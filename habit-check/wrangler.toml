@@ -1,0 +1,18 @@
+name = "habit-check"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+# DB_習慣チェック のデータソースID（IDだけでは読み書きできない。権限はインテグレーション側）
+DATA_SOURCE_ID = "e730b8b2-bb41-491d-9382-a296c40e6deb"
+# 行を作るときに付ける「プレイヤー」（DB_プレイヤーのページ）
+PLAYER_PAGE_ID = "3e962844acbe81b0843ff78fe19791fa"
+
+# 秘密の値は wrangler secret put で入れる（このファイルには書かない）
+#   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
+#   APP_KEY      : アプリを開くときの合言葉（16文字以上）
