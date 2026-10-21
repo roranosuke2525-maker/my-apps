@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hello</title>
+  <meta name="theme-color" content="#2563eb">
+  <!-- iPhoneの「ホーム画面に追加」用 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Hello">
+  <link rel="apple-touch-icon" href="./icons/icon-180.png">
+  <link rel="icon" type="image/png" href="./icons/icon-180.png">
+  <link rel="manifest" href="./manifest.json">
+  <style>
+    :root { color-scheme: light dark; --bg: #f8fafc; --fg: #0f172a; --accent: #2563eb; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0f172a; --fg: #f8fafc; } }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg); color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      user-select: none; -webkit-user-select: none;
+    }
+    #count { flex: 1; display: grid; place-items: center; font-size: 30vw; font-weight: 700; font-variant-numeric: tabular-nums; }
+    /* 片手操作：ボタンは画面下部に大きく配置 */
+    .controls { display: flex; gap: 12px; padding: 16px; }
+    button { border: 0; border-radius: 20px; font-size: 1.5rem; font-weight: 700; touch-action: manipulation; }
+    #inc { flex: 3; height: 120px; background: var(--accent); color: #fff; }
+    #reset { flex: 1; height: 120px; background: #64748b; color: #fff; font-size: 1rem; }
+    button:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+  <div id="count">0</div>
+  <div class="controls">
+    <button id="reset" type="button">リセット</button>
+    <button id="inc" type="button">＋1</button>
+  </div>
+  <script>
+    const KEY = 'hello-count';
+    const el = document.getElementById('count');
+    let n = 0;
+    try { n = Number(localStorage.getItem(KEY)) || 0; } catch (e) {}
+    const render = () => {
+      el.textContent = n;
+      try { localStorage.setItem(KEY, String(n)); } catch (e) {}
+    };
+    document.getElementById('inc').addEventListener('click', () => { n++; render(); });
+    document.getElementById('reset').addEventListener('click', () => { n = 0; render(); });
+    render();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
+</body>
+</html>
