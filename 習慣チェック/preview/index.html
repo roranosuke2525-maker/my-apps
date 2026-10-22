@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>習慣チェック（確認用・3パターン）</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#f6f3ee;--card:#fff;--text:#1f2328;--sub:#6b7076;--line:#e4dfd6;--accent:#2f7d5b;--soft:#e2f1e8;--must:#c2410c}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--card:#20232a;--text:#eceef1;--sub:#9aa1ab;--line:#2f343d;--accent:#5cc493;--soft:#1d3a2d;--must:#fb923c}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.35 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;display:flex;flex-direction:column;height:100dvh;overflow:hidden;padding-bottom:env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+.switch{display:flex;gap:4px;padding:calc(env(safe-area-inset-top) + 4px) 8px 4px;background:var(--text)}
+.switch button{flex:1;border:0;border-radius:6px;padding:4px 0;background:transparent;color:var(--bg);font-size:12px;font-weight:700}
+.switch button[aria-pressed=true]{background:var(--bg);color:var(--text)}
+header{padding:6px 12px 6px;border-bottom:1px solid var(--line)}
+.row1{display:flex;justify-content:space-between;align-items:baseline}
+h1{font-size:16px;margin:0}
+.lv{font-weight:800;color:var(--accent)}.lv small{font-weight:400;color:var(--sub);font-size:11px;margin-left:4px}
+.prog{display:flex;align-items:center;gap:8px;margin-top:3px;color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums}
+.bar{flex:1;height:6px;background:var(--line);border-radius:9px;overflow:hidden}.fill{height:100%;background:var(--accent);transition:width .3s}
+.must{color:var(--must);font-size:11px;min-height:15px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{flex:1;min-height:0;padding:6px 10px;display:flex;flex-direction:column;gap:4px}
+h2{font-size:11px;color:var(--sub);margin:4px 0 2px 2px}
+.tag{font-size:10px;font-weight:700;color:var(--must);border:1px solid currentColor;border-radius:5px;padding:0 4px;flex:none}
+/* A 2列 */
+.a .grid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.a .h{display:flex;align-items:center;gap:6px;min-height:34px;padding:3px 8px;border:0;border-radius:8px;background:var(--card);text-align:left}
+.a .box,.c .box{flex:none;width:18px;height:18px;border-radius:5px;border:2px solid var(--line);display:grid;place-items:center}
+.h[aria-pressed=true] .box{background:var(--accent);border-color:var(--accent)}
+.h[aria-pressed=true] .box::after{content:"";width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.h[aria-pressed=true] .n{color:var(--sub);text-decoration:line-through}
+.a .n{flex:1;min-width:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* B タイル */
+.b .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.b .h{position:relative;height:62px;border:2px solid transparent;border-radius:12px;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px 4px}
+.b .h[aria-pressed=true]{background:var(--soft);border-color:var(--accent)}
+.b .n{font-size:12px;font-weight:700;text-align:center;line-height:1.2}
+.b .tag{position:absolute;top:2px;right:3px}
+.b .box{display:none}.b .ic{font-size:16px}
+/* C タブ */
+.tabs{display:flex;gap:4px}.tabs button{flex:1;border:0;border-radius:8px;padding:6px 0;background:var(--card);font-weight:700;font-size:13px}
+.tabs button[aria-selected=true]{background:var(--accent);color:#fff}
+.c .list{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px}
+.c .h{flex:1;min-height:0;max-height:64px;display:flex;align-items:center;gap:12px;padding:0 14px;border:0;border-radius:12px;background:var(--card);text-align:left}
+.c .box{width:26px;height:26px;border-radius:8px}
+.c .n{flex:1;font-size:16px;font-weight:700}
+.note{display:flex;gap:6px;padding:6px 10px 8px}
+.note input{flex:1;min-width:0;font:inherit;font-size:16px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
+.note button{border:0;border-radius:9px;background:var(--accent);color:#fff;font-weight:700;padding:0 14px}
+.demo{text-align:center;font-size:10px;color:var(--sub);padding:0 0 3px}
+</style>
+</head>
+<body>
+<nav class="switch" id="switch">
+  <button type="button" data-v="a">A 2列</button><button type="button" data-v="b">B タイル</button><button type="button" data-v="c">C タブ</button>
+</nav>
+<header>
+  <div class="row1"><h1>10/22（木） 今日</h1><span class="lv">Lv7<small>次まで 35EXP</small></span></div>
+  <div class="prog"><div class="bar"><div class="fill" id="fill"></div></div><span id="count"></span></div>
+  <div class="must" id="must"></div>
+</header>
+<main id="main"></main>
+<div class="note"><input id="memo" placeholder="ひとこと（+5EXP）" maxlength="200"><button type="button" id="save">保存</button></div>
+<div class="demo">確認用・ダミーデータ（本物のデータには保存されません）</div>
+<script>
+// 確認用：通信も保存もしない。ダミーデータだけで動く。
+var SLOTS=[["morning","☼ 朝"],["noon","☀︎ 昼"],["night","☾ 夜"],["anytime","↻ いつでも"]];
+var H=[
+ {id:1,slot:"morning",label:"起床",must:1,ic:"⏰"},{id:2,slot:"morning",label:"水を飲む",ic:"💧"},
+ {id:3,slot:"morning",label:"朝食",must:1,ic:"🍚"},{id:4,slot:"morning",label:"ストレッチ",ic:"🧘"},
+ {id:5,slot:"noon",label:"昼食",ic:"🍱"},{id:6,slot:"noon",label:"散歩",ic:"🚶"},
+ {id:7,slot:"noon",label:"英語",must:1,ic:"📖"},
+ {id:8,slot:"night",label:"入浴",ic:"🛁"},{id:9,slot:"night",label:"日記",ic:"📝"},
+ {id:10,slot:"night",label:"就寝準備",must:1,ic:"🌙"},
+ {id:11,slot:"anytime",label:"片付け",ic:"🧹"},{id:12,slot:"anytime",label:"読書",ic:"📚"}
+];
+var done={1:1,2:1,3:1},view="a",tab="morning";
+try{var q=new URLSearchParams(location.search).get("v");if("abc".indexOf(q)>=0&&q)view=q}catch(e){}
+var $=function(i){return document.getElementById(i)};
+function btn(h){
+  var b=document.createElement("button");b.type="button";b.className="h";b.setAttribute("aria-pressed",String(!!done[h.id]));
+  var box='<span class="box"></span>',ic=view==="b"?'<span class="ic">'+h.ic+'</span>':'';
+  b.innerHTML=(view==="b"?ic:box)+'<span class="n"></span>'+(h.must?'<span class="tag">必ず</span>':'');
+  b.querySelector(".n").textContent=h.label;
+  b.onclick=function(){done[h.id]=done[h.id]?0:1;render()};
+  return b;
+}
+function status(){
+  var n=H.filter(function(h){return done[h.id]}).length;
+  $("count").textContent=n+" / "+H.length;$("fill").style.width=(n/H.length*100)+"%";
+  var m=H.filter(function(h){return h.must}),l=m.filter(function(h){return !done[h.id]});
+  $("must").textContent=l.length?"◆必ず "+(m.length-l.length)+"/"+m.length+"　のこり："+l.map(function(h){return h.label}).join("・"):"◆必ず "+m.length+"/"+m.length+" クリア！";
+}
+function render(){
+  status();
+  document.querySelectorAll("#switch button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.v===view))});
+  var main=$("main");main.className=view;main.innerHTML="";
+  if(view==="c"){
+    var t=document.createElement("div");t.className="tabs";
+    SLOTS.forEach(function(s){var b=document.createElement("button");b.type="button";b.setAttribute("aria-selected",String(s[0]===tab));
+      var left=H.filter(function(h){return h.slot===s[0]&&!done[h.id]}).length;
+      b.textContent=s[1]+(left?" "+left:" ✓");b.onclick=function(){tab=s[0];render()};t.appendChild(b)});
+    var l=document.createElement("div");l.className="list";
+    H.filter(function(h){return h.slot===tab}).forEach(function(h){l.appendChild(btn(h))});
+    main.append(t,l);return;
+  }
+  SLOTS.forEach(function(s){
+    var items=H.filter(function(h){return h.slot===s[0]});if(!items.length)return;
+    var h2=document.createElement("h2");h2.textContent=s[1];
+    var g=document.createElement("div");g.className="grid";items.forEach(function(h){g.appendChild(btn(h))});
+    main.append(h2,g);
+  });
+}
+$("switch").onclick=function(e){var v=e.target.dataset&&e.target.dataset.v;if(v){view=v;render()}};
+$("save").onclick=function(){$("memo").value=""};
+render();
+</script>
+</body>
+</html>
