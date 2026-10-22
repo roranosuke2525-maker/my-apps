@@ -69,8 +69,10 @@ iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Work
 npm install
 npm test               # Worker のテスト（Notion は偽物に差し替え）
 npx wrangler dev       # ローカルで起動（.dev.vars に NOTION_TOKEN と APP_KEY を書く）
+node scripts/build-demo.mjs   # 動かせるデモ dist/demo.html を作る（Notion には通信しない）
 ```
 
 - `src/worker.js`：Notion API の中継（API バージョン 2025-09-03、データソース指定）
 - `public/`：画面（HTML/CSS/JS、サービスワーカー、アイコン）
 - `scripts/make-icons.py`：アイコン画像の生成
+- `scripts/build-demo.mjs`：本物の画面に偽の /api を組み込んだ1ファイルのデモ（Notion のタスクページに埋め込む用）。画面を直したら作り直す
