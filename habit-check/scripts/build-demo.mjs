@@ -1,22 +1,11 @@
 // 動かせるデモ（1ファイルのHTML）を作る。本物の画面コードをそのまま使い、/api だけを偽物に差し替える。
 //   node scripts/build-demo.mjs [出力先]   既定：dist/demo.html
 // デモのデータはすべて作りもの（実際の Notion の値ではない）。
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { inlinePage, root } from "./inline-page.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = process.argv[2] || join(root, "dist", "demo.html");
-const read = (p) => readFile(join(root, p), "utf8");
-const dataUri = async (p, type) => `data:${type};base64,${(await readFile(join(root, p))).toString("base64")}`;
-
-const [html, css, app, walnut, oak] = await Promise.all([
-  read("public/index.html"),
-  read("public/style.css"),
-  read("public/app.js"),
-  dataUri("public/img/walnut.jpg", "image/jpeg"),
-  dataUri("public/img/oak.jpg", "image/jpeg"),
-]);
 
 // デモ用の習慣（列名の形式は DB_習慣チェック と同じ）
 const habits = [
@@ -150,19 +139,8 @@ const mock = `
 
 const banner = `<div style="position:fixed;top:0;right:0;z-index:30;background:#fff4d6;color:#7a5200;font-size:10px;line-height:16px;padding:0 8px;border-radius:0 0 0 8px;pointer-events:none">デモ（作りもののデータ・保存されません）</div>`;
 
-const demoCss = css.replaceAll('url("img/walnut.jpg")', `url("${walnut}")`).replaceAll('url("img/oak.jpg")', `url("${oak}")`);
+const page = await inlinePage({ apiScript: mock, bodyStart: banner });
 
-const page = html
-  .replace(/<link rel="manifest"[^>]*>\s*/, "")
-  .replace(/<link rel="(?:icon|apple-touch-icon)"[^>]*>\s*/g, "")
-  .replace('<link rel="stylesheet" href="style.css">', `<style>\n${demoCss}\n</style>`)
-  .replace("<body>", `<body>\n  ${banner}`)
-  .replace(
-    '<script src="app.js" type="module"></script>',
-    `<script>${mock}</script>\n  <script type="module">\n${app.replace(/if \("serviceWorker" in navigator\)[\s\S]*?\n}\n/, "")}\n  </script>`,
-  );
-
-if (page.includes('href="style.css"') || page.includes('src="app.js"') || page.includes('url("img/')) throw new Error("デモの組み立てに失敗しました");
 await mkdir(dirname(out), { recursive: true });
 await writeFile(out, page);
 console.log(`demo written: ${out} (${(page.length / 1024).toFixed(1)} KiB)`);
