@@ -10,8 +10,13 @@ run_worker_first = ["/api/*"]
 [vars]
 # DB_習慣チェック のデータソースID（IDだけでは読み書きできない。権限はインテグレーション側）
 DATA_SOURCE_ID = "e730b8b2-bb41-491d-9382-a296c40e6deb"
-# 行を作るときに付ける「プレイヤー」（DB_プレイヤーのページ）
+# 行を作るときに付ける「プレイヤー」（DB_プレイヤーのページ）。きろくタブもここを読む
 PLAYER_PAGE_ID = "3e962844acbe81b0843ff78fe19791fa"
+# 習慣ページの他のタブ（パーティー／ギルド／ものがたり）のデータソースID
+PARTY_DS_ID = "7ab3aa8b-2f1e-44cb-b2f8-592202bab226"   # DB_すがた
+GUILD_DS_ID = "86ea2c0d-a66a-49e4-9a6b-b287f4f32bbd"   # DB_ギルド依頼
+REPORT_DS_ID = "0ea02603-b2dd-4064-bc84-bf02f0e60aca"  # DB_ギルド達成記録
+STORY_DS_ID = "f673bc1a-91b2-467d-bcd3-b2a70bd1bcbd"   # DB_ものがたり
 
 # 秘密の値は wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）

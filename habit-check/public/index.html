@@ -4,10 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>習慣チェック</title>
-  <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#5c3a23">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="習慣チェック">
   <meta name="robots" content="noindex">
   <link rel="manifest" href="manifest.webmanifest">
@@ -16,54 +15,126 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="top">
-    <div class="day-nav">
-      <button type="button" id="prev" class="icon-btn" aria-label="前の日">‹</button>
-      <h1 id="date-label">—</h1>
-      <button type="button" id="next" class="icon-btn" aria-label="次の日">›</button>
-    </div>
-    <div class="status" id="status" hidden>
-      <div class="lv"><span class="lv-num" id="lv">Lv—</span><span class="rest" id="rest"></span></div>
-      <div class="progress">
-        <div class="bar"><div class="fill" id="fill"></div></div>
-        <span id="count">0 / 0</span>
+<div class="app">
+  <header class="top wood">
+    <div class="head-row">
+      <div class="head-text">
+        <span id="head-sub" class="head-sub"></span>
+        <h1 id="head-title">習慣チェック</h1>
       </div>
-      <div class="must" id="must"></div>
+      <div class="pill" id="pill"><span>Lv</span><b id="pill-lv">—</b></div>
+    </div>
+    <div id="habit-tabs" class="tabs" role="tablist" aria-label="習慣の表示">
+      <button type="button" role="tab" data-tab="day">日</button>
+      <button type="button" role="tab" data-tab="week">週</button>
+      <button type="button" role="tab" data-tab="cal">カレンダー</button>
+      <button type="button" role="tab" data-tab="graph">グラフ</button>
+    </div>
+    <div id="exp-row" class="exp-row" hidden>
+      <span class="exp-chip">総EXP <b id="exp-total">—</b></span>
+      <span class="exp-chip">次のLvまで <b id="exp-next">—</b></span>
     </div>
   </header>
 
   <main id="main">
-    <section id="login" class="card" hidden>
-      <h2>合言葉を入れてください</h2>
-      <p class="sub">Worker に設定した APP_KEY です。この端末にだけ保存されます。</p>
-      <form id="login-form">
-        <input id="key" type="password" autocomplete="current-password" required minlength="16" placeholder="合言葉">
-        <button type="submit" class="primary">はじめる</button>
-      </form>
+    <section id="login" class="view" hidden>
+      <div class="card">
+        <h2>合言葉を入れてください</h2>
+        <p class="sub">Worker に設定した APP_KEY です。この端末にだけ保存されます。</p>
+        <form id="login-form">
+          <input id="key" type="password" autocomplete="current-password" required minlength="16" placeholder="合言葉" aria-label="合言葉">
+          <button type="submit" class="primary">はじめる</button>
+        </form>
+      </div>
     </section>
 
-    <section id="empty" class="card" hidden>
-      <h2>この日の行がまだありません</h2>
-      <p class="sub">Notion の DB_習慣チェック に、この日の行を作ってからチェックします。</p>
-      <button type="button" id="create" class="primary">行を作る</button>
+    <section id="view-day" class="view" hidden>
+      <div class="nav-row">
+        <button type="button" id="prev" class="icon-btn" aria-label="前の日"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <div class="nav-title"><span id="date-label">—</span><button type="button" id="go-today" class="chip-btn" hidden>今日へ</button></div>
+        <button type="button" id="next" class="icon-btn" aria-label="次の日"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div id="day-body" class="stack fill"></div>
     </section>
 
-    <div id="groups"></div>
-
-    <section id="note-box" class="card" hidden>
-      <label for="note" class="note-label">ひとこと <span class="sub">その他のできたこと（書くと +5EXP）</span></label>
-      <textarea id="note" rows="2" maxlength="2000"></textarea>
-      <button type="button" id="save-note" class="primary" disabled>保存</button>
+    <section id="view-week" class="view" hidden>
+      <div class="nav-row">
+        <button type="button" id="week-prev" class="icon-btn" aria-label="前の週"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <span id="week-label" class="nav-title">—</span>
+        <button type="button" id="week-next" class="icon-btn" aria-label="次の週"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div id="week-body" class="stack fill"></div>
     </section>
 
-    <p class="foot">
-      <a id="open-notion" href="#" target="_blank" rel="noopener" hidden>Notionで開く</a>
-      <button type="button" id="refresh" class="link">更新</button>
-      <button type="button" id="logout" class="link">合言葉を消す</button>
-    </p>
+    <section id="view-cal" class="view" hidden>
+      <div class="nav-row">
+        <button type="button" id="month-prev" class="icon-btn" aria-label="前の月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <span id="month-label" class="nav-title">—</span>
+        <button type="button" id="month-next" class="icon-btn" aria-label="次の月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div id="cal-body" class="stack fill"></div>
+    </section>
+
+    <section id="view-graph" class="view" hidden>
+      <div id="graph-body" class="stack fill"></div>
+    </section>
+
+    <section id="view-party" class="view" hidden>
+      <div id="party-body" class="stack fill"></div>
+    </section>
+
+    <section id="view-guild" class="view" hidden>
+      <div class="seg" role="tablist" aria-label="ギルドの表示">
+        <button type="button" role="tab" data-guild="board">けいじばん</button>
+        <button type="button" role="tab" data-guild="reports">ほうこく</button>
+      </div>
+      <div id="guild-body" class="stack fill"></div>
+    </section>
+
+    <section id="view-story" class="view" hidden>
+      <div id="story-body" class="stack fill"></div>
+    </section>
+
+    <section id="view-me" class="view" hidden>
+      <div id="me-body" class="stack fill"></div>
+      <p class="foot">
+        <button type="button" id="refresh" class="link">更新</button>
+        <button type="button" id="logout" class="link">合言葉を消す</button>
+      </p>
+    </section>
   </main>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js" type="module"></script>
+  <nav class="bottom wood" id="bottom-nav" aria-label="メイン">
+    <button type="button" data-view="habit">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></svg>習慣
+    </button>
+    <button type="button" data-view="party">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 2 5.3 4.9"/></svg>パーティー
+    </button>
+    <button type="button" data-view="guild">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>ギルド
+    </button>
+    <button type="button" data-view="story">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5C6.5 4 9.5 4 12 5.5 14.5 4 17.5 4 20 5.5V19c-2.5-1.5-5.5-1.5-8 0-2.5-1.5-5.5-1.5-8 0z"/><path d="M12 5.5V19"/></svg>ものがたり
+    </button>
+    <button type="button" data-view="me">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/></svg>きろく
+    </button>
+  </nav>
+</div>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-head">
+      <h2 id="sheet-title"></h2>
+      <button type="button" id="sheet-close" class="icon-btn" aria-label="閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="sheet-body" class="sheet-body"></div>
+    <div id="sheet-foot" class="sheet-foot"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="app.js" type="module"></script>
 </body>
 </html>

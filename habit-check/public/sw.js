@@ -1,6 +1,6 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク）
-const CACHE = "habit-check-v1";
-const SHELL = ["./", "index.html", "app.js", "style.css", "manifest.webmanifest", "icons/icon-192.png"];
+const CACHE = "habit-check-v2";
+const SHELL = ["./", "index.html", "app.js", "style.css", "manifest.webmanifest", "icons/icon-192.png", "img/walnut.jpg", "img/oak.jpg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
