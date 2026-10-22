@@ -17,6 +17,8 @@
     report: "0ea02603-b2dd-4064-bc84-bf02f0e60aca", // DB_ギルド達成記録
     story: "f673bc1a-91b2-467d-bcd3-b2a70bd1bcbd", // DB_ものがたり
   };
+  // 「🌅 習慣」ページに置いた DB_習慣チェック のビュー。ここで非表示にした列はアプリにも出さない
+  const HABIT_VIEW_DB = "3e962844acbe8135bff2dab4a1157d77";
   const PLAYER_ID = "3e962844acbe81b0843ff78fe19791fa";
   const NOTE = "ひとこと";
   const SLOTS = { "☼": "morning", "☀": "noon", "◷": "timed", "☾": "night", "↻": "anytime" };
@@ -143,11 +145,12 @@
 
   async function loadSchema() {
     if (schemaCache && Date.now() - schemaCache.at < SCHEMA_TTL) return schemaCache;
-    const res = await call("fetch", { id: `collection://${DS.habit}` }, { read: true });
+    const res = await call("fetch", { id: HABIT_VIEW_DB }, { read: true });
     const state = JSON.parse(between(res.text, "data-source-state") || "{}");
     const props = state.schema || {};
-    const habits = Object.values(props)
-      .filter((p) => p.type === "checkbox")
+    const shown = viewProperties(res.text);
+    const habits = (shown ? shown.map((name) => props[name]) : Object.values(props))
+      .filter((p) => p?.type === "checkbox")
       .map((p) => {
         const m = p.name.match(HABIT_NAME);
         return {
@@ -160,6 +163,17 @@
       });
     schemaCache = { at: Date.now(), props, habits };
     return schemaCache;
+  }
+
+  // ビューで表示している列（並びもビューのとおり）。ビューが読めなければ null（＝全部出す）
+  function viewProperties(text) {
+    for (const m of String(text || "").matchAll(/<view [^>]*>\s*(\{[\s\S]*?\})\s*<\/view>/g)) {
+      try {
+        const view = JSON.parse(m[1]);
+        if (String(view.dataSourceUrl).includes(DS.habit) && Array.isArray(view.displayProperties)) return view.displayProperties;
+      } catch { /* 読めないビューは飛ばす */ }
+    }
+    return null;
   }
 
   function summarizeRow(r, schema) {
@@ -214,7 +228,7 @@
     if (name === NOTE && schema.props[NOTE]) {
       if (typeof value !== "string" || value.length > 2000) throw apiError(400, "ひとことは2000字までです");
       prop = value;
-    } else if (schema.props[name]?.type === "checkbox" && typeof value === "boolean") {
+    } else if (schema.habits.some((h) => h.name === name) && typeof value === "boolean") {
       prop = value ? "__YES__" : "__NO__";
     } else {
       throw apiError(400, "変更できない項目です");

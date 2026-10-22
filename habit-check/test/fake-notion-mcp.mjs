@@ -1,6 +1,6 @@
 // テスト用の偽 Notion 連携（MCP）。返事の形は本物の Notion MCP に合わせ、値はすべて作りもの。
 // ブラウザにも toString() で渡すので、この関数の外のものは使わない。
-export function fakeNotionMcp({ bareToolNames = false, today = "2026-10-23" } = {}) {
+export function fakeNotionMcp({ bareToolNames = false, today = "2026-10-23", withView = true } = {}) {
   const DS = {
     habit: "e730b8b2-bb41-491d-9382-a296c40e6deb",
     party: "7ab3aa8b-2f1e-44cb-b2f8-592202bab226",
@@ -12,7 +12,10 @@ export function fakeNotionMcp({ bareToolNames = false, today = "2026-10-23" } = 
   const url = (id) => `https://app.notion.com/p/${id}`;
   const hex = (n) => n.toString(16).padStart(32, "0");
   const ref = (kind, ds, id) => `${kind}Result://${ds}/${id}/AbCd`;
-  const habitNames = ["◆☼ 起床", "◆☼ 洗濯", "◇☼ ストレッチ", "◇☀︎ プロテイン", "◇☾プロテインの準備", "◇↻ 読書"];
+  const VIEW_DB = "3e962844acbe8135bff2dab4a1157d77";
+  const habitNames = ["◆☼ 起床", "◆☼ 洗濯", "◇☼ ストレッチ", "◇☀︎ プロテイン", "◇☾プロテインの準備", "◇↻ 読書", "◇☾ 仕事の所感を書く"];
+  // ビューで表示している列（「◇☾ 仕事の所感を書く」は非表示、読書を洗濯の前に並べ替え）
+  const viewProps = ["日", "けいけんち", "◆☼ 起床", "◇↻ 読書", "◆☼ 洗濯", "◇☼ ストレッチ", "◇☀︎ プロテイン", "◇☾プロテインの準備", "ひとこと"];
   const hints = { "◇☼ ストレッチ": "最小版：1分", "◇↻ 読書": "最小版：1ページ" };
   const schema = {
     日: { name: "日", type: "title" },
@@ -80,6 +83,11 @@ export function fakeNotionMcp({ bareToolNames = false, today = "2026-10-23" } = 
         return ok({ metadata: { type: "data_source" }, text: `<data-source>\n<data-source-state>\n${JSON.stringify({ name: "DB_習慣チェック", schema })}\n</data-source-state>\n</data-source>` });
       }
       const id = idOf(input.id);
+      if (id === VIEW_DB) {
+        const state = `<data-source-state>\n${JSON.stringify({ name: "DB_習慣チェック", schema })}\n</data-source-state>`;
+        const view = withView ? `<views>\n<view url="{{view://v1}}">\n${JSON.stringify({ dataSourceUrl: `{{collection://${DS.habit}}}`, displayProperties: viewProps, name: "✅ 習慣チェック", type: "gallery" })}\n</view>\n</views>` : "";
+        return ok({ metadata: { type: "database" }, text: `<database>\n<data-sources>\n${state}\n</data-sources>\n${view}\n</database>` });
+      }
       if (id === PLAYER) return ok({ text: `<page>\n<properties>\n${JSON.stringify({ url: url(PLAYER), 名前: "テストさん", レベル: ref("formula", "x", PLAYER) })}\n</properties>\n<blank-page/>\n</page>` });
       const found = findRow(id);
       if (!found) return fail("tool_error", "object_not_found");

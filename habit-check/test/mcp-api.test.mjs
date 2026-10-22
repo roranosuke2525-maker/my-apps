@@ -152,3 +152,20 @@ test("連携が使えないときは理由を返す（合言葉の画面には�
   assert.notEqual(res2.status, 401);
   assert.match((await res2.json()).error, /再接続/);
 });
+
+test("ビューで非表示の列は出さず、ビューの並びで返す", async () => {
+  const { api, mcp } = setup();
+  const { data } = await api("GET", `/api/day?date=${addDays(TODAY, -1)}`);
+  assert.deepEqual(data.habits.map((h) => h.name), ["◆☼ 起床", "◇↻ 読書", "◆☼ 洗濯", "◇☼ ストレッチ", "◇☀︎ プロテイン", "◇☾プロテインの準備"]);
+  assert.equal("◇☾ 仕事の所感を書く" in data.row.checks, false);
+  const res = await api("PATCH", `/api/pages/${data.row.id}`, { name: "◇☾ 仕事の所感を書く", value: true });
+  assert.equal(res.status, 400);
+  assert.equal(mcp.calls.filter((c) => c.name === "notion-update-page").length, 0);
+});
+
+test("ビューが読めないときは、チェックの列を全部出す", async () => {
+  const { api } = setup({ withView: false });
+  const { data } = await api("GET", `/api/day?date=${addDays(TODAY, -1)}`);
+  assert.equal(data.habits.length, 7);
+  assert.ok(data.habits.some((h) => h.name === "◇☾ 仕事の所感を書く"));
+});
