@@ -19,7 +19,29 @@ Notion の「🌅 習慣」ページの5つのタブ（習慣チェック・パ�
 - Lv・EXP・ステータスなどの計算は Notion の数式の結果をそのまま表示する（アプリ側で計算し直さない）
 - 基本はスクロールなしの1画面。習慣が多い時間帯や依頼の一覧など、長いときだけその枠の中がスクロールする
 
-## しくみ
+## 2つの動かし方
+
+| | アーティファクト版（MCP） | Cloudflare版 |
+| --- | --- | --- |
+| 開き方 | claude.ai のアーティファクト（[習慣チェック](https://claude.ai/artifact/2Qh2SswrkppSsvWsiat4bV)）を開く | 自分の `workers.dev` のURLを開く |
+| Notion への入り方 | 見ている人の claude.ai の Notion 連携（MCP）。トークン・合言葉・サーバーなし | Notion のインテグレーションのトークン（Cloudflare の秘密の値） |
+| 準備 | なし（初回に「Notion を使ってよいか」の確認が出たら許可） | 下の「セットアップ」 |
+| Lv・EXP・ステータス・なかま・じゅもん | 出ない（「—」）。Notion の MCP は数式・ロールアップの値を返さないため | 出る |
+| ギルドの達成回数 | 達成記録の数で出す。累計EXP・けいじばん・寄り道は出ない | 出る |
+| パーティー | 表示条件（数式）が読めないので、すがたを全部出す | ひょうじ が付いたものだけ |
+| ものがたりのロック | Lv が分からないのでロックしない | Lv が足りない章はロック |
+| 習慣の列 | 「🌅 習慣」ページのビュー「✅ 習慣チェック」で**表示している列だけ**を、ビューの並びで出す（非表示にした列は出さず、書き込みもしない） | チェックボックスの列を全部出す（Notion API ではビューの表示設定が読めないため） |
+
+アーティファクト版の /api は `src/mcp-api.js` が画面の中で答える（Worker と同じ返事の形）。
+書き換えるのは Cloudflare版と同じ3つだけで、さらに「この画面で読み込んだ行・依頼・章」に限る。
+
+```sh
+node scripts/build-artifact.mjs   # dist/artifact.html を作る（公開は Claude に「アーティファクトを更新して」）
+```
+
+公開するときは capabilities に `{"mcp": {"servers": [{"server": "Notion", "tools": ["notion-fetch", "notion-query-data-sources", "notion-update-page", "notion-create-pages"]}]}}` を宣言する。
+
+## しくみ（Cloudflare版）
 
 ```
 iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Worker ──トークン──▶ Notion API
@@ -34,7 +56,7 @@ iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Work
 - アプリを開くには合言葉（APP_KEY）が必要。合言葉は端末のブラウザにだけ保存される
 - Cloudflare Workers の無料枠で動く
 
-## セットアップ（PCのブラウザだけでできる）
+## セットアップ（Cloudflare版・PCのブラウザだけでできる）
 
 ### 1. Notion：インテグレーションを作る
 
@@ -87,13 +109,15 @@ iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Work
 
 ```sh
 npm install
-npm test               # Worker のテスト（Notion は偽物に差し替え）
+npm test               # Worker とアーティファクト版 /api のテスト（Notion は偽物に差し替え）
 npx wrangler dev       # ローカルで起動（.dev.vars に NOTION_TOKEN と APP_KEY を書く）
 node scripts/build-demo.mjs   # 動かせるデモ dist/demo.html を作る（Notion には通信しない）
 ```
 
 - `src/worker.js`：Notion API の中継（API バージョン 2025-09-03、データソース指定）
+- `src/mcp-api.js`：アーティファクト版の /api（Notion 連携＝MCP 経由）。テストの偽連携は `test/fake-notion-mcp.mjs`
 - `public/`：画面（HTML/CSS/JS、サービスワーカー、アイコン）
 - `scripts/make-icons.py`：アイコン画像の生成
 - `scripts/make-wood.py`：木目の背景画像（`public/img/walnut.jpg`・`oak.jpg`）の生成
 - `scripts/build-demo.mjs`：本物の画面に偽の /api を組み込んだ1ファイルのデモ（Notion のタスクページに埋め込む用）。画面を直したら作り直す
+- `scripts/build-artifact.mjs`：アーティファクト版の1ファイル。`scripts/inline-page.mjs`（画面を1ファイルにまとめる部分）をデモと共用
