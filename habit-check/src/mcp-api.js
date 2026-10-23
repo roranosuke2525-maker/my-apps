@@ -26,6 +26,7 @@
   const SCHEMA_TTL = 60e3;
   const REPORT_LIMIT = 20;
   const REPORT_NOTE_MAX = 200;
+  const REPORT_QUEST_MAX = 5;
   const MAX_RANGE_DAYS = 62;
 
   // ---------- MCP 呼び出し ----------
@@ -320,17 +321,19 @@
   }
 
   async function createReport(body) {
-    const { questId, note } = body || {};
-    if (!knownQuests.has(questId)) throw apiError(403, "読み込んだ依頼ではありません。「更新」してからやり直してください");
+    const { note } = body || {};
+    const questIds = [...new Set(Array.isArray(body?.questIds) ? body.questIds : [body?.questId])];
+    if (!questIds.length || questIds.length > REPORT_QUEST_MAX) throw apiError(400, `依頼を1〜${REPORT_QUEST_MAX}件えらんでください`);
+    if (!questIds.every((id) => knownQuests.has(id))) throw apiError(403, "読み込んだ依頼ではありません。「更新」してからやり直してください");
     if (typeof note !== "string" || !note.trim() || note.length > REPORT_NOTE_MAX) {
       throw apiError(400, `ひとことを${REPORT_NOTE_MAX}字以内で書いてください`);
     }
     await call("create", {
       parent: { type: "data_source_id", data_source_id: DS.report },
-      pages: [{ properties: { [NOTE]: note.trim(), 依頼: [pageUrl(questId)] } }],
+      pages: [{ properties: { [NOTE]: note.trim(), 依頼: questIds.map(pageUrl) } }],
       allow_async: false,
     });
-    return { report: { id: `new-${Date.now()}`, url: "", note: note.trim(), questIds: [questId], date: new Date().toISOString() } };
+    return { report: { id: `new-${Date.now()}`, url: "", note: note.trim(), questIds, date: new Date().toISOString() } };
   }
 
   // ---------- ものがたり（DB_ものがたり）：Lvでのロックは計算式なので判定しない ----------

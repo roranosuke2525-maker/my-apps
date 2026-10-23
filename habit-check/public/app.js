@@ -553,9 +553,11 @@ async function renderGuild() {
   if (state.view !== "guild") return;
   if (state.errors.guild && !state.data.guild) return body.replaceChildren(h("p", { class: "err", text: state.errors.guild }));
   const { quests, reports } = state.data.guild;
+  const addBtn = h("button", { type: "button", class: "primary add-report", onclick: () => openNewReport() }, "＋ ほうこく");
   if (state.guildTab === "reports") {
     const titles = Object.fromEntries(quests.map((q) => [q.id.replace(/-/g, ""), q.title]));
     return body.replaceChildren(
+      addBtn,
       reports.length
         ? h("div", { class: "list scroll fill" }, reports.map((r) => h("div", { class: "card report" },
           h("span", { class: "rnote", text: r.note || "（ひとことなし）" }),
@@ -567,6 +569,7 @@ async function renderGuild() {
   const cats = ["すべて", ...Object.keys(CATEGORY_COLORS).filter((c) => quests.some((q) => q.category === c))];
   const shown = quests.filter((q) => state.guildCat === "すべて" || q.category === state.guildCat);
   body.replaceChildren(
+    addBtn,
     h("div", { class: "chips", role: "group", "aria-label": "カテゴリ" }, cats.map((c) => h("button", {
       type: "button", "aria-pressed": String(c === state.guildCat), onclick: () => { state.guildCat = c; renderGuild(); },
     }, c))),
@@ -601,24 +604,7 @@ function openQuest(q) {
   const note = h("textarea", { rows: "2", maxlength: "200", placeholder: "なにをしたか ひとこと", "aria-label": "ほうこくのひとこと", disabled: locked });
   const send = h("button", { type: "button", class: "primary", disabled: true }, locked ? `Lv${q.lv}になると受注できます` : "ほうこくする");
   note.addEventListener("input", () => { send.disabled = locked || !note.value.trim(); });
-  send.addEventListener("click", async () => {
-    send.disabled = true;
-    try {
-      await api("POST", "/api/guild/reports", { questId: q.id, note: note.value });
-      toast(`ほうこくしました：${q.title}`);
-      closeSheet();
-      state.loadedAt.guild = 0;
-      if (state.view === "guild") renderGuild();
-      clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => enqueue(async () => {
-        await Promise.all([loadData("guild", "/api/guild", { force: true }), loadPlayer({ force: true })]);
-        if (state.view === "guild") renderGuild();
-      }), REFRESH_DELAY);
-    } catch (err) {
-      toast(err.message, true);
-      send.disabled = false;
-    }
-  });
+  send.addEventListener("click", () => submitReport([q], note.value, send));
   openSheet(q.title, [
     h("div", { class: "qmeta", style: "display:flex;gap:6px;flex-wrap:wrap;align-items:center" },
       h("span", { class: `rank ${q.rank || ""}`, text: q.rank || "?" }),
@@ -633,6 +619,116 @@ function openQuest(q) {
     q.board ? h("div", { class: "card" }, h("h3", { text: "けいじばん" }), h("p", { class: "pre", style: "margin:6px 0 0", text: q.board })) : null,
     q.detour ? h("div", { class: "card" }, h("h3", { text: "寄り道" }), h("p", { class: "pre", style: "margin:6px 0 0", text: q.detour })) : null,
   ], [note, send]);
+}
+
+// ほうこくを送って、ギルドとLvを読み直す（依頼の画面と「＋ ほうこく」の共用）
+async function submitReport(selected, note, send) {
+  send.disabled = true;
+  try {
+    await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
+    toast(`ほうこくしました：${selected.map((q) => q.title).join("、")}`);
+    closeSheet();
+    state.loadedAt.guild = 0;
+    if (state.view === "guild") renderGuild();
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => enqueue(async () => {
+      await Promise.all([loadData("guild", "/api/guild", { force: true }), loadPlayer({ force: true })]);
+      if (state.view === "guild") renderGuild();
+    }), REFRESH_DELAY);
+  } catch (err) {
+    toast(err.message, true);
+    send.disabled = false;
+  }
+}
+
+// ---------- 「＋ ほうこく」：先にひとことを書き、合う依頼を候補から選ぶ ----------
+const REPORT_QUEST_MAX = 5;
+const SUGGEST_COUNT = 6;
+
+// 比べやすい形（全角半角・大文字小文字・空白や記号をそろえる）
+function normText(s) {
+  return (s || "").normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+}
+
+// 2文字ずつの組（日本語は単語の区切りがないため）
+function bigrams(s) {
+  const t = normText(s);
+  const out = new Set();
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
+  return out;
+}
+
+// ひとことの2文字の組が、依頼名（重め）・段階・カテゴリにいくつ含まれるか
+function questScore(noteGrams, q) {
+  if (!noteGrams.size) return 0;
+  const title = bigrams(q.title);
+  const rest = bigrams(`${q.stages.join(" ")} ${q.category || ""}`);
+  let score = 0;
+  for (const g of noteGrams) score += title.has(g) ? 3 : rest.has(g) ? 1 : 0;
+  return score;
+}
+
+// 書く前の並び：最近ほうこくした依頼 → それ以外（受注Lv順のまま）
+function recentQuestOrder(quests, reports) {
+  const rank = new Map();
+  for (const r of reports) for (const id of r.questIds || []) {
+    const key = id.replace(/-/g, "");
+    if (!rank.has(key)) rank.set(key, rank.size);
+  }
+  const at = (q) => rank.get(q.id.replace(/-/g, "")) ?? Infinity;
+  return [...quests].sort((a, b) => at(a) - at(b));
+}
+
+function openNewReport() {
+  const { quests, reports } = state.data.guild;
+  const open = quests.filter((q) => !questLocked(q));
+  const recent = recentQuestOrder(open, reports);
+  const selected = new Map();
+  const note = h("textarea", { rows: "2", maxlength: "200", placeholder: "なにをしたか ひとこと（例：換気扇のフィルターを替えた）", "aria-label": "ほうこくのひとこと" });
+  const send = h("button", { type: "button", class: "primary", disabled: true }, "ほうこくする");
+  const picked = h("div", { class: "chips picked", role: "group", "aria-label": "えらんだ依頼" });
+  const list = h("div", { class: "list suggest" });
+  const hint = h("p", { class: "sub", style: "margin:0" });
+
+  const update = () => { send.disabled = !note.value.trim() || !selected.size; };
+  const toggle = (q) => {
+    if (selected.has(q.id)) selected.delete(q.id);
+    else if (selected.size < REPORT_QUEST_MAX) selected.set(q.id, q);
+    else return toast(`依頼は${REPORT_QUEST_MAX}つまでです`, true);
+    draw();
+  };
+  const draw = () => {
+    const grams = bigrams(note.value);
+    const scored = grams.size
+      ? open.map((q) => [q, questScore(grams, q)]).filter(([, sc]) => sc > 0).sort((a, b) => b[1] - a[1]).map(([q]) => q)
+      : [];
+    const shown = (scored.length ? scored : recent).slice(0, SUGGEST_COUNT);
+    hint.textContent = !note.value.trim() ? "最近ほうこくした依頼" : scored.length ? "ひとことに合いそうな依頼" : "合う依頼が見つからないので、最近の依頼を出しています";
+    list.replaceChildren(...shown.map((q) => h("button", {
+      type: "button", class: "card quest pick", "aria-pressed": String(selected.has(q.id)), onclick: () => toggle(q),
+    },
+      h("span", { class: `rank ${q.rank || ""}`, text: q.rank || "?" }),
+      h("span", { class: "qbody" },
+        h("span", { class: "qtitle", text: q.title }),
+        h("span", { class: "qmeta" },
+          q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
+          h("span", { text: `基本${q.exp ?? "—"}EXP` }),
+        ),
+      ),
+      h("span", { class: "pick-mark", "aria-hidden": "true", text: selected.has(q.id) ? "✓" : "" }),
+    )));
+    picked.replaceChildren(...[...selected.values()].map((q) => h("button", {
+      type: "button", "aria-pressed": "true", "aria-label": `${q.title} をはずす`, onclick: () => toggle(q),
+    }, `${q.title} ×`)));
+    picked.hidden = !selected.size;
+    update();
+  };
+  let timer = null;
+  note.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(draw, 150); update(); });
+  send.addEventListener("click", () => submitReport([...selected.values()], note.value, send));
+  openSheet("ほうこく", [note, picked, hint, list], [send]);
+  draw();
+  note.focus();
 }
 
 // ================= ものがたり（DB_ものがたり） =================
@@ -713,6 +809,10 @@ async function renderMe() {
     ),
     parts.length ? h("div", { class: "card stack", style: "gap:6px" }, h("h3", { text: "EXPのうちわけ" }),
       parts.map(([label, v]) => h("div", { class: "rank-row" }, h("span", { class: "label", text: label }), h("div", { class: "bar" }, h("span", { style: `width:${(v / max) * 100}%` })), h("b", { text: fmt(v) })))) : null,
+    // 習慣EXPは読めてタスクEXPだけ空 ＝ インテグレーションが DB_タスク管理 に未接続（Lvがタスク分だけ低く出る）
+    typeof p.habitExp === "number" && p.taskExp == null
+      ? h("p", { class: "err", text: "タスクEXPが読めません。Notion の DB_タスク管理 に「習慣チェック」を接続すると、Lv にタスクの分が入ります" })
+      : null,
     textCard("ステータス", p.status),
     textCard("なかま", p.party),
     textCard("じゅもん", p.spell),

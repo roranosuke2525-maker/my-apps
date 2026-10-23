@@ -347,6 +347,7 @@ const QUEST_FIELDS = {
 };
 const REPORT_LIMIT = 20;
 const REPORT_NOTE_MAX = 200;
+const REPORT_QUEST_MAX = 5;
 
 async function getGuild(notion, env) {
   const [quests, reports] = await Promise.all([
@@ -367,23 +368,32 @@ async function getGuild(notion, env) {
 }
 
 async function createReport(notion, env, body) {
-  const { questId, note } = body || {};
-  if (typeof questId !== "string" || !/^[0-9a-f-]{32,36}$/i.test(questId)) throw httpError(400, "依頼を選んでください");
+  const { note } = body || {};
+  const questIds = reportQuestIds(body);
   if (typeof note !== "string" || !note.trim() || note.length > REPORT_NOTE_MAX) {
     throw httpError(400, `ひとことを${REPORT_NOTE_MAX}字以内で書いてください`);
   }
-  const quest = await notion("GET", `/pages/${questId}`);
-  if (normalizeId(quest.parent?.data_source_id) !== normalizeId(dsId(env, "GUILD_DS_ID"))) {
-    throw httpError(403, "DB_ギルド依頼 の依頼ではありません");
+  const guild = normalizeId(dsId(env, "GUILD_DS_ID"));
+  for (const id of questIds) {
+    const quest = await notion("GET", `/pages/${id}`);
+    if (normalizeId(quest.parent?.data_source_id) !== guild) throw httpError(403, "DB_ギルド依頼 の依頼ではありません");
   }
   const page = await notion("POST", "/pages", {
     parent: { type: "data_source_id", data_source_id: dsId(env, "REPORT_DS_ID") },
     properties: {
       ひとこと: { title: [{ type: "text", text: { content: note.trim() } }] },
-      依頼: { relation: [{ id: questId }] },
+      依頼: { relation: questIds.map((id) => ({ id })) },
     },
   });
   return { report: summarizeReport(page) };
+}
+
+// questIds（配列・最大 REPORT_QUEST_MAX 件）か、以前の questId（1件）を受け付ける
+function reportQuestIds(body) {
+  const raw = Array.isArray(body?.questIds) ? body.questIds : [body?.questId];
+  if (!raw.length || raw.length > REPORT_QUEST_MAX) throw httpError(400, `依頼を1〜${REPORT_QUEST_MAX}件えらんでください`);
+  if (!raw.every((id) => typeof id === "string" && /^[0-9a-f-]{32,36}$/i.test(id))) throw httpError(400, "依頼を選んでください");
+  return [...new Set(raw.map(normalizeId))];
 }
 
 function summarizeReport(page) {
