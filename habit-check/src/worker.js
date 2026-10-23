@@ -20,6 +20,7 @@ export default {
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います" }, 401);
       const notion = notionClient(env);
+      if (request.method !== "GET") forgetPlayer(env);
 
       if (url.pathname === "/api/day" && request.method === "GET") {
         return json(await getDay(notion, env, url.searchParams.get("date")));
@@ -302,10 +303,86 @@ const PLAYER_FIELDS = {
   spell: "じゅもん",
 };
 
-async function getPlayer(notion, env) {
+// Notion API はページの rollup を関連の先頭25件だけで計算し、それを使う数式（総EXP・レベル…）もずれる。
+// そこで EXP の rollup は「ページのプロパティ」API で全件の合計を取り直し、レベル系は Notion と同じ式で計算し直す。
+const EXP_ROLLUPS = { habitExp: "習慣EXP", taskExp: "タスクEXP", guildExp: "ギルドEXP" };
+const MAX_PROPERTY_PAGES = 30;
+const PLAYER_TTL = 60e3;
+const playerCache = new WeakMap(); // env ごと（同じ Worker の中で1分だけ使い回す）
+
+// DB_プレイヤーの数式と同じ：レベル = floor(√(総EXP/25)) + 1、レベルnの始まり = 25(n-1)²
+const levelOf = (xp) => Math.floor(Math.sqrt(xp / 25)) + 1;
+const expAt = (lv) => 25 * (lv - 1) ** 2;
+const JOBS = [[20, "でんせつ"], [15, "たつじん"], [10, "ベテラン"], [7, "いちにんまえ"], [4, "かけだし"], [0, "みならい"]];
+
+// DB_プレイヤー「ステータス」の数式と同じ文面
+function statusText(name, lv, xp, exp) {
+  const cur = expAt(lv);
+  const nxt = expAt(lv + 1);
+  const fill = Math.floor(((xp - cur) / (nxt - cur)) * 10);
+  const job = JOBS.find(([min]) => lv >= min)[1];
+  return `▶ ${name}　Lv ${lv}\nしょくぎょう：${job}\nEXP：${"■".repeat(fill)}${"□".repeat(10 - fill)}\n` +
+    `つぎの レベルまで あと ${nxt - xp} EXP\n（しゅうかん ${exp.habitExp}／ギルド ${exp.guildExp}／タスク ${exp.taskExp}）`;
+}
+
+// 取れなければページの値（先頭25件の合計）のまま。プロパティIDは URL エンコード済みで返ることがある
+async function fullRollup(notion, pageId, prop) {
+  if (!prop || prop.type !== "rollup") return null;
+  const fallback = prop.rollup?.type === "number" ? prop.rollup.number : null;
+  const propId = encodeURIComponent(decodeURIComponent(prop.id));
+  try {
+    return await pagedRollup(notion, pageId, propId);
+  } catch {
+    return fallback;
+  }
+}
+
+async function pagedRollup(notion, pageId, propId) {
+  let cursor;
+  let last = null;
+  for (let i = 0; i < MAX_PROPERTY_PAGES; i++) {
+    const q = `page_size=100${cursor ? `&start_cursor=${encodeURIComponent(cursor)}` : ""}`;
+    const res = await notion("GET", `/pages/${pageId}/properties/${propId}?${q}`);
+    last = res.property_item?.rollup ?? res.rollup ?? null;
+    if (!res.has_more) break;
+    cursor = res.next_cursor;
+  }
+  return last?.type === "number" ? last.number : null;
+}
+
+async function loadPlayer(notion, env) {
+  const cached = playerCache.get(env);
+  if (cached && Date.now() - cached.at < PLAYER_TTL) return cached.value;
   if (!env.PLAYER_PAGE_ID) throw httpError(500, "PLAYER_PAGE_ID が設定されていません（wrangler.toml）");
   const page = await notion("GET", `/pages/${env.PLAYER_PAGE_ID}`);
-  return { player: pick(page, PLAYER_FIELDS) };
+  const player = pick(page, PLAYER_FIELDS);
+  const exp = {};
+  for (const [key, name] of Object.entries(EXP_ROLLUPS)) {
+    exp[key] = await fullRollup(notion, page.id, page.properties?.[name]);
+  }
+  // 習慣EXPも読めないときは計算し直さない（接続が足りない。Notion の値のまま出す）
+  if (typeof exp.habitExp === "number") {
+    const xp = (exp.habitExp ?? 0) + (exp.taskExp ?? 0) + (exp.guildExp ?? 0);
+    const level = levelOf(xp);
+    Object.assign(player, exp, { totalExp: xp, level, toNext: expAt(level + 1) - xp });
+    player.status = statusText(player.name || "プレイヤー", level, xp, { habitExp: exp.habitExp ?? 0, taskExp: exp.taskExp ?? 0, guildExp: exp.guildExp ?? 0 });
+  }
+  playerCache.set(env, { at: Date.now(), value: player });
+  return player;
+}
+
+// 書き込んだらEXPが変わるので読み直させる
+function forgetPlayer(env) {
+  playerCache.delete(env);
+}
+
+async function playerLevel(notion, env) {
+  const lv = (await loadPlayer(notion, env)).level;
+  return typeof lv === "number" ? lv : null;
+}
+
+async function getPlayer(notion, env) {
+  return { player: await loadPlayer(notion, env) };
 }
 
 // ---------- パーティー（DB_すがた：ひょうじ が付いたものだけ） ----------
@@ -313,13 +390,15 @@ async function getParty(notion, env) {
   const rows = await queryAll(notion, dsId(env, "PARTY_DS_ID"), {
     sorts: [{ property: "なまえ", direction: "ascending" }],
   });
-  const shown = rows.filter((p) => propValue(p.properties?.["ひょうじ"]) !== false);
-  const members = await Promise.all(
-    shown.map(async (p) => ({
-      ...pick(p, { name: "なまえ", kind: "しゅるい", needLv: "ひつようLv", nextLv: "つぎLv" }),
-      image: await firstImage(notion, p.id),
-    })),
-  );
+  const lv = await playerLevel(notion, env);
+  // DB_すがた「ひょうじ」と同じ判定を、正しいレベルでやり直す（レベルが分からなければ Notion の値）
+  const shown = rows
+    .map((p) => ({ page: p, m: pick(p, { name: "なまえ", kind: "しゅるい", needLv: "ひつようLv", nextLv: "つぎLv" }) }))
+    .filter(({ page, m }) => {
+      if (lv === null) return propValue(page.properties?.["ひょうじ"]) !== false;
+      return m.kind === "なかま" ? lv >= (m.needLv ?? 0) : lv >= (m.needLv ?? 0) && lv < (m.nextLv ?? Infinity);
+    });
+  const members = await Promise.all(shown.map(async ({ page, m }) => ({ ...m, image: await firstImage(notion, page.id) })));
   return { members };
 }
 
@@ -350,18 +429,19 @@ const REPORT_NOTE_MAX = 200;
 const REPORT_QUEST_MAX = 5;
 
 async function getGuild(notion, env) {
-  const [quests, reports] = await Promise.all([
+  const [quests, reports, lv] = await Promise.all([
     queryAll(notion, dsId(env, "GUILD_DS_ID"), { sorts: [{ property: "受注Lv", direction: "ascending" }] }),
     notion("POST", `/data_sources/${dsId(env, "REPORT_DS_ID")}/query`, {
       sorts: [{ timestamp: "created_time", direction: "descending" }],
       page_size: REPORT_LIMIT,
     }),
+    playerLevel(notion, env),
   ]);
   return {
     quests: quests.map((p) => {
       const q = pick(p, QUEST_FIELDS);
       const { stagesText, ...rest } = q;
-      return { ...rest, stages: splitStages(stagesText) };
+      return { ...rest, ...(lv !== null ? { playerLv: lv } : {}), stages: splitStages(stagesText) };
     }),
     reports: (reports.results || []).map(summarizeReport),
   };
@@ -416,17 +496,23 @@ const STORY_FIELDS = {
   playerLv: "いまのLv",
 };
 
-function summarizeStory(page) {
+// lv：正しいレベル（分からなければ null で Notion の「いまのLv」のまま）
+function summarizeStory(page, lv = null) {
   const s = pick(page, STORY_FIELDS);
+  const notionLocked = typeof s.unlockLv === "number" && typeof s.playerLv === "number" && s.playerLv < s.unlockLv;
+  if (lv !== null) s.playerLv = lv;
   const locked = typeof s.unlockLv === "number" && typeof s.playerLv === "number" && s.playerLv < s.unlockLv;
+  // Notion 側がずれたレベルでロック表示にしている章は、じょうたい の文面も合わせる
+  if (notionLocked && !locked && !s.read && s.kind !== "よりみち") s.state = "📖 NEW！ 読める";
   return { ...s, locked };
 }
 
 async function getStories(notion, env) {
-  const rows = await queryAll(notion, dsId(env, "STORY_DS_ID"), {
-    sorts: [{ property: "じゅんばん", direction: "ascending" }],
-  });
-  return { chapters: rows.map(summarizeStory) };
+  const [rows, lv] = await Promise.all([
+    queryAll(notion, dsId(env, "STORY_DS_ID"), { sorts: [{ property: "じゅんばん", direction: "ascending" }] }),
+    playerLevel(notion, env),
+  ]);
+  return { chapters: rows.map((p) => summarizeStory(p, lv)) };
 }
 
 async function storyPage(notion, env, id) {
@@ -438,17 +524,18 @@ async function storyPage(notion, env, id) {
 }
 
 async function getStory(notion, env, id) {
-  const chapter = summarizeStory(await storyPage(notion, env, id));
+  const chapter = summarizeStory(await storyPage(notion, env, id), await playerLevel(notion, env));
   if (chapter.locked) throw httpError(403, `Lv${chapter.unlockLv}になると読めます`);
   return { chapter, blocks: await readText(notion, id, 0) };
 }
 
 async function markStory(notion, env, id, body) {
   if (typeof body?.read !== "boolean") throw httpError(400, "変更できない項目です");
-  const chapter = summarizeStory(await storyPage(notion, env, id));
+  const lv = await playerLevel(notion, env);
+  const chapter = summarizeStory(await storyPage(notion, env, id), lv);
   if (chapter.locked) throw httpError(403, `Lv${chapter.unlockLv}になると読めます`);
   const page = await notion("PATCH", `/pages/${id}`, { properties: { よんだ: { checkbox: body.read } } });
-  return { chapter: summarizeStory(page) };
+  return { chapter: summarizeStory(page, lv) };
 }
 
 // 本文を「段落」と「引用（SYSTEM など）」の並びにする。トグル（▶ 読む）の中も読む
