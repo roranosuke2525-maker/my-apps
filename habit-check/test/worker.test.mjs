@@ -42,7 +42,7 @@ function extraPages() {
       総EXP: formula(1265),
       ステータス: formula("ちから 12"),
     }),
-    other("m1", PARTY, { なまえ: { type: "title", title: text("さとし（かけだし）") }, しゅるい: { type: "select", select: { name: "しゅじんこう" } }, ひつようLv: { type: "number", number: 4 }, つぎLv: { type: "number", number: 7 }, ひょうじ: formula(true) }),
+    other("m1", PARTY, { なまえ: { type: "title", title: text("さとし（かけだし）") }, しゅるい: { type: "select", select: { name: "しゅじんこう" } }, ひつようLv: { type: "number", number: 4 }, つぎLv: { type: "number", number: 10 }, ひょうじ: formula(true) }),
     other("m2", PARTY, { なまえ: { type: "title", title: text("ゼニ") }, しゅるい: { type: "select", select: { name: "なかま" } }, ひつようLv: { type: "number", number: 15 }, つぎLv: { type: "number", number: 999 }, ひょうじ: formula(false) }),
     other(QID, GUILD, {
       依頼: { type: "title", title: text("固定費のみなおし") },
@@ -102,8 +102,11 @@ function page(id, created, extra = {}) {
   };
 }
 
+let propertyItems = {};
+
 beforeEach(() => {
   calls = [];
+  propertyItems = {};
   pages = [
     page("day20", "2026-10-19T15:00:10.000Z"),
     page("day21", "2026-10-20T15:00:05.000Z"),
@@ -138,6 +141,15 @@ beforeEach(() => {
       });
       pages.push(p);
       return ok(p);
+    }
+    const pi = path.match(/^\/pages\/([^/]+)\/properties\/([^?]+)(?:\?(.*))?$/);
+    if (init.method === "GET" && pi) {
+      const items = propertyItems[decodeURIComponent(pi[2])];
+      if (!items) return new Response(JSON.stringify({ code: "object_not_found" }), { status: 404 });
+      const cursor = new URLSearchParams(pi[3] || "").get("start_cursor");
+      const i = cursor ? Number(cursor) : 0;
+      const more = i + 1 < items.length;
+      return ok({ object: "list", results: [], has_more: more, next_cursor: more ? String(i + 1) : null, property_item: { type: "rollup", rollup: { type: "number", number: items[i] } } });
     }
     const m = path.match(/^\/pages\/(.+)$/);
     const p = m && pages.find((x) => x.id === m[1]);
@@ -263,6 +275,25 @@ test("きろく：プレイヤーのLv・EXP・ステータスを返す", async 
   assert.equal(player.toNext, 35);
   assert.equal(player.status, "ちから 12");
   assert.equal(player.guildExp, null);
+});
+
+test("きろく：EXPは全件の合計を取り直し、Lv・次のLvまで・ステータスを Notion と同じ式で計算し直す", async () => {
+  const player = pages.find((p) => p.id === "player1");
+  const roll = (id, n) => ({ id, type: "rollup", rollup: { type: "number", number: n, function: "sum" } });
+  Object.assign(player.properties, { 習慣EXP: roll("h%3C", 100), タスクEXP: roll("t", 10), ギルドEXP: roll("g", 50) });
+  // タスクは2ページに分かれ、最後のページが全件の合計（ページの値 10 は先頭25件だけの合計）
+  propertyItems = { "h<": [900], t: [10, 2260], g: [650] };
+  const lvEnv = { ...env };
+  const res = await worker.fetch(new Request("https://app.test/api/player", { headers: { Authorization: `Bearer ${KEY}` } }), lvEnv);
+  const { player: p } = await res.json();
+  assert.deepEqual([p.habitExp, p.taskExp, p.guildExp, p.totalExp], [900, 2260, 650, 3810]);
+  assert.equal(p.level, 13); // floor(√(3810/25)) + 1
+  assert.equal(p.toNext, 25 * 13 ** 2 - 3810);
+  assert.match(p.status, /^▶ Satoshi　Lv 13\nしょくぎょう：ベテラン\n/);
+
+  // ものがたり：Notion の いまのLv(8) ではなく 13 でロックを判定する
+  const stories = await (await worker.fetch(new Request("https://app.test/api/story", { headers: { Authorization: `Bearer ${KEY}` } }), lvEnv)).json();
+  assert.deepEqual(stories.chapters.map((c) => [c.playerLv, c.locked]), [[13, false], [13, true]]);
 });
 
 test("パーティー：ひょうじ が付いたすがただけ、絵のURLつきで返す", async () => {
