@@ -125,6 +125,10 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 
 /* 日：習慣のタイル（2列） */
 .habits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-content: start; }
+.slot-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 6px; padding: 6px 2px 0; font-size: 12px; font-weight: 600; color: var(--sub); }
+.slot-head:first-child { padding-top: 0; }
+.slot-head em { font-style: normal; font-size: 10px; padding: 0 6px; border-radius: 8px; background: var(--accent); color: var(--on-accent); }
+.slot-head small { margin-left: auto; font-variant-numeric: tabular-nums; }
 .habit { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; box-shadow: var(--shadow); }
 .habit[aria-pressed="true"] { background: var(--accent-soft); }
 .habit:disabled { cursor: default; opacity: 0.6; }
@@ -159,6 +163,8 @@ textarea { resize: none; }
 .trow .cell:disabled { cursor: default; }
 .trow .dot { display: grid; place-items: center; color: var(--line); }
 .tbody { overflow-y: auto; min-height: 0; }
+.trow.group { min-height: 24px; background: var(--accent-soft); }
+.trow.group .name { grid-column: 1 / -1; font-size: 11px; font-weight: 600; color: var(--sub); }
 
 /* カレンダー */
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
