@@ -40,7 +40,6 @@ const state = {
   view: "habit",
   tab: "day",
   date: todayJst(),
-  slot: null,
   habits: [],
   row: null,
   savedNote: "",
@@ -212,35 +211,13 @@ async function loadDay({ quiet = false } = {}) {
   if (state.view === "habit" && state.tab === "day") renderDay();
 }
 
-function sortedHabits(slot) {
-  return state.habits
-    .filter((x) => !slot || x.slot === slot)
-    .sort((a, b) => Number(b.must) - Number(a.must) || a.label.localeCompare(b.label, "ja"));
-}
-
-function activeSlot() {
-  const present = SLOTS.map(([s]) => s).filter((s) => state.habits.some((x) => x.slot === s));
-  if (state.slot && present.includes(state.slot)) return state.slot;
-  const now = currentSlot();
-  return present.includes(now) ? now : present[0] || null;
-}
-
-function slotChips(checksOf, onPick) {
-  const current = activeSlot();
-  return h(
-    "div",
-    { class: "chips", role: "group", "aria-label": "時間帯" },
-    SLOTS.filter(([s]) => state.habits.some((x) => x.slot === s)).map(([s, label]) => {
-      const list = sortedHabits(s);
-      const done = checksOf ? list.filter((x) => checksOf(x)).length : null;
-      return h(
-        "button",
-        { type: "button", "aria-pressed": String(s === current), onclick: () => { state.slot = s; onPick(); } },
-        label,
-        done == null ? null : h("small", { text: `${done}/${list.length}` }),
-      );
-    }),
-  );
+// 時間帯ごとのまとまり。時間帯の順は SLOTS、中の並びは届いた順（アーティファクト版は Notion のビューの順）で、◆必ず を先に
+function slotGroups() {
+  return SLOTS.map(([slot, label]) => ({
+    slot,
+    label,
+    list: state.habits.filter((x) => x.slot === slot).sort((a, b) => Number(b.must) - Number(a.must)),
+  })).filter((g) => g.list.length);
 }
 
 function renderDay() {
@@ -262,11 +239,18 @@ function renderDay() {
     );
   }
   const canEdit = editable(state.date);
-  const slot = activeSlot();
+  const now = state.date === todayJst() ? currentSlot() : null;
+  const tiles = slotGroups().flatMap((g) => [
+    h("div", { class: "slot-head" },
+      h("span", { text: g.label }),
+      g.slot === now ? h("em", { text: "いま" }) : null,
+      h("small", { text: `${g.list.filter((x) => row.checks[x.name]).length}/${g.list.length}` }),
+    ),
+    ...g.list.map((x) => habitTile(x, row, canEdit)),
+  ]);
   body.replaceChildren(
     statusCard(row),
-    slotChips((x) => row.checks[x.name], renderDay),
-    h("div", { class: "habits scroll fill" }, sortedHabits(slot).map((x) => habitTile(x, row, canEdit))),
+    h("div", { class: "habits scroll fill" }, tiles),
     canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
   );
 }
@@ -426,10 +410,9 @@ function renderWeek() {
   withRange("week-body", from, to, (r) => {
     const dates = Array.from({ length: 7 }, (_, i) => addDays(from, i));
     const today = todayJst();
-    const slot = activeSlot();
     const head = h("div", { class: "trow head" }, h("div", { class: "name", text: "習慣" }),
       dates.map((d, i) => h("div", { class: `day${d === today ? " today" : ""}` }, h("span", { text: WEEK[i] }), h("span", { text: String(Number(d.slice(8))) }))));
-    const rows = sortedHabits(slot).map((x) => h("div", { class: "trow" }, h("div", { class: "name", text: x.label }),
+    const habitRow = (x) => h("div", { class: "trow" }, h("div", { class: "name", text: x.label }),
       dates.map((d) => {
         const day = r.days[d];
         if (!day || d > today) return h("div", { class: "dot", "aria-hidden": "true", text: "·" });
@@ -437,11 +420,11 @@ function renderWeek() {
         const btn = h("button", { type: "button", class: `cell${d === today ? " today" : ""}`, "aria-pressed": String(on), "aria-label": `${x.label} ${md(d)}`, disabled: !editable(d) }, h("span", { class: "box" }));
         btn.addEventListener("click", () => toggleCheck(day, d, x, !day.checks[x.name]));
         return btn;
-      })));
+      }));
+    const rows = slotGroups().flatMap((g) => [h("div", { class: "trow group" }, h("div", { class: "name", text: g.label })), ...g.list.map(habitRow)]);
     const foot = h("div", { class: "trow foot" }, h("div", { class: "name", text: "達成率" }),
       dates.map((d) => { const rate = dayRate(r.days[d]); return h("div", { class: "day", text: rate == null ? "–" : pct(rate) }); }));
     $("week-body").replaceChildren(
-      slotChips(null, renderWeek),
       h("div", { class: "table fill" }, head, h("div", { class: "tbody" }, rows), foot),
     );
   }, () => state.weekStart === from);

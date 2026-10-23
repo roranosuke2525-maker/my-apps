@@ -12,6 +12,8 @@ run_worker_first = ["/api/*"]
 DATA_SOURCE_ID = "e730b8b2-bb41-491d-9382-a296c40e6deb"
 # 行を作るときに付ける「プレイヤー」（DB_プレイヤーのページ）。きろくタブもここを読む
 PLAYER_PAGE_ID = "3e962844acbe81b0843ff78fe19791fa"
+# アプリに出さない習慣（DB_習慣チェックの列名をカンマ区切り）。Notion のビューで非表示にした列をここにも書く
+HIDDEN_HABITS = "◇☾ 仕事の所感を書く"
 # 習慣ページの他のタブ（パーティー／ギルド／ものがたり）のデータソースID
 PARTY_DS_ID = "7ab3aa8b-2f1e-44cb-b2f8-592202bab226"   # DB_すがた
 GUILD_DS_ID = "86ea2c0d-a66a-49e4-9a6b-b287f4f32bbd"   # DB_ギルド依頼

@@ -149,7 +149,7 @@ async function updateHabit(notion, env, pageId, body) {
   if (name === NOTE_PROPERTY && schema.props[NOTE_PROPERTY]?.type === "rich_text") {
     if (typeof value !== "string" || value.length > 2000) throw httpError(400, "ひとことは2000字までです");
     patch = { rich_text: value ? [{ type: "text", text: { content: value } }] : [] };
-  } else if (schema.props[name]?.type === "checkbox" && typeof value === "boolean") {
+  } else if (schema.habitNames.has(name) && typeof value === "boolean") {
     patch = { checkbox: value };
   } else {
     throw httpError(400, "変更できない項目です");
@@ -167,8 +167,10 @@ async function updateHabit(notion, env, pageId, body) {
 async function loadSchema(notion, env) {
   const ds = await notion("GET", `/data_sources/${env.DATA_SOURCE_ID}`);
   const props = ds.properties || {};
+  // Notion API ではビューの表示設定が読めないので、出さない習慣は HIDDEN_HABITS（wrangler.toml）に書く
+  const hidden = new Set((env.HIDDEN_HABITS || "").split(",").map((s) => s.trim()).filter(Boolean));
   const habits = Object.values(props)
-    .filter((p) => p.type === "checkbox")
+    .filter((p) => p.type === "checkbox" && !hidden.has(p.name))
     .map((p) => {
       const m = p.name.match(HABIT_NAME);
       return {
@@ -179,7 +181,7 @@ async function loadSchema(notion, env) {
         hint: p.description || "",
       };
     });
-  return { props, habits };
+  return { props, habits, habitNames: new Set(habits.map((h) => h.name)) };
 }
 
 async function findRow(notion, env, date) {
@@ -201,7 +203,7 @@ function summarizeRow(page, schema) {
   const stats = {};
   let note = "";
   for (const [name, prop] of Object.entries(page.properties || {})) {
-    if (prop.type === "checkbox" && schema.props[name]) checks[name] = prop.checkbox;
+    if (prop.type === "checkbox" && schema.habitNames.has(name)) checks[name] = prop.checkbox;
     else if (name === NOTE_PROPERTY && prop.type === "rich_text") note = prop.rich_text.map((t) => t.plain_text ?? t.text?.content ?? "").join("");
     else if (STAT_TYPES.has(prop.type)) {
       const v = statValue(prop);
