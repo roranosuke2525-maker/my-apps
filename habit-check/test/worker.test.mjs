@@ -322,3 +322,17 @@ test("ものがたり：他のDBのページには触らない", async () => {
   assert.equal((await req("GET", `/api/story/${QID}`)).status, 403);
   assert.equal((await req("PATCH", `/api/story/${SID_OPEN}`, { read: "yes" })).status, 400);
 });
+
+test("HIDDEN_HABITS に書いた習慣は出さず、書き換えもしない", async () => {
+  const hiddenEnv = { ...env, HIDDEN_HABITS: "◇☼ 新聞, ◇☾プロテインの準備" };
+  pages[1].id = "c".repeat(32);
+  const call = (method, path, body) =>
+    worker.fetch(new Request(`https://app.test${path}`, { method, headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }), hiddenEnv);
+  const data = await (await call("GET", "/api/day?date=2026-10-21")).json();
+  const names = data.habits.map((x) => x.name);
+  assert.ok(!names.includes("◇☼ 新聞") && !names.includes("◇☾プロテインの準備"));
+  assert.ok(names.includes("◆☼ 起床"));
+  assert.equal("◇☼ 新聞" in data.row.checks, false);
+  const res = await call("PATCH", `/api/pages/${data.row.id}`, { name: "◇☼ 新聞", value: true });
+  assert.equal(res.status, 400);
+});
