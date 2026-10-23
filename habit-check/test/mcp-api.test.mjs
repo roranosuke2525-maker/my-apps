@@ -123,6 +123,9 @@ test("ギルドのほうこくと、ものがたりの「よんだ」を書き�
   assert.equal(create.input.parent.data_source_id, "0ea02603-b2dd-4064-bc84-bf02f0e60aca");
   assert.deepEqual(create.input.pages[0].properties["依頼"], [`https://www.notion.so/${q.id}`]);
   assert.equal((await api("POST", "/api/guild/reports", { questId: "e".repeat(32), note: "x" })).status, 403);
+  const multi = await api("POST", "/api/guild/reports", { questIds: [guild.quests[0].id, q.id], note: "ふたつ" });
+  assert.deepEqual(multi.data.report.questIds, [guild.quests[0].id, q.id]);
+  assert.equal((await api("POST", "/api/guild/reports", { questIds: [q.id, "e".repeat(32)], note: "x" })).status, 403);
 
   const chapters = (await api("GET", "/api/story")).data.chapters;
   const marked = await api("PATCH", `/api/story/${chapters[1].id}`, { read: true });

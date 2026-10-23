@@ -299,6 +299,18 @@ test("ギルド：依頼以外のページや空のひとことは受け付け�
   assert.equal(calls.filter((c) => c.path === "/pages").length, 0);
 });
 
+test("ギルド：questIds で複数の依頼に紐づけられる（重複はまとめ、依頼以外が混ざれば拒否）", async () => {
+  const res = await req("POST", "/api/guild/reports", { questIds: [QID, QID], note: "まとめて片づけた" });
+  assert.equal(res.status, 200);
+  const post = calls.find((c) => c.method === "POST" && c.path === "/pages");
+  assert.deepEqual(post.body.properties.依頼, { relation: [{ id: QID }] });
+  calls.length = 0;
+  assert.equal((await req("POST", "/api/guild/reports", { questIds: [QID, SID_OPEN], note: "x" })).status, 403);
+  assert.equal((await req("POST", "/api/guild/reports", { questIds: [], note: "x" })).status, 400);
+  assert.equal((await req("POST", "/api/guild/reports", { questIds: Array(6).fill(QID), note: "x" })).status, 400);
+  assert.equal(calls.filter((c) => c.path === "/pages").length, 0);
+});
+
 test("ものがたり：じゅんばん順の一覧と、Lvが足りない章のロック", async () => {
   const { chapters } = await (await req("GET", "/api/story")).json();
   assert.deepEqual(chapters.map((c) => [c.title, c.locked]), [["第1章", false], ["最終章", true]]);
