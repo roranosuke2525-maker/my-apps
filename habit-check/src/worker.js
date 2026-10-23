@@ -356,10 +356,10 @@ async function loadPlayer(notion, env) {
   if (!env.PLAYER_PAGE_ID) throw httpError(500, "PLAYER_PAGE_ID が設定されていません（wrangler.toml）");
   const page = await notion("GET", `/pages/${env.PLAYER_PAGE_ID}`);
   const player = pick(page, PLAYER_FIELDS);
-  const exp = {};
-  for (const [key, name] of Object.entries(EXP_ROLLUPS)) {
-    exp[key] = await fullRollup(notion, page.id, page.properties?.[name]);
-  }
+  const entries = await Promise.all(
+    Object.entries(EXP_ROLLUPS).map(async ([key, name]) => [key, await fullRollup(notion, page.id, page.properties?.[name])]),
+  );
+  const exp = Object.fromEntries(entries);
   // 習慣EXPも読めないときは計算し直さない（接続が足りない。Notion の値のまま出す）
   if (typeof exp.habitExp === "number") {
     const xp = (exp.habitExp ?? 0) + (exp.taskExp ?? 0) + (exp.guildExp ?? 0);

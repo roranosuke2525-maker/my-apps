@@ -109,6 +109,8 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 .progress { display: flex; align-items: center; gap: 12px; font-size: 14px; }
 .progress b { font-variant-numeric: tabular-nums; }
 .must { font-size: 12px; color: var(--must); margin-top: 4px; }
+.progress .must { margin-top: 0; font-size: 12px; white-space: nowrap; }
+#status { padding: 8px 12px; }
 .must.clear { color: var(--sub); }
 
 .chips { display: flex; gap: 6px; overflow-x: auto; flex: none; scrollbar-width: none; }
@@ -122,21 +124,26 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 [aria-pressed="true"] > .box, .stages .done > .box { background: var(--accent); border-color: var(--accent); }
 [aria-pressed="true"] > .box::after, .stages .done > .box::after { content: ""; width: 5px; height: 10px; border: solid var(--on-accent); border-width: 0 2.5px 2.5px 0; transform: translateY(-1px) rotate(45deg); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .box { background: transparent; border-color: #a58c76; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) [aria-pressed="true"] > .box, :root:not([data-theme="light"]) .stages .done > .box { background: var(--accent); border-color: var(--accent); } }
 
-/* 日：習慣のタイル（2列） */
-.habits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-content: start; }
-.slot-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 6px; padding: 6px 2px 0; font-size: 12px; font-weight: 600; color: var(--sub); }
-.slot-head:first-child { padding-top: 0; }
-.slot-head em { font-style: normal; font-size: 10px; padding: 0 6px; border-radius: 8px; background: var(--accent); color: var(--on-accent); }
-.slot-head small { margin-left: auto; font-variant-numeric: tabular-nums; }
-.habit { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; box-shadow: var(--shadow); }
+/* 日：時間帯ごとに「左の見出し＋3列のタイル」。行数に応じて高さを分け合い、1画面に収める（狭すぎるときだけスクロール） */
+.habits { display: flex; flex-direction: column; gap: 6px; }
+.slot-line { flex: var(--rows) 1 0; min-height: calc(var(--rows) * 36px + (var(--rows) - 1) * 4px); display: flex; gap: 6px; }
+.slot { flex: 1 1 0; min-width: 0; display: flex; gap: 4px; }
+.slot-label { flex: none; width: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--sub); line-height: 1.1; }
+.slot-label .slot-icon { font-size: 13px; }
+.slot-label small { font-size: 9.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.slot.now .slot-label { background: var(--accent); color: var(--on-accent); }
+.slot-tiles { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 4px; }
+.habit { display: flex; align-items: center; gap: 6px; min-height: 0; padding: 3px 6px; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--card); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; box-shadow: var(--shadow); }
 .habit[aria-pressed="true"] { background: var(--accent-soft); }
 .habit:disabled { cursor: default; opacity: 0.6; }
+.habit .box { width: 18px; height: 18px; }
 .habit .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.habit .name { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.habit .name { font-size: 12.5px; font-weight: 600; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .habit[aria-pressed="true"] .name { color: var(--sub); text-decoration: line-through; }
-.habit .hint { font-size: 11px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.habit .tag { flex: none; font-size: 10px; font-weight: 700; color: var(--must); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.habit .must-mark { color: var(--must); margin-right: 1px; text-decoration: none; display: inline-block; }
+.habit .hint { font-size: 9.5px; line-height: 1.2; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .habit.pending { opacity: 0.6; }
 .note-row { flex: none; display: flex; gap: 8px; }
 .note-row input { flex: 1; min-width: 0; }

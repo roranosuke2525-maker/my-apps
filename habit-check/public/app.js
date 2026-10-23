@@ -97,6 +97,15 @@ function currentSlot() {
   return "night";
 }
 
+// 中身を入れ替える。同じ画面（key が同じ）の描き直しなら、スクロール位置をそのまま残す
+function swap(body, nodes, key = "") {
+  const same = body.dataset.scrollKey === key;
+  const tops = same ? [...body.querySelectorAll(".scroll, .tbody")].map((el) => el.scrollTop) : [];
+  body.replaceChildren(...nodes.filter(Boolean));
+  body.dataset.scrollKey = key;
+  if (tops.length) body.querySelectorAll(".scroll, .tbody").forEach((el, i) => { if (tops[i]) el.scrollTop = tops[i]; });
+}
+
 // ---------- 通信 ----------
 function getKey() {
   try { return localStorage.getItem(KEY_STORAGE) || ""; } catch { return ""; }
@@ -212,6 +221,8 @@ async function loadDay({ quiet = false } = {}) {
 }
 
 // 時間帯ごとのまとまり。時間帯の順は SLOTS、中の並びは届いた順（アーティファクト版は Notion のビューの順）で、◆必ず を先に
+const DAY_COLS = 3;
+
 function slotGroups() {
   return SLOTS.map(([slot, label]) => ({
     slot,
@@ -240,19 +251,33 @@ function renderDay() {
   }
   const canEdit = editable(state.date);
   const now = state.date === todayJst() ? currentSlot() : null;
-  const tiles = slotGroups().flatMap((g) => [
-    h("div", { class: "slot-head" },
-      h("span", { text: g.label }),
-      g.slot === now ? h("em", { text: "いま" }) : null,
+  // 時間帯ごとに「左に見出し・右に3列のタイル」。行数に応じて高さを分け合い、1画面に収める。
+  // 1行に満たない時間帯どうし（昼・時間など）は、合わせて3つまでなら同じ行に並べる
+  const lines = [];
+  for (const g of slotGroups()) {
+    const last = lines.at(-1);
+    const n = g.list.length;
+    if (n < DAY_COLS && last && last.every((x) => x.list.length < DAY_COLS) && last.reduce((a, x) => a + x.list.length, n) <= DAY_COLS) last.push(g);
+    else lines.push([g]);
+  }
+  const slotEl = (g, cols) => h("div", { class: `slot${g.slot === now ? " now" : ""}`, style: `--cols:${cols};flex-grow:${cols}` },
+    h("div", { class: "slot-label" },
+      h("span", { class: "slot-icon", text: g.label.split(" ")[0] }),
+      h("span", { class: "slot-name", text: g.label.split(" ")[1] || "" }),
       h("small", { text: `${g.list.filter((x) => row.checks[x.name]).length}/${g.list.length}` }),
     ),
-    ...g.list.map((x) => habitTile(x, row, canEdit)),
-  ]);
-  body.replaceChildren(
-    statusCard(row),
-    h("div", { class: "habits scroll fill" }, tiles),
-    canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
+    h("div", { class: "slot-tiles" }, g.list.map((x) => habitTile(x, row, canEdit))),
   );
+  const groups = lines.map((line) => {
+    const rows = Math.max(...line.map((g) => Math.ceil(g.list.length / DAY_COLS)));
+    return h("div", { class: "slot-line", style: `--rows:${rows}` },
+      line.length === 1 ? slotEl(line[0], DAY_COLS) : line.map((g) => slotEl(g, g.list.length)));
+  });
+  swap(body, [
+    statusCard(row),
+    h("div", { class: "habits scroll fill" }, groups),
+    canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
+  ], `day:${state.date}`);
 }
 
 function statusCard(row) {
@@ -265,9 +290,10 @@ function statusCard(row) {
       h("span", { class: "sub", text: "達成" }),
       h("div", { class: "bar" }, h("span", { style: `width:${total ? (done / total) * 100 : 0}%` })),
       h("b", { text: `${done} / ${total}` }),
+      musts.length && !left.length ? h("span", { class: "must clear", text: "◆クリア" }) : null,
     ),
-    musts.length
-      ? h("div", { class: left.length ? "must" : "must clear", text: left.length ? `◆必ず ${musts.length - left.length}/${musts.length}　のこり：${left.map((x) => x.label).join("・")}` : `◆必ず ${musts.length}/${musts.length} クリア！` })
+    left.length
+      ? h("div", { class: "must", text: `◆必ず ${musts.length - left.length}/${musts.length}　のこり：${left.map((x) => x.label).join("・")}` })
       : null,
   );
 }
@@ -275,8 +301,9 @@ function statusCard(row) {
 function habitTile(x, row, canEdit) {
   const btn = h("button", { type: "button", class: "habit", "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit },
     h("span", { class: "box" }),
-    h("span", { class: "text" }, h("span", { class: "name", text: x.label }), x.hint ? h("span", { class: "hint", text: x.hint }) : null),
-    x.must ? h("span", { class: "tag", text: "必ず" }) : null,
+    h("span", { class: "text" },
+      h("span", { class: "name" }, x.must ? h("span", { class: "must-mark", title: "必ず", text: "◆" }) : null, x.label),
+      x.hint ? h("span", { class: "hint", text: x.hint }) : null),
   );
   btn.addEventListener("click", () => {
     btn.classList.add("pending");
@@ -424,9 +451,9 @@ function renderWeek() {
     const rows = slotGroups().flatMap((g) => [h("div", { class: "trow group" }, h("div", { class: "name", text: g.label })), ...g.list.map(habitRow)]);
     const foot = h("div", { class: "trow foot" }, h("div", { class: "name", text: "達成率" }),
       dates.map((d) => { const rate = dayRate(r.days[d]); return h("div", { class: "day", text: rate == null ? "–" : pct(rate) }); }));
-    $("week-body").replaceChildren(
+    swap($("week-body"), [
       h("div", { class: "table fill" }, head, h("div", { class: "tbody" }, rows), foot),
-    );
+    ], `week:${state.weekStart}`);
   }, () => state.weekStart === from);
 }
 
@@ -532,7 +559,7 @@ async function renderParty() {
   const lv = state.data.player?.player?.level;
   const members = state.data.party.members;
   if (!members.length) return body.replaceChildren(h("p", { class: "empty-msg", text: "まだなかまがいません" }));
-  body.replaceChildren(h("div", { class: "party scroll fill" }, members.map((m) => {
+  swap(body, [h("div", { class: "party scroll fill" }, members.map((m) => {
     const isNow = m.kind === "しゅじんこう" && typeof lv === "number" && lv >= (m.needLv ?? 0) && lv < (m.nextLv ?? Infinity);
     return h("div", { class: "card member" },
       isNow ? h("span", { class: "now-badge", text: "いま" }) : null,
@@ -541,7 +568,7 @@ async function renderParty() {
       h("span", { class: `tag ${m.kind === "なかま" ? "blue" : "yellow"}`, text: m.kind || "—" }),
       typeof m.needLv === "number" ? h("span", { class: "sub", text: `Lv${m.needLv}〜` }) : null,
     );
-  })));
+  }))], "party");
 }
 
 // ================= ギルド（DB_ギルド依頼・DB_ギルド達成記録） =================
@@ -556,7 +583,7 @@ async function renderGuild() {
   const addBtn = h("button", { type: "button", class: "primary add-report", onclick: () => openNewReport() }, "＋ ほうこく");
   if (state.guildTab === "reports") {
     const titles = Object.fromEntries(quests.map((q) => [q.id.replace(/-/g, ""), q.title]));
-    return body.replaceChildren(
+    return swap(body, [
       addBtn,
       reports.length
         ? h("div", { class: "list scroll fill" }, reports.map((r) => h("div", { class: "card report" },
@@ -564,17 +591,17 @@ async function renderGuild() {
           h("span", { class: "rmeta", text: `${jstStamp(r.date)} ・ ${(r.questIds || []).map((id) => titles[id.replace(/-/g, "")] || "依頼").join("、")}` }),
         )))
         : h("p", { class: "empty-msg", text: "まだほうこくがありません" }),
-    );
+    ], "guild:reports");
   }
   const cats = ["すべて", ...Object.keys(CATEGORY_COLORS).filter((c) => quests.some((q) => q.category === c))];
   const shown = quests.filter((q) => state.guildCat === "すべて" || q.category === state.guildCat);
-  body.replaceChildren(
+  swap(body, [
     addBtn,
     h("div", { class: "chips", role: "group", "aria-label": "カテゴリ" }, cats.map((c) => h("button", {
       type: "button", "aria-pressed": String(c === state.guildCat), onclick: () => { state.guildCat = c; renderGuild(); },
     }, c))),
     h("div", { class: "list scroll fill" }, shown.map(questCard)),
-  );
+  ], `guild:board:${state.guildCat}`);
 }
 
 function questLocked(q) {
@@ -743,7 +770,7 @@ async function renderStory() {
     const list = chapters.filter((c) => (c.kind || "ほんぺん") === kind);
     return list.length ? [h("p", { class: "section-title", text: title }), ...list.map(chapterRow)] : [];
   };
-  body.replaceChildren(h("div", { class: "list scroll fill" }, section("ほんぺん", "ほんぺん"), section("よりみち", "よりみち")));
+  swap(body, [h("div", { class: "list scroll fill" }, section("ほんぺん", "ほんぺん"), section("よりみち", "よりみち"))], "story");
 }
 
 function chapterRow(c) {
@@ -797,7 +824,7 @@ async function renderMe() {
   const parts = [["習慣", p.habitExp], ["タスク", p.taskExp], ["ギルド", p.guildExp]].filter(([, v]) => typeof v === "number");
   const max = Math.max(1, ...parts.map(([, v]) => v));
   const textCard = (title, value) => (value ? h("div", { class: "card" }, h("h3", { text: title }), h("p", { class: "pre", style: "margin:6px 0 0", text: String(value) })) : null);
-  body.replaceChildren(h("div", { class: "scroll fill stack" },
+  swap(body, [h("div", { class: "scroll fill stack" },
     h("div", { class: "card hero" },
       me?.image ? h("img", { src: me.image, alt: me.name }) : h("div", { class: "noimg" }),
       h("div", { class: "stack", style: "gap:2px;flex:1;min-width:0" },
@@ -817,7 +844,7 @@ async function renderMe() {
     textCard("なかま", p.party),
     textCard("じゅもん", p.spell),
     p.url ? h("a", { class: "link", href: p.url, target: "_blank", rel: "noopener", style: "text-align:center" }, "Notionで開く") : null,
-  ));
+  )], "me");
 }
 
 // ---------- シート ----------
