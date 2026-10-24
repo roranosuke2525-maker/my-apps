@@ -62,3 +62,14 @@ function carving(name, cls = "") {
   svg.innerHTML = CARVINGS[name];
   return svg;
 }
+
+// 札に彫る短い名前。（…）を外し、「を・に・・」の手前までにする。決めておきたいものは SHORT_NAMES に書く
+const SHORT_NAMES = [["マネーフォワード", "MF更新"], ["プロテインの準備", "プロテ準備"], ["千切りキャベツ", "キャベツ"]];
+const SHORT_MAX = 7;
+
+function shortName(label) {
+  const fixed = SHORT_NAMES.find(([word]) => label.includes(word));
+  if (fixed) return fixed[1];
+  const base = label.replace(/[（(].*?[）)]/g, "").split(/[をに・]/)[0].trim() || label;
+  return [...base].slice(0, SHORT_MAX).join("");
+}
