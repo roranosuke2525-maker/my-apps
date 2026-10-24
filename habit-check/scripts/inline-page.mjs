@@ -9,10 +9,11 @@ const read = (p) => readFile(join(root, p), "utf8");
 const dataUri = async (p, type) => `data:${type};base64,${(await readFile(join(root, p))).toString("base64")}`;
 
 export async function inlinePage({ apiScript, bodyStart = "", extraCss = "" }) {
-  const [html, css, app, walnut, oak] = await Promise.all([
+  const [html, css, app, carve, walnut, oak] = await Promise.all([
     read("public/index.html"),
     read("public/style.css"),
     read("public/app.js"),
+    read("public/carve.js"),
     dataUri("public/img/walnut.jpg", "image/jpeg"),
     dataUri("public/img/oak.jpg", "image/jpeg"),
   ]);
@@ -22,11 +23,12 @@ export async function inlinePage({ apiScript, bodyStart = "", extraCss = "" }) {
     .replace(/<link rel="(?:icon|apple-touch-icon)"[^>]*>\s*/g, "")
     .replace('<link rel="stylesheet" href="style.css">', `<style>\n${inlineCss}\n${extraCss ? `${extraCss}\n` : ""}</style>`)
     .replace("<body>", `<body>\n  ${bodyStart}`)
+    .replace('<script src="carve.js"></script>', () => `<script>\n${carve}\n  </script>`)
     .replace(
       '<script src="app.js" type="module"></script>',
       `<script>${apiScript}</script>\n  <script type="module">\n${app.replace(/if \("serviceWorker" in navigator\)[\s\S]*?\n}\n/, "")}\n  </script>`,
     );
-  if (page.includes('href="style.css"') || page.includes('src="app.js"') || page.includes('url("img/')) {
+  if (page.includes('href="style.css"') || page.includes('src="app.js"') || page.includes('src="carve.js"') || page.includes('url("img/')) {
     throw new Error("1ファイルへの組み立てに失敗しました");
   }
   return page;

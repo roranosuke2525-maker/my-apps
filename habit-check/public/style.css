@@ -20,6 +20,13 @@
   --shadow: 0 1px 3px rgba(60, 36, 18, 0.08);
   --ground: #f3e8d8 url("img/oak.jpg") center / cover;
   --wood: #5c3a23 url("img/walnut.jpg") center / cover;
+  /* 板（カード）と彫り：溝は濃く、下側の縁に光 */
+  --plank: linear-gradient(rgba(255, 249, 238, 0.55), rgba(255, 249, 238, 0.55)), #e9d3ae url("img/oak.jpg") center / 240% auto;
+  --plank-line: rgba(90, 55, 25, 0.28);
+  --carve: #5b3a1e;
+  --carve-hi: rgba(255, 246, 228, 0.8);
+  --carve-off: 1px;
+  --note: linear-gradient(170deg, #fbf4e3, #f1e3c6);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -40,6 +47,11 @@
     --lv3: #a9774b;
     --shadow: none;
     --ground: linear-gradient(rgba(22, 13, 7, 0.82), rgba(22, 13, 7, 0.82)), #2a1a0f url("img/walnut.jpg") center / cover;
+    --plank: linear-gradient(rgba(28, 16, 8, 0.38), rgba(28, 16, 8, 0.38)), #4a2e1c url("img/walnut.jpg") center / 240% auto;
+    --plank-line: rgba(0, 0, 0, 0.45);
+    --carve: #f0d5ad;
+    --carve-hi: rgba(0, 0, 0, 0.7);
+    --carve-off: -1px;
   }
 }
 
@@ -143,11 +155,11 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 .habit .flip { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(0.34, 1.45, 0.55, 1); }
 .habit[aria-pressed="true"] .flip { transform: rotateY(180deg); }
 .habit:active:not(:disabled) .flip { scale: 0.94; }
-.habit .face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 7px; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #e7cfa8 url(img/oak.jpg) center / 220% auto; border: 1px solid rgba(70, 40, 15, 0.28); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(70, 40, 15, 0.18), 0 2px 3px rgba(40, 20, 5, 0.25); }
-.habit .back { transform: rotateY(180deg); background: #4a2e1c url(img/walnut.jpg) center / 220% auto; border-color: rgba(20, 10, 0, 0.5); box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(20, 10, 0, 0.35); }
+.habit .face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 7px; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #e7cfa8 url("img/oak.jpg") center / 220% auto; border: 1px solid rgba(70, 40, 15, 0.28); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(70, 40, 15, 0.18), 0 2px 3px rgba(40, 20, 5, 0.25); }
+.habit .back { transform: rotateY(180deg); background: #4a2e1c url("img/walnut.jpg") center / 220% auto; border-color: rgba(20, 10, 0, 0.5); box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(20, 10, 0, 0.35); }
 .habit .hole { position: absolute; top: 4px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: rgba(50, 28, 10, 0.55); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.35); }
-.habit .ico { font-size: min(58cqh, 44cqw); line-height: 1; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35)); }
-.habit .back .ico { opacity: 0.85; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+.habit svg.ico { width: min(64cqh, 46cqw); height: min(64cqh, 46cqw); stroke: #5b3a1e; stroke-width: 2.1; filter: drop-shadow(0 1px 0 rgba(255, 246, 228, 0.85)); }
+.habit .back svg.ico { stroke: #f1d6ad; filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.75)); }
 .habit .ico.txt { font-size: min(34cqh, 24cqw); font-weight: 800; color: #5a3a20; letter-spacing: -0.02em; }
 .habit .back .ico.txt { color: #f3dfc0; }
 .habit .done-mark { position: absolute; right: 4px; bottom: 2px; font-size: min(30cqh, 20cqw); font-weight: 900; line-height: 1; color: #f6e2bf; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6); }
@@ -322,3 +334,42 @@ textarea { resize: none; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--danger); color: #fff; }
+
+/* ================= 木彫りの見た目（ほかのタブも板と彫りでそろえる） ================= */
+svg.carve { fill: none; stroke: var(--carve); stroke-width: 2; filter: drop-shadow(0 var(--carve-off) 0 var(--carve-hi)); }
+.carved, .ctitle, .mname, .card h3, .lvbig, .rnote, .qtitle { text-shadow: 0 var(--carve-off) 0 var(--carve-hi); }
+
+/* 板のカード */
+#view-me .card, #view-story .card, #view-guild .card.report { flex: none; }
+#status, #view-party .card, #view-story .card, #view-me .card, #view-guild .card.report {
+  background: var(--plank);
+  border: 1px solid var(--plank-line);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 215, 0.35), inset 0 -2px 0 rgba(60, 30, 10, 0.18), 0 2px 4px rgba(40, 20, 5, 0.22);
+}
+
+/* 彫った溝のバー（達成・EXP） */
+.bar { background: rgba(70, 40, 15, 0.2); box-shadow: inset 0 1px 2px rgba(30, 15, 0, 0.45), 0 var(--carve-off) 0 var(--carve-hi); }
+.bar > span { background: linear-gradient(#e7b36c, #a86f38); box-shadow: inset 0 1px 0 rgba(255, 235, 200, 0.5); }
+
+/* ものがたり：彫った札（よんだ は焼き印） */
+.chapter { gap: 12px; }
+.chapter .plaque-ico { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 6px; background: rgba(70, 40, 15, 0.1); box-shadow: inset 0 1px 2px rgba(30, 15, 0, 0.3), 0 var(--carve-off) 0 var(--carve-hi); }
+.chapter .plaque-ico svg { width: 22px; height: 22px; }
+.chapter .ctitle { font-weight: 800; }
+.chapter.locked { background: var(--wood) !important; color: #e9d2b0; opacity: 0.8; --carve: #e9d2b0; --carve-hi: rgba(0, 0, 0, 0.7); --carve-off: -1px; }
+.chapter.locked .cstate { color: #d6bc98; }
+.read-badge { flex: none; padding: 1px 7px; border: 2px solid #7a2e12; border-radius: 5px; color: #7a2e12; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; transform: rotate(-9deg); opacity: 0.8; background: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .read-badge { border-color: #f0a070; color: #f0a070; } }
+
+/* ギルド：けいじばん（ウォールナットの板に、依頼の紙を釘で留める） */
+#view-guild .list:has(.quest.note) { background: var(--wood); border-radius: 10px; padding: 12px 10px; gap: 12px; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45); }
+.quest.note { --text: #3a2a1e; --sub: #6b5544; position: relative; padding-top: 16px; color: var(--text); background: var(--note); border: 1px solid rgba(60, 35, 10, 0.12); border-radius: 3px; box-shadow: 0 3px 5px rgba(0, 0, 0, 0.35); text-shadow: none; }
+.quest.note .qtitle { text-shadow: none; }
+.quest.note:nth-child(odd) { rotate: -0.5deg; }
+.quest.note:nth-child(even) { rotate: 0.4deg; }
+.quest.note .nail { position: absolute; top: 5px; left: 50%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #d9d4cc, #6d655c 60%, #3b352f); box-shadow: 0 1px 1px rgba(0, 0, 0, 0.5); }
+.quest.note.locked { opacity: 0.6; }
+
+/* パーティー：木の額縁 */
+.member img, .member .noimg { border-radius: 3px; background: #f6ecd8; box-shadow: 0 0 0 4px #6b4428, 0 0 0 5px rgba(30, 15, 0, 0.45), inset 0 0 8px rgba(60, 30, 10, 0.25); margin: 5px 0 6px; width: calc(100% - 10px); }
+.member .now-badge { z-index: 1; }
