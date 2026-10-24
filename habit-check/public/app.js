@@ -299,25 +299,12 @@ function statusCard(row) {
   );
 }
 
-// 習慣の絵（列名に含まれる言葉で選ぶ。上から順に見て、最初に当たったもの。なければ名前の1文字目）
-const HABIT_ICONS = [
-  ["プロテインの準備", "🥄"], ["プロテイン", "🥤"], ["起床", "⏰"], ["洗濯", "🧺"], ["ストレッチ", "🤸"], ["日焼け止め", "🧴"],
-  ["スクワット", "🦵"], ["腹筋", "🛞"], ["体重", "⚖️"], ["新聞", "📰"], ["サプリ", "💊"], ["ゴミ", "🗑️"], ["胸トレ", "💪"],
-  ["フロス", "🦷"], ["ヤクルト", "🧃"], ["風呂", "🛁"], ["キャベツ", "🥬"], ["寝かしつけ", "💤"], ["読書", "📖"],
-  ["ミルク", "🍼"], ["離乳食", "🍼"], ["ナッツ", "🥜"], ["マネーフォワード", "💴"], ["クイックル", "🧹"], ["INBOX", "📥"],
-  ["ごはん", "🍳"], ["食器", "🍽️"], ["食洗機", "🍽️"], ["掃除", "🧽"], ["散歩", "🚶"], ["水", "💧"], ["薬", "💊"], ["日記", "📓"],
-];
-
-function habitIcon(label) {
-  return HABIT_ICONS.find(([word]) => label.includes(word))?.[1] ?? null;
-}
-
-// 木札：表は白木、チェックすると くるっと裏返って ウォールナットの面（済）になる。名前は長押しで出す
+// 木札：表は白木に彫った絵、チェックすると くるっと裏返って ウォールナットの面（済）になる。名前は長押しで出す
 function habitTile(x, row, canEdit) {
-  const icon = habitIcon(x.label);
+  const art = habitCarving(x.label); // carve.js
   const face = (side) => h("span", { class: `face ${side}` },
     h("span", { class: "hole", "aria-hidden": "true" }),
-    icon ? h("span", { class: "ico", text: icon }) : h("span", { class: "ico txt", text: x.label.slice(0, 2) }),
+    art ? carving(art, "ico") : h("span", { class: "ico txt", text: x.label.slice(0, 2) }),
     side === "back" ? h("span", { class: "done-mark", "aria-hidden": "true", text: "✓" }) : null,
   );
   const btn = h("button", {
@@ -700,7 +687,8 @@ function questLocked(q) {
 
 function questCard(q) {
   const locked = questLocked(q);
-  return h("button", { type: "button", class: `card quest${locked ? " locked" : ""}`, onclick: () => openQuest(q) },
+  return h("button", { type: "button", class: `card quest note${locked ? " locked" : ""}`, onclick: () => openQuest(q) },
+    h("span", { class: "nail", "aria-hidden": "true" }),
     h("span", { class: `rank ${q.rank || ""}`, text: q.rank || "?" }),
     h("span", { class: "qbody" },
       h("span", { class: "qtitle", text: q.title }),
@@ -710,7 +698,7 @@ function questCard(q) {
         h("span", { text: `基本${q.exp ?? "—"}EXP` }),
         h("span", { text: `達成${q.count ?? 0}回` }),
       ),
-      q.board ? h("span", { class: "board", text: q.board }) : null,
+      q.board ? h("span", { class: "board", text: plainMarks(q.board) }) : null,
     ),
   );
 }
@@ -733,8 +721,8 @@ function openQuest(q) {
         h("ol", { class: "stages", style: "margin-top:8px" }, q.stages.map((s, i) => h("li", { class: i < count ? "done" : i === count ? "next" : "" },
           h("span", { class: "box" }), h("span", { text: s })))))
       : null,
-    q.board ? h("div", { class: "card" }, h("h3", { text: "けいじばん" }), h("p", { class: "pre", style: "margin:6px 0 0", text: q.board })) : null,
-    q.detour ? h("div", { class: "card" }, h("h3", { text: "寄り道" }), h("p", { class: "pre", style: "margin:6px 0 0", text: q.detour })) : null,
+    q.board ? h("div", { class: "card" }, h("h3", { text: "けいじばん" }), h("p", { class: "pre", style: "margin:6px 0 0", text: plainMarks(q.board) })) : null,
+    q.detour ? h("div", { class: "card" }, h("h3", { text: "寄り道" }), h("p", { class: "pre", style: "margin:6px 0 0", text: plainMarks(q.detour) })) : null,
   ], [note, send]);
 }
 
@@ -863,11 +851,20 @@ async function renderStory() {
   swap(body, [h("div", { class: "list scroll fill" }, section("ほんぺん", "ほんぺん"), section("よりみち", "よりみち"))], "story");
 }
 
+// Notion の文面の先頭の絵文字（📖 ✅ 🔒 など）は外し、代わりに彫った絵を出す
+const stripEmoji = (t) => (t || "").replace(/^(?:\p{Extended_Pictographic}|\uFE0F|\s)+/u, "");
+
+// 文中の絵文字は、木彫りの見た目に合う記号に置き換える（知らないものは消す）
+const EMOJI_MARKS = { "✅": "✓", "✔": "✓", "🔒": "×", "📖": "▶", "📝": "…", "⭐": "★", "⚠": "！", "▶": "▶", "◀": "◀", "☀": "☀", "☾": "☾" };
+const plainMarks = (t) => (t || "").replace(/\p{Extended_Pictographic}\uFE0F?/gu, (m) => EMOJI_MARKS[m.replace("\uFE0F", "")] ?? "").replace(/^ +/gm, "");
+
 function chapterRow(c) {
-  return h("button", { type: "button", class: `card chapter${c.locked ? " locked" : ""}`, disabled: c.locked, onclick: () => openChapter(c) },
+  const art = c.locked ? "lock" : c.read ? "check" : c.kind === "よりみち" ? "sprout" : "book";
+  return h("button", { type: "button", class: `card chapter${c.locked ? " locked" : ""}${c.read ? " read" : ""}`, disabled: c.locked, onclick: () => openChapter(c) },
+    h("span", { class: "plaque-ico" }, carving(art)),
     h("span", { class: "cbody" },
       h("span", { class: "ctitle", text: c.title }),
-      h("span", { class: "cstate", text: c.locked ? `Lv${c.unlockLv}で解放` : c.state || "" }),
+      h("span", { class: "cstate", text: c.locked ? `Lv${c.unlockLv}で解放` : stripEmoji(c.state) }),
     ),
     c.read ? h("span", { class: "read-badge", text: "よんだ" }) : null,
   );
