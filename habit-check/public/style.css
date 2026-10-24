@@ -158,10 +158,14 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 .habit .face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 7px; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #e7cfa8 url("img/oak.jpg") center / 220% auto; border: 1px solid rgba(70, 40, 15, 0.28); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(70, 40, 15, 0.18), 0 2px 3px rgba(40, 20, 5, 0.25); }
 .habit .back { transform: rotateY(180deg); background: #4a2e1c url("img/walnut.jpg") center / 220% auto; border-color: rgba(20, 10, 0, 0.5); box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(20, 10, 0, 0.35); }
 .habit .hole { position: absolute; top: 4px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: rgba(50, 28, 10, 0.55); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.35); }
-.habit svg.ico { width: min(64cqh, 46cqw); height: min(64cqh, 46cqw); stroke: #5b3a1e; stroke-width: 2.1; filter: drop-shadow(0 1px 0 rgba(255, 246, 228, 0.85)); }
+/* 札の中身：左に彫った絵、右に短い名前（どの大きさの札でも同じ並び） */
+.habit .face { display: flex; align-items: center; justify-content: center; gap: max(3px, 3.5cqw); padding: 0 4cqw; }
+.habit svg.ico { flex: none; width: min(58cqh, 21cqw); height: min(58cqh, 21cqw); stroke: #5b3a1e; stroke-width: 2.1; filter: drop-shadow(0 1px 0 rgba(255, 246, 228, 0.85)); }
 .habit .back svg.ico { stroke: #f1d6ad; filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.75)); }
-.habit .ico.txt { font-size: min(34cqh, 24cqw); font-weight: 800; color: #5a3a20; letter-spacing: -0.02em; }
-.habit .back .ico.txt { color: #f3dfc0; }
+.habit .lbl { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; font-size: clamp(10px, min(32cqh, 10.8cqw), 16px); font-weight: 800; line-height: 1.15; color: #5b3a1e; text-shadow: 0 1px 0 rgba(255, 246, 228, 0.85); letter-spacing: -0.01em; }
+.habit .back .lbl { color: #f1d6ad; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.75); }
+.habit .lbl.only { font-size: clamp(11px, min(40cqh, 15cqw), 18px); }
+.habit .hole { left: auto; right: 6px; top: 5px; margin-left: 0; width: 5px; height: 5px; }
 .habit .done-mark { position: absolute; right: 4px; bottom: 2px; font-size: min(30cqh, 20cqw); font-weight: 900; line-height: 1; color: #f6e2bf; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6); }
 .habit .must-mark { position: absolute; top: 2px; left: 4px; z-index: 1; font-size: min(26cqh, 16cqw); line-height: 1; color: var(--must); text-shadow: 0 0 2px rgba(255, 255, 255, 0.7); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .habit .flip { transition: none; } }

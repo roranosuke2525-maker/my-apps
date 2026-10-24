@@ -299,12 +299,13 @@ function statusCard(row) {
   );
 }
 
-// 木札：表は白木に彫った絵、チェックすると くるっと裏返って ウォールナットの面（済）になる。名前は長押しで出す
+// 木札：表は白木に彫った絵と短い名前、チェックすると くるっと裏返って ウォールナットの面（済）になる。長押しで正式な名前と説明
 function habitTile(x, row, canEdit) {
   const art = habitCarving(x.label); // carve.js
   const face = (side) => h("span", { class: `face ${side}` },
     h("span", { class: "hole", "aria-hidden": "true" }),
-    art ? carving(art, "ico") : h("span", { class: "ico txt", text: x.label.slice(0, 2) }),
+    art ? carving(art, "ico") : null,
+    h("span", { class: `lbl${art ? "" : " only"}`, text: shortName(x.label) }),
     side === "back" ? h("span", { class: "done-mark", "aria-hidden": "true", text: "✓" }) : null,
   );
   const btn = h("button", {
