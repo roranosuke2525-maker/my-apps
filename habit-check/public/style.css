@@ -128,23 +128,36 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 
 /* 日：時間帯ごとに「左の見出し＋3列のタイル」。行数に応じて高さを分け合い、1画面に収める（狭すぎるときだけスクロール） */
 .habits { display: flex; flex-direction: column; gap: 6px; }
-.slot-line { flex: var(--rows) 1 0; min-height: calc(var(--rows) * 36px + (var(--rows) - 1) * 4px); display: flex; gap: 6px; }
+.slot-line { flex: var(--rows) 1 0; min-height: calc(var(--rows) * 24px + (var(--rows) - 1) * 5px); display: flex; gap: 6px; }
 .slot { flex: 1 1 0; min-width: 0; display: flex; gap: 4px; }
 .slot-label { flex: none; width: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--sub); line-height: 1.1; }
 .slot-label .slot-icon { font-size: 13px; }
 .slot-label small { font-size: 9.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .slot.now .slot-label { background: var(--accent); color: var(--on-accent); }
-.slot-tiles { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 4px; }
-.habit { display: flex; align-items: center; gap: 6px; min-height: 0; padding: 3px 6px; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--card); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; box-shadow: var(--shadow); }
-.habit[aria-pressed="true"] { background: var(--accent-soft); }
-.habit:disabled { cursor: default; opacity: 0.6; }
-.habit .box { width: 18px; height: 18px; }
-.habit .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.habit .name { font-size: 12.5px; font-weight: 600; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.habit[aria-pressed="true"] .name { color: var(--sub); text-decoration: line-through; }
-.habit .must-mark { color: var(--must); margin-right: 1px; text-decoration: none; display: inline-block; }
-.habit .hint { font-size: 9.5px; line-height: 1.2; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.habit.pending { opacity: 0.6; }
+.slot-tiles { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 5px; }
+
+/* 習慣の木札：表は白木（オーク）、チェックで裏返ってウォールナットの面に */
+.habit { position: relative; min-height: 0; padding: 0; border: 0; background: none; cursor: pointer; perspective: 500px; container-type: size; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.habit:disabled { cursor: default; opacity: 0.55; }
+.habit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 7px; }
+.habit .flip { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(0.34, 1.45, 0.55, 1); }
+.habit[aria-pressed="true"] .flip { transform: rotateY(180deg); }
+.habit:active:not(:disabled) .flip { scale: 0.94; }
+.habit .face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 7px; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #e7cfa8 url(img/oak.jpg) center / 220% auto; border: 1px solid rgba(70, 40, 15, 0.28); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(70, 40, 15, 0.18), 0 2px 3px rgba(40, 20, 5, 0.25); }
+.habit .back { transform: rotateY(180deg); background: #4a2e1c url(img/walnut.jpg) center / 220% auto; border-color: rgba(20, 10, 0, 0.5); box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(20, 10, 0, 0.35); }
+.habit .hole { position: absolute; top: 4px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: rgba(50, 28, 10, 0.55); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.35); }
+.habit .ico { font-size: min(58cqh, 44cqw); line-height: 1; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35)); }
+.habit .back .ico { opacity: 0.85; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+.habit .ico.txt { font-size: min(34cqh, 24cqw); font-weight: 800; color: #5a3a20; letter-spacing: -0.02em; }
+.habit .back .ico.txt { color: #f3dfc0; }
+.habit .done-mark { position: absolute; right: 4px; bottom: 2px; font-size: min(30cqh, 20cqw); font-weight: 900; line-height: 1; color: #f6e2bf; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6); }
+.habit .must-mark { position: absolute; top: 2px; left: 4px; z-index: 1; font-size: min(26cqh, 16cqw); line-height: 1; color: var(--must); text-shadow: 0 0 2px rgba(255, 255, 255, 0.7); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .habit .flip { transition: none; } }
+
+/* 長押しで出る名前 */
+.name-bubble { position: fixed; z-index: 60; max-width: min(80vw, 280px); padding: 6px 10px; border-radius: 8px; background: rgba(40, 24, 12, 0.94); color: #fbeedd; font-size: 13px; line-height: 1.35; display: flex; flex-direction: column; gap: 1px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); pointer-events: none; animation: bubble-in 0.12s ease-out; }
+.name-bubble span { font-size: 11.5px; opacity: 0.8; }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(4px); } }
 .note-row { flex: none; display: flex; gap: 8px; }
 .note-row input { flex: 1; min-width: 0; }
 .readonly { font-size: 12px; color: var(--sub); text-align: center; }

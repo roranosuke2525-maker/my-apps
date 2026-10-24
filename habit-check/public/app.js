@@ -53,6 +53,7 @@ const state = {
   errors: {},
   guildTab: "board",
   guildCat: "すべて",
+  pending: new Map(), // `${行ID}|${列名}` → 送信中・送信直後のチェック（読み直しで古い値に戻さないため）
 };
 let writeChain = Promise.resolve();
 let refreshTimer = null;
@@ -208,7 +209,7 @@ async function loadDay({ quiet = false } = {}) {
     const data = await api("GET", `/api/day?date=${date}`);
     if (data.date !== state.date) return; // 読み込み中に日付を変えた
     state.habits = data.habits;
-    state.row = data.row;
+    state.row = applyPending(data.row);
     state.savedNote = data.row?.note || "";
     state.dayError = "";
   } catch (err) {
@@ -260,7 +261,7 @@ function renderDay() {
     if (n < DAY_COLS && last && last.every((x) => x.list.length < DAY_COLS) && last.reduce((a, x) => a + x.list.length, n) <= DAY_COLS) last.push(g);
     else lines.push([g]);
   }
-  const slotEl = (g, cols) => h("div", { class: `slot${g.slot === now ? " now" : ""}`, style: `--cols:${cols};flex-grow:${cols}` },
+  const slotEl = (g, cols) => h("div", { class: `slot${g.slot === now ? " now" : ""}`, "data-slot": g.slot, style: `--cols:${cols};flex-grow:${cols}` },
     h("div", { class: "slot-label" },
       h("span", { class: "slot-icon", text: g.label.split(" ")[0] }),
       h("span", { class: "slot-name", text: g.label.split(" ")[1] || "" }),
@@ -298,18 +299,65 @@ function statusCard(row) {
   );
 }
 
+// 習慣の絵（列名に含まれる言葉で選ぶ。上から順に見て、最初に当たったもの。なければ名前の1文字目）
+const HABIT_ICONS = [
+  ["プロテインの準備", "🥄"], ["プロテイン", "🥤"], ["起床", "⏰"], ["洗濯", "🧺"], ["ストレッチ", "🤸"], ["日焼け止め", "🧴"],
+  ["スクワット", "🦵"], ["腹筋", "🛞"], ["体重", "⚖️"], ["新聞", "📰"], ["サプリ", "💊"], ["ゴミ", "🗑️"], ["胸トレ", "💪"],
+  ["フロス", "🦷"], ["ヤクルト", "🧃"], ["風呂", "🛁"], ["キャベツ", "🥬"], ["寝かしつけ", "💤"], ["読書", "📖"],
+  ["ミルク", "🍼"], ["離乳食", "🍼"], ["ナッツ", "🥜"], ["マネーフォワード", "💴"], ["クイックル", "🧹"], ["INBOX", "📥"],
+  ["ごはん", "🍳"], ["食器", "🍽️"], ["食洗機", "🍽️"], ["掃除", "🧽"], ["散歩", "🚶"], ["水", "💧"], ["薬", "💊"], ["日記", "📓"],
+];
+
+function habitIcon(label) {
+  return HABIT_ICONS.find(([word]) => label.includes(word))?.[1] ?? null;
+}
+
+// 木札：表は白木、チェックすると くるっと裏返って ウォールナットの面（済）になる。名前は長押しで出す
 function habitTile(x, row, canEdit) {
-  const btn = h("button", { type: "button", class: "habit", "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit },
-    h("span", { class: "box" }),
-    h("span", { class: "text" },
-      h("span", { class: "name" }, x.must ? h("span", { class: "must-mark", title: "必ず", text: "◆" }) : null, x.label),
-      x.hint ? h("span", { class: "hint", text: x.hint }) : null),
+  const icon = habitIcon(x.label);
+  const face = (side) => h("span", { class: `face ${side}` },
+    h("span", { class: "hole", "aria-hidden": "true" }),
+    icon ? h("span", { class: "ico", text: icon }) : h("span", { class: "ico txt", text: x.label.slice(0, 2) }),
+    side === "back" ? h("span", { class: "done-mark", "aria-hidden": "true", text: "✓" }) : null,
   );
-  btn.addEventListener("click", () => {
-    btn.classList.add("pending");
-    toggleCheck(row, state.date, x, !row.checks[x.name], () => btn.classList.remove("pending"));
+  const btn = h("button", {
+    type: "button", class: "habit", "data-name": x.name, "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit,
+    "aria-label": `${x.must ? "必ず：" : ""}${x.label}${x.hint ? `（${x.hint}）` : ""}`,
+  },
+    h("span", { class: "flip" }, face("front"), face("back")),
+    x.must ? h("span", { class: "must-mark", "aria-hidden": "true", text: "◆" }) : null,
+  );
+  let pressTimer = null;
+  let longPressed = false;
+  btn.addEventListener("pointerdown", () => {
+    longPressed = false;
+    pressTimer = setTimeout(() => { longPressed = true; showName(btn, x); }, LONG_PRESS_MS);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) btn.addEventListener(ev, () => clearTimeout(pressTimer));
+  btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  btn.addEventListener("click", (e) => {
+    if (longPressed) { longPressed = false; e.preventDefault(); return; }
+    toggleCheck(row, state.date, x, !row.checks[x.name]);
   });
   return btn;
+}
+
+const LONG_PRESS_MS = 420;
+let nameTimer = null;
+
+// 長押しした札の上に、名前と説明を少しだけ出す
+function showName(btn, x) {
+  document.querySelector(".name-bubble")?.remove();
+  const r = btn.getBoundingClientRect();
+  const bubble = h("div", { class: "name-bubble", role: "status" },
+    h("b", { text: `${x.must ? "◆ " : ""}${x.label}` }), x.hint ? h("span", { text: x.hint }) : null);
+  document.body.append(bubble);
+  const bw = bubble.offsetWidth;
+  bubble.style.left = `${Math.max(8, Math.min(innerWidth - bw - 8, r.left + r.width / 2 - bw / 2))}px`;
+  bubble.style.top = `${Math.max(8, r.top - bubble.offsetHeight - 6)}px`;
+  if (navigator.vibrate) navigator.vibrate(8);
+  clearTimeout(nameTimer);
+  nameTimer = setTimeout(() => bubble.remove(), 1800);
 }
 
 function noteRow(row) {
@@ -321,25 +369,53 @@ function noteRow(row) {
   return h("div", { class: "note-row" }, input, save);
 }
 
-// チェックの付け外し（日・週どちらからでも）。画面は先に変え、失敗したら戻す
-function toggleCheck(row, date, habit, next, done) {
+// チェックの付け外し（日・週どちらからでも）。画面はすぐ変え、少し待ってから送る（続けて押したら最後の状態だけ送る）。
+// 送信中と送った直後は、読み直した値で上書きしない（Notion の検索は少し遅れて古い値を返すことがあるため）
+const SEND_DELAY = 250;
+const KEEP_LOCAL_MS = 20e3;
+
+function toggleCheck(row, date, habit, next) {
   setCheck(row.id, habit.name, next);
+  if (navigator.vibrate) navigator.vibrate(next ? 12 : 6);
   rerenderHabit();
-  if (next && navigator.vibrate) navigator.vibrate(10);
-  enqueue(async () => {
-    try {
-      const { row: updated } = await api("PATCH", `/api/pages/${row.id}`, { name: habit.name, value: next });
-      if (state.row?.id === updated.id) state.row.stats = updated.stats;
-      toast(next ? `✓ ${habit.label}` : `${habit.label} を外しました`);
-      scheduleRefresh();
-    } catch (err) {
-      setCheck(row.id, habit.name, !next);
-      toast(`保存できませんでした：${err.message}`, true);
-    } finally {
-      done?.();
-      rerenderHabit();
-    }
-  });
+  const key = `${row.id}|${habit.name}`;
+  const p = state.pending.get(key) || { chain: Promise.resolve(), sent: !next };
+  Object.assign(p, { value: next, until: Infinity });
+  state.pending.set(key, p);
+  clearTimeout(p.timer);
+  p.timer = setTimeout(() => { p.chain = p.chain.then(() => sendCheck(row.id, habit, key)); }, SEND_DELAY);
+}
+
+async function sendCheck(rowId, habit, key) {
+  const p = state.pending.get(key);
+  if (!p || p.value === p.sent) return;
+  const value = p.value;
+  try {
+    const { row: updated } = await api("PATCH", `/api/pages/${rowId}`, { name: habit.name, value });
+    p.sent = value;
+    if (state.row?.id === updated.id) state.row.stats = updated.stats;
+    if (p.value === value) p.until = Date.now() + KEEP_LOCAL_MS;
+    scheduleRefresh();
+  } catch (err) {
+    if (p.value !== value) return; // その間に押し直した。次の送信に任せる
+    state.pending.delete(key);
+    setCheck(rowId, habit.name, p.sent);
+    rerenderHabit();
+    if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+    toast(`${habit.label}：保存できませんでした（${err.message}）`, true);
+  }
+}
+
+// 読み直した行に、まだ Notion に届いていない（または届いた直後の）チェックを重ねる
+function applyPending(row) {
+  if (!row) return row;
+  const now = Date.now();
+  for (const [key, p] of state.pending) {
+    const [rowId, name] = [key.slice(0, key.indexOf("|")), key.slice(key.indexOf("|") + 1)];
+    if (p.until < now) state.pending.delete(key);
+    else if (rowId === row.id) row.checks[name] = p.value;
+  }
+  return row;
 }
 
 function setCheck(rowId, name, value) {
@@ -350,7 +426,23 @@ function setCheck(rowId, name, value) {
 }
 
 function rerenderHabit() {
-  if (state.view === "habit") show();
+  if (state.view !== "habit") return;
+  if (state.tab === "day" && patchDay()) return;
+  show();
+}
+
+// 日の画面は作り直さずに、札の向き・達成の数だけ書き換える（裏返る動きを見せるため）
+function patchDay() {
+  const body = $("day-body");
+  const row = state.row;
+  if (!row || body.dataset.scrollKey !== `day:${state.date}`) return false;
+  for (const btn of body.querySelectorAll(".habit[data-name]")) btn.setAttribute("aria-pressed", String(!!row.checks[btn.dataset.name]));
+  for (const el of body.querySelectorAll(".slot[data-slot] .slot-label small")) {
+    const list = state.habits.filter((x) => x.slot === el.closest(".slot").dataset.slot);
+    el.textContent = `${list.filter((x) => row.checks[x.name]).length}/${list.length}`;
+  }
+  $("status")?.replaceWith(statusCard(row));
+  return true;
 }
 
 function saveNote(row, input, save) {
@@ -389,10 +481,7 @@ async function createDay() {
 // Lv・EXP は Notion 側の計算を待ってから取り直す
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => enqueue(async () => {
-    await loadPlayer({ force: true });
-    if (state.view === "habit" && state.tab === "day") await loadDay({ quiet: true });
-  }), REFRESH_DELAY);
+  refreshTimer = setTimeout(() => loadPlayer({ force: true }), REFRESH_DELAY);
 }
 
 // ================= 習慣：週・カレンダー・グラフ（期間まとめ読み） =================
@@ -402,6 +491,7 @@ async function getRange(from, to) {
   if (hit && Date.now() - hit.at < STALE_MS) return hit;
   const data = await api("GET", `/api/range?from=${from}&to=${to}`);
   if (data.habits?.length) state.habits = data.habits;
+  for (const day of Object.values(data.days || {})) applyPending(day);
   const entry = { ...data, at: Date.now() };
   state.ranges.set(key, entry);
   return entry;
