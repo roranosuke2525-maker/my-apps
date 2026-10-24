@@ -1,0 +1,9 @@
+{
+  "name": "ikuji-hub",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:artifact": "node scripts/build-artifact.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

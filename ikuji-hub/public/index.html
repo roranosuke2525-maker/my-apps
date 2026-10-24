@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>育児ハブ</title>
+  <meta name="theme-color" content="#2f6f8f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="育児ハブ">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700;900&family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="who">
+      <span class="name" id="child-name">—</span>
+      <span class="age" id="child-age">読み込み中…</span>
+    </div>
+    <button type="button" id="reload" class="icon-btn" aria-label="Notion から読み直す">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+    </button>
+  </header>
+
+  <main id="main">
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <section id="soon-wrap" class="block" hidden>
+      <h2 class="sec">ちかい予定 <em>60日以内</em></h2>
+      <div id="soon" class="soon"></div>
+    </section>
+
+    <section id="pin-wrap" class="block" hidden>
+      <h2 class="sec">★ ピン留め</h2>
+      <div id="pins" class="pins"></div>
+    </section>
+
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+      <input id="q" type="search" placeholder="さがす（例：離乳食）" aria-label="さがす" autocomplete="off">
+    </label>
+
+    <div id="shelves" class="shelves"></div>
+    <div id="srcs" class="chips" aria-label="元のデータで絞る"></div>
+
+    <section class="block">
+      <h2 class="sec"><span id="list-title">すべて</span><em id="list-count"></em></h2>
+      <div id="list" class="list"></div>
+      <label class="done-toggle"><input type="checkbox" id="show-done"> 済んだものも見る</label>
+    </section>
+  </main>
+
+  <form id="add" class="add">
+    <input id="add-title" maxlength="100" placeholder="育児のタスクを追加（INBOXへ）" aria-label="追加するタスク" autocomplete="off">
+    <button type="submit" class="primary">追加</button>
+  </form>
+</div>
+
+<dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <span id="sheet-src" class="pill src"></span>
+      <button type="button" id="sheet-close" class="icon-btn" aria-label="閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <h3 id="sheet-title"></h3>
+    <dl id="sheet-props" class="props"></dl>
+    <p id="sheet-note" class="note"></p>
+    <div id="sheet-actions" class="actions"></div>
+    <a id="sheet-open" class="open" href="#" target="_blank" rel="noopener">Notion で開く</a>
+  </div>
+</dialog>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>
