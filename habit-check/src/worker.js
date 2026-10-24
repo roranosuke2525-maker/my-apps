@@ -107,18 +107,29 @@ function constantTimeEqual(a, b) {
   return diff === 0;
 }
 
+// 混み合い（429）や一時的なエラー・同時書き込みの衝突（409）は、少し待って取り直す
+const RETRY_STATUS = new Set([409, 429, 500, 502, 503, 504]);
+const MAX_RETRIES = 3;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function notionClient(env) {
   const base = env.NOTION_API_BASE || NOTION_BASE;
   return async (method, path, body) => {
-    const res = await fetch(base + path, {
-      method,
-      headers: {
-        Authorization: `Bearer ${env.NOTION_TOKEN}`,
-        "Notion-Version": NOTION_VERSION,
-        "Content-Type": "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(base + path, {
+        method,
+        headers: {
+          Authorization: `Bearer ${env.NOTION_TOKEN}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!RETRY_STATUS.has(res.status) || attempt >= MAX_RETRIES) break;
+      const after = Number(res.headers.get("Retry-After"));
+      await sleep(after > 0 ? Math.min(after, 5) * 1000 : 300 * 2 ** attempt);
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const hint =
@@ -161,6 +172,9 @@ async function createDay(notion, env, date) {
 }
 
 async function updateHabit(notion, env, pageId, body) {
+  // 列の一覧と、書き換える行の確認を同時に取りにいく（1回のチェックを速く）
+  const pageCheck = notion("GET", `/pages/${pageId}`);
+  pageCheck.catch(() => {}); // 先に 400 で返すときの未処理エラーを防ぐ
   const schema = await loadSchema(notion, env);
   const { name, value } = body || {};
   let patch;
@@ -174,7 +188,7 @@ async function updateHabit(notion, env, pageId, body) {
   }
 
   // DB_習慣チェック の行だけを書き換える（他のページには触らない）
-  const page = await notion("GET", `/pages/${pageId}`);
+  const page = await pageCheck;
   if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.DATA_SOURCE_ID)) {
     throw httpError(403, "DB_習慣チェック の行ではありません");
   }
@@ -182,7 +196,19 @@ async function updateHabit(notion, env, pageId, body) {
   return { row: summarizeRow(updated, schema) };
 }
 
+// 列の一覧は Worker の中で少しだけ使い回す（チェックのたびに取りにいかない）
+const SCHEMA_TTL = 60e3;
+const schemaCache = new WeakMap();
+
 async function loadSchema(notion, env) {
+  const hit = schemaCache.get(env);
+  if (hit && Date.now() - hit.at < SCHEMA_TTL) return hit.value;
+  const value = await readSchema(notion, env);
+  schemaCache.set(env, { at: Date.now(), value });
+  return value;
+}
+
+async function readSchema(notion, env) {
   const ds = await notion("GET", `/data_sources/${env.DATA_SOURCE_ID}`);
   const props = ds.properties || {};
   // Notion API ではビューの表示設定が読めないので、出さない習慣は HIDDEN_HABITS（wrangler.toml）に書く
