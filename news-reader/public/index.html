@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>けさの新聞</title>
+  <meta name="theme-color" content="#f6f2e8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="新聞">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="mast">
+    <div class="mast-row">
+      <div>
+        <div id="today" class="dateline"></div>
+        <h1>けさの新聞</h1>
+      </div>
+      <div class="mast-side">
+        <span id="total" class="badge big" hidden aria-live="polite"></span>
+        <button type="button" id="open-settings" class="icon-btn" aria-label="設定">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="表示">
+      <button type="button" role="tab" data-scope="unread">未読<span class="badge" data-count="unread" hidden></span></button>
+      <button type="button" role="tab" data-scope="recent">最近3日</button>
+      <button type="button" role="tab" data-scope="sent">📚 送った</button>
+    </nav>
+    <div id="papers" class="papers" role="group" aria-label="新聞社で絞る"></div>
+  </header>
+
+  <main id="main">
+    <section id="login" class="view" hidden>
+      <div class="card">
+        <h2>合言葉を入れてください</h2>
+        <p class="sub">Worker に設定した APP_KEY です。この端末にだけ保存されます。</p>
+        <form id="login-form">
+          <input id="key" type="password" autocomplete="current-password" required minlength="16" placeholder="合言葉" aria-label="合言葉">
+          <button type="submit" class="primary">はじめる</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="list" class="view" hidden>
+      <div id="notify-banner" class="banner" hidden></div>
+      <div id="list-body"></div>
+    </section>
+  </main>
+
+  <article id="reader" class="reader" hidden aria-label="記事">
+    <div class="reader-bar">
+      <button type="button" id="reader-back" class="icon-btn" aria-label="一覧に戻る">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <div id="reader-meta" class="reader-meta"></div>
+      <a id="reader-open" class="icon-btn" target="_blank" rel="noopener noreferrer" aria-label="元の記事を開く">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+      </a>
+    </div>
+    <div id="reader-scroll" class="reader-scroll">
+      <div id="reader-body" class="reader-body"></div>
+    </div>
+    <div class="reader-actions">
+      <button type="button" id="act-unread" class="ghost">未読に戻す</button>
+      <button type="button" id="act-send" class="ghost">📚 送る</button>
+      <button type="button" id="act-next" class="primary">次の記事 →</button>
+    </div>
+  </article>
+
+  <dialog id="settings" class="sheet">
+    <form method="dialog">
+      <h2>設定</h2>
+      <div id="notify-status" class="sub"></div>
+      <div class="sheet-buttons">
+        <button type="button" id="notify-on" class="primary">🔔 アイコンに未読数を出す</button>
+        <button type="button" id="notify-test" class="ghost" hidden>通知を試す</button>
+        <button type="button" id="logout" class="ghost">合言葉を消す</button>
+        <button value="close" class="ghost">閉じる</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

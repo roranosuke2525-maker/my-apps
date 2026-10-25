@@ -1,0 +1,26 @@
+name = "news-reader"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+# DB_ニュース のデータソースID（IDだけでは読み書きできない。権限はインテグレーション側）
+NEWS_DS_ID = "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd"
+# 本文を取り込んでよいサイト（カンマ区切り。サブドメインも含む）
+ALLOWED_HOSTS = "nikkei.com,jiji.com,tokyo-np.co.jp,jomo-news.co.jp,asahi.com,yomiuri.co.jp,mainichi.jp"
+
+# 通知の宛先と通知用の鍵を置く場所。id を書かなくても初回のデプロイで自動で作られる
+[[kv_namespaces]]
+binding = "NEWS_KV"
+
+# 平日 7:15（日本時間）＝朝のニュース収集（6:47）のあとに、未読の数をホーム画面のアイコンへ送る
+[triggers]
+crons = ["15 22 * * 0-4"]
+
+# 秘密の値は Cloudflare の「変数とシークレット」で入れる（このファイルには書かない）
+#   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
+#   APP_KEY      : アプリを開くときの合言葉（16文字以上）
