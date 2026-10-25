@@ -27,6 +27,7 @@
   --carve-hi: rgba(255, 246, 228, 0.8);
   --carve-off: 1px;
   --note: linear-gradient(170deg, #fbf4e3, #f1e3c6);
+  --fade: rgba(246, 238, 226, 0.55);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -52,6 +53,7 @@
     --carve: #f0d5ad;
     --carve-hi: rgba(0, 0, 0, 0.7);
     --carve-off: -1px;
+    --fade: rgba(26, 16, 9, 0.5);
   }
 }
 
@@ -150,7 +152,9 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 
 /* 習慣の木札：表は白木（オーク）、チェックで裏返ってウォールナットの面に */
 .habit { position: relative; min-height: 0; padding: 0; border: 0; background: none; cursor: pointer; perspective: 500px; container-type: size; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
-.habit:disabled { cursor: default; opacity: 0.55; }
+/* 押せない札は上に薄い膜をかけて淡くする（opacity を使うと3Dが平らになり、表と裏が重なって見えるため） */
+.habit:disabled { cursor: default; }
+.habit:disabled .face::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: var(--fade); pointer-events: none; }
 .habit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 7px; }
 .habit .flip { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(0.34, 1.45, 0.55, 1); }
 .habit[aria-pressed="true"] .flip { transform: rotateY(180deg); }
@@ -378,3 +382,13 @@ svg.carve { fill: none; stroke: var(--carve); stroke-width: 2; filter: drop-shad
 .member img, .member .noimg { border-radius: 3px; background: #f6ecd8; box-shadow: 0 0 0 4px #6b4428, 0 0 0 5px rgba(30, 15, 0, 0.45), inset 0 0 8px rgba(60, 30, 10, 0.25); margin: 5px 0 6px; width: calc(100% - 10px); }
 .member .now-badge { z-index: 1; }
 .badge-note { text-align: center; margin: 0; font-size: 12px; }
+
+/* 今日はお休みの習慣（ごみの収集日以外など）：裏返したまま、押せない */
+/* お休みの札は裏面だけを出す（3Dを使わない） */
+.habit.off .flip { transform: none; transition: none; }
+.habit.off .front { display: none; }
+.habit.off .back { transform: none; }
+.habit.off .done-mark { font-size: min(34cqh, 13cqw); font-weight: 800; }
+.dot.off { font-size: 10px; color: var(--sub); opacity: 0.7; }
+/* ★ボーナス：札の左上に金色の星 */
+.habit .bonus-mark { color: #c8901c; text-shadow: 0 0 2px rgba(255, 255, 255, 0.8); }

@@ -41,7 +41,7 @@ const CARVINGS = {
 const HABIT_CARVINGS = [
   ["プロテインの準備", "scoop"], ["プロテイン", "shaker"], ["起床", "alarm"], ["洗濯", "shirt"], ["ストレッチ", "stretch"],
   ["日焼け止め", "lotion"], ["スクワット", "squat"], ["腹筋", "roller"], ["体重", "scale"], ["新聞", "paper"], ["サプリ", "capsule"],
-  ["ゴミ", "trash"], ["胸トレ", "dumbbell"], ["筋トレ", "dumbbell"], ["フロス", "tooth"], ["歯", "tooth"], ["ヤクルト", "bottle"],
+  ["ゴミ", "trash"], ["ごみ", "trash"], ["胸トレ", "dumbbell"], ["筋トレ", "dumbbell"], ["フロス", "tooth"], ["歯", "tooth"], ["ヤクルト", "bottle"],
   ["風呂", "bath"], ["キャベツ", "cabbage"], ["野菜", "cabbage"], ["寝かしつけ", "moon"], ["睡眠", "moon"], ["読書", "book"],
   ["本", "book"], ["ミルク", "babybottle"], ["離乳食", "babybottle"], ["ナッツ", "acorn"], ["マネーフォワード", "coin"],
   ["家計", "coin"], ["クイックル", "broom"], ["INBOX", "inbox"], ["ごはん", "pan"], ["料理", "pan"], ["食器", "dish"],

@@ -105,7 +105,22 @@ function currentSlot() {
 function weekday(date) {
   return new Date(`${date}T00:00:00Z`).getUTCDay();
 }
+// ごみ：燃やせるごみ（列名の曜日）に加えて、資源ごみの日（第2・第4 水曜）も出す。12/30〜1/3 は収集なし（高崎市飯塚町）
+const isGarbage = (x) => /ごみ|ゴミ/.test(x.label);
+function garbageExtra(date) {
+  const d = Number(date.slice(8));
+  return weekday(date) === 3 && (Math.ceil(d / 7) === 2 || Math.ceil(d / 7) === 4);
+}
+function garbageHoliday(date) {
+  const md = date.slice(5);
+  return md >= "12-30" || md <= "01-03";
+}
+
 function isOff(x, date) {
+  if (isGarbage(x)) {
+    if (garbageHoliday(date)) return true;
+    if (garbageExtra(date)) return false;
+  }
   return !!x.days && !x.days.includes(weekday(date));
 }
 function counts(x, date) {
@@ -249,7 +264,8 @@ function slotGroups() {
 // ホーム画面のアイコンに、今日のまだの習慣の数を出す（iPhone はホーム画面に追加し、通知を許可したときだけ出る）
 function updateBadge() {
   if (!("setAppBadge" in navigator) || state.date !== todayJst() || state.dayLoading || state.dayError) return;
-  const left = state.row ? state.habits.filter((x) => !state.row.checks[x.name]).length : state.habits.length;
+  const todays = state.habits.filter((x) => counts(x, state.date));
+  const left = state.row ? todays.filter((x) => !state.row.checks[x.name]).length : todays.length;
   (left ? navigator.setAppBadge(left) : navigator.clearAppBadge()).catch(() => {});
 }
 
@@ -303,7 +319,7 @@ function renderDay() {
     h("div", { class: "slot-label" },
       h("span", { class: "slot-icon", text: g.label.split(" ")[0] }),
       h("span", { class: "slot-name", text: g.label.split(" ")[1] || "" }),
-      h("small", { text: (() => { const s = g.list.filter((x) => counts(x, state.date)); return `${s.filter((x) => row.checks[x.name]).length}/${s.length}`; })() }),
+      h("small", { text: slotCount(g.list, row) }),
     ),
     h("div", { class: "slot-tiles" }, g.list.map((x) => habitTile(x, row, canEdit))),
   );
@@ -318,6 +334,12 @@ function renderDay() {
     canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
   ], `day:${state.date}`);
   updateBadge();
+}
+
+// 時間帯の「済/数える数」（★ボーナスとお休みの日の習慣は数えない）
+function slotCount(list, row) {
+  const s = list.filter((x) => counts(x, state.date));
+  return `${s.filter((x) => row.checks[x.name]).length}/${s.length}`;
 }
 
 function statusCard(row) {
@@ -342,18 +364,21 @@ function statusCard(row) {
 // 木札：表は白木に彫った絵と短い名前、チェックすると くるっと裏返って ウォールナットの面（済）になる。長押しで正式な名前と説明
 function habitTile(x, row, canEdit) {
   const art = habitCarving(x.label); // carve.js
+  const off = isOff(x, state.date); // 今日はない日（ごみの収集日以外など）：裏返したまま押せない
   const face = (side) => h("span", { class: `face ${side}` },
     h("span", { class: "hole", "aria-hidden": "true" }),
     art ? carving(art, "ico") : null,
     h("span", { class: `lbl${art ? "" : " only"}`, text: shortName(x.label) }),
-    side === "back" ? h("span", { class: "done-mark", "aria-hidden": "true", text: "✓" }) : null,
+    side === "back" ? h("span", { class: "done-mark", "aria-hidden": "true", text: off ? "休" : "✓" }) : null,
   );
+  const kind = x.must ? "必ず：" : x.bonus ? "ボーナス：" : "";
   const btn = h("button", {
-    type: "button", class: "habit", "data-name": x.name, "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit,
-    "aria-label": `${x.must ? "必ず：" : ""}${x.label}${x.hint ? `（${x.hint}）` : ""}`,
+    type: "button", class: `habit${off ? " off" : ""}${x.bonus ? " bonus" : ""}`, "data-name": x.name, "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit || off,
+    "aria-label": `${kind}${x.label}${x.hint ? `（${x.hint}）` : ""}${off ? "（今日はお休み）" : ""}`,
   },
     h("span", { class: "flip" }, face("front"), face("back")),
-    x.must ? h("span", { class: "must-mark", "aria-hidden": "true", text: "◆" }) : null,
+    x.must && !off ? h("span", { class: "must-mark", "aria-hidden": "true", text: "◆" }) : null,
+    x.bonus ? h("span", { class: "must-mark bonus-mark", "aria-hidden": "true", text: "★" }) : null,
   );
   let pressTimer = null;
   let longPressed = false;
@@ -378,7 +403,9 @@ function showName(btn, x) {
   document.querySelector(".name-bubble")?.remove();
   const r = btn.getBoundingClientRect();
   const bubble = h("div", { class: "name-bubble", role: "status" },
-    h("b", { text: `${x.must ? "◆ " : ""}${x.label}` }), x.hint ? h("span", { text: x.hint }) : null);
+    h("b", { text: `${x.must ? "◆ " : x.bonus ? "★ " : ""}${x.label}` }),
+    x.bonus ? h("span", { text: "ボーナス（やった日だけEXP・達成率に数えない）" }) : null,
+    isOff(x, state.date) ? h("span", { text: "今日はお休み" }) : x.hint ? h("span", { text: x.hint }) : null);
   document.body.append(bubble);
   const bw = bubble.offsetWidth;
   bubble.style.left = `${Math.max(8, Math.min(innerWidth - bw - 8, r.left + r.width / 2 - bw / 2))}px`;
@@ -469,8 +496,7 @@ function patchDay() {
   if (!row || body.dataset.scrollKey !== `day:${state.date}`) return false;
   for (const btn of body.querySelectorAll(".habit[data-name]")) btn.setAttribute("aria-pressed", String(!!row.checks[btn.dataset.name]));
   for (const el of body.querySelectorAll(".slot[data-slot] .slot-label small")) {
-    const list = state.habits.filter((x) => x.slot === el.closest(".slot").dataset.slot);
-    el.textContent = `${list.filter((x) => row.checks[x.name]).length}/${list.length}`;
+    el.textContent = slotCount(state.habits.filter((x) => x.slot === el.closest(".slot").dataset.slot), row);
   }
   $("status")?.replaceWith(statusCard(row));
   updateBadge();
@@ -567,8 +593,9 @@ function renderWeek() {
       dates.map((d) => {
         const day = r.days[d];
         if (!day || d > today) return h("div", { class: "dot", "aria-hidden": "true", text: "·" });
+        if (isOff(x, d)) return h("div", { class: "dot off", title: "この日はお休み", text: "休" });
         const on = !!day.checks[x.name];
-        const btn = h("button", { type: "button", class: `cell${d === today ? " today" : ""}${isOff(x, d) ? " off" : ""}`, "aria-pressed": String(on), "aria-label": `${x.label} ${md(d)}`, disabled: !editable(d) }, h("span", { class: "box" }));
+        const btn = h("button", { type: "button", class: `cell${d === today ? " today" : ""}`, "aria-pressed": String(on), "aria-label": `${x.label} ${md(d)}`, disabled: !editable(d) }, h("span", { class: "box" }));
         btn.addEventListener("click", () => toggleCheck(day, d, x, !day.checks[x.name]));
         return btn;
       }));
