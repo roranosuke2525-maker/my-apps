@@ -232,6 +232,30 @@ function slotGroups() {
   })).filter((g) => g.list.length);
 }
 
+// ホーム画面のアイコンに、今日のまだの習慣の数を出す（iPhone はホーム画面に追加し、通知を許可したときだけ出る）
+function updateBadge() {
+  if (!("setAppBadge" in navigator) || state.date !== todayJst() || state.dayLoading || state.dayError) return;
+  const left = state.row ? state.habits.filter((x) => !state.row.checks[x.name]).length : state.habits.length;
+  (left ? navigator.setAppBadge(left) : navigator.clearAppBadge()).catch(() => {});
+}
+
+function badgeCard() {
+  if (!("setAppBadge" in navigator) || !("Notification" in window)) return null;
+  const perm = Notification.permission;
+  if (perm === "granted") return h("p", { class: "sub badge-note", text: "ホーム画面のアイコンに、今日のまだの数を出しています（アプリを開いたときに更新）" });
+  if (perm === "denied") return h("p", { class: "sub badge-note", text: "アイコンの数字は、設定アプリ → 通知 → 習慣チェック で許可すると出ます" });
+  const btn = h("button", { type: "button", class: "primary" }, "アイコンに残りの数を出す");
+  btn.addEventListener("click", async () => {
+    const r = await Notification.requestPermission().catch(() => "denied");
+    if (r === "granted") { updateBadge(); toast("アイコンに数字を出します"); }
+    renderMe();
+  });
+  return h("div", { class: "card stack", style: "gap:8px" },
+    h("h3", { text: "ホーム画面のアイコン" }),
+    h("p", { class: "sub", style: "margin:0", text: "今日まだの習慣の数を、アイコンの赤い丸に出します。iPhone は通知の許可が要ります（通知は送りません）。" }),
+    btn);
+}
+
 function renderDay() {
   $("date-label").textContent = dateLabel(state.date);
   $("go-today").hidden = state.date === todayJst();
@@ -279,6 +303,7 @@ function renderDay() {
     h("div", { class: "habits scroll fill" }, groups),
     canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
   ], `day:${state.date}`);
+  updateBadge();
 }
 
 function statusCard(row) {
@@ -407,7 +432,10 @@ function applyPending(row) {
 }
 
 function setCheck(rowId, name, value) {
-  if (state.row?.id === rowId) state.row.checks[name] = value;
+  if (state.row?.id === rowId) {
+    state.row.checks[name] = value;
+    updateBadge(); // 週の表から今日を付けたときも
+  }
   for (const r of state.ranges.values()) {
     for (const day of Object.values(r.days || {})) if (day.id === rowId) day.checks[name] = value;
   }
@@ -430,6 +458,7 @@ function patchDay() {
     el.textContent = `${list.filter((x) => row.checks[x.name]).length}/${list.length}`;
   }
   $("status")?.replaceWith(statusCard(row));
+  updateBadge();
   return true;
 }
 
@@ -931,6 +960,7 @@ async function renderMe() {
     textCard("ステータス", p.status),
     textCard("なかま", p.party),
     textCard("じゅもん", p.spell),
+    badgeCard(),
     p.url ? h("a", { class: "link", href: p.url, target: "_blank", rel: "noopener", style: "text-align:center" }, "Notionで開く") : null,
   )], "me");
 }
