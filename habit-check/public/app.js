@@ -7,9 +7,9 @@ const STALE_MS = 60e3;
 const REFRESH_DELAY = 2500;
 const SLOTS = [
   ["morning", "☼ 朝"],
-  ["noon", "☀︎ 昼"],
-  ["timed", "◷ 時間"],
-  ["night", "☾ 夜"],
+  ["noon", "☀︎ 日中"],
+  ["evening", "◐ 夕方"],
+  ["night", "☾ 寝る前"],
   ["anytime", "↻ いつでも"],
 ];
 const WEEK = "月火水木金土日";
@@ -90,11 +90,25 @@ function editable(date) {
   const d = daysFromToday(date);
   return d <= 0 && d >= -MAX_BACK_DAYS;
 }
+// 時間帯の区切り（JST）：朝 4:00〜8:00／日中〜17:15／夕方〜21:00／寝る前〜翌4:00
 function currentSlot() {
-  const hour = new Date(Date.now() + 9 * 3600e3).getUTCHours();
-  if (hour >= 4 && hour <= 10) return "morning";
-  if (hour >= 11 && hour <= 17) return "noon";
+  const d = new Date(Date.now() + 9 * 3600e3);
+  const min = d.getUTCHours() * 60 + d.getUTCMinutes();
+  if (min >= 240 && min < 480) return "morning";
+  if (min >= 480 && min < 1035) return "noon";
+  if (min >= 1035 && min < 1260) return "evening";
   return "night";
+}
+
+// その日の達成率に数える習慣か（★ボーナスは数えない／曜日指定はその曜日だけ）
+function weekday(date) {
+  return new Date(`${date}T00:00:00Z`).getUTCDay();
+}
+function isOff(x, date) {
+  return !!x.days && !x.days.includes(weekday(date));
+}
+function counts(x, date) {
+  return !x.bonus && !isOff(x, date);
 }
 
 // 中身を入れ替える。同じ画面（key が同じ）の描き直しなら、スクロール位置をそのまま残す
@@ -264,7 +278,7 @@ function renderDay() {
     h("div", { class: "slot-label" },
       h("span", { class: "slot-icon", text: g.label.split(" ")[0] }),
       h("span", { class: "slot-name", text: g.label.split(" ")[1] || "" }),
-      h("small", { text: `${g.list.filter((x) => row.checks[x.name]).length}/${g.list.length}` }),
+      h("small", { text: (() => { const s = g.list.filter((x) => counts(x, state.date)); return `${s.filter((x) => row.checks[x.name]).length}/${s.length}`; })() }),
     ),
     h("div", { class: "slot-tiles" }, g.list.map((x) => habitTile(x, row, canEdit))),
   );
@@ -281,8 +295,9 @@ function renderDay() {
 }
 
 function statusCard(row) {
-  const total = state.habits.length;
-  const done = state.habits.filter((x) => row.checks[x.name]).length;
+  const scored = state.habits.filter((x) => counts(x, state.date));
+  const total = scored.length;
+  const done = scored.filter((x) => row.checks[x.name]).length;
   const musts = state.habits.filter((x) => x.must);
   const left = musts.filter((x) => !row.checks[x.name]);
   return h("div", { class: "card", id: "status" },
@@ -299,11 +314,16 @@ function statusCard(row) {
 }
 
 function habitTile(x, row, canEdit) {
-  const btn = h("button", { type: "button", class: "habit", "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit },
+  const off = isOff(x, state.date);
+  const hint = off ? "今日はお休み（数えない）" : x.hint;
+  const btn = h("button", { type: "button", class: `habit${off ? " off" : ""}${x.bonus ? " bonus" : ""}`, "aria-pressed": String(!!row.checks[x.name]), disabled: !canEdit },
     h("span", { class: "box" }),
     h("span", { class: "text" },
-      h("span", { class: "name" }, x.must ? h("span", { class: "must-mark", title: "必ず", text: "◆" }) : null, x.label),
-      x.hint ? h("span", { class: "hint", text: x.hint }) : null),
+      h("span", { class: "name" },
+        x.must ? h("span", { class: "must-mark", title: "必ず", text: "◆" }) : null,
+        x.bonus ? h("span", { class: "bonus-mark", title: "ボーナス（達成率に数えない）", text: "★" }) : null,
+        x.label),
+      hint ? h("span", { class: "hint", text: hint }) : null),
   );
   btn.addEventListener("click", () => {
     btn.classList.add("pending");
@@ -424,9 +444,11 @@ async function withRange(bodyId, from, to, render, isCurrent) {
   }
 }
 
-function dayRate(day) {
-  if (!day || !state.habits.length) return null;
-  return state.habits.filter((x) => day.checks[x.name]).length / state.habits.length;
+function dayRate(day, date) {
+  if (!day) return null;
+  const scored = state.habits.filter((x) => counts(x, date));
+  if (!scored.length) return null;
+  return scored.filter((x) => day.checks[x.name]).length / scored.length;
 }
 
 function renderWeek() {
@@ -444,13 +466,13 @@ function renderWeek() {
         const day = r.days[d];
         if (!day || d > today) return h("div", { class: "dot", "aria-hidden": "true", text: "·" });
         const on = !!day.checks[x.name];
-        const btn = h("button", { type: "button", class: `cell${d === today ? " today" : ""}`, "aria-pressed": String(on), "aria-label": `${x.label} ${md(d)}`, disabled: !editable(d) }, h("span", { class: "box" }));
+        const btn = h("button", { type: "button", class: `cell${d === today ? " today" : ""}${isOff(x, d) ? " off" : ""}`, "aria-pressed": String(on), "aria-label": `${x.label} ${md(d)}`, disabled: !editable(d) }, h("span", { class: "box" }));
         btn.addEventListener("click", () => toggleCheck(day, d, x, !day.checks[x.name]));
         return btn;
       }));
     const rows = slotGroups().flatMap((g) => [h("div", { class: "trow group" }, h("div", { class: "name", text: g.label })), ...g.list.map(habitRow)]);
     const foot = h("div", { class: "trow foot" }, h("div", { class: "name", text: "達成率" }),
-      dates.map((d) => { const rate = dayRate(r.days[d]); return h("div", { class: "day", text: rate == null ? "–" : pct(rate) }); }));
+      dates.map((d) => { const rate = dayRate(r.days[d], d); return h("div", { class: "day", text: rate == null ? "–" : pct(rate) }); }));
     swap($("week-body"), [
       h("div", { class: "table fill" }, head, h("div", { class: "tbody" }, rows), foot),
     ], `week:${state.weekStart}`);
@@ -482,7 +504,7 @@ function renderCal() {
     const musts = state.habits.filter((x) => x.must);
     for (let d = from; d <= to; d = addDays(d, 1)) {
       const day = r.days[d];
-      const rate = d <= today ? dayRate(day) : null;
+      const rate = d <= today ? dayRate(day, d) : null;
       if (rate != null) {
         sum += rate; counted++;
         if (rate === 1) perfect++;
@@ -526,12 +548,17 @@ function renderGraph() {
     const bars = [];
     const labels = [];
     for (let d = barFrom; d <= to; d = addDays(d, 1)) {
-      const rate = dayRate(r.days[d]) ?? 0;
+      const rate = dayRate(r.days[d], d) ?? 0;
       bars.push(h("span", { class: d === to ? "now" : "", style: `height:${Math.max(1.5, rate * 100)}%`, title: `${md(d)} ${pct(rate)}` }));
       labels.push(h("span", { text: String(Number(d.slice(8))) }));
     }
-    const days = Object.values(r.days);
-    const rates = state.habits.map((x) => ({ x, rate: days.length ? days.filter((d) => d.checks[x.name]).length / days.length : 0 }))
+    const entries = Object.entries(r.days);
+    const days = entries.map(([, d]) => d);
+    // ★ボーナスは順位に出さない。曜日指定はその曜日の日だけで割る
+    const rates = state.habits.filter((x) => !x.bonus).map((x) => {
+      const on = entries.filter(([date]) => !isOff(x, date));
+      return { x, rate: on.length ? on.filter(([, d]) => d.checks[x.name]).length / on.length : 0 };
+    })
       .sort((a, b) => b.rate - a.rate);
     const rankList = (list) => h("div", { class: "rank-list" }, list.map(({ x, rate }) => h("div", { class: "rank-row" },
       h("span", { class: "label", text: x.label }), h("div", { class: "bar" }, h("span", { style: `width:${rate * 100}%` })), h("b", { text: pct(rate) }))));

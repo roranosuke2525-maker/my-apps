@@ -27,9 +27,11 @@ const mock = `
   const HABITS = ${JSON.stringify(habits)};
   const EXP_PER_CHECK = 5, EXP_PER_LV = 150;
   const habitList = HABITS.map(([name, hint]) => {
-    const m = name.match(/^([◆◇])\\s*([☼☀◷☾↻])[\\uFE0E\\uFE0F]?\\s*(.+)$/u);
-    const slot = { "☼": "morning", "☀": "noon", "◷": "timed", "☾": "night", "↻": "anytime" }[m[2]];
-    return { name, label: m[3].trim(), must: m[1] === "◆", slot, hint };
+    const m = name.match(/^([◆◇★])\\s*([☼☀◷◐☾↻])[\\uFE0E\\uFE0F]?\\s*(.+)$/u);
+    const slot = { "☼": "morning", "☀": "noon", "◷": "noon", "◐": "evening", "☾": "night", "↻": "anytime" }[m[2]];
+    const label = m[3].trim();
+    const d = label.match(/[（(]([日月火水木金土]+)[）)]\\s*$/u);
+    return { name, label, must: m[1] === "◆", bonus: m[1] === "★", slot, days: d ? [...d[1]].map((c) => "日月火水木金土".indexOf(c)) : null, hint };
   });
   const jst = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
   const addDays = (d, n) => { const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };

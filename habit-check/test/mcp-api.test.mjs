@@ -26,7 +26,7 @@ test("習慣の一覧を列名から作り、日本時間のその日の行を�
   assert.equal(status, 200);
   assert.equal(data.habits.length, 6);
   const byName = Object.fromEntries(data.habits.map((h) => [h.name, h]));
-  assert.deepEqual(byName["◆☼ 起床"], { name: "◆☼ 起床", label: "起床", must: true, slot: "morning", hint: "" });
+  assert.deepEqual(byName["◆☼ 起床"], { name: "◆☼ 起床", label: "起床", must: true, bonus: false, slot: "morning", days: null, hint: "" });
   assert.equal(byName["◇☀︎ プロテイン"].slot, "noon");
   assert.equal(byName["◇☾プロテインの準備"].label, "プロテインの準備");
   assert.equal(byName["◇↻ 読書"].hint, "最小版：1ページ");

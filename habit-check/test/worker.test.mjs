@@ -196,7 +196,7 @@ test("習慣の一覧を列名から読み取り、日本時間のその日の�
   assert.equal(data.row.id, "day21");
   assert.equal(data.row.stats["いまのLv"], 7);
   const byName = Object.fromEntries(data.habits.map((h) => [h.name, h]));
-  assert.deepEqual(byName["◆☼ 起床"], { name: "◆☼ 起床", label: "起床", must: true, slot: "morning", hint: "" });
+  assert.deepEqual(byName["◆☼ 起床"], { name: "◆☼ 起床", label: "起床", must: true, bonus: false, slot: "morning", days: null, hint: "" });
   assert.equal(byName["◇☀︎ プロテイン"].slot, "noon");
   assert.equal(byName["◇☀︎ プロテイン"].label, "プロテイン");
   assert.equal(byName["◇☾プロテインの準備"].slot, "night");
@@ -378,4 +378,16 @@ test("HIDDEN_HABITS に書いた習慣は出さず、書き換えもしない", 
   assert.equal("◇☼ 新聞" in data.row.checks, false);
   const res = await call("PATCH", `/api/pages/${data.row.id}`, { name: "◇☼ 新聞", value: true });
   assert.equal(res.status, 400);
+});
+
+test("★はボーナス、◐は夕方、（火金）は曜日指定として読む", async () => {
+  const src = await import("node:fs").then((fs) => fs.readFileSync(new URL("../src/worker.js", import.meta.url), "utf8"));
+  const body = src.slice(src.indexOf("const SLOTS"), src.indexOf("export default"));
+  const parseHabit = new Function(`${body}; return parseHabit;`)();
+  const a = parseHabit({ name: "★◐ ごはん作り" });
+  assert.equal(a.bonus, true); assert.equal(a.slot, "evening"); assert.equal(a.days, null);
+  const b = parseHabit({ name: "◇☼ 燃やせるごみ（火金）" });
+  assert.deepEqual(b.days, [2, 5]); assert.equal(b.label, "燃やせるごみ（火金）");
+  assert.equal(parseHabit({ name: "◇☾ ヤクルト（22時）" }).days, null);
+  assert.equal(parseHabit({ name: "◇◷ プロテイン（15時）" }).slot, "noon");
 });

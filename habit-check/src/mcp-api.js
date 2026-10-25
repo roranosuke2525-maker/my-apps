@@ -21,8 +21,26 @@
   const HABIT_VIEW_DB = "3e962844acbe8135bff2dab4a1157d77";
   const PLAYER_ID = "3e962844acbe81b0843ff78fe19791fa";
   const NOTE = "ひとこと";
-  const SLOTS = { "☼": "morning", "☀": "noon", "◷": "timed", "☾": "night", "↻": "anytime" };
-  const HABIT_NAME = /^([◆◇])\s*([☼☀◷☾↻])[︎️]?\s*(.+)$/u;
+  // 区分：◆必ず ◇できれば ★ボーナス（達成率に数えない） ／ 時間帯：☼朝 ☀︎日中 ◐夕方 ☾寝る前 ↻いつでも（◷は日中として読む）
+  // 名前の最後に（火金）のように曜日を書くと、その曜日だけ達成率に数える
+  const SLOTS = { "☼": "morning", "☀": "noon", "◷": "noon", "◐": "evening", "☾": "night", "↻": "anytime" };
+  const HABIT_NAME = /^([◆◇★])\s*([☼☀◷◐☾↻])[︎️]?\s*(.+)$/u;
+  const HABIT_DAYS = /[（(]([日月火水木金土]+)[）)]\s*$/u;
+  
+  function parseHabit(p) {
+    const m = p.name.match(HABIT_NAME);
+    const label = m ? m[3].trim() : p.name;
+    const d = label.match(HABIT_DAYS);
+    return {
+      name: p.name,
+      label,
+      must: m ? m[1] === "◆" : false,
+      bonus: m ? m[1] === "★" : false,
+      slot: m ? SLOTS[m[2]] : "anytime",
+      days: d ? [...new Set([...d[1]].map((c) => "日月火水木金土".indexOf(c)))] : null,
+      hint: p.description || "",
+    };
+  }
   const SCHEMA_TTL = 60e3;
   const REPORT_LIMIT = 20;
   const REPORT_NOTE_MAX = 200;
@@ -152,16 +170,7 @@
     const shown = viewProperties(res.text);
     const habits = (shown ? shown.map((name) => props[name]) : Object.values(props))
       .filter((p) => p?.type === "checkbox")
-      .map((p) => {
-        const m = p.name.match(HABIT_NAME);
-        return {
-          name: p.name,
-          label: m ? m[3].trim() : p.name,
-          must: m ? m[1] === "◆" : false,
-          slot: m ? SLOTS[m[2]] : "anytime",
-          hint: p.description || "",
-        };
-      });
+      .map(parseHabit);
     schemaCache = { at: Date.now(), props, habits };
     return schemaCache;
   }
