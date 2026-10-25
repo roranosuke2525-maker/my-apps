@@ -377,3 +377,4 @@ svg.carve { fill: none; stroke: var(--carve); stroke-width: 2; filter: drop-shad
 /* パーティー：木の額縁 */
 .member img, .member .noimg { border-radius: 3px; background: #f6ecd8; box-shadow: 0 0 0 4px #6b4428, 0 0 0 5px rgba(30, 15, 0, 0.45), inset 0 0 8px rgba(60, 30, 10, 0.25); margin: 5px 0 6px; width: calc(100% - 10px); }
 .member .now-badge { z-index: 1; }
+.badge-note { text-align: center; margin: 0; font-size: 12px; }
