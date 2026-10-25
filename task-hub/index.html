@@ -1,0 +1,1017 @@
+<title>今どこボード</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Dela+Gothic+One&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* 1画面の操作盤：上に6区分の計器、中央に区分ごとの専用ビュー（ページ送り）、下にタブ。スクロールしない */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --sunk: #e3e8ef;
+  --ink: #18212f;
+  --muted: #5d6878;
+  --line: #ccd4df;
+  --accent: #2d58a8;
+  --accent-ink: #ffffff;
+  --today: #c9731a;
+  --plan: #2d6fc4;
+  --next: #c8452f;
+  --inbox: #6b7584;
+  --wait: #a68512;
+  --proj: #7a4fb5;
+  --ai: #1f8a7a;
+  --good: #2f8a4c;
+  --bad: #b8402f;
+  --glow: rgba(45, 88, 168, .16);
+  --f-body: "BIZ UDPGothic", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --f-display: "Dela Gothic One", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --f-num: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141e; --surface: #172131; --sunk: #0a0f17; --ink: #e6ebf3; --muted: #93a0b4; --line: #2a3648;
+    --accent: #7fa6ec; --accent-ink: #0e141e; --today: #eba45a; --plan: #74a8ee; --next: #ee7c66; --inbox: #9aa4b3;
+    --wait: #d9bb4d; --proj: #b593e8; --ai: #5cc7b5; --good: #6cc488; --bad: #ee7c66; --glow: rgba(127, 166, 236, .18);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141e; --surface: #172131; --sunk: #0a0f17; --ink: #e6ebf3; --muted: #93a0b4; --line: #2a3648;
+  --accent: #7fa6ec; --accent-ink: #0e141e; --today: #eba45a; --plan: #74a8ee; --next: #ee7c66; --inbox: #9aa4b3;
+  --wait: #d9bb4d; --proj: #b593e8; --ai: #5cc7b5; --good: #6cc488; --bad: #ee7c66; --glow: rgba(127, 166, 236, .18);
+  color-scheme: dark;
+}
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 12px; line-height: 1.35; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+
+#app { height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); max-width: 760px; margin: 0 auto; }
+@media (min-width: 420px) { #app { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
+
+/* ヘッダー */
+header { display: flex; align-items: center; gap: 8px; padding-block: 6px 4px; }
+#mini { width: 22px; height: 22px; flex: none; }
+header h1 { font-family: var(--f-display); font-weight: 400; font-size: 15px; letter-spacing: .02em; margin: 0; }
+#stamp { color: var(--muted); font-size: 10px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#reload { font-size: 11px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+
+/* 6区分の計器 */
+#lanes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding-block: 2px 6px; }
+#lanes[hidden] { display: none; }
+.lane { --c: var(--accent); display: grid; justify-items: center; gap: 1px; padding: 5px 0 4px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); position: relative; }
+.lane b { font-family: var(--f-display); font-weight: 400; font-size: 17px; line-height: 1; color: var(--c); }
+.lane span { font-size: 9.5px; color: var(--muted); white-space: nowrap; }
+.lane i { font-style: normal; font-size: 11px; line-height: 1; }
+.lane[aria-pressed="true"] { background: var(--c); border-color: var(--c); }
+.lane[aria-pressed="true"] b, .lane[aria-pressed="true"] span { color: var(--accent-ink); }
+.lane .ov { position: absolute; top: 2px; right: 3px; font-size: 8.5px; font-family: var(--f-num); color: var(--bad); }
+.lane[aria-pressed="true"] .ov { color: var(--accent-ink); }
+
+/* メイン */
+main { grid-row: 3; min-height: 0; position: relative; display: flex; flex-direction: column; }
+nav { grid-row: 4; }
+.pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.bar { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.bar h2 { font-size: 12px; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.bar .hint { color: var(--muted); font-size: 10px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg { display: flex; gap: 3px; flex-wrap: wrap; }
+.seg button { font-size: 10.5px; padding: 3px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.seg .n { font-family: var(--f-num); font-size: 9.5px; opacity: .75; margin-left: 2px; }
+
+.list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
+.row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 7px; height: 36px; padding: 0 8px 0 0; border-radius: 7px; background: var(--surface); text-align: left; width: 100%; border: 1px solid transparent; flex: none; }
+.row:active { border-color: var(--accent); }
+.row .tag { width: 30px; height: 100%; display: grid; place-items: center; border-radius: 7px 0 0 7px; background: var(--sunk); font-size: 9.5px; color: var(--muted); line-height: 1.1; text-align: center; }
+.row .txt { min-width: 0; display: grid; }
+.row .nm { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .sub { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .side { display: flex; align-items: center; gap: 4px; }
+.chip { font-size: 9.5px; padding: 1px 5px; border-radius: 4px; background: var(--sunk); color: var(--muted); white-space: nowrap; font-family: var(--f-num); }
+.chip.late { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.w { font-family: var(--f-num); font-size: 9.5px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); color: var(--muted); }
+.w.S { color: var(--good); border-color: var(--good); } .w.L { color: var(--today); border-color: var(--today); } .w.XL { color: var(--bad); border-color: var(--bad); }
+.done-btn { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 12px; color: transparent; flex: none; }
+.done-btn:active, .done-btn.on { border-color: var(--good); color: var(--good); }
+
+.pager { display: flex; align-items: center; justify-content: center; gap: 10px; height: 26px; flex: none; }
+.pager button { width: 34px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }
+.pager button:disabled { opacity: .3; }
+.pager .pg { font-family: var(--f-num); font-size: 10.5px; color: var(--muted); min-width: 48px; text-align: center; }
+.empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--muted); font-size: 11.5px; padding: 12px; }
+
+/* 今日：いまやるカード */
+.focus { background: var(--surface); border-radius: 10px; padding: 9px 10px; display: grid; gap: 5px; border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); flex: none; }
+.focus .k { font-size: 9.5px; letter-spacing: .12em; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.focus .t { font-size: 14px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.focus .nx { font-size: 11px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.acts { display: flex; gap: 4px; flex-wrap: wrap; }
+.acts button { font-size: 11px; padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
+.acts button.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.meter { height: 5px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--good); border-radius: 3px; }
+
+/* 予定：2週間の帯 */
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; flex: none; }
+.cal button { height: 38px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); display: grid; align-content: center; justify-items: center; gap: 1px; }
+.cal .d { font-family: var(--f-num); font-size: 11px; }
+.cal .wd { font-size: 8.5px; color: var(--muted); }
+.cal .dots { display: flex; gap: 2px; height: 5px; }
+.cal .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--plan); }
+.cal button.sun .wd { color: var(--bad); } .cal button.sat .wd { color: var(--plan); }
+.cal button.today { border-color: var(--today); }
+.cal button[aria-pressed="true"] { background: var(--plan); border-color: var(--plan); color: var(--accent-ink); }
+.cal button[aria-pressed="true"] .wd { color: var(--accent-ink); }
+.cal button[aria-pressed="true"] .dots i { background: var(--accent-ink); }
+
+/* 次にやる：トリアージ */
+.triage { background: var(--surface); border-radius: 12px; padding: 10px; display: grid; gap: 6px; border: 1px solid var(--line); flex: none; touch-action: pan-y; }
+.triage .k { display: flex; gap: 6px; align-items: center; font-size: 10px; color: var(--muted); }
+.triage .t { font-size: 14.5px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.triage .nx { font-size: 11px; color: var(--ink); background: var(--sunk); border-radius: 6px; padding: 5px 7px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.triage .nx::before { content: "NEXT ▸ "; color: var(--muted); font-family: var(--f-num); font-size: 9px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.grid4 button { font-size: 11px; padding: 6px 0; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+.grid4 button.pri { background: var(--next); color: #fff; border-color: var(--next); }
+
+/* 倉庫：タイル */
+.tiles { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 46px; gap: 4px; align-content: start; }
+.tile { background: var(--surface); border-radius: 7px; padding: 5px 7px; text-align: left; display: grid; grid-template-rows: auto 1fr; gap: 2px; min-width: 0; border-left: 3px solid var(--tc, var(--line)); }
+.tile .nm { font-size: 11px; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; }
+.tile .mt { font-size: 9px; color: var(--muted); display: flex; gap: 4px; white-space: nowrap; overflow: hidden; }
+
+/* 待ち：経過日数のバー */
+.age { width: 54px; display: grid; gap: 2px; justify-items: end; }
+.age .b { width: 100%; height: 4px; border-radius: 2px; background: var(--sunk); overflow: hidden; }
+.age .b i { display: block; height: 100%; background: var(--wait); }
+.age .v { font-family: var(--f-num); font-size: 9.5px; color: var(--muted); }
+
+/* プロジェクト：カード */
+.cards { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 96px; gap: 5px; align-content: start; }
+.card { background: var(--surface); border-radius: 9px; padding: 7px 8px; text-align: left; display: grid; grid-template-rows: auto auto auto 1fr; gap: 3px; min-width: 0; border: 1px solid var(--line); }
+.card .nm { font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .st { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: var(--muted); }
+.card .meter i { background: var(--proj); }
+.card .stp { font-size: 10px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+.card .stp::before { content: "▸ "; color: var(--proj); }
+
+/* AI */
+.ai-mark { font-size: 13px; }
+
+/* DB：回る球体 */
+.globe { flex: 1; min-height: 0; position: relative; overflow: hidden; border-radius: 14px; background: radial-gradient(circle at 50% 46%, var(--glow), transparent 62%), var(--surface); border: 1px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none; }
+.globe canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.globe .lbl { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--sc, var(--line)); color: var(--ink); will-change: transform, opacity; }
+.globe .lbl small { font-weight: 400; color: var(--muted); font-size: 9px; margin-left: 3px; }
+.globe .cap { position: absolute; left: 10px; bottom: 8px; right: 10px; font-size: 10px; color: var(--muted); pointer-events: none; display: flex; justify-content: space-between; }
+.legend { display: flex; gap: 3px; flex-wrap: wrap; flex: none; }
+.legend button { font-size: 10px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--sc); background: var(--surface); white-space: nowrap; }
+.legend button[aria-pressed="true"] { background: var(--sc); color: var(--accent-ink); }
+#dbq { flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.back { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); white-space: nowrap; }
+
+/* 下のタブ */
+nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding-block: 6px 4px; }
+nav button { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 0; border-radius: 9px; font-size: 11.5px; font-weight: 700; color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+nav button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+nav .n { font-family: var(--f-num); font-size: 10px; font-weight: 500; }
+
+/* シート */
+#sheet { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center; background: rgba(8, 12, 20, .42); }
+#sheet .box { width: 100%; max-width: 560px; max-height: 82%; overflow: auto; background: var(--surface); border-radius: 14px 14px 0 0; padding: 12px max(14px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); display: grid; gap: 8px; }
+#sheet h3 { margin: 0; font-size: 14px; line-height: 1.35; }
+#sheet .props { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 11px; }
+#sheet .props dt { color: var(--muted); white-space: nowrap; }
+#sheet .props dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+#sheet .acts button { padding: 7px 10px; font-size: 12px; }
+#sheet .acts .danger { color: var(--bad); }
+#sheet a { color: var(--accent); }
+#sheet .kids { display: grid; gap: 3px; }
+.secret { color: var(--muted); }
+
+#toast { position: fixed; left: 50%; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); padding: 7px 12px; border-radius: 8px; font-size: 11.5px; max-width: calc(100% - 32px); }
+.banner { font-size: 10.5px; padding: 5px 8px; border-radius: 6px; background: color-mix(in srgb, var(--wait) 18%, var(--surface)); color: var(--ink); flex: none; }
+.banner.err { background: color-mix(in srgb, var(--bad) 16%, var(--surface)); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="app">
+  <header>
+    <canvas id="mini" width="44" height="44" aria-hidden="true"></canvas>
+    <h1>今どこ</h1>
+    <div id="stamp">読み込み中…</div>
+    <button id="reload" type="button">更新</button>
+  </header>
+  <div id="lanes" role="group" aria-label="今どこの区分"></div>
+  <main id="main"></main>
+  <nav>
+    <button type="button" data-tab="where" aria-pressed="true">🗺 今どこ</button>
+    <button type="button" data-tab="ai">🤖 AI <span class="n" id="ai-n"></span></button>
+    <button type="button" data-tab="db">🌐 DB <span class="n" id="db-n"></span></button>
+  </nav>
+</div>
+<div id="sheet" hidden></div>
+<div id="toast" hidden></div>
+
+<script>
+(() => {
+  // ================= 設定 =================
+  const SERVER = "Notion";
+  const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
+  const PROJ_DS = "6cc9696c-be0e-4b03-9f91-77143ab0a629";
+  const DB_PAGE = "3ed62844acbe81438bf3c88092856f8b"; // 🗄 データベース
+  const STORE = "imadoko:v1";
+
+  // 今どこ（DB_タスク管理の計算式）を、ステータスと実行日から同じ規則で出し直す。MCPは計算式の値を返さないため
+  const LANES = [
+    { key: "today", no: 1, icon: "☀️", label: "今日やる", short: "今日", color: "--today" },
+    { key: "plan", no: 2, icon: "📅", label: "予定あり", short: "予定", color: "--plan" },
+    { key: "next", no: 3, icon: "🔥", label: "次にやる", short: "次", color: "--next" },
+    { key: "inbox", no: 4, icon: "📥", label: "倉庫", short: "倉庫", color: "--inbox" },
+    { key: "wait", no: 5, icon: "⏳", label: "待ち", short: "待ち", color: "--wait" },
+    { key: "proj", no: 6, icon: "🎯", label: "プロジェクト", short: "PJ", color: "--proj" },
+  ];
+  const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
+  const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
+  const WAKU = { "☼ 朝": "朝", "💻 PC": "PC", "🏠 家・外": "家外", "作業中": "作業" };
+  const WAKU_ORDER = ["作業中", "☼ 朝", "💻 PC", "🏠 家・外"];
+  const TAG_COLOR = { HOME: "--good", BUILD: "--today", CHILD: "--next", FAMILY: "--next", MONEY: "--bad", FOOD: "--today", HEALTH: "--good", BEAUTY: "--proj", LEARN: "--plan", AI: "--proj", NOTION: "--proj", TECH: "--plan", BUY: "--wait", ROUTINE: "--inbox", INPUT: "--plan", BOOK: "--proj", COFFEE: "--inbox", TRIP: "--today", WORK: "--today" };
+
+  // 🗄 データベース ページの並び（ページが読めないときの控え。読めたらページの内容で置き換える）
+  const SECTIONS = [
+    ["✅ タスク・仕組み", "--accent", [["21762844-acbe-8075-bbe6-000bcaf22801", "DB_タスク管理"], ["f482a557-cd35-4bf1-a2a1-eee22c681517", "DB_スキル"], ["15f261e9-1452-4eed-917f-06dd8a13fea3", "DB_運用ログ"], ["15898cc5-118c-438e-b2b0-5f26f2f41978", "DB_目標"], ["6cc9696c-be0e-4b03-9f91-77143ab0a629", "DB_プロジェクト"], ["a36bdfc4-617e-4eac-ad23-f01f9e256278", "DB_診断レポート"]]],
+    ["🧪 AI・プロンプト", "--proj", [["e1562d9b-3924-4709-b696-d3ee05437d3c", "DB_プロンプト"]]],
+    ["💰 お金", "--bad", [["de35539c-31ce-4112-af1f-296bc3e2b04b"], ["3d49780c-10f9-4efd-b9f0-06b712298ee3"], ["22562844-acbe-8091-970a-000ba7c7d505"], ["29762844-acbe-80fe-8853-000b1aae6031"]]],
+    ["🔑 アカウント", "--inbox", [["26462844-acbe-8030-ac7c-000b2fc59a17"], ["26362844-acbe-8090-9fd3-000b55f7f608"], ["26462844-acbe-80ba-8080-000b0850a590"]]],
+    ["🍳 料理", "--today", [["22562844-acbe-8019-a513-000b708749d8"], ["22862844-acbe-80f8-b2f4-000b650fcb64"], ["24e62844-acbe-809d-8a15-000be073e312"], ["25462844-acbe-80a5-811d-000b22397b04"], ["25762844-acbe-8000-be8b-000b17ba125c"]]],
+    ["🎮 習慣（RPG）", "--wait", [["e730b8b2-bb41-491d-9382-a296c40e6deb", "DB_習慣チェック"], ["7ab3aa8b-2f1e-44cb-b2f8-592202bab226", "DB_すがた"], ["aa2b621b-b928-4047-91f8-9eb531f71814", "DB_プレイヤー"], ["86ea2c0d-a66a-49e4-9a6b-b287f4f32bbd", "DB_ギルド依頼"], ["0ea02603-b2dd-4064-bc84-bf02f0e60aca", "DB_ギルド達成記録"], ["f673bc1a-91b2-467d-bcd3-b2a70bd1bcbd", "DB_ものがたり"], ["24462844-acbe-8065-bca4-000b4da3b5f3"]]],
+    ["🏠 暮らし・家", "--good", [["53881991-7268-41b5-8954-2bc4b2bf1971"], ["21f62844-acbe-80cc-954c-000b57ae3e36"], ["21c62844-acbe-8069-a125-000b4743c5ee"], ["26662844-acbe-809b-90c7-000b31d5490a"], ["26762844-acbe-80ae-8a01-000b00110193"], ["4c30681e-8563-4044-9fc5-134d695a41eb", "DB_ワードローブ"]]],
+    ["👶 家族", "--next", [["2f362844-acbe-804a-9314-000be9fe07fa"], ["5b44efda-1531-4df5-93d0-96085df89dd3"], ["21c62844-acbe-800b-8b6b-000b7d8e1e7c"]]],
+    ["📝 記録・趣味", "--plan", [["f9332496-b396-44cd-af45-e682ff4fcc8c"], ["23362844-acbe-80b5-a2b4-000b59e31cdf"], ["f22b94dd-2a47-419a-95cf-e406837e8e5e"], ["1730d2d3-32fc-45e9-944e-fe9b801909a5", "DB_体組成ログ"], ["22062844-acbe-8035-af00-000b3af97d3f"], ["24162844-acbe-807c-91bf-000b82be8aa2"]]],
+    ["☕ コーヒー", "--ai", [["21162844-acbe-801d-9540-000bac4ca660"], ["25c62844-acbe-8002-9cb0-000b18e69fd9"], ["25c62844-acbe-80c4-9230-000b4ed3899b"], ["599ef279-52ad-48d7-bdb3-f079103046da"], ["25c62844-acbe-8094-abdf-000b0a334597"], ["33062844-acbe-81c5-85d5-000b725a6493"], ["22762844-acbe-805f-a401-000bbd4241e7"]]],
+    ["📰 ニュース・日記", "--muted", [["62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", "DB_ニュース"], ["2eaf269b-813f-4f1f-a980-e57602b1f99d", "DB_ジャーナル"]]],
+  ];
+  const SECTION_COLORS = ["--accent", "--proj", "--bad", "--inbox", "--today", "--wait", "--good", "--next", "--plan", "--ai", "--muted"];
+  const SECRET = /パスワード|password|passwd|pass|PIN|暗証|秘密|secret|token|キー|コード番号/i;
+
+  // ================= 状態 =================
+  const S = {
+    mode: "loading", // loading | live | demo
+    tab: "where", lane: "today",
+    tasks: [], projects: [], doneToday: 0, inboxMore: false,
+    page: {}, filter: { plan: null, inbox: null, proj: "🔥 進行中", ai: "💭" },
+    nextIdx: 0, error: null, loadedAt: null,
+    dbs: [], dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbFocus: null,
+  };
+  const known = new Map(); // id → タスク（書き込みは読み込んだ行だけ）
+
+  // ================= 小道具 =================
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const jst = (ms = Date.now()) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
+  const TODAY = () => jst();
+  const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const addMonths = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCMonth(x.getUTCMonth() + n); return x.toISOString().slice(0, 10); };
+  const dow = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
+  const diffDays = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400e3);
+  const WD = "日月火水木金土";
+  const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  const idOf = (url) => (String(url || "").replace(/-/g, "").match(/([0-9a-f]{32})(?:\?|$|#)/i) || [])[1]?.toLowerCase() || "";
+  const isRef = (v) => typeof v === "string" && /^(formula|rollup)Result:\/\/|^<omitted/.test(v);
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(`${STORE}:${k}`)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(`${STORE}:${k}`, JSON.stringify(v)); } catch { /* 保存できなくても動く */ } },
+  };
+  function text(v) {
+    if (v == null || isRef(v)) return "";
+    if (typeof v !== "string") return String(v);
+    return v.replace(/<date start="([^"]+)"[^>]*\/>/g, "$1").replace(/<mention[^>]*url="([^"]+)"[^>]*\/>/g, "↗").replace(/<br\s*\/?>/g, " ")
+      .replace(/<[^>]+>/g, "").replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, "$1").replace(/\\_/g, "_")
+      .replace(/&(lt|gt|amp|quot|#39|nbsp);/g, (_, e) => ({ lt: "<", gt: ">", amp: "&", quot: '"', "#39": "'", nbsp: " " })[e]).trim();
+  }
+  function list(v) {
+    if (Array.isArray(v)) return v;
+    if (typeof v === "string" && v.startsWith("[")) { try { const a = JSON.parse(v); if (Array.isArray(a)) return a; } catch { /* 文字のまま */ } }
+    return null;
+  }
+  let toastTimer;
+  function toast(msg) {
+    const t = $("#toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+
+  // ================= MCP =================
+  let mcpP = null;
+  // 表示直後は window.claude がまだ無いことがあるので少し待つ
+  function getMcp() {
+    if (!mcpP) mcpP = (async () => {
+      for (let i = 0; i < 30 && !window.claude?.use; i++) await sleep(100);
+      return window.claude?.use ? window.claude.use("mcp") : null;
+    })().catch(() => null);
+    return mcpP;
+  }
+  const TOOL = { fetch: "notion-fetch", query: "notion-query-data-sources", update: "notion-update-page" };
+  async function call(kind, input, { read = true } = {}) {
+    const mcp = await getMcp();
+    if (!mcp) throw Object.assign(new Error("no-mcp"), { code: "not_granted" });
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await mcp.callTool(SERVER, TOOL[kind], input, read ? undefined : { cache: false });
+        return res.payload ?? res;
+      } catch (err) {
+        if (read && attempt === 0 && err?.retryable) { await sleep((err.retryAfterMs ?? 800) + Math.random() * 400); continue; }
+        throw err;
+      }
+    }
+  }
+  function errText(err) {
+    return ({
+      needs_reauth: "Notion の連携が切れています。claude.ai の 設定 → コネクタ で Notion を再接続してください",
+      server_not_connected: "Notion 連携がありません。claude.ai の 設定 → コネクタ で Notion を追加してください",
+      selection_required: "Notion 連携が複数あります。表示された確認でどれを使うか選んでください",
+      not_in_manifest: "このページで Notion の利用が許可されていません。ページの権限から Notion を許可してください",
+      approval_required: "Notion の利用を許可してください（確認が出たら「許可」）",
+      consent_required: "Notion の利用を許可してください（確認が出たら「許可」）",
+      blocked_by_policy: "組織の設定で Notion 連携が使えません",
+      server_unavailable: "Notion が混み合っています。少し待ってから「更新」してください",
+      rate_limited: "Notion が混み合っています。少し待ってから「更新」してください",
+      tool_error: `Notion がエラーを返しました（${String(err?.message || "").slice(0, 70)}）`,
+    })[err?.code] || "Notion との通信でエラーが起きました。「更新」でやり直してください";
+  }
+  const statusFilter = (s) => ({ type: "property", property: "ステータス", propertyType: "status", operator: "status_is", value: { type: "is_option", value: s } });
+  async function rows(ds, { filters, sort, limit = 100 } = {}) {
+    const data = { mode: "rows", data_source_url: `collection://${ds}`, limit };
+    if (filters?.length) data.filter = { type: "group", operator: "and", filters };
+    if (sort) data.sort = sort;
+    const res = await call("query", { data });
+    return { results: res.results || [], more: !!res.has_more };
+  }
+
+  // ================= タスク =================
+  function toTask(r) {
+    const t = {
+      id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", next: text(r.NEXT), status: r["ステータス"] || ST.inbox,
+      date: r["date:実行日:start"] ? String(r["date:実行日:start"]).slice(0, 10) : null, waku: r["枠"] || null, weight: r["重さ"] || null,
+      tag: r["分類タグ"] || null, ai: r["AIアクション"] || null, edited: r["最終更新日時"] || null,
+      projects: (list(r["プロジェクト"]) || []).map(idOf).filter(Boolean), link: text(r["userDefined:URL"]),
+    };
+    known.set(t.id, t);
+    return t;
+  }
+  // 1 ☀️今日やる：実行日が今日以前 ／ 2 📅予定あり：実行日が明日以降 ／ 3 🔥次にやる：NEXT・DOINGで日付なし
+  // 4 📥倉庫：INBOX（とSOMEDAY）で日付なし ／ 5 ⏳待ち：WAITING ／ 6 🎯プロジェクト：DB_プロジェクト
+  function laneOf(t, today = TODAY()) {
+    if (t.status === ST.done || t.status === ST.ref) return null;
+    if (t.status === ST.ai) return "ai";
+    if (t.status === ST.wait) return "wait";
+    if (t.date) return t.date <= today ? "today" : "plan";
+    if (t.status === ST.next || t.status === ST.doing) return "next";
+    return "inbox";
+  }
+  const inLane = (k) => S.tasks.filter((t) => laneOf(t) === k);
+
+  async function loadLive() {
+    const sortEdited = [{ property: "最終更新日時", direction: "descending" }];
+    const jobs = OPEN_STATUSES.map((s) => rows(TASK_DS, { filters: [statusFilter(s)], sort: sortEdited }));
+    jobs.push(rows(TASK_DS, {
+      filters: [statusFilter(ST.done), { type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: { type: "relative", value: "today" } }], limit: 50,
+    }));
+    jobs.push(rows(PROJ_DS, { limit: 100 }));
+    const out = await Promise.all(jobs);
+    known.clear();
+    S.tasks = out.slice(0, OPEN_STATUSES.length).flatMap((o) => o.results.map(toTask));
+    S.inboxMore = out[OPEN_STATUSES.indexOf(ST.inbox)].more;
+    S.doneToday = out[OPEN_STATUSES.length].results.length;
+    S.projects = out[OPEN_STATUSES.length + 1].results.map((r) => ({
+      id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", status: r["ステータス"] || "", step: text(r["次の一歩"]), now: text(r["今の状態"]),
+      tag: r["分類タグ"] || null, total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
+    }));
+    S.loadedAt = Date.now();
+    store.set("snap", { at: S.loadedAt, tasks: S.tasks, projects: S.projects, doneToday: S.doneToday, inboxMore: S.inboxMore });
+  }
+
+  // ================= 書き込み =================
+  const ACTIONS = {
+    done: { label: "✅ 完了", props: () => ({ "ステータス": ST.done }), msg: "完了にしました" },
+    today: { label: "☀️ 今日", props: () => dateProps(TODAY()), msg: "今日にしました" },
+    tomorrow: { label: "明日", props: () => dateProps(addDays(TODAY(), 1)), msg: "明日にしました" },
+    weekend: { label: "週末", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: "週末（土）にしました" },
+    nodate: { label: "日付なし", props: () => ({ "date:実行日:start": null }), msg: "日付を外しました" },
+    adopt: { label: "⏭ NEXTへ", props: () => ({ "ステータス": ST.next }), msg: "NEXTにしました" },
+    wait: { label: "⏳ 待ち", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: "待ちにしました（実行日は外しました）" },
+    someday: { label: "🕰 保留", props: () => ({ "ステータス": ST.some, ...dateProps(addMonths(TODAY(), 1)) }), msg: "保留にしました（見直し日＝1か月後）" },
+    ref: { label: "📚 資料", props: () => ({ "ステータス": ST.ref }), msg: "REFERENCEにしました" },
+    research: { label: "🔍 AIに調べて", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: "AIに預けました（🔍）" },
+  };
+  function dateProps(d) { return { "date:実行日:start": d, "date:実行日:is_datetime": 0 }; }
+  function applyLocal(t, props) {
+    if ("ステータス" in props) t.status = props["ステータス"];
+    if ("AIアクション" in props) t.ai = props["AIアクション"];
+    if ("date:実行日:start" in props) t.date = props["date:実行日:start"];
+  }
+  async function act(id, key) {
+    const t = known.get(id); const a = ACTIONS[key];
+    if (!t || !a) return;
+    const before = { status: t.status, ai: t.ai, date: t.date };
+    const props = a.props();
+    applyLocal(t, props);
+    if (key === "done" && before.date && before.date <= TODAY()) S.doneToday++;
+    closeSheet(); render();
+    if (S.mode === "demo") { toast(`${a.msg}（サンプル表示なので Notion は変わりません）`); return; }
+    try {
+      await call("update", { page_id: id, command: "update_properties", properties: props, allow_async: false }, { read: false });
+      toast(a.msg);
+      store.set("snap", { at: S.loadedAt, tasks: S.tasks, projects: S.projects, doneToday: S.doneToday, inboxMore: S.inboxMore });
+    } catch (err) {
+      Object.assign(t, before);
+      if (key === "done" && before.date && before.date <= TODAY()) S.doneToday--;
+      render();
+      toast(err?.code === "server_unavailable" ? "Notion の返事がありません。反映されたかもしれないので「更新」で確かめてください" : errText(err));
+    }
+  }
+
+  // ================= ページ送り =================
+  function pageOf(key, items, per) {
+    const pages = Math.max(1, Math.ceil(items.length / per));
+    const p = Math.min(S.page[key] || 0, pages - 1);
+    S.page[key] = p;
+    return { slice: items.slice(p * per, p * per + per), p, pages };
+  }
+  function pagerHtml(key, p, pages) {
+    if (pages <= 1) return "";
+    return `<div class="pager"><button type="button" data-pg="${key}" data-d="-1" ${p === 0 ? "disabled" : ""} aria-label="前のページ">‹</button><span class="pg">${p + 1} / ${pages}</span><button type="button" data-pg="${key}" data-d="1" ${p >= pages - 1 ? "disabled" : ""} aria-label="次のページ">›</button></div>`;
+  }
+  // 枠（.list など）の高さから1ページに入る件数を測る
+  function fit(el, unit, gap = 3) { return Math.max(1, Math.floor((el.clientHeight + gap) / (unit + gap))); }
+  // 一覧を描いてから、入る件数で描き直す
+  function paged(pane, key, items, { sel = ".list", unit = 36, gap = 3, cols = 1, draw }) {
+    const box = $(sel, pane);
+    let per = fit(box, unit, gap) * cols;
+    if (items.length > per) per = Math.max(cols, Math.floor((box.clientHeight - 29 + gap) / (unit + gap)) * cols); // ページ送りの分をあける
+    const { slice, p, pages } = pageOf(key, items, per);
+    box.innerHTML = slice.map(draw).join("");
+    box.insertAdjacentHTML("afterend", pagerHtml(key, p, pages));
+  }
+
+  // ================= 描画 =================
+  const main = $("#main");
+  function render() {
+    renderLanes();
+    for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
+    $("#ai-n").textContent = S.mode === "loading" ? "" : String(inLane("ai").length);
+    $("#db-n").textContent = S.dbs.length ? String(S.dbs.length) : "";
+    $("#lanes").hidden = S.tab !== "where";
+    if (S.tab !== "db") sphere.stop();
+    main.innerHTML = "";
+    const pane = document.createElement("div");
+    pane.className = "pane";
+    main.append(pane);
+    if (S.tab === "db") return S.dbOpen ? renderDb(pane) : renderGlobe(pane);
+    if (S.mode === "loading" && !S.tasks.length) { pane.innerHTML = `<div class="empty">Notion から DB_タスク管理 を読み込んでいます…</div>`; return; }
+    if (S.error) pane.insertAdjacentHTML("beforeend", `<div class="banner err">${esc(S.error)}</div>`);
+    if (S.mode === "demo") pane.insertAdjacentHTML("beforeend", `<div class="banner">サンプル表示です（Notion につながっていません）。claude.ai で開くと自分のタスクが出ます</div>`);
+    if (S.tab === "ai") return renderAi(pane);
+    ({ today: renderToday, plan: renderPlan, next: renderNext, inbox: renderInbox, wait: renderWait, proj: renderProj })[S.lane](pane);
+  }
+
+  function renderLanes() {
+    const today = TODAY();
+    $("#lanes").innerHTML = LANES.map((l) => {
+      const n = S.mode === "loading" && !S.tasks.length ? "–" : l.key === "proj" ? S.projects.filter((p) => p.status.includes("進行中")).length : inLane(l.key).length;
+      const late = l.key === "today" ? inLane("today").filter((t) => t.date < today).length : 0;
+      return `<button type="button" class="lane" data-lane="${l.key}" style="--c:var(${l.color})" aria-pressed="${S.lane === l.key}" aria-label="${l.no} ${l.label} ${n}件">
+        ${late ? `<span class="ov">+${late}</span>` : ""}<i>${l.icon}</i><b>${n}</b><span>${l.short}</span></button>`;
+    }).join("");
+  }
+
+  function wakuTag(t) { return `<span class="tag">${esc(WAKU[t.waku] || "—")}</span>`; }
+  function weight(t) { return t.weight ? `<span class="w ${t.weight}">${t.weight}</span>` : ""; }
+  function dateChip(t, today = TODAY()) {
+    if (!t.date) return "";
+    const d = diffDays(today, t.date);
+    if (d < 0) return `<span class="chip late">${-d}日遅れ</span>`;
+    if (d === 0) return `<span class="chip">今日</span>`;
+    return `<span class="chip">${md(t.date)}(${WD[dow(t.date)]})</span>`;
+  }
+  function projName(t) { const p = S.projects.find((x) => t.projects.includes(x.id)); return p ? `🎯${p.name}` : ""; }
+  function subLine(t) { return [t.next, projName(t)].filter(Boolean).join("　"); }
+  function taskRow(t, { side = "", lead = wakuTag(t), check = false } = {}) {
+    return `<div class="row" role="button" tabindex="0" data-open="${t.id}">${lead}<span class="txt"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(subLine(t) || t.tag || "")}</span></span>
+      <span class="side">${side}${weight(t)}${check ? `<button type="button" class="done-btn" data-act="done" data-id="${t.id}" aria-label="完了にする">✓</button>` : ""}</span></div>`;
+  }
+  const bar = (title, hint = "", extra = "") => `<div class="bar"><h2>${title}</h2><span class="hint">${hint}</span>${extra}</div>`;
+
+  // 1 ☀️ 今日やる：いまやる1つ＋枠順のチェックリスト
+  function renderToday(pane) {
+    const today = TODAY();
+    const items = inLane("today").sort((a, b) => (a.date < today) - (b.date < today) || WAKU_ORDER.indexOf(a.waku) - WAKU_ORDER.indexOf(b.waku) || (a.date || "").localeCompare(b.date || ""));
+    const total = items.length + S.doneToday;
+    const pct = total ? Math.round((S.doneToday / total) * 100) : 0;
+    const late = items.filter((t) => t.date < today).length;
+    pane.insertAdjacentHTML("beforeend", bar("☀️ 今日やる", `${md(today)}(${WD[dow(today)]})　完了 ${S.doneToday} / ${total}${late ? `　遅れ ${late}` : ""}`, `<span class="num" style="font-size:10px;color:var(--muted)">${pct}%</span>`)
+      + `<div class="meter" style="flex:none"><i style="width:${pct}%"></i></div>`);
+    if (!items.length) { pane.insertAdjacentHTML("beforeend", `<div class="empty">今日やるは空です。🔥 次にやる から選んで「今日」にできます</div>`); return; }
+    const f = items[0];
+    pane.insertAdjacentHTML("beforeend", `<div class="focus"><div class="k">いまやる　${dateChip(f)}${weight(f)}<span>${esc(f.waku || "")}</span></div>
+      <div class="t" data-open="${f.id}">${esc(f.name)}</div>${f.next ? `<div class="nx">${esc(f.next)}</div>` : ""}
+      <div class="acts"><button type="button" class="pri" data-act="done" data-id="${f.id}">✅ 完了</button><button type="button" data-act="tomorrow" data-id="${f.id}">明日へ</button><button type="button" data-act="nodate" data-id="${f.id}">日付なし</button><button type="button" data-open="${f.id}">ほか…</button></div></div>
+      <div class="list"></div>`);
+    paged(pane, "today", items.slice(1), { draw: (t) => taskRow(t, { side: t.date < today ? dateChip(t) : "", check: true }) });
+  }
+
+  // 2 📅 予定あり：2週間の帯＋日ごとの一覧
+  function renderPlan(pane) {
+    const today = TODAY();
+    const items = inLane("plan").sort((a, b) => a.date.localeCompare(b.date));
+    const days = Array.from({ length: 14 }, (_, i) => addDays(today, i + 1));
+    const later = items.filter((t) => t.date > days[13]).length;
+    const sel = S.filter.plan;
+    pane.insertAdjacentHTML("beforeend", bar("📅 予定あり", sel ? `${md(sel)}(${WD[dow(sel)]}) の予定` : `明日から2週間${later ? `＋その先 ${later}件` : ""}`, sel ? `<button type="button" class="back" data-planday="">すべて</button>` : "")
+      + `<div class="cal">${days.map((d) => {
+        const n = items.filter((t) => t.date === d).length;
+        return `<button type="button" class="${dow(d) === 0 ? "sun" : dow(d) === 6 ? "sat" : ""}" data-planday="${d}" aria-pressed="${sel === d}" aria-label="${md(d)} ${n}件">
+          <span class="wd">${WD[dow(d)]}</span><span class="d">${+d.slice(8)}</span><span class="dots">${"<i></i>".repeat(Math.min(n, 4))}</span></button>`;
+      }).join("")}</div><div class="list"></div>`);
+    const shown = sel ? items.filter((t) => t.date === sel) : items;
+    if (!shown.length) { $(".list", pane).outerHTML = `<div class="empty">${sel ? "この日の予定はありません" : "日付の入った予定はありません"}</div>`; return; }
+    paged(pane, `plan:${sel || ""}`, shown, { draw: (t) => taskRow(t, { lead: `<span class="tag"><span>${WD[dow(t.date)]}<br><span class="num">${md(t.date)}</span></span></span>` }) });
+  }
+
+  // 3 🔥 次にやる：古いものから1枚ずつ振り分ける
+  function renderNext(pane) {
+    const items = inLane("next").sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
+    if (!items.length) { pane.insertAdjacentHTML("beforeend", bar("🔥 次にやる") + `<div class="empty">次にやるは空です</div>`); return; }
+    if (S.nextIdx >= items.length) S.nextIdx = 0;
+    const t = items[S.nextIdx];
+    const age = t.edited ? diffDays(jst(Date.parse(t.edited)), TODAY()) : null;
+    pane.insertAdjacentHTML("beforeend", bar("🔥 次にやる", `古い順に振り分け　<span class="num">${S.nextIdx + 1} / ${items.length}</span>`)
+      + `<div class="triage" id="triage"><div class="k">${esc(t.status)}　${esc(t.waku || "枠なし")}　${weight(t)}${age != null ? `<span class="chip ${age > 14 ? "late" : ""}">${age}日さわっていない</span>` : ""}</div>
+        <div class="t" data-open="${t.id}">${esc(t.name)}</div>${t.next ? `<div class="nx">${esc(t.next)}</div>` : ""}
+        ${projName(t) ? `<div class="k">${esc(projName(t))}</div>` : ""}
+        <div class="grid4"><button type="button" class="pri" data-act="today" data-id="${t.id}">☀️ 今日</button><button type="button" data-act="tomorrow" data-id="${t.id}">明日</button><button type="button" data-act="weekend" data-id="${t.id}">週末</button><button type="button" data-act="done" data-id="${t.id}">✅ 完了</button>
+        <button type="button" data-act="wait" data-id="${t.id}">⏳ 待ち</button><button type="button" data-act="someday" data-id="${t.id}">🕰 保留</button><button type="button" data-act="ref" data-id="${t.id}">📚 資料</button><button type="button" data-skip="1">あとで ›</button></div></div>
+      <div class="bar"><h2 style="font-size:10.5px;color:var(--muted)">このあと</h2></div><div class="list"></div>`);
+    const rest = items.slice(S.nextIdx + 1).concat(items.slice(0, S.nextIdx));
+    paged(pane, "next", rest, { draw: (x) => taskRow(x) });
+  }
+
+  // 4 📥 倉庫：分類タグで絞れるタイル
+  function renderInbox(pane) {
+    const all = inLane("inbox").sort((a, b) => (b.edited || "").localeCompare(a.edited || ""));
+    const counts = {};
+    for (const t of all) counts[t.tag || "未分類"] = (counts[t.tag || "未分類"] || 0) + 1;
+    const tags = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 9);
+    const sel = S.filter.inbox;
+    const items = sel ? all.filter((t) => (t.tag || "未分類") === sel) : all;
+    pane.insertAdjacentHTML("beforeend", bar("📥 倉庫", `INBOX・日付なし　新しい順${S.inboxMore ? "（最近の100件）" : ""}`)
+      + `<div class="seg"><button type="button" data-inbox="" aria-pressed="${!sel}">全部<span class="n">${all.length}</span></button>${tags.map(([k, n]) => `<button type="button" data-inbox="${esc(k)}" aria-pressed="${sel === k}">${esc(k)}<span class="n">${n}</span></button>`).join("")}</div>
+      <div class="tiles"></div>`);
+    if (!items.length) { $(".tiles", pane).outerHTML = `<div class="empty">倉庫は空です</div>`; return; }
+    paged(pane, `inbox:${sel || ""}`, items, {
+      sel: ".tiles", unit: 46, gap: 4, cols: 2,
+      draw: (t) => `<button type="button" class="tile" data-open="${t.id}" style="--tc:var(${TAG_COLOR[t.tag] || "--line"})"><span class="nm">${esc(t.name)}</span>
+        <span class="mt"><span>${esc(t.tag || "未分類")}</span>${t.weight ? `<span>${t.weight}</span>` : ""}${t.status === ST.some ? "<span>🕰</span>" : ""}${t.edited ? `<span class="num">${md(jst(Date.parse(t.edited)))}</span>` : ""}</span></button>`,
+    });
+  }
+
+  // 5 ⏳ 待ち：待っている日数が長い順
+  function renderWait(pane) {
+    const today = TODAY();
+    const items = inLane("wait").map((t) => ({ t, d: t.edited ? diffDays(jst(Date.parse(t.edited)), today) : 0 })).sort((a, b) => b.d - a.d);
+    const max = Math.max(14, ...items.map((x) => x.d));
+    pane.insertAdjacentHTML("beforeend", bar("⏳ 待ち", "人の返事・届くのを待っているもの　最後に動いてからの日数") + `<div class="list"></div>`);
+    if (!items.length) { $(".list", pane).outerHTML = `<div class="empty">待っているものはありません</div>`; return; }
+    paged(pane, "wait", items, {
+      draw: ({ t, d }) => taskRow(t, { side: `<span class="age"><span class="v">${d}日</span><span class="b"><i style="width:${Math.round((d / max) * 100)}%"></i></span></span>` }),
+    });
+  }
+
+  // 6 🎯 プロジェクト：進捗と次の一歩のカード
+  function projStats(p) {
+    const open = S.tasks.filter((t) => t.projects.includes(p.id) && t.status !== ST.done && t.status !== ST.ref);
+    const done = Math.max(0, p.total - open.length);
+    return { open, done, pct: p.total ? Math.round((done / p.total) * 100) : 0 };
+  }
+  function renderProj(pane) {
+    const groups = ["🔥 進行中", "⏸ 保留", "💡 いつか", "✅ 完了"];
+    const counts = Object.fromEntries(groups.map((g) => [g, S.projects.filter((p) => p.status === g).length]));
+    const sel = S.filter.proj;
+    const items = S.projects.filter((p) => p.status === sel).sort((a, b) => (b.edited || "").localeCompare(a.edited || ""));
+    pane.insertAdjacentHTML("beforeend", bar("🎯 プロジェクト", "DB_プロジェクト")
+      + `<div class="seg">${groups.map((g) => `<button type="button" data-proj="${g}" aria-pressed="${sel === g}">${g}<span class="n">${counts[g]}</span></button>`).join("")}</div><div class="cards"></div>`);
+    if (!items.length) { $(".cards", pane).outerHTML = `<div class="empty">このステータスのプロジェクトはありません</div>`; return; }
+    paged(pane, `proj:${sel}`, items, {
+      sel: ".cards", unit: 96, gap: 5, cols: 2,
+      draw: (p) => {
+        const s = projStats(p);
+        const doing = s.open.filter((t) => t.status === ST.doing || t.status === ST.next).length;
+        return `<button type="button" class="card" data-proj-open="${p.id}"><span class="nm">${esc(p.name)}</span>
+          <span class="st"><span>残り ${s.open.length}${doing ? `・着手 ${doing}` : ""}</span><span class="num">${s.done}/${p.total}</span></span>
+          <span class="meter"><i style="width:${s.pct}%"></i></span><span class="stp">${esc(p.step || p.now || "次の一歩が空です")}</span></button>`;
+      },
+    });
+  }
+
+  // 🤖 AI：自分の番（💭・🔍✅）と AI の番
+  function renderAi(pane) {
+    const all = inLane("ai");
+    const segs = [["💭", "回答待ち", (t) => t.ai === "💭"], ["🔍✅", "判定待ち", (t) => t.ai === "🔍✅"], ["⚙️", "AIの番", (t) => ["🔍", "🔬", "💬"].includes(t.ai)], ["・", "印なし", (t) => !t.ai]];
+    const sel = segs.find((s) => s[0] === S.filter.ai) || segs[0];
+    const items = all.filter(sel[2]).sort((a, b) => (b.edited || "").localeCompare(a.edited || ""));
+    pane.insertAdjacentHTML("beforeend", bar("🤖 AIに預けている", "ステータス＝🤖 AI　💭🔍✅ は自分の番")
+      + `<div class="seg">${segs.map((s) => `<button type="button" data-ai="${s[0]}" aria-pressed="${s === sel}">${s[0]} ${s[1]}<span class="n">${all.filter(s[2]).length}</span></button>`).join("")}</div><div class="list"></div>`);
+    if (!items.length) { $(".list", pane).outerHTML = `<div class="empty">ここに入っている行はありません</div>`; return; }
+    paged(pane, `ai:${sel[0]}`, items, { draw: (t) => taskRow(t, { lead: `<span class="tag ai-mark">${esc(t.ai || "・")}</span>` }) });
+  }
+
+  // ================= シート（タスクの詳細と操作） =================
+  function openTask(id) {
+    const t = known.get(id); if (!t) return;
+    const lane = laneOf(t);
+    const keys = lane === "today" ? ["done", "tomorrow", "weekend", "nodate", "wait", "someday", "ref", "research"]
+      : lane === "plan" ? ["today", "done", "nodate", "tomorrow", "wait", "someday", "ref"]
+      : lane === "next" ? ["today", "tomorrow", "weekend", "done", "wait", "someday", "ref", "research"]
+      : lane === "inbox" ? ["adopt", "today", "tomorrow", "research", "someday", "ref", "done"]
+      : lane === "wait" ? ["adopt", "today", "done", "someday", "ref"]
+      : ["adopt", "today", "someday", "ref", "research", "done"];
+    const p = S.projects.find((x) => t.projects.includes(x.id));
+    showSheet(`<h3>${esc(t.name)}</h3>
+      <dl class="props"><dt>今どこ</dt><dd>${esc(lane === "ai" ? "🤖 AI処理" : (LANES.find((l) => l.key === lane) || {}).label || "—")}</dd>
+      <dt>ステータス</dt><dd>${esc(t.status)}${t.ai ? `　AIアクション ${esc(t.ai)}` : ""}</dd>
+      <dt>NEXT</dt><dd>${esc(t.next || "—")}</dd><dt>実行日</dt><dd>${t.date ? `${md(t.date)}(${WD[dow(t.date)]})` : "—"}</dd>
+      <dt>枠・重さ</dt><dd>${esc(t.waku || "—")}　${esc(t.weight || "—")}</dd><dt>分類</dt><dd>${esc(t.tag || "—")}</dd>
+      ${p ? `<dt>PJ</dt><dd>${esc(p.name)}</dd>` : ""}${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link.slice(0, 60))}</a></dd>` : ""}</dl>
+      <div class="acts">${keys.map((k) => `<button type="button" data-act="${k}" data-id="${t.id}" class="${k === keys[0] ? "pri" : ""}">${ACTIONS[k].label}</button>`).join("")}</div>
+      <div class="acts"><a href="${esc(t.url)}" target="_blank" rel="noopener">Notion で開く ↗</a><button type="button" data-close="1" style="margin-left:auto">閉じる</button></div>`);
+  }
+  function openProject(id) {
+    const p = S.projects.find((x) => x.id === id); if (!p) return;
+    const s = projStats(p);
+    const order = [ST.doing, ST.next, ST.wait, ST.ai, ST.some, ST.inbox];
+    const kids = s.open.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
+    showSheet(`<h3>🎯 ${esc(p.name)}</h3><dl class="props"><dt>ステータス</dt><dd>${esc(p.status)}</dd><dt>進み具合</dt><dd class="num">${s.done} / ${p.total}（${s.pct}%）</dd>
+      <dt>今の状態</dt><dd>${esc(p.now || "—")}</dd><dt>次の一歩</dt><dd>${esc(p.step || "—")}</dd></dl>
+      <div class="kids">${kids.length ? kids.map((t) => taskRow(t, { lead: `<span class="tag">${esc(t.status.split(" ")[0])}</span>` })).join("") : `<div class="empty">残っている子タスクはありません</div>`}</div>
+      <div class="acts"><a href="${esc(p.url)}" target="_blank" rel="noopener">Notion で開く ↗</a><button type="button" data-close="1" style="margin-left:auto">閉じる</button></div>`);
+  }
+  function showSheet(html) { const s = $("#sheet"); s.innerHTML = `<div class="box" role="dialog" aria-modal="true">${html}</div>`; s.hidden = false; }
+  function closeSheet() { $("#sheet").hidden = true; $("#sheet").innerHTML = ""; }
+
+  // ================= DB：回る球体 =================
+  function initDbs() {
+    const names = store.get("dbnames") || {};
+    S.dbs = SECTIONS.flatMap(([sec, color, items]) => items.map(([id, name]) => ({ id, name: name || names[id] || "", sec, color })));
+  }
+  // 🗄 データベース ページを読み、増えたDB・名前を取り込む
+  async function refreshDbList() {
+    try {
+      const res = await call("fetch", { id: DB_PAGE });
+      const body = String(res.text || "");
+      const out = []; let sec = "その他"; let ci = 0; const colorOf = {};
+      const re = /<h2[^>]*>\s*([^<]+?)\s*<\/h2>|^##\s+(.+)$|<database url="[^"]+"(?: data-source-url="collection:\/\/([0-9a-f-]+)")?[^>]*>([\s\S]*?)<\/database>/gm;
+      for (const m of body.matchAll(re)) {
+        if (m[1] || m[2]) { sec = (m[1] || m[2]).trim(); colorOf[sec] ??= SECTION_COLORS[ci++ % SECTION_COLORS.length]; continue; }
+        if (!m[3]) continue;
+        const prev = S.dbs.find((d) => d.id === m[3]);
+        colorOf[sec] ??= SECTION_COLORS[ci++ % SECTION_COLORS.length];
+        out.push({ id: m[3], name: text(m[4]) || prev?.name || "", sec, color: colorOf[sec] });
+      }
+      if (out.length >= 5) { S.dbs = out; sphere.setItems(S.dbs); }
+    } catch { /* 控えの一覧のまま */ }
+    fillDbNames();
+  }
+  // 名前のないDBは1つずつ読んで名前を出す（3本ずつ・覚えておく）
+  async function fillDbNames() {
+    const names = store.get("dbnames") || {};
+    const todo = S.dbs.filter((d) => !d.name);
+    const worker = async () => {
+      for (let d; (d = todo.shift());) {
+        try {
+          const res = await call("fetch", { id: `collection://${d.id}` });
+          const m = String(res.text || "").match(/The title of this Data Source is:\s*(.+)/);
+          d.name = (m ? m[1] : res.title || "").trim() || "（名前なし）";
+          names[d.id] = d.name; store.set("dbnames", names);
+          sphere.rename(d);
+        } catch { d.name = d.name || "（読めないDB）"; sphere.rename(d); }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+  }
+
+  function renderGlobe(pane) {
+    const secs = [...new Map(S.dbs.map((d) => [d.sec, d.color])).entries()];
+    pane.innerHTML = `<div class="bar"><h2>🌐 すべてのデータベース</h2><span class="hint">ドラッグで回す・タップで開く</span></div>
+      <div class="legend">${secs.map(([s, c]) => `<button type="button" data-sec="${esc(s)}" style="--sc:var(${c})" aria-pressed="${S.dbFocus === s}">${esc(s)}</button>`).join("")}</div>
+      <div class="globe" id="globe"><canvas></canvas><div class="cap"><span>${S.dbs.length} 個のDB</span><span>🗄 データベース ページの並び</span></div></div>`;
+    sphere.mount($("#globe"), S.dbs);
+    if (S.dbFocus) sphere.focusSection(S.dbFocus);
+  }
+
+  const sphere = (() => {
+    let host, canvas, ctx, labels = [], items = [], raf = 0, W = 0, H = 0, R = 0;
+    let rx = -0.35, ry = 0, vx = 0, vy = 0.0035, drag = null, target = null;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    function place() {
+      const n = items.length;
+      items.forEach((it, i) => { const y = 1 - ((i + 0.5) / n) * 2; const r = Math.sqrt(1 - y * y); const a = i * golden; it.p = [Math.cos(a) * r, y, Math.sin(a) * r]; });
+    }
+    function rot([x, y, z]) {
+      const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx);
+      const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+      return [x1, y * cx - z1 * sx, y * sx + z1 * cx];
+    }
+    function size() {
+      const r = host.getBoundingClientRect(); W = r.width; H = r.height; R = Math.min(W * 0.36, H * 0.4);
+      const dpr = Math.min(2, devicePixelRatio || 1); canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888"; }
+    function wire(c, w, h, r, color, step = 12) {
+      c.lineWidth = 1;
+      // 緯線・経線を投影し、裏側は薄く描く
+      for (let lat = -60; lat <= 60; lat += 30) {
+        const ph = (lat * Math.PI) / 180;
+        for (let i = 0; i < 72; i++) {
+          const a0 = (i / 72) * Math.PI * 2, a1 = ((i + 1) / 72) * Math.PI * 2;
+          const p0 = rot([Math.cos(ph) * Math.cos(a0), Math.sin(ph), Math.cos(ph) * Math.sin(a0)]), p1 = rot([Math.cos(ph) * Math.cos(a1), Math.sin(ph), Math.cos(ph) * Math.sin(a1)]);
+          c.globalAlpha = p0[2] > 0 ? 0.42 : 0.1; c.strokeStyle = color; c.beginPath(); c.moveTo(w / 2 + p0[0] * r, h / 2 - p0[1] * r); c.lineTo(w / 2 + p1[0] * r, h / 2 - p1[1] * r); c.stroke();
+        }
+      }
+      for (let lon = 0; lon < 180; lon += step * 1.25) {
+        const th = (lon * Math.PI) / 180;
+        for (let i = 0; i < 72; i++) {
+          const a0 = (i / 72) * Math.PI * 2, a1 = ((i + 1) / 72) * Math.PI * 2;
+          const p0 = rot([Math.cos(a0) * Math.cos(th), Math.sin(a0), Math.cos(a0) * Math.sin(th)]), p1 = rot([Math.cos(a1) * Math.cos(th), Math.sin(a1), Math.cos(a1) * Math.sin(th)]);
+          c.globalAlpha = p0[2] > 0 ? 0.32 : 0.08; c.strokeStyle = color; c.beginPath(); c.moveTo(w / 2 + p0[0] * r, h / 2 - p0[1] * r); c.lineTo(w / 2 + p1[0] * r, h / 2 - p1[1] * r); c.stroke();
+        }
+      }
+      c.globalAlpha = 0.55; c.beginPath(); c.arc(w / 2, h / 2, r, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
+    }
+    function frame() {
+      raf = 0;
+      if (!host?.isConnected) return;
+      if (target) { // 指定の向きへ近づける
+        ry += (target.ry - ry) * 0.12; rx += (target.rx - rx) * 0.12;
+        if (Math.abs(target.ry - ry) < 0.002 && Math.abs(target.rx - rx) < 0.002) { const cb = target.cb; target = null; vy = 0; cb?.(); }
+      } else if (!drag) { ry += vy; rx += vx; vx *= 0.94; if (!reduce) vy = vy * 0.97 + 0.0035 * 0.03; else vy *= 0.9; rx = Math.max(-1.2, Math.min(1.2, rx)); }
+      ctx.clearRect(0, 0, W, H);
+      wire(ctx, W, H, R, css("--accent"));
+      const fov = 2.6;
+      items.forEach((it, i) => {
+        const [x, y, z] = rot(it.p); const s = fov / (fov - z);
+        const el = labels[i]; if (!el) return;
+        const px = W / 2 + x * R * s, py = H / 2 - y * R * s;
+        ctx.globalAlpha = z > 0 ? 0.9 : 0.3; ctx.fillStyle = css(it.color); ctx.beginPath(); ctx.arc(px, py, 2.2 * s, 0, Math.PI * 2); ctx.fill();
+        const hl = !S.dbFocus || S.dbFocus === it.sec;
+        el.style.transform = `translate(${px.toFixed(1)}px,${(py - 11 * s).toFixed(1)}px) translate(-50%,-50%) scale(${(0.62 + 0.38 * ((z + 1) / 2)) * s * 0.82})`;
+        el.style.opacity = String((hl ? 1 : 0.35) * (z > -0.15 ? 0.35 + 0.65 * ((z + 1) / 2) : 0.12));
+        el.style.zIndex = String(Math.round((z + 1) * 100));
+        el.style.pointerEvents = z > -0.1 ? "auto" : "none";
+      });
+      ctx.globalAlpha = 1;
+      raf = requestAnimationFrame(frame);
+    }
+    function labelHtml(it) { return `${esc(it.name || "…")}`; }
+    function mount(h, list) {
+      host = h; canvas = $("canvas", host); ctx = canvas.getContext("2d");
+      setItems(list); size();
+      host.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), el: e.target.closest(".lbl") }; target = null; host.setPointerCapture(e.pointerId); });
+      host.addEventListener("pointermove", (e) => {
+        if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+        ry += dx * 0.008; rx += dy * 0.008; vy = dx * 0.008; vx = dy * 0.008; rx = Math.max(-1.2, Math.min(1.2, rx));
+      });
+      const end = (e) => {
+        if (!drag) return; const moved = Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy); const el = drag.el; drag = null;
+        if (moved < 7 && el) pick(+el.dataset.i);
+      };
+      host.addEventListener("pointerup", end); host.addEventListener("pointercancel", () => { drag = null; });
+      host.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.classList.contains("lbl")) pick(+e.target.dataset.i); });
+      new ResizeObserver(() => size()).observe(host);
+      if (!raf) raf = requestAnimationFrame(frame);
+    }
+    // 正面に回してから開く
+    function pick(i) {
+      const it = items[i]; if (!it) return;
+      const [x, y, z] = it.p;
+      const ty = Math.atan2(-x, z); const zr = Math.hypot(x, z);
+      const tx = Math.atan2(y, zr);
+      target = { ry: nearest(ry, ty), rx: Math.max(-1.2, Math.min(1.2, tx)), cb: () => openDb(it.id) };
+      if (!raf) raf = requestAnimationFrame(frame);
+    }
+    function nearest(cur, t) { const k = Math.round((cur - t) / (Math.PI * 2)); return t + k * Math.PI * 2; }
+    function focusSection(sec) {
+      const pts = items.filter((it) => it.sec === sec); if (!pts.length) return;
+      const c = pts.reduce((a, it) => [a[0] + it.p[0], a[1] + it.p[1], a[2] + it.p[2]], [0, 0, 0]);
+      const ty = Math.atan2(-c[0], c[2]); const tx = Math.atan2(c[1], Math.hypot(c[0], c[2]));
+      target = { ry: nearest(ry, ty), rx: Math.max(-1.2, Math.min(1.2, tx)) };
+      if (!raf) raf = requestAnimationFrame(frame);
+    }
+    function setItems(list) {
+      items = list; place();
+      if (!host) return;
+      host.querySelectorAll(".lbl").forEach((e) => e.remove());
+      labels = items.map((it, i) => {
+        const el = document.createElement("button"); el.type = "button"; el.className = "lbl"; el.dataset.i = i; el.style.setProperty("--sc", `var(${it.color})`);
+        el.innerHTML = labelHtml(it); host.append(el); return el;
+      });
+    }
+    function rename(it) { const i = items.indexOf(it); if (labels[i]) labels[i].innerHTML = labelHtml(it); }
+    function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; host = null; }
+    return { mount, setItems, rename, stop, focusSection };
+  })();
+
+  // ヘッダーの小さな地球儀：読み込み中だけ回る
+  const mini = (() => {
+    const c = $("#mini"), x = c.getContext("2d"); let a = 0, on = false, raf = 0;
+    function draw() {
+      x.clearRect(0, 0, 44, 44);
+      const col = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+      x.strokeStyle = col; x.lineWidth = 2.2; x.beginPath(); x.arc(22, 22, 19, 0, Math.PI * 2); x.stroke();
+      x.lineWidth = 1.4;
+      for (let k = 0; k < 3; k++) { const w = Math.abs(Math.cos(a + (k * Math.PI) / 3)) * 19; x.globalAlpha = 0.85; x.beginPath(); x.ellipse(22, 22, Math.max(0.5, w), 19, 0, 0, Math.PI * 2); x.stroke(); }
+      x.globalAlpha = 0.6; x.beginPath(); x.moveTo(3, 22); x.lineTo(41, 22); x.stroke(); x.beginPath(); x.ellipse(22, 22, 19, 7, 0, 0, Math.PI * 2); x.stroke(); x.globalAlpha = 1;
+    }
+    function loop() { a += 0.06; draw(); raf = on ? requestAnimationFrame(loop) : 0; }
+    return { spin(v) { on = v && !matchMedia("(prefers-reduced-motion: reduce)").matches; if (on && !raf) raf = requestAnimationFrame(loop); if (!on) draw(); } };
+  })();
+
+  // ================= DB：中身を見る =================
+  async function openDb(id) {
+    const d = S.dbs.find((x) => x.id === id); if (!d) return;
+    S.dbOpen = d; S.dbRows = []; S.dbSchema = null; S.dbErr = null; S.dbQuery = ""; S.dbLoading = true; S.page.db = 0;
+    render();
+    if (S.mode === "demo") { S.dbLoading = false; S.dbErr = "サンプル表示では中身を読めません（claude.ai で開くと読めます）"; render(); return; }
+    try {
+      const res = await call("fetch", { id: `collection://${id}` });
+      const t = String(res.text || "");
+      const m = t.match(/The title of this Data Source is:\s*(.+)/); if (m && !d.name) d.name = m[1].trim();
+      let schema = {};
+      try { schema = JSON.parse((t.match(/<data-source-state>\s*([\s\S]*?)\s*<\/data-source-state>/) || [])[1] || "{}").schema || {}; } catch { /* 列の型なしで出す */ }
+      S.dbSchema = schema;
+      const edited = Object.values(schema).find((p) => p.type === "last_edited_time") || Object.values(schema).find((p) => p.type === "created_time");
+      let r;
+      try { r = await rows(id, { sort: edited ? [{ property: edited.name, direction: "descending" }] : undefined }); }
+      catch { r = await rows(id); }
+      S.dbRows = r.results; S.dbMore = r.more;
+    } catch (err) { S.dbErr = errText(err); }
+    S.dbLoading = false;
+    if (S.dbOpen === d) render();
+  }
+  function dbColumns() {
+    const schema = S.dbSchema || {};
+    const all = Object.values(schema);
+    const title = all.find((p) => p.type === "title")?.name || "名前";
+    const pref = ["status", "select", "date", "number", "multi_select", "checkbox", "text"];
+    const extra = [];
+    for (const type of pref) for (const p of all) if (p.type === type && p.name !== title && !SECRET.test(p.name) && extra.length < 2) extra.push(p);
+    return { title, extra };
+  }
+  function cell(r, p) {
+    const k = p.type === "date" ? `date:${p.name}:start` : /^(url|id)$/i.test(p.name) ? `userDefined:${p.name}` : p.name;
+    const v = r[k] ?? r[p.name];
+    if (p.type === "checkbox") return v === "__YES__" ? "☑" : "☐";
+    if (p.type === "date") return v ? md(String(v).slice(0, 10)) : "";
+    const l = list(v);
+    if (l) return l.every((x) => /^https?:/.test(x)) ? `${l.length}件` : l.join("・");
+    return text(v);
+  }
+  function renderDb(pane) {
+    const d = S.dbOpen;
+    pane.innerHTML = `<div class="bar"><button type="button" class="back" data-dbback="1">‹ 球体</button><h2 style="min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(d.name || "DB")}</h2><span class="hint">${esc(d.sec)}</span></div>`;
+    if (S.dbLoading) { pane.insertAdjacentHTML("beforeend", `<div class="empty">読み込んでいます…</div>`); return; }
+    if (S.dbErr) { pane.insertAdjacentHTML("beforeend", `<div class="empty">${esc(S.dbErr)}</div>`); return; }
+    const { title, extra } = dbColumns();
+    const q = S.dbQuery.trim().toLowerCase();
+    const items = S.dbRows.filter((r) => !q || Object.values(r).some((v) => typeof v === "string" && !isRef(v) && text(v).toLowerCase().includes(q)));
+    pane.insertAdjacentHTML("beforeend", `<div class="bar"><input id="dbq" type="search" placeholder="この中を絞り込む" value="${esc(S.dbQuery)}" aria-label="絞り込み"><span class="hint" style="flex:none">${items.length}${S.dbMore ? "（最新100件）" : "件"}</span></div><div class="list"></div>`);
+    if (!items.length) { $(".list", pane).outerHTML = `<div class="empty">${q ? "当てはまる行はありません" : "行がありません"}</div>`; return; }
+    paged(pane, "db", items, {
+      draw: (r) => {
+        const i = S.dbRows.indexOf(r);
+        const sub = extra.map((p) => cell(r, p)).filter(Boolean).join("　");
+        return `<div class="row" role="button" tabindex="0" data-dbrow="${i}"><span class="tag" style="background:color-mix(in srgb, var(${d.color}) 20%, var(--sunk))">${i + 1}</span><span class="txt"><span class="nm">${esc(text(r[title]) || "（無題）")}</span><span class="sub">${esc(sub)}</span></span><span class="side"></span></div>`;
+      },
+    });
+  }
+  function openDbRow(i) {
+    const r = S.dbRows[i]; if (!r) return;
+    const schema = S.dbSchema || {};
+    const { title } = dbColumns();
+    const props = Object.values(schema).filter((p) => p.name !== title && !["button", "formula", "rollup"].includes(p.type));
+    const shown = props.map((p) => {
+      const v = cell(r, p);
+      if (!v) return "";
+      const val = SECRET.test(p.name) ? `<span class="secret">••••（非表示）</span>` : esc(v);
+      return `<dt>${esc(p.name)}</dt><dd>${val}</dd>`;
+    }).join("");
+    const formulas = Object.values(schema).filter((p) => p.type === "formula" || p.type === "rollup").length;
+    showSheet(`<h3>${esc(text(r[title]) || "（無題）")}</h3><dl class="props">${shown || "<dt>—</dt><dd>入っている項目はありません</dd>"}</dl>
+      ${formulas ? `<div class="hint" style="font-size:10px;color:var(--muted)">計算式・ロールアップ ${formulas}列は Notion 連携から読めないので出していません</div>` : ""}
+      <div class="acts"><a href="${esc(r.url)}" target="_blank" rel="noopener">Notion で開く ↗</a><button type="button" data-close="1" style="margin-left:auto">閉じる</button></div>`);
+  }
+
+  // ================= 操作 =================
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("button, [data-open], [data-dbrow]");
+    if (!el) { if (e.target.id === "sheet") closeSheet(); return; }
+    const ds = el.dataset;
+    if (ds.tab) { S.tab = ds.tab; if (ds.tab !== "db") S.dbOpen = null; render(); return; }
+    if (ds.lane) { S.lane = ds.lane; render(); return; }
+    if (ds.act) { e.stopPropagation(); act(ds.id, ds.act); return; }
+    if (ds.pg) { S.page[ds.pg] = (S.page[ds.pg] || 0) + +ds.d; render(); return; }
+    if (ds.planday !== undefined) { S.filter.plan = ds.planday && S.filter.plan !== ds.planday ? ds.planday : null; render(); return; }
+    if (ds.inbox !== undefined) { S.filter.inbox = ds.inbox || null; render(); return; }
+    if (ds.proj) { S.filter.proj = ds.proj; render(); return; }
+    if (ds.ai) { S.filter.ai = ds.ai; render(); return; }
+    if (ds.skip) { S.nextIdx++; render(); return; }
+    if (ds.projOpen) { openProject(ds.projOpen); return; }
+    if (ds.close) { closeSheet(); return; }
+    if (ds.sec) { S.dbFocus = S.dbFocus === ds.sec ? null : ds.sec; for (const b of document.querySelectorAll(".legend button")) b.setAttribute("aria-pressed", String(b.dataset.sec === S.dbFocus)); if (S.dbFocus) sphere.focusSection(S.dbFocus); return; }
+    if (ds.dbback) { S.dbOpen = null; render(); return; }
+    if (ds.dbrow !== undefined) { openDbRow(+ds.dbrow); return; }
+    if (ds.open) { openTask(ds.open); return; }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSheet();
+    if (e.key === "Enter" && e.target.matches("[data-open], [data-dbrow]")) e.target.click();
+  });
+  document.addEventListener("input", (e) => {
+    if (e.target.id !== "dbq") return;
+    S.dbQuery = e.target.value; S.page.db = 0;
+    const pos = e.target.selectionStart; render(); const i = $("#dbq"); if (i) { i.focus(); i.setSelectionRange(pos, pos); }
+  });
+  // 左右スワイプでページ送り（トリアージでは「あとで」）
+  let sw = null;
+  main.addEventListener("touchstart", (e) => { if (e.target.closest(".globe")) return; sw = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+  main.addEventListener("touchend", (e) => {
+    if (!sw) return; const dx = e.changedTouches[0].clientX - sw.x, dy = e.changedTouches[0].clientY - sw.y; sw = null;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > 40) return;
+    if (e.target.closest("#triage")) { if (dx < 0) { S.nextIdx++; render(); } return; }
+    const btn = main.querySelector(`.pager button[data-d="${dx < 0 ? 1 : -1}"]:not(:disabled)`); btn?.click();
+  });
+  let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (S.tab !== "db" || S.dbOpen) render(); }, 150); });
+  $("#reload").addEventListener("click", () => load());
+
+  // ================= 起動 =================
+  function stamp() {
+    const at = S.loadedAt ? new Date(S.loadedAt + 9 * 3600e3).toISOString().slice(11, 16) : "";
+    $("#stamp").textContent = S.mode === "demo" ? "サンプル表示" : S.mode === "loading" ? (at ? `前回 ${at} の内容・読み込み中…` : "読み込み中…")
+      : S.error ? `読み込めませんでした${at ? `（${at} の内容）` : ""}` : `${at} 更新　未完了 ${S.tasks.length}件`;
+  }
+  async function load() {
+    S.mode = "loading"; S.error = null; mini.spin(true); stamp();
+    const mcp = await getMcp();
+    if (!mcp) { useDemo(); mini.spin(false); return; }
+    try { await loadLive(); } catch (err) { S.error = errText(err); }
+    S.mode = "live";
+    mini.spin(false); stamp(); render();
+    if (!load.dbDone) { load.dbDone = true; refreshDbList(); }
+  }
+  function useDemo() {
+    S.mode = "demo"; known.clear();
+    const d = TODAY();
+    const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${(Math.random().toString(16).slice(2) + "0".repeat(32)).slice(0, 32)}`, 名前: name, ステータス: status, NEXT: o.next || "", "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
+    const P1 = "a".repeat(32), P2 = "b".repeat(32), P3 = "c".repeat(32);
+    S.tasks = [
+      mk("（例）資源ごみを出す", ST.next, { date: d, waku: "☼ 朝", w: "S", tag: "ROUTINE", next: "7:30までに玄関前へ" }),
+      mk("（例）保険の住所変更をWEBで申請", ST.next, { date: addDays(d, -2), waku: "☼ 朝", w: "S", tag: "MONEY", next: "契約者サービスにログインする" }),
+      mk("（例）ペグボードの棚板を選ぶ", ST.doing, { date: d, waku: "🏠 家・外", w: "L", tag: "HOME", pj: P1, next: "天板から画面上端までの高さを測る" }),
+      mk("（例）家計の振込", ST.next, { date: d, waku: "💻 PC", w: "S", tag: "MONEY", next: "妻口座へ振り込む" }),
+      mk("（例）歯医者の予約", ST.next, { date: addDays(d, 3), waku: "☼ 朝", w: "S", tag: "HEALTH" }),
+      mk("（例）応援購入を決める（締切）", ST.next, { date: addDays(d, 5), waku: "☼ 朝", w: "S", tag: "TECH" }),
+      mk("（例）車の点検", ST.next, { date: addDays(d, 9), waku: "🏠 家・外", w: "M", tag: "CAR" }),
+      mk("（例）離乳食の進め方を理解する", ST.next, { waku: "💻 PC", w: "L", tag: "CHILD", age: 10, next: "月齢ごとの量を表にまとめる" }),
+      mk("（例）パスワードの管理先を一本化", ST.next, { waku: "💻 PC", w: "L", tag: "TECH", age: 14, next: "どちらにするか決める" }),
+      mk("（例）傘置きを買うか決める", ST.next, { waku: "🏠 家・外", w: "S", tag: "BUY", age: 9, next: "玄関ドアに磁石が付くか確認" }),
+      mk("（例）施主支給分の見積", ST.doing, { waku: "💻 PC", w: "L", tag: "BUILD", pj: P2, age: 20 }),
+      ...["常夜灯の材料を買う", "気になるラーメン店", "読みたい本をメモ", "ベランダの掃除道具", "旅行の候補地", "コーヒー豆の次の候補", "子どもの靴のサイズ", "朝のストレッチ"].map((n, i) => mk(`（例）${n}`, ST.inbox, { tag: ["BUY", "FOOD", "BOOK", "HOME", "TRIP", "COFFEE", "CHILD", "HEALTH"][i], w: i % 2 ? "S" : "M", age: i + 1 })),
+      mk("（例）郵便受けの改善を相談中", ST.wait, { waku: "☼ 朝", w: "M", tag: "BUILD", age: 18, pj: P2 }),
+      mk("（例）住所変更の反映待ち", ST.wait, { w: "S", tag: "HOME", age: 6 }),
+      mk("（例）タスクアプリのUI案", ST.ai, { ai: "💭", tag: "AI", next: "質問票に答える", pj: P3 }),
+      mk("（例）食洗機の比較", ST.ai, { ai: "🔍✅", tag: "HOME", next: "比較表を見て決める" }),
+      mk("（例）ドリッパーを調べる", ST.ai, { ai: "🔍", tag: "COFFEE" }),
+    ];
+    S.projects = [
+      { id: P1, url: "https://www.notion.so/" + P1, name: "（例）書斎を仕上げる", status: "🔥 進行中", step: "デスク天板から画面上端までの高さを測る", now: "", total: 6, edited: new Date().toISOString() },
+      { id: P2, url: "https://www.notion.so/" + P2, name: "（例）外構を整える", status: "🔥 進行中", step: "郵便受けの対策を決める", now: "", total: 9, edited: new Date().toISOString() },
+      { id: P3, url: "https://www.notion.so/" + P3, name: "（例）タスクアプリ", status: "⏸ 保留", step: "UI案から3つ選ぶ", now: "", total: 4, edited: new Date().toISOString() },
+    ];
+    S.doneToday = 2; S.loadedAt = Date.now(); stamp(); render();
+  }
+
+  initDbs();
+  const snap = store.get("snap");
+  if (snap?.tasks?.length) {
+    S.tasks = snap.tasks; S.projects = snap.projects || []; S.doneToday = snap.doneToday || 0; S.inboxMore = !!snap.inboxMore; S.loadedAt = snap.at;
+    for (const t of S.tasks) known.set(t.id, t);
+    if (jst(snap.at) !== TODAY()) S.doneToday = 0;
+  }
+  try { const h = location.hash.slice(1); if (LANES.some((l) => l.key === h)) S.lane = h; else if (["ai", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  render(); mini.spin(true);
+  load();
+})();
+</script>
