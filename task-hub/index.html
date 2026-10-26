@@ -1,12 +1,12 @@
-<title>今どこ線</title>
+<title>今どこ工場</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=DotGothic16&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
-/* 鉄道の路線図と発車標。上：時計と運行情報、中：路線図（駅＝今どこ）、下：選んだ駅の発車標。タブで 運行状況（診断）・行き先（目標とPJ）・全線図（すべてのDB） */
+/* 工場の生産ライン。上：時計と構内放送、中：ライン（工程＝今どこ、箱＝タスク）、下：選んだ工程のアンドン（作業指示）。タブで 生産管理（診断）・受注（目標とPJ）・倉庫（すべてのDB） */
 :root {
-  --bg: #eef1f4;
+  --bg: #eceae6;
   --surface: #ffffff;
   --ink: #1b2330;
   --sub: #5d6878;
@@ -18,15 +18,21 @@
   --led-2: #86e27c;
   --led-3: #ff6a55;
   --led-dim: #6c5a33;
-  --l-main: #e60012;
-  --l-today: #f39700;
-  --l-plan: #0079c2;
-  --l-next: #e60012;
-  --l-inbox: #8c9aa3;
-  --l-wait: #b8975e;
-  --l-proj: #9b7cb6;
-  --l-ai: #00a051;
-  --l-done: #00ac9b;
+  --l-main: #f2b705;
+  --l-today: #e8930c;
+  --l-plan: #2f6db5;
+  --l-next: #d9482b;
+  --l-inbox: #75808b;
+  --l-wait: #9a7d4a;
+  --l-proj: #7a5bb0;
+  --l-ai: #17998a;
+  --l-done: #2e9b57;
+  --belt: #3a3f47;
+  --floor: #e4e2dd;
+  --floor-line: #d3d0c9;
+  --crate: #c79a5b;
+  --crate-edge: #8a6435;
+  --hazard: #f2b705;
   --good: #0f9a55;
   --warn: #d98a00;
   --bad: #d7262b;
@@ -36,17 +42,17 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e131a; --surface: #172029; --ink: #e6ebf1; --sub: #95a1b0; --rule: #2a3542; --accent: #6aa8f0;
+    --bg: #121417; --surface: #1c2026; --ink: #e6ebf1; --sub: #95a1b0; --rule: #2a3542; --accent: #6aa8f0;
     --board: #07090c; --board-2: #12161c; --led-dim: #4d4024;
-    --l-main: #ff3b45; --l-today: #ffaa2b; --l-plan: #3fa2ea; --l-next: #ff3b45; --l-inbox: #a5b3bc; --l-wait: #d2b27a; --l-proj: #b99bd6; --l-ai: #2fc373; --l-done: #2fd0bd;
+    --l-main: #f5c431; --l-today: #ffae3d; --l-plan: #5a9be8; --l-next: #ff6e4f; --l-inbox: #9aa5b0; --l-wait: #c4a46e; --l-proj: #a888dc; --l-ai: #3cc7b5; --l-done: #4cc27a; --belt: #0b0d10; --floor: #1b1f24; --floor-line: #262b32; --crate: #b98c50; --crate-edge: #6e4f28; --hazard: #f5c431;
     --good: #3ccb7f; --warn: #ffb02e; --bad: #ff5a5e;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e131a; --surface: #172029; --ink: #e6ebf1; --sub: #95a1b0; --rule: #2a3542; --accent: #6aa8f0;
+  --bg: #121417; --surface: #1c2026; --ink: #e6ebf1; --sub: #95a1b0; --rule: #2a3542; --accent: #6aa8f0;
   --board: #07090c; --board-2: #12161c; --led-dim: #4d4024;
-  --l-main: #ff3b45; --l-today: #ffaa2b; --l-plan: #3fa2ea; --l-next: #ff3b45; --l-inbox: #a5b3bc; --l-wait: #d2b27a; --l-proj: #b99bd6; --l-ai: #2fc373; --l-done: #2fd0bd;
+  --l-main: #f5c431; --l-today: #ffae3d; --l-plan: #5a9be8; --l-next: #ff6e4f; --l-inbox: #9aa5b0; --l-wait: #c4a46e; --l-proj: #a888dc; --l-ai: #3cc7b5; --l-done: #4cc27a; --belt: #0b0d10; --floor: #1b1f24; --floor-line: #262b32; --crate: #b98c50; --crate-edge: #6e4f28; --hazard: #f5c431;
   --good: #3ccb7f; --warn: #ffb02e; --bad: #ff5a5e;
   color-scheme: dark;
 }
@@ -63,7 +69,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 /* 上：ロゴ・時計・ボタン */
 header { display: flex; align-items: center; gap: 8px; padding-block: 6px 4px; }
-.logo { width: 26px; height: 26px; border-radius: 50%; border: 4px solid var(--l-main); display: grid; place-items: center; font-weight: 900; font-size: 11px; background: var(--surface); flex: none; }
+.logo { width: 28px; height: 28px; border-radius: 6px; border: 4px solid transparent; background: linear-gradient(var(--surface), var(--surface)) padding-box, repeating-linear-gradient(45deg, var(--hazard) 0 5px, #1b1b1b 5px 10px) border-box; display: grid; place-items: center; font-weight: 900; font-size: 11px; background: var(--surface); flex: none; }
 .ttl { font-weight: 900; font-size: 15px; letter-spacing: .04em; white-space: nowrap; }
 .ttl small { display: block; font-family: var(--f-code); font-size: 9px; color: var(--sub); letter-spacing: .14em; font-weight: 600; line-height: 1; }
 .clock { margin-left: auto; font-family: var(--f-code); font-weight: 700; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -75,9 +81,9 @@ header { display: flex; align-items: center; gap: 8px; padding-block: 6px 4px; }
 .loading #reload span { display: inline-block; animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 運行情報の電光掲示 */
+/* 構内放送の電光掲示 */
 .ticker { background: var(--board); color: var(--led); font-family: var(--f-led); font-size: 12px; height: 22px; overflow: hidden; border-radius: 4px; position: relative; display: flex; align-items: center; }
-.ticker b { flex: none; background: var(--led-3); color: var(--board); font-family: var(--f-ui); font-weight: 900; font-size: 10px; padding: 0 6px; height: 100%; display: grid; place-items: center; z-index: 1; }
+.ticker b { flex: none; background: var(--hazard); color: #1b1b1b; font-family: var(--f-ui); font-weight: 900; font-size: 10px; padding: 0 6px; height: 100%; display: grid; place-items: center; z-index: 1; }
 .ticker .tr { display: flex; white-space: nowrap; animation: marquee var(--dur, 30s) linear infinite; padding-left: 12px; }
 .ticker .tr span { padding-right: 48px; }
 @keyframes marquee { to { transform: translateX(-50%); } }
@@ -86,26 +92,44 @@ main { min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-t
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; animation: viewin .35s ease-out; }
 @keyframes viewin { from { opacity: 0; transform: translateY(6px); } }
 
-/* 路線図 */
-.map { flex: none; background: var(--surface); border-radius: 10px; border: 1px solid var(--rule); position: relative; overflow: hidden; }
+/* ライン（工場の床） */
+.map { flex: none; border-radius: 10px; border: 1px solid var(--rule); position: relative; overflow: hidden; background-color: var(--floor);
+  background-image: linear-gradient(var(--floor-line) 1px, transparent 1px), linear-gradient(90deg, var(--floor-line) 1px, transparent 1px); background-size: 24px 24px; }
 .map svg { display: block; width: 100%; height: 100%; }
-.map .ln { fill: none; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw 1.1s ease-out forwards; }
+.map .ln { fill: none; stroke: var(--belt); stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw 1.1s ease-out forwards; }
 .map.still .ln { animation: none; stroke-dashoffset: 0; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-.map .st circle.ring { fill: var(--surface); stroke-width: 4; }
-.map .st text { font-family: var(--f-ui); font-weight: 700; fill: var(--ink); }
-.map .st .cnt { font-family: var(--f-code); font-weight: 700; font-size: 13px; }
-.map .st .nm { font-size: 10px; }
-.map .st .cd { font-family: var(--f-code); font-size: 7.5px; fill: var(--sub); letter-spacing: .05em; }
+.map .beltmv { fill: none; stroke: rgba(255, 255, 255, .35); stroke-width: 2; stroke-dasharray: 4 6; animation: beltmove .55s linear infinite; }
+.map .beltmv.stop { animation: none; stroke: rgba(255, 255, 255, .15); }
+@keyframes beltmove { to { stroke-dashoffset: -10; } }
 .map .st { cursor: pointer; }
-.map .st.sel .ring { stroke-width: 6; }
+.map .mc { stroke: rgba(0, 0, 0, .25); stroke-width: 1; }
+.map .st.sel .mc { stroke: var(--ink); stroke-width: 2.5; }
+.map .hz { fill: url(#hz); }
+.map .st text { font-family: var(--f-ui); font-weight: 900; }
+.map .st .nm { fill: #fff; font-size: 10px; }
+.map .st .cnt { fill: #fff; font-family: var(--f-code); font-size: 13px; }
+.map .st .sub { fill: var(--sub); font-size: 8.5px; font-weight: 700; }
+.map .st .cd { font-family: var(--f-code); font-size: 7.5px; letter-spacing: .05em; }
+.map .crate { fill: var(--crate); stroke: var(--crate-edge); stroke-width: .8; }
+.map .crate.bad { fill: var(--bad); stroke: #7a1515; }
+.map .gear { fill: rgba(255, 255, 255, .85); transform-box: view-box; animation: spin 2.6s linear infinite; }
+.map .gear.slow { animation-duration: 9s; } .map .gear.stop { animation: none; opacity: .6; }
+.map .gear .hub { fill: rgba(0, 0, 0, .35); }
+.map .lamp { fill: var(--good); stroke: rgba(0, 0, 0, .3); }
+.map .lamp.on { fill: var(--bad); animation: colon .7s steps(1) infinite; }
+.map .arm { fill: var(--l-ai); transform-box: view-box; animation: armswing 2.6s ease-in-out infinite alternate; }
+.map .arm2 { transform-box: view-box; animation: armswing2 1.7s ease-in-out infinite alternate; }
+@keyframes armswing { from { transform: rotate(-28deg); } to { transform: rotate(22deg); } }
+@keyframes armswing2 { from { transform: rotate(-20deg); } to { transform: rotate(35deg); } }
 .map .pulse { fill: none; stroke-width: 2; animation: pulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes pulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(2.2); } }
+@keyframes pulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
 .map .delay { font-family: var(--f-ui); font-size: 8.5px; font-weight: 900; fill: #fff; }
 .map .bump { animation: bump .55s ease-out; transform-box: fill-box; transform-origin: center; }
-@keyframes bump { 40% { transform: scale(1.4); } }
+@keyframes bump { 40% { transform: scale(1.18); } }
+.map .floor-label { font-family: var(--f-code); font-size: 9px; fill: var(--sub); letter-spacing: .12em; font-weight: 700; }
 
-/* 発車標 */
+/* アンドン（作業指示の電光板） */
 .board { flex: 1; min-height: 0; background: var(--board); border-radius: 8px; color: var(--led); font-family: var(--f-led); display: flex; flex-direction: column; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .board .bh { display: flex; align-items: center; gap: 6px; padding: 5px 8px 4px; background: var(--board-2); font-family: var(--f-ui); color: #fff; }
 .board .bh .sta { display: flex; align-items: center; gap: 5px; font-weight: 900; font-size: 13px; white-space: nowrap; }
@@ -135,7 +159,7 @@ main { min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-t
 @keyframes slidel { from { transform: translateX(40%); opacity: 0; } }
 @keyframes slider { from { transform: translateX(-40%); opacity: 0; } }
 
-/* 運行状況 */
+/* 生産管理 */
 .status { flex: none; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; border-left: 6px solid var(--sc); text-align: left; }
 .status .top { display: flex; align-items: center; gap: 8px; }
 .status .pill { font-weight: 900; font-size: 11px; color: #fff; background: var(--sc); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
@@ -160,39 +184,40 @@ main { min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-t
 @keyframes dash { to { stroke-dashoffset: 0; } }
 .chart text { font-family: var(--f-code); font-size: 9px; fill: var(--sub); }
 
-/* 行き先（目標とPJ） */
+/* 受注（目標とPJ） */
 .goal-row { height: 36px; display: flex; align-items: center; gap: 7px; flex: none; text-align: left; width: 100%; animation: flap .38s both; animation-delay: calc(var(--i, 0) * 45ms); }
-.goal-row .term { width: 26px; height: 26px; border-radius: 4px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-weight: 900; font-size: 11px; flex: none; }
+.goal-row .term { width: 26px; height: 26px; border-radius: 4px; background: var(--hazard); color: #1b1b1b; display: grid; place-items: center; font-weight: 900; font-size: 11px; flex: none; }
 .goal-row .gn { font-weight: 900; font-size: 12.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .goal-row .gm { font-size: 9.5px; color: var(--sub); white-space: nowrap; }
 .pj-row { height: 36px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; flex: none; padding-left: 12px; text-align: left; width: 100%; position: relative; animation: flap .38s both; animation-delay: calc(var(--i, 0) * 45ms); }
 .pj-row::before { content: ""; position: absolute; left: 12px; top: 0; bottom: 0; border-left: 2px dotted var(--rule); }
 .pj-row .trackwrap { position: relative; height: 34px; margin-left: 8px; min-width: 0; }
 .pj-row .pn { position: absolute; left: 0; top: 1px; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.pj-row .track { position: absolute; left: 0; right: 0; bottom: 8px; height: 5px; border-radius: 3px; background: var(--pc); }
-.pj-row .stop { position: absolute; bottom: 5px; width: 11px; height: 11px; margin-left: -5px; border-radius: 50%; background: var(--surface); border: 2.5px solid var(--pc); }
+.pj-row .track { position: absolute; left: 0; right: 0; bottom: 7px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--belt) 0 6px, color-mix(in srgb, var(--belt) 70%, #fff) 6px 8px); background-size: 8px 100%; animation: beltx .6s linear infinite; }
+@keyframes beltx { to { background-position: 8px 0; } }
+.pj-row .stop { position: absolute; bottom: 4px; width: 4px; height: 12px; margin-left: -2px; border-radius: 1px; background: var(--rule); }
 .pj-row .stop.done { background: var(--pc); }
-.pj-row .train { position: absolute; bottom: 4px; left: 0; width: 18px; height: 9px; margin-left: -9px; border-radius: 3px 5px 5px 3px; background: var(--ink); transition: left 1.4s cubic-bezier(.2, .8, .2, 1); box-shadow: inset -5px 0 0 var(--pc); }
+.pj-row .train { position: absolute; bottom: 5px; left: 0; width: 12px; height: 12px; margin-left: -6px; border-radius: 2px; background: var(--crate); border: 1.5px solid var(--crate-edge); transition: left 1.4s cubic-bezier(.2, .8, .2, 1); }
 .pj-row .pp { font-family: var(--f-code); font-size: 12px; color: var(--sub); }
 .stack { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .pager-dots { display: flex; justify-content: center; gap: 5px; flex: none; padding: 2px 0; min-height: 9px; }
 .pager-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--rule); }
 .pager-dots i.on { background: var(--accent); width: 14px; border-radius: 3px; }
 
-/* 全線図 */
+/* 倉庫（ラック） */
 .net-row { height: 40px; display: grid; grid-template-columns: 26px 92px 1fr 24px; align-items: center; gap: 7px; flex: none; text-align: left; width: 100%; animation: flap .38s both; animation-delay: calc(var(--i, 0) * 40ms); }
-.lb { width: 24px; height: 24px; border-radius: 50%; border: 4px solid var(--lc); background: var(--surface); display: grid; place-items: center; font-family: var(--f-code); font-weight: 700; font-size: 12px; flex: none; }
+.lb { width: 24px; height: 24px; border-radius: 5px; border: 4px solid var(--lc); background: var(--surface); display: grid; place-items: center; font-family: var(--f-code); font-weight: 700; font-size: 12px; flex: none; }
 .net-row .nm { font-weight: 900; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .net-row .rail { position: relative; height: 18px; }
-.net-row .rail::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 5px; border-radius: 3px; background: var(--lc); }
-.net-row .rail i { position: absolute; top: 4px; width: 11px; height: 11px; margin-left: -5px; border-radius: 50%; background: var(--surface); border: 2.5px solid var(--lc); }
-.net-row .rail .tr { position: absolute; top: 3px; width: 20px; height: 13px; margin-left: -10px; border-radius: 3px 6px 6px 3px; background: var(--ink); box-shadow: inset -5px 0 0 var(--lc); animation: shuttle var(--d, 7s) ease-in-out infinite alternate; }
+.net-row .rail::before { content: ""; position: absolute; left: 0; right: 0; top: 15px; height: 3px; background: var(--sub); }
+.net-row .rail i { position: absolute; top: 4px; width: 11px; height: 11px; margin-left: -5px; border-radius: 2px; background: color-mix(in srgb, var(--lc) 70%, var(--surface)); border: 1px solid var(--lc); }
+.net-row .rail .tr { position: absolute; top: 18px; width: 18px; height: 7px; margin-left: -9px; border-radius: 2px; background: var(--hazard); box-shadow: inset 4px 0 0 var(--ink); animation: shuttle var(--d, 7s) ease-in-out infinite alternate; }
 @keyframes shuttle { from { left: 4%; } to { left: 96%; } }
 .net-row .n { font-family: var(--f-code); font-size: 13px; color: var(--sub); text-align: right; }
 .strip { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; padding-left: 4px; touch-action: pan-y; }
-.strip::before { content: ""; position: absolute; left: 15px; top: 10px; bottom: 10px; width: 7px; border-radius: 4px; background: var(--lc); }
+.strip::before { content: ""; position: absolute; left: 13px; top: 6px; bottom: 6px; width: 11px; background: repeating-linear-gradient(to bottom, var(--lc) 0 4px, transparent 4px 40px), linear-gradient(to right, var(--sub) 0 2px, transparent 2px 9px, var(--sub) 9px 11px); }
 .sta-row { height: 40px; display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px; flex: none; text-align: left; width: 100%; position: relative; animation: flap .38s both; animation-delay: calc(var(--i, 0) * 45ms); }
-.sta-row i { width: 22px; height: 22px; border-radius: 50%; background: var(--surface); border: 4px solid var(--lc); z-index: 1; }
+.sta-row i { width: 22px; height: 18px; border-radius: 3px; background: var(--crate); border: 2px solid var(--crate-edge); z-index: 1; box-shadow: inset 0 -5px 0 var(--lc); }
 .sta-row b { font-weight: 900; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sta-row .code { font-size: 12px; color: var(--sub); }
 .crumb { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -204,11 +229,11 @@ main { min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-t
 /* 下のタブ */
 nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-block: 5px 6px; }
 nav button { display: grid; justify-items: center; gap: 2px; padding: 4px 0; border-radius: 9px; font-size: 10px; font-weight: 700; color: var(--sub); }
-nav button i { width: 18px; height: 18px; border-radius: 50%; border: 3.5px solid var(--nc); background: var(--surface); transition: transform .2s; }
+nav button i { width: 18px; height: 18px; border-radius: 4px; border: 3.5px solid var(--nc); background: var(--surface); transition: transform .2s; }
 nav button[aria-pressed="true"] { color: var(--ink); background: var(--surface); box-shadow: 0 1px 0 var(--rule); }
 nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc); }
 
-/* 乗車券（タスク・行の詳細） */
+/* 作業伝票（タスク・行の詳細） */
 #sheet { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center; background: rgba(8, 12, 18, .5); animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; } }
 .ticket { width: 100%; max-width: 600px; height: calc(100% - 24px - env(safe-area-inset-top, 0px)); max-height: 780px; background: var(--surface); border-radius: 14px 14px 0 0; display: flex; flex-direction: column; overflow: hidden; animation: up .32s cubic-bezier(.2, .8, .2, 1); }
@@ -218,7 +243,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
 .ticket .band .k .code { background: #fff; color: #1b2330; border-radius: 3px; padding: 0 4px; font-size: 11px; letter-spacing: 0; }
 .ticket .band h3 { margin: 0; font-size: 16px; font-weight: 900; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding-right: 30px; }
 .ticket .band .nx { font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ticket .band .nx::before { content: "行先 ▸ "; font-weight: 900; }
+.ticket .band .nx::before { content: "次の作業 ▸ "; font-weight: 900; }
 .ticket .band .x { position: absolute; right: 10px; top: 8px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0, 0, 0, .22); color: #fff; font-size: 16px; }
 .perf { height: 12px; flex: none; position: relative; margin-top: -6px; background: radial-gradient(circle at 0 50%, transparent 6px, var(--surface) 6.5px) left / 51% 100% no-repeat, radial-gradient(circle at 100% 50%, transparent 6px, var(--surface) 6.5px) right / 51% 100% no-repeat; }
 .perf::after { content: ""; position: absolute; left: 12px; right: 12px; top: 5px; border-top: 2px dashed var(--rule); }
@@ -276,7 +301,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
 .secret { color: var(--sub); }
 .empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--sub); font-size: 12px; padding: 12px; }
 
-.mover { fill: var(--ink); stroke: var(--surface); stroke-width: 2.5; }
+.mover { fill: #ffcf5a; stroke: var(--crate-edge); stroke-width: 1.5; filter: drop-shadow(0 0 4px #ffcf5a); }
 #toast { position: fixed; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; background: var(--board); color: var(--led); font-family: var(--f-led); padding: 7px 12px; border-radius: 6px; font-size: 12.5px; max-width: calc(100% - 32px); box-shadow: 0 4px 14px rgba(0, 0, 0, .35); animation: fade .2s; }
 .banner { font-size: 10.5px; padding: 4px 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn) 18%, var(--surface)); flex: none; }
 .banner.err { background: color-mix(in srgb, var(--bad) 16%, var(--surface)); }
@@ -285,19 +310,19 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
 
 <div id="app">
   <header>
-    <span class="logo" aria-hidden="true">今</span>
-    <span class="ttl">今どこ線<small>IMADOKO LINE</small></span>
+    <span class="logo" aria-hidden="true">工</span>
+    <span class="ttl">今どこ工場<small>IMADOKO WORKS</small></span>
     <span class="clock" id="clock" aria-label="現在時刻"></span>
     <button id="add" class="hb pen" type="button" aria-label="新しく書く">✎</button>
     <button id="reload" class="hb" type="button" aria-label="更新"><span>↻</span></button>
   </header>
-  <div class="ticker" aria-live="off"><b>運行情報</b><div class="tr" id="ticker"></div></div>
+  <div class="ticker" aria-live="off"><b>構内放送</b><div class="tr" id="ticker"></div></div>
   <main id="main"></main>
   <nav>
-    <button type="button" data-tab="map" aria-pressed="true" style="--nc:var(--l-main)"><i></i>路線図</button>
-    <button type="button" data-tab="ops" style="--nc:var(--l-today)"><i></i>運行状況</button>
-    <button type="button" data-tab="goal" style="--nc:var(--l-proj)"><i></i>行き先</button>
-    <button type="button" data-tab="net" style="--nc:var(--l-plan)"><i></i>全線図</button>
+    <button type="button" data-tab="map" aria-pressed="true" style="--nc:var(--l-main)"><i></i>ライン</button>
+    <button type="button" data-tab="ops" style="--nc:var(--l-today)"><i></i>生産管理</button>
+    <button type="button" data-tab="goal" style="--nc:var(--l-proj)"><i></i>受注</button>
+    <button type="button" data-tab="net" style="--nc:var(--l-plan)"><i></i>倉庫</button>
   </nav>
 </div>
 <div id="sheet" hidden></div>
@@ -318,31 +343,32 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   const PLAYER = "https://www.notion.so/3e962844acbe81b0843ff78fe19791fa"; // DB_プレイヤー（Satoshi）
   const STORE = "imadoko:v2";
 
-  // 今どこ（DB_タスク管理の計算式）を駅にする。MCPは計算式の値を返さないので、ステータスと実行日から同じ規則で出し直す
-  // 座標は路線図（viewBox 360×262）の上の位置
+  // 今どこ（DB_タスク管理の計算式）を工程にする。MCPは計算式の値を返さないので、ステータスと実行日から同じ規則で出し直す
+  // 座標はライン図（viewBox 360×262）の上の位置
   const STATIONS = {
-    inbox: { code: "K01", name: "倉庫", x: 40, y: 168, c: "--l-inbox", lab: "below" },
-    next: { code: "K02", name: "次にやる", x: 160, y: 168, c: "--l-next", lab: "below-r" },
-    plan: { code: "K03", name: "予定あり", x: 236, y: 86, c: "--l-plan", lab: "above" },
-    today: { code: "K04", name: "今日やる", x: 290, y: 168, c: "--l-today", lab: "below-l" },
-    done: { code: "K05", name: "済み", x: 330, y: 234, c: "--l-done", lab: "left" },
-    wait: { code: "K06", name: "待ち", x: 160, y: 236, c: "--l-wait", lab: "right" },
-    proj: { code: "P01", name: "プロジェクト", x: 58, y: 236, c: "--l-proj", lab: "below" },
-    ai: { code: "A01", name: "AI", x: 100, y: 70, c: "--l-ai", lab: "above" },
+    inbox: { code: "K01", name: "受入", sub: "倉庫", x: 40, y: 150, c: "--l-inbox" },
+    next: { code: "K02", name: "仕分け", sub: "次にやる", x: 128, y: 150, c: "--l-next" },
+    plan: { code: "K03", name: "予定棚", sub: "予定あり", x: 190, y: 64, c: "--l-plan" },
+    today: { code: "K04", name: "加工", sub: "今日やる", x: 252, y: 150, c: "--l-today" },
+    done: { code: "K05", name: "出荷", sub: "済み", x: 326, y: 150, c: "--l-done" },
+    wait: { code: "K06", name: "保留棚", sub: "待ち", x: 128, y: 230, c: "--l-wait" },
+    proj: { code: "P01", name: "組立", sub: "プロジェクト", x: 278, y: 230, c: "--l-proj" },
+    ai: { code: "A01", name: "AIロボ", sub: "AI", x: 52, y: 64, c: "--l-ai" },
   };
+  // ベルトコンベア（箱が流れる道）
   const LINES = [
-    { id: "main", c: "--l-main", d: "M40 168 H290 Q330 168 330 204 V234" },
-    { id: "plan", c: "--l-plan", d: "M160 168 C198 168 196 86 236 86 C276 86 290 122 290 168" },
-    { id: "ai", c: "--l-ai", d: "M40 168 C66 168 64 70 100 70 C136 70 146 128 160 168" },
-    { id: "wait", c: "--l-wait", d: "M160 168 V236" },
-    { id: "proj", c: "--l-proj", d: "M58 236 C108 236 128 204 160 168" },
+    { id: "main", d: "M12 150 H348", n: 5, v: 26 },
+    { id: "plan", d: "M128 150 C152 150 160 64 190 64 C220 64 228 150 252 150", n: 2, v: 18 },
+    { id: "ai", d: "M40 150 C40 110 52 104 52 64", n: 1, v: 12 },
+    { id: "wait", d: "M128 150 V230", n: 0, v: 0 },
+    { id: "proj", d: "M206 230 H348", n: 2, v: 14 },
   ];
   const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
   const WAKU = { "☼ 朝": "朝", "💻 PC": "PC", "🏠 家・外": "外", "作業中": "作" };
   const WAKU_ORDER = ["作業中", "☼ 朝", "💻 PC", "🏠 家・外"];
-  // 重さ＝列車の種別
-  const KIND = { S: ["普通", "#8fe388"], M: ["快速", "#ffb21a"], L: ["急行", "#ff8a3d"], XL: ["特急", "#ff5a55"] };
+  // 重さ＝品種（荷の大きさ）
+  const KIND = { S: ["小物", "#8fe388"], M: ["中物", "#ffb21a"], L: ["大物", "#ff8a3d"], XL: ["特大", "#ff5a55"] };
 
   // 🗄 データベース ページの並び（ページが読めないときの控え。読めたらページの内容で置き換える）
   const SECTIONS = [
@@ -531,18 +557,18 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     saveSnap();
   }
 
-  // ================= 書き込み：プロパティ（乗り換え） =================
+  // ================= 書き込み：プロパティ（工程の移動） =================
   const ACTIONS = {
-    done: { label: "済み", to: "done", props: () => ({ "ステータス": ST.done }), msg: "済みに到着しました" },
-    today: { label: "今日やる", to: "today", props: () => dateProps(TODAY()), msg: "今日やるに乗り換えました" },
-    tomorrow: { label: "明日", to: "plan", props: () => dateProps(addDays(TODAY(), 1)), msg: "明日の予定に乗り換えました" },
-    weekend: { label: "週末", to: "plan", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: "週末（土）の予定にしました" },
-    nodate: { label: "日付を消す", to: null, props: () => ({ "date:実行日:start": null }), msg: "日付を消しました" },
-    adopt: { label: "次にやる", to: "next", props: () => ({ "ステータス": ST.next }), msg: "次にやるに乗り換えました" },
-    wait: { label: "待ち", to: "wait", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: "待ちにしました（日付は消しました）" },
-    someday: { label: "保留（1か月後）", to: "plan", props: () => ({ "ステータス": ST.some, ...dateProps(addMonths(TODAY(), 1)) }), msg: "保留にしました（見直しは1か月後）" },
-    ref: { label: "資料で降りる", to: null, props: () => ({ "ステータス": ST.ref }), msg: "REFERENCEにしました" },
-    research: { label: "AIに調べて", to: "ai", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: "AI線に乗せました（🔍）" },
+    done: { label: "出荷（済み）", to: "done", props: () => ({ "ステータス": ST.done }), msg: "出荷しました" },
+    today: { label: "加工へ（今日）", to: "today", props: () => dateProps(TODAY()), msg: "加工ライン（今日やる）に載せました" },
+    tomorrow: { label: "予定棚（明日）", to: "plan", props: () => dateProps(addDays(TODAY(), 1)), msg: "予定棚（明日）に移しました" },
+    weekend: { label: "予定棚（週末）", to: "plan", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: "予定棚（週末・土）に移しました" },
+    nodate: { label: "日付を外す", to: null, props: () => ({ "date:実行日:start": null }), msg: "日付を外しました" },
+    adopt: { label: "仕分けへ（次にやる）", to: "next", props: () => ({ "ステータス": ST.next }), msg: "仕分け（次にやる）に回しました" },
+    wait: { label: "保留棚へ（待ち）", to: "wait", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: "保留棚に置きました（日付は外しました）" },
+    someday: { label: "寝かせる（1か月後）", to: "plan", props: () => ({ "ステータス": ST.some, ...dateProps(addMonths(TODAY(), 1)) }), msg: "SOMEDAYにしました（見直しは1か月後）" },
+    ref: { label: "資料室へ", to: null, props: () => ({ "ステータス": ST.ref }), msg: "REFERENCEにしました" },
+    research: { label: "AIロボへ（🔍）", to: "ai", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: "AIロボに預けました（🔍）" },
   };
   function dateProps(d) { return { "date:実行日:start": d, "date:実行日:is_datetime": 0 }; }
   function applyLocal(t, props) {
@@ -574,67 +600,75 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     }
   }
 
-  // ================= 路線図 =================
-  // 乗り換え：点が駅から駅へ走る
+  // ================= ライン =================
+  // 工程の移動：箱が工程から工程へ飛ぶ
   function travel(from, to) {
     const svg = $("#map svg");
     if (!svg || reduce || !from || !to || from === to || !STATIONS[from] || !STATIONS[to]) return Promise.resolve();
     const A = STATIONS[from], B = STATIONS[to];
-    const cx = (A.x + B.x) / 2, cy = Math.min(A.y, B.y) - 46;
-    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    dot.setAttribute("r", "6"); dot.setAttribute("class", "mover");
-    svg.append(dot);
+    const cx = (A.x + B.x) / 2, cy = Math.min(A.y, B.y) - 50;
+    const box = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    box.setAttribute("width", "11"); box.setAttribute("height", "11"); box.setAttribute("rx", "1.5"); box.setAttribute("class", "mover");
+    svg.append(box);
     return new Promise((res) => {
-      const t0 = performance.now(), dur = 750;
+      const t0 = performance.now(), dur = 800;
       const step = (now) => {
         const k = Math.min(1, (now - t0) / dur); const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-        const x = (1 - e) ** 2 * A.x + 2 * (1 - e) * e * cx + e * e * B.x, y = (1 - e) ** 2 * A.y + 2 * (1 - e) * e * cy + e * e * B.y;
-        dot.setAttribute("cx", x); dot.setAttribute("cy", y);
-        if (k < 1) requestAnimationFrame(step); else { dot.remove(); S.bump = to; res(); }
+        const x = (1 - e) ** 2 * A.x + 2 * (1 - e) * e * cx + e * e * B.x, y = (1 - e) ** 2 * (A.y - 20) + 2 * (1 - e) * e * cy + e * e * (B.y - 20);
+        box.setAttribute("x", x - 5.5); box.setAttribute("y", y - 5.5); box.setAttribute("transform", `rotate(${k * 360} ${x} ${y})`);
+        if (k < 1) requestAnimationFrame(step); else { box.remove(); S.bump = to; res(); }
       };
       requestAnimationFrame(step);
     });
   }
-  function radius(n) { return 11 + Math.min(8, Math.sqrt(n) * 1.8); }
+  function gear(x, y, cls) {
+    const teeth = Array.from({ length: 6 }, (_, i) => `<rect x="${x - 1.6}" y="${y - 8.5}" width="3.2" height="4" transform="rotate(${i * 60} ${x} ${y})"></rect>`).join("");
+    return `<g class="gear ${cls}" style="transform-origin:${x}px ${y}px" aria-hidden="true">${teeth}<circle cx="${x}" cy="${y}" r="5.5"></circle><circle class="hub" cx="${x}" cy="${y}" r="2"></circle></g>`;
+  }
   function mapSvg() {
     const late = lateCount();
     const loading = S.mode === "loading" && !S.tasks.length;
-    const lines = LINES.map((l) => `<path class="ln" data-train="${l.id}" d="${l.d}" stroke="var(${l.c})"></path>`).join("")
-      + `<path d="M150 236 H170" stroke="var(--l-wait)" stroke-width="4" stroke-linecap="round"></path>`; // 待ち線の車止め
+    const defs = `<defs><pattern id="hz" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="8" fill="#f2b705"></rect><rect x="4" width="4" height="8" fill="#1b1b1b"></rect></pattern></defs>`;
+    const belts = LINES.map((l) => `<path class="ln" data-belt="${l.id}" d="${l.d}"></path><path class="beltmv${l.v ? "" : " stop"}" d="${l.d}"></path>`).join("");
+    const A = STATIONS.ai, ax = A.x + 30, ay = A.y + 18;
+    const arm = `<g aria-hidden="true"><rect x="${ax - 7}" y="${ay}" width="14" height="6" rx="2" fill="var(--sub)"></rect><g class="arm" style="transform-origin:${ax}px ${ay}px"><rect x="${ax - 2.5}" y="${ay - 30}" width="5" height="30" rx="2.5"></rect>
+      <g class="arm2" style="transform-origin:${ax}px ${ay - 28}px"><rect x="${ax - 2}" y="${ay - 30}" width="24" height="4.5" rx="2"></rect><rect x="${ax + 20}" y="${ay - 30}" width="3" height="10" rx="1"></rect></g></g></g>`;
     const sts = Object.entries(STATIONS).map(([k, s]) => {
       const n = loading ? "–" : countOf(k);
-      const r = radius(typeof n === "number" ? n : 0);
-      const lx = s.lab === "left" ? s.x - r - 4 : s.lab === "right" ? s.x + r + 4 : s.lab === "below-r" ? s.x + 4 : s.lab === "below-l" ? s.x - 4 : s.x;
-      const ly = s.lab === "above" ? s.y - r - 8 : s.lab === "left" || s.lab === "right" ? s.y + 3 : s.y + r + 13;
-      const anchor = s.lab === "left" || s.lab === "below-l" ? "end" : s.lab === "right" || s.lab === "below-r" ? "start" : "middle";
       const sel = S.station === k;
-      return `<g class="st${sel ? " sel" : ""}" data-station="${k}" role="button" tabindex="0" aria-label="${s.name} ${n}件">
-        ${sel ? `<circle class="pulse" cx="${s.x}" cy="${s.y}" r="${r}" stroke="var(${s.c})"></circle>` : ""}
-        ${k === "today" && late ? `<circle class="pulse" cx="${s.x}" cy="${s.y}" r="${r}" stroke="var(--bad)" style="animation-duration:1.1s"></circle>` : ""}
-        <circle class="ring${S.bump === k ? " bump" : ""}" cx="${s.x}" cy="${s.y}" r="${r}" stroke="var(${s.c})"></circle>
-        <text class="cnt" x="${s.x}" y="${s.y + 4.5}" text-anchor="middle">${n}</text>
-        <text class="nm" x="${lx}" y="${ly}" text-anchor="${anchor}">${s.name}<tspan class="cd" dx="3">${s.code}</tspan></text>
-        ${k === "today" && late ? `<g transform="translate(${s.x + r - 2},${s.y - r - 4})"><rect x="-2" y="-9" width="34" height="13" rx="6" fill="var(--bad)"></rect><text class="delay" x="15" y="0.5" text-anchor="middle">遅延${late}</text></g>` : ""}
+      const W = 52, H = 30, x0 = s.x - W / 2, y0 = s.y - H / 2;
+      const lateN = k === "today" ? late : 0;
+      const stack = typeof n === "number" ? Array.from({ length: Math.min(n, 12) }, (_, i) => `<rect class="crate${i < lateN ? " bad" : ""}" x="${x0 + 3 + (i % 6) * 7.6}" y="${y0 - 8 - Math.floor(i / 6) * 7.6}" width="6.6" height="6.6" rx=".8"></rect>`).join("") + (n > 12 ? `<text class="sub" x="${x0 + W - 2}" y="${y0 - 18}" text-anchor="end">+${n - 12}</text>` : "") : "";
+      return `<g class="st${sel ? " sel" : ""}" data-station="${k}" role="button" tabindex="0" aria-label="${s.name}（${s.sub}） ${n}件">
+        ${sel ? `<rect class="pulse" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="6" stroke="var(${s.c})"></rect>` : ""}
+        ${stack}
+        <rect class="mc${S.bump === k ? " bump" : ""}" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="6" fill="var(${s.c})"></rect>
+        <rect class="hz" x="${x0 + 2}" y="${y0 + H - 5}" width="${W - 4}" height="4" rx="1"></rect>
+        <text class="nm" x="${s.x - 7}" y="${s.y - 2}" text-anchor="middle">${s.name}</text>
+        <text class="cnt" x="${s.x - 7}" y="${s.y + 9}" text-anchor="middle">${n}</text>
+        ${gear(x0 + W - 10, s.y - 2, k === "today" && late ? "slow" : k === "wait" ? "stop" : "")}
+        ${k === "today" ? `<circle class="lamp${late ? " on" : ""}" cx="${x0 + W - 4}" cy="${y0 - 4}" r="4"></circle>` : ""}
+        <text class="sub" x="${s.x}" y="${y0 + H + 10}" text-anchor="middle">${s.sub}<tspan class="cd" dx="3">${s.code}</tspan></text>
+        ${lateN ? `<g transform="translate(${x0 + W - 6},${y0 - 20})"><rect x="0" y="-7" width="36" height="13" rx="3" fill="var(--bad)"></rect><text class="delay" x="18" y="2.5" text-anchor="middle">遅れ${lateN}</text></g>` : ""}
       </g>`;
     }).join("");
     S.bump = null;
-    return `<svg viewBox="0 0 360 262" preserveAspectRatio="xMidYMid meet" role="img" aria-label="今どこ線の路線図">${lines}<g id="trains"></g>${sts}</svg>`;
+    return `<svg viewBox="0 0 360 262" preserveAspectRatio="xMidYMid meet" role="img" aria-label="今どこ工場のライン">${defs}<text class="floor-label" x="8" y="14">LINE 1　今どこ</text>${belts}<g id="crates"></g>${arm}${sts}</svg>`;
   }
 
-  // 線路の上を行き来する列車
+  // ベルトの上を流れる箱
   const trains = (() => {
     let list = [], raf = 0, last = 0;
     function mount() {
       stop();
-      const g = $("#trains"); if (!g || reduce) return;
-      for (const p of document.querySelectorAll("#map [data-train]")) {
-        const len = p.getTotalLength(); const id = p.dataset.train;
-        const n = id === "main" ? 2 : 1;
-        for (let i = 0; i < n; i++) {
-          const el = document.createElementNS("http://www.w3.org/2000/svg", "g");
-          el.innerHTML = `<rect x="-9" y="-4.5" width="18" height="9" rx="3" fill="var(--ink)"></rect><rect x="3" y="-3" width="4" height="6" rx="1" fill="var(${LINES.find((l) => l.id === id).c})"></rect>`;
+      const g = $("#crates"); if (!g || reduce) return;
+      for (const p of document.querySelectorAll("#map [data-belt]")) {
+        const L = LINES.find((l) => l.id === p.dataset.belt); const len = p.getTotalLength();
+        for (let i = 0; i < L.n; i++) {
+          const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          el.setAttribute("x", "-4"); el.setAttribute("y", "-4"); el.setAttribute("width", "8"); el.setAttribute("height", "8"); el.setAttribute("rx", "1"); el.setAttribute("class", "crate");
           g.append(el);
-          list.push({ p, len, el, s: ((i + 0.3) / n) * len, v: (id === "main" ? 34 : 22) * (i ? -1 : 1) });
+          list.push({ p, len, el, s: (i / L.n) * len, v: L.v });
         }
       }
       last = performance.now(); raf = requestAnimationFrame(tick);
@@ -644,11 +678,10 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       if (!list.length || !list[0].el.isConnected) return;
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       for (const t of list) {
-        t.s += t.v * dt;
-        if (t.s > t.len) { t.s = t.len; t.v *= -1; } else if (t.s < 0) { t.s = 0; t.v *= -1; }
+        t.s = (t.s + t.v * dt) % t.len;
         const a = t.p.getPointAtLength(t.s), b = t.p.getPointAtLength(Math.min(t.len, t.s + 1));
         const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-        t.el.setAttribute("transform", `translate(${a.x.toFixed(1)},${a.y.toFixed(1)}) rotate(${ang.toFixed(0)})`);
+        t.el.setAttribute("transform", `translate(${a.x.toFixed(1)},${(a.y - 6).toFixed(1)}) rotate(${ang.toFixed(0)})`);
       }
       if (!document.hidden) raf = requestAnimationFrame(tick);
     }
@@ -657,7 +690,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     return { mount, stop };
   })();
 
-  // ================= 発車標 =================
+  // ================= アンドン（作業指示） =================
   // 1頁の行数を高さから決め、左右スワイプでめくる。行はパタパタと出てくる
   function pageOf(key, items, per) {
     const pages = Math.max(1, Math.ceil(items.length / per));
@@ -672,7 +705,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     box.dataset.swipe = key; box.dataset.pages = pages;
     if (S.slide?.key === key) box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
     if (dotsEl) dotsEl.innerHTML = pages > 1 ? Array.from({ length: Math.min(pages, 12) }, (_, i) => `<i class="${i === p ? "on" : ""}"></i>`).join("") : "";
-    // 長い行先は電光掲示のように流す
+    // 長い品名は電光掲示のように流す
     requestAnimationFrame(() => {
       for (const d of box.querySelectorAll(".dest")) {
         const sp = d.firstElementChild; if (!sp) continue;
@@ -684,58 +717,58 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   function kindCell(w) { const k = KIND[w] || ["各停", "#9aa6b2"]; return `<span class="kind" style="--k:${k[1]}">${k[0]}</span>`; }
   function brow(t, i, { time = "", cls = "", plat = WAKU[t.waku] || "", check = false } = {}) {
     return `<div class="brow" role="button" tabindex="0" data-open="${t.id}" style="--i:${i}">${kindCell(t.weight)}<span class="dest"><span>${esc(t.name)}</span></span>
-      <span class="time ${cls}">${time}</span>${check ? `<button type="button" class="chk" data-act="done" data-id="${t.id}" aria-label="済みにする">✓</button>` : `<span class="plat">${esc(plat)}</span>`}</div>`;
+      <span class="time ${cls}">${time}</span>${check ? `<button type="button" class="chk" data-act="done" data-id="${t.id}" aria-label="出荷する">✓</button>` : `<span class="plat">${esc(plat)}</span>`}</div>`;
   }
   function stationBoard(view) {
     const k = S.station; const s = STATIONS[k]; const today = TODAY();
-    let items = [], draw, note = "", cols = ["種別", "行先", "時刻", "番線"];
+    let items = [], draw, note = "", cols = ["品種", "品名", "納期", "ライン"];
     if (k === "today") {
       items = at("today").sort((a, b) => (b.date < today) - (a.date < today) || WAKU_ORDER.indexOf(a.waku) - WAKU_ORDER.indexOf(b.waku));
       const late = lateCount();
-      note = `到着 ${S.doneToday.length}／${items.length + S.doneToday.length}${late ? `　遅延 ${late}` : "　定刻"}`;
-      cols = ["種別", "行先", "状況", "済"];
-      draw = (t, i) => brow(t, i, { time: t.date < today ? `遅延${diffDays(t.date, today)}日` : "定刻", cls: t.date < today ? "late" : "ok", check: true });
+      note = `出荷 ${S.doneToday.length}／${items.length + S.doneToday.length}${late ? `　遅れ ${late}` : "　予定どおり"}`;
+      cols = ["品種", "品名", "状況", "出荷"];
+      draw = (t, i) => brow(t, i, { time: t.date < today ? `遅れ${diffDays(t.date, today)}日` : "本日", cls: t.date < today ? "late" : "ok", check: true });
     } else if (k === "plan") {
       items = at("plan").sort((a, b) => a.date.localeCompare(b.date));
-      note = items[0] ? `次の発車 ${md(items[0].date)}（${WD[dow(items[0].date)]}）` : "";
+      note = items[0] ? `次の着手 ${md(items[0].date)}（${WD[dow(items[0].date)]}）` : "";
       draw = (t, i) => brow(t, i, { time: `${md(t.date)}${WD[dow(t.date)]}` });
     } else if (k === "next") {
       items = at("next").sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
-      note = "長く停車している順";
-      cols = ["種別", "行先", "停車", "番線"];
+      note = "長く滞留している順";
+      cols = ["品種", "品名", "滞留", "ライン"];
       draw = (t, i) => { const d = ageOf(t); return brow(t, i, { time: `${d}日`, cls: d > 14 ? "late" : "" }); };
     } else if (k === "inbox") {
       items = at("inbox").sort((a, b) => (b.edited || "").localeCompare(a.edited || ""));
       note = `INBOX・日付なし${S.inboxMore ? "　最近の100件" : ""}`;
-      cols = ["種別", "行先", "入線", "分類"];
+      cols = ["品種", "品名", "入荷", "分類"];
       draw = (t, i) => brow(t, i, { time: t.edited ? md(jst(Date.parse(t.edited))) : "", plat: (t.tag || "").slice(0, 4) });
     } else if (k === "wait") {
       items = at("wait").sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
-      note = "運転見合わせ中";
-      cols = ["種別", "行先", "見合わせ", "番線"];
+      note = "部品・返事待ちで保留中";
+      cols = ["品種", "品名", "保留", "ライン"];
       draw = (t, i) => brow(t, i, { time: `${ageOf(t)}日`, cls: "late" });
     } else if (k === "ai") {
       const order = { "💭": 0, "🔍✅": 1, "💬": 2, "🔍": 3, "🔬": 4 };
       items = at("ai").sort((a, b) => (order[a.ai] ?? 9) - (order[b.ai] ?? 9));
       note = `自分の番 ${mineCount()}（💭回答待ち・🔍✅判定待ち）`;
-      cols = ["種別", "行先", "印", "番線"];
+      cols = ["品種", "品名", "印", "ライン"];
       draw = (t, i) => brow(t, i, { time: t.ai || "・", cls: t.ai === "💭" || t.ai === "🔍✅" ? "late" : "" });
     } else if (k === "done") {
       items = S.doneToday;
-      note = "本日の到着";
-      cols = ["種別", "行先", "", ""];
-      draw = (t, i) => `<div class="brow" style="--i:${i}">${kindCell(t.weight)}<span class="dest"><span>${esc(t.name)}</span></span><span class="time ok">到着</span><span class="plat">${esc(WAKU[t.waku] || "")}</span></div>`;
+      note = "本日の出荷";
+      cols = ["品種", "品名", "", ""];
+      draw = (t, i) => `<div class="brow" style="--i:${i}">${kindCell(t.weight)}<span class="dest"><span>${esc(t.name)}</span></span><span class="time ok">出荷済</span><span class="plat">${esc(WAKU[t.waku] || "")}</span></div>`;
     } else if (k === "proj") {
       items = S.projects.filter((p) => !p.status.includes("完了")).sort((a, b) => (a.status.includes("進行中") ? 0 : 1) - (b.status.includes("進行中") ? 0 : 1) || (b.edited || "").localeCompare(a.edited || ""));
-      note = "行き先タブで路線ごとに見られます";
-      cols = ["状態", "路線", "進み", "残り"];
+      note = "受注タブでロットごとに見られます";
+      cols = ["状態", "ロット", "完成", "残り"];
       draw = (p, i) => { const st = projStats(p); return `<div class="brow" role="button" tabindex="0" data-proj-open="${p.id}" style="--i:${i}"><span class="kind" style="--k:${p.status.includes("進行中") ? "#ff8a3d" : "#9aa6b2"}">${esc(p.status.split(" ")[1] || "")}</span><span class="dest"><span>${esc(p.name)}</span></span><span class="time">${st.done}/${p.total}</span><span class="plat">${st.open.length}</span></div>`; };
     }
     view.insertAdjacentHTML("beforeend", `<div class="board"><div class="bh"><span class="sta" style="--c:var(${s.c})"><i></i>${s.name}<span class="code">${s.code}</span></span><span class="note">${esc(note)}</span></div>
       <div class="cols">${cols.map((c, i) => `<span style="${i === 2 ? "text-align:right" : i === 3 ? "text-align:center" : ""}">${c}</span>`).join("")}</div>
       <div class="rows"></div><div class="dots"></div></div>`);
     const box = $(".board .rows", view);
-    if (!items.length) { box.outerHTML = `<div class="empty">${k === "done" ? "本日の到着はまだありません" : "この駅に停車中の列車はありません"}</div>`; return; }
+    if (!items.length) { box.outerHTML = `<div class="empty">${k === "done" ? "本日の出荷はまだありません" : "この工程に仕掛かり中の品はありません"}</div>`; return; }
     fill(box, `st:${k}`, items, 30, draw, $(".board .dots", view));
   }
 
@@ -758,25 +791,25 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   function renderMap(view, keep) {
     const h = Math.min(250, Math.max(190, Math.round(main.clientWidth * 262 / 360)));
     view.insertAdjacentHTML("beforeend", `<div class="map${keep ? " still" : ""}" id="map" style="height:${h}px">${mapSvg()}</div>`);
-    if (S.mode === "loading" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="board"><div class="empty">Notion から時刻表を読み込んでいます…</div></div>`); return; }
+    if (S.mode === "loading" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="board"><div class="empty">Notion から生産計画を読み込んでいます…</div></div>`); return; }
     stationBoard(view);
   }
 
-  // 運行情報（上の電光掲示）
+  // 構内放送（上の電光掲示）
   function renderTicker() {
     const late = lateCount();
     const d = S.diag.at(-1);
     const waits = at("wait").map(ageOf);
     const mine = mineCount();
     const parts = [];
-    if (S.mode === "loading" && !S.tasks.length) parts.push("ただいま時刻表を読み込んでいます");
+    if (S.mode === "loading" && !S.tasks.length) parts.push("ただいま生産計画を読み込んでいます");
     else {
-      parts.push(late ? `今日やるで ${late}件 の遅延が発生しています` : "今日やるは定刻どおり運行しています");
-      parts.push(`本日の到着 ${S.doneToday.length}件／発車待ち ${at("today").length}件`);
-      if (waits.length) parts.push(`待ち線は最長 ${Math.max(...waits)}日 運転を見合わせています`);
-      if (mine) parts.push(`AI線：あなたの回答・判定待ちが ${mine}件 あります`);
-      if (d) parts.push(`第${d.no}回 診断「${d.verdict}」　次の一手：${d.next}`);
-      const lg = S.logs[0]; if (lg) parts.push(`最新の運行記録　${lg.event}：${lg.name}`);
+      parts.push(late ? `加工ラインで ${late}件 の遅れが出ています` : "加工ラインは予定どおり稼働中です");
+      parts.push(`本日の出荷 ${S.doneToday.length}件／加工待ち ${at("today").length}件／受入 ${at("inbox").length}件`);
+      if (waits.length) parts.push(`保留棚は最長 ${Math.max(...waits)}日 止まっています`);
+      if (mine) parts.push(`AIロボ：あなたの回答・判定待ちが ${mine}件 あります`);
+      if (d) parts.push(`第${d.no}回 診断「${d.verdict}」　改善：${d.next}`);
+      const lg = S.logs[0]; if (lg) parts.push(`最新の作業日報　${lg.event}：${lg.name}`);
     }
     const s = parts.join("　◆　");
     const el = $("#ticker");
@@ -786,7 +819,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     el.style.setProperty("--dur", `${Math.max(18, s.length * 0.28)}s`);
   }
 
-  // ================= 運行状況（診断・運用ログ） =================
+  // ================= 生産管理（診断・作業日報） =================
   function gauge(label, value, max, color, unit) {
     const frac = Math.max(0, Math.min(1, max ? value / max : 0));
     const L = Math.PI * 22;
@@ -802,10 +835,10 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const waits = at("wait").map(ageOf);
     const mine = mineCount();
     view.insertAdjacentHTML("beforeend", d
-      ? `<button type="button" class="status" style="--sc:var(${ok ? "--good" : "--warn"})" data-diag="${d.id}"><span class="top"><span class="pill">${ok ? "平常運転" : "遅れ気味"}</span><h3>第${d.no}回 診断「${esc(d.verdict)}」</h3></span>
-        <p>${d.from ? `${md(d.from)}〜${md(d.to || d.from)}　` : ""}完了 ${d.done}／流入 ${d.inflow}　今日やる完了率 ${Math.round(d.rate * 100)}%</p><p><b>次の一手</b>　${esc(d.next)}</p></button>`
+      ? `<button type="button" class="status" style="--sc:var(${ok ? "--good" : "--warn"})" data-diag="${d.id}"><span class="top"><span class="pill">${ok ? "正常稼働" : "要改善"}</span><h3>第${d.no}回 診断「${esc(d.verdict)}」</h3></span>
+        <p>${d.from ? `${md(d.from)}〜${md(d.to || d.from)}　` : ""}出荷 ${d.done}／入荷 ${d.inflow}　今日やる完了率 ${Math.round(d.rate * 100)}%</p><p><b>改善</b>　${esc(d.next)}</p></button>`
       : `<div class="status" style="--sc:var(--sub)"><div class="top"><span class="pill">情報なし</span><h3>診断レポートがまだ読めていません</h3></div><p>${esc(S.extraErr.diag || "DB_診断レポート から読み込みます")}</p></div>`);
-    view.insertAdjacentHTML("beforeend", `<div class="gauges">${gauge("今日の到着", pct, 100, pct >= 50 ? "--good" : "--l-today", "%")}${gauge("遅延", late, Math.max(5, late), late ? "--bad" : "--good", "件")}${gauge("待ち最長", waits.length ? Math.max(...waits) : 0, 30, "--l-wait", "日")}${gauge("自分の番", mine, Math.max(5, mine), "--l-ai", "件")}</div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="gauges">${gauge("出荷率", pct, 100, pct >= 50 ? "--good" : "--l-today", "%")}${gauge("遅れ", late, Math.max(5, late), late ? "--bad" : "--good", "件")}${gauge("在庫", at("inbox").length, Math.max(30, at("inbox").length), "--l-inbox", "件")}${gauge("自分の番", mine, Math.max(5, mine), "--l-ai", "件")}</div>`);
     // 診断の推移：完了・流入の棒と、今日やる完了率の線
     const ds = S.diag.slice(-8);
     if (ds.length) {
@@ -818,13 +851,13 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
         <rect class="bar" style="--i:${i}" x="${xs[i] + 1}" y="${yv(x.done)}" width="${bw}" height="${H - 16 - yv(x.done)}" rx="2" fill="var(--l-plan)"></rect><text x="${xs[i]}" y="${H - 4}" text-anchor="middle">第${x.no}回</text>`).join("");
       const line = ds.map((x, i) => `${i ? "L" : "M"}${xs[i].toFixed(1)} ${yr(x.rate).toFixed(1)}`).join(" ");
       const pts = ds.map((x, i) => `<circle cx="${xs[i]}" cy="${yr(x.rate)}" r="3" fill="var(--surface)" stroke="var(--l-today)" stroke-width="2"></circle><text x="${xs[i]}" y="${yr(x.rate) - 6}" text-anchor="middle" fill="var(--l-today)">${Math.round(x.rate * 100)}%</text>`).join("");
-      view.insertAdjacentHTML("beforeend", `<div class="panel chart"><h4>診断の推移<small><span>■流入</span>　<span style="color:var(--l-plan)">■完了</span>　<span style="color:var(--l-today)">●今日やる完了率</span></small></h4>
+      view.insertAdjacentHTML("beforeend", `<div class="panel chart"><h4>生産の推移（診断）<small><span>■入荷</span>　<span style="color:var(--l-plan)">■出荷</span>　<span style="color:var(--l-today)">●今日やる完了率</span></small></h4>
         <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="診断の推移"><line x1="${pad}" x2="${W - pad}" y1="${H - 16}" y2="${H - 16}" stroke="var(--rule)"></line>${bars}<path class="rate" d="${line}"></path>${pts}</svg></div>`);
     }
-    // 運行記録（DB_運用ログ）
-    view.insertAdjacentHTML("beforeend", `<div class="board log"><div class="bh"><span class="sta" style="--c:var(--l-today)"><i></i>運行記録<span class="code">LOG</span></span><span class="note">DB_運用ログ　新しい順</span></div><div class="rows"></div><div class="dots"></div></div>`);
+    // 作業日報（DB_運用ログ）
+    view.insertAdjacentHTML("beforeend", `<div class="board log"><div class="bh"><span class="sta" style="--c:var(--l-today)"><i></i>作業日報<span class="code">LOG</span></span><span class="note">DB_運用ログ　新しい順</span></div><div class="rows"></div><div class="dots"></div></div>`);
     const box = $(".log .rows", view);
-    if (!S.logs.length) box.outerHTML = `<div class="empty">${esc(S.extraErr.log || "運行記録はまだありません")}</div>`;
+    if (!S.logs.length) box.outerHTML = `<div class="empty">${esc(S.extraErr.log || "作業日報はまだありません")}</div>`;
     else {
       const evColor = { "定期実行": "#86e27c", "仕組み変更": "#ff6a55", "ステータス": "#ffb21a", "NEXT": "#ffb21a", "作成": "#74b3ff", "AI依頼": "#86e27c", "習慣チェック": "#c79bff", "実行日": "#74b3ff" };
       const today = TODAY();
@@ -844,7 +877,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     requestAnimationFrame(step);
   }
 
-  // ================= 行き先（目標とプロジェクト） =================
+  // ================= 受注（目標とプロジェクト） =================
   function projStats(p) {
     const open = S.tasks.filter((t) => t.projects.includes(p.id) && t.status !== ST.done && t.status !== ST.ref);
     const done = Math.max(0, p.total - open.length);
@@ -860,15 +893,15 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       g.projects.forEach((pid, j) => { const p = S.projects.find((x) => x.id === pid); if (p && !p.status.includes("完了")) { flat.push({ k: "p", p, c: PJ_COLORS[j % PJ_COLORS.length] }); used.add(p.id); } });
     }
     const rest = S.projects.filter((p) => !used.has(p.id) && !p.status.includes("完了"));
-    if (rest.length) { flat.push({ k: "g", g: { name: "行き先がまだ決まっていない路線", status: "", area: "", id: "" } }); rest.forEach((p, j) => flat.push({ k: "p", p, c: PJ_COLORS[j % PJ_COLORS.length] })); }
+    if (rest.length) { flat.push({ k: "g", g: { name: "受注先（目標）がまだないロット", status: "", area: "", id: "" } }); rest.forEach((p, j) => flat.push({ k: "p", p, c: PJ_COLORS[j % PJ_COLORS.length] })); }
     const live = goals.filter((g) => /挑戦中/.test(g.status)).length;
-    view.insertAdjacentHTML("beforeend", `<div class="crumb"><h2>行き先　<span>目標＝終着駅、プロジェクト＝そこへ向かう路線　挑戦中 ${live}</span></h2></div><div class="stack" id="goalstack"></div><div class="pager-dots" id="goaldots"></div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><h2>受注　<span>目標＝受注、プロジェクト＝製造ロット（箱の位置＝完成度）　挑戦中 ${live}</span></h2></div><div class="stack" id="goalstack"></div><div class="pager-dots" id="goaldots"></div>`);
     const box = $("#goalstack", view);
     if (!flat.length) { box.outerHTML = `<div class="empty">${esc(S.extraErr.goal || "目標・プロジェクトはまだありません")}</div>`; return; }
     fill(box, "goal", flat, 36, (x, i) => {
       if (x.k === "g") {
         const g = x.g;
-        return `<button type="button" class="goal-row" style="--i:${i}" ${g.id ? `data-goal="${g.id}"` : "disabled"}><span class="term">${/挑戦中/.test(g.status) ? "🔥" : g.id ? "終" : "？"}</span><span class="gn">${esc(g.name)}</span><span class="gm">${esc([g.status, g.area, g.due ? `〜${md(g.due)}` : ""].filter(Boolean).join("・"))}</span></button>`;
+        return `<button type="button" class="goal-row" style="--i:${i}" ${g.id ? `data-goal="${g.id}"` : "disabled"}><span class="term">${/挑戦中/.test(g.status) ? "🔥" : g.id ? "受" : "？"}</span><span class="gn">${esc(g.name)}</span><span class="gm">${esc([g.status, g.area, g.due ? `〜${md(g.due)}` : ""].filter(Boolean).join("・"))}</span></button>`;
       }
       const p = x.p; const st = projStats(p);
       const n = Math.min(p.total, 10);
@@ -878,7 +911,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     requestAnimationFrame(() => requestAnimationFrame(() => { for (const t of box.querySelectorAll(".train")) t.style.left = `${t.dataset.left}%`; }));
   }
 
-  // ================= 全線図（すべてのDB） =================
+  // ================= 倉庫（すべてのDB） =================
   function initDbs() {
     const names = store.get("dbnames") || {};
     S.dbs = SECTIONS.flatMap(([sec, items]) => items.map(([id, name]) => ({ id, name: name || names[id] || "", sec })));
@@ -928,7 +961,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const lines = netLines();
     const L = S.netLine && lines.find((l) => l.sec === S.netLine);
     if (!L) {
-      view.insertAdjacentHTML("beforeend", `<div class="crumb"><h2>全線図　<span>🗄 データベース ページの ${S.dbs.length} 駅・${lines.length} 路線</span></h2></div><div class="stack" id="netstack"></div><div class="pager-dots" id="netdots"></div>`);
+      view.insertAdjacentHTML("beforeend", `<div class="crumb"><h2>倉庫　<span>🗄 データベース ページの ${S.dbs.length} 品目・${lines.length} 棚</span></h2></div><div class="stack" id="netstack"></div><div class="pager-dots" id="netdots"></div>`);
       fill($("#netstack", view), "net", lines, 40, (l, i) => {
         const n = l.dbs.length;
         const stops = l.dbs.map((_, j) => `<i style="left:${n === 1 ? 50 : 4 + (j * 92) / (n - 1)}%"></i>`).join("");
@@ -936,11 +969,11 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       }, $("#netdots", view));
       return;
     }
-    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-line="">‹ 全線図</button><span class="lb" style="--lc:var(${L.c})">${L.code}</span><h2>${esc(L.sec)}</h2></div><div class="strip" id="strip" style="--lc:var(${L.c})"></div><div class="pager-dots" id="stripdots"></div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-line="">‹ 倉庫</button><span class="lb" style="--lc:var(${L.c})">${L.code}</span><h2>${esc(L.sec)}</h2></div><div class="strip" id="strip" style="--lc:var(${L.c})"></div><div class="pager-dots" id="stripdots"></div>`);
     fill($("#strip", view), `line:${L.sec}`, L.dbs, 40, (d, i) => `<button type="button" class="sta-row" style="--i:${i}" data-db="${d.id}"><i></i><b>${esc(d.name || "…")}</b><span class="code">${L.code}-${String(L.dbs.indexOf(d) + 1).padStart(2, "0")}</span></button>`, $("#stripdots", view));
   }
 
-  // ================= DB：中身を発車標で見る =================
+  // ================= DB：中身をアンドンで見る =================
   async function openDb(id) {
     const d = S.dbs.find((x) => x.id === id); if (!d) return;
     S.dbOpen = d; S.dbRows = []; S.dbSchema = null; S.dbErr = null; S.dbQuery = ""; S.dbLoading = true; S.page.db = 0;
@@ -980,13 +1013,13 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   }
   function renderDb(view) {
     const d = S.dbOpen; const L = netLines().find((l) => l.sec === d.sec) || { code: "?", c: "--accent" };
-    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-dbback="1">‹ ${esc(L.code)}線</button><h2>${esc(d.name || "DB")}</h2></div>`);
-    if (S.dbLoading) { view.insertAdjacentHTML("beforeend", `<div class="board"><div class="empty">発車標を読み込んでいます…</div></div>`); return; }
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-dbback="1">‹ ${esc(L.code)}棚</button><h2>${esc(d.name || "DB")}</h2></div>`);
+    if (S.dbLoading) { view.insertAdjacentHTML("beforeend", `<div class="board"><div class="empty">在庫を読み込んでいます…</div></div>`); return; }
     if (S.dbErr) { view.insertAdjacentHTML("beforeend", `<div class="board"><div class="empty">${esc(S.dbErr)}</div></div>`); return; }
     const { title, extra } = dbColumns();
     const q = S.dbQuery.trim().toLowerCase();
     const items = S.dbRows.filter((r) => !q || Object.values(r).some((v) => typeof v === "string" && !isRef(v) && text(v).toLowerCase().includes(q)));
-    view.insertAdjacentHTML("beforeend", `<div class="crumb"><input id="dbq" type="search" placeholder="この駅の中を探す" value="${esc(S.dbQuery)}" aria-label="絞り込み"></div>
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><input id="dbq" type="search" placeholder="この棚を探す" value="${esc(S.dbQuery)}" aria-label="絞り込み"></div>
       <div class="board"><div class="bh"><span class="sta" style="--c:var(${L.c})"><i></i>${esc(d.name || "")}</span><span class="note">${items.length}${S.dbMore ? "（最新100件）" : "件"}</span></div><div class="rows"></div><div class="dots"></div></div>`);
     const box = $(".board .rows", view);
     if (!items.length) { box.outerHTML = `<div class="empty">${q ? "当てはまる行はありません" : "行がありません"}</div>`; return; }
@@ -997,8 +1030,8 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     }, $(".board .dots", view));
   }
 
-  // ================= 乗車券（詳細）：本文・項目・書く =================
-  function stationOfTask(t) { return STATIONS[laneOf(t)] || { code: "—", name: "降車済み", c: "--sub" }; }
+  // ================= 作業伝票（詳細）：本文・項目・書く =================
+  function stationOfTask(t) { return STATIONS[laneOf(t)] || { code: "—", name: "資料室", sub: "REFERENCE", c: "--sub" }; }
   function openTask(id) {
     const t = known.get(id); if (!t) return;
     S.leaf = { kind: "task", id, url: t.url, title: t.name, view: "body", body: null, bodyErr: null, open: new Set(), pg: 0, write: "todo" };
@@ -1122,9 +1155,9 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     if (L.kind === "task") {
       const t = known.get(L.id); const s = stationOfTask(t);
       const p = S.projects.find((x) => t.projects.includes(x.id));
-      return `<dl class="fields"><dt>現在地</dt><dd>${esc(s.name)}（${s.code}）　<span style="color:var(--sub)">${esc(t.status)}${t.ai ? ` ${esc(t.ai)}` : ""}</span></dd>
-        <dt>行先</dt><dd class="big">${esc(t.next || "—")}</dd><dt>日付</dt><dd>${t.date ? `${md(t.date)}(${WD[dow(t.date)]})` : "—"}　番線 ${esc(t.waku || "—")}　種別 ${esc((KIND[t.weight] || ["—"])[0])}（${esc(t.weight || "—")}）　${esc(t.tag || "")}</dd>
-        ${p ? `<dt>路線</dt><dd>${esc(p.name)}</dd>` : ""}${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link.slice(0, 60))}</a></dd>` : ""}</dl>`;
+      return `<dl class="fields"><dt>工程</dt><dd>${esc(s.name)}（${esc(s.sub)}・${s.code}）　<span style="color:var(--sub)">${esc(t.status)}${t.ai ? ` ${esc(t.ai)}` : ""}</span></dd>
+        <dt>次の作業</dt><dd class="big">${esc(t.next || "—")}</dd><dt>日付</dt><dd>${t.date ? `${md(t.date)}(${WD[dow(t.date)]})` : "—"}　ライン ${esc(t.waku || "—")}　品種 ${esc((KIND[t.weight] || ["—"])[0])}（${esc(t.weight || "—")}）　${esc(t.tag || "")}</dd>
+        ${p ? `<dt>ロット</dt><dd>${esc(p.name)}</dd>` : ""}${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link.slice(0, 60))}</a></dd>` : ""}</dl>`;
     }
     if (L.kind === "proj") {
       const p = S.projects.find((x) => x.id === L.id); const s = projStats(p);
@@ -1140,7 +1173,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const formulas = Object.values(schema).filter((p) => p.type === "formula" || p.type === "rollup").length;
     return `<dl class="fields">${shown || "<dt>—</dt><dd>入っている項目はありません</dd>"}</dl>${formulas ? `<div style="font-size:10px;color:var(--sub)">計算式・ロールアップ ${formulas}列は Notion 連携から読めないので出していません</div>` : ""}`;
   }
-  // 乗り換え先のボタン（今の駅に合わせて並べる）
+  // 移動先のボタン（今の工程に合わせて並べる）
   function xferHtml() {
     const L = S.leaf; if (L.kind !== "task") return "";
     const t = known.get(L.id); const lane = laneOf(t);
@@ -1158,7 +1191,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const t = L.kind === "task" ? known.get(L.id) : null;
     const s = t ? stationOfTask(t) : null;
     const tc = s ? s.c : L.kind === "proj" || L.sub === "goal" ? "--l-proj" : L.sub === "diag" || L.sub === "log" ? "--l-today" : "--l-plan";
-    const kicker = t ? `<span class="code">${s.code}</span>現在地　${esc(s.name)}` : L.kind === "proj" ? `<span class="code">PJ</span>プロジェクト路線` : L.sub === "goal" ? `<span class="code">終</span>行き先（目標）` : L.sub === "diag" ? `<span class="code">診</span>運行状況（診断）` : L.sub === "log" ? `<span class="code">LOG</span>運行記録` : `<span class="code">DB</span>${esc(S.dbOpen?.name || "")}`;
+    const kicker = t ? `<span class="code">${s.code}</span>作業伝票　工程：${esc(s.name)}（${esc(s.sub)}）` : L.kind === "proj" ? `<span class="code">PJ</span>製造ロット（プロジェクト）` : L.sub === "goal" ? `<span class="code">受</span>受注（目標）` : L.sub === "diag" ? `<span class="code">診</span>生産管理（診断）` : L.sub === "log" ? `<span class="code">LOG</span>作業日報` : `<span class="code">DB</span>${esc(S.dbOpen?.name || "")}`;
     const views = L.kind === "proj" ? [["fields", "子タスク"], ["body", "本文"], ["write", "書く"]] : [["body", "本文"], ["fields", "項目"], ["write", "書く"]];
     const fresh = sh.dataset.id !== L.id;
     sh.dataset.id = L.id;
@@ -1200,7 +1233,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
 
   function writeHtml() {
     const L = S.leaf;
-    const modes = L.kind === "task" ? [["todo", "やることに足す"], ["memo", "メモを書く"], ["next", "行先（次の一手）を書き換える"]] : [["memo", "メモを書く"], ["todo", "チェック項目を足す"]];
+    const modes = L.kind === "task" ? [["todo", "やることに足す"], ["memo", "メモを書く"], ["next", "次の作業（NEXT）を書き換える"]] : [["memo", "メモを書く"], ["todo", "チェック項目を足す"]];
     if (!modes.some(([k]) => k === L.write)) L.write = modes[0][0];
     const t = L.kind === "task" ? known.get(L.id) : null;
     const note = { todo: "1行＝1項目。本文の「やること／ToDo」の最後に足します（なければ本文の最後に見出しごと作ります）", memo: "本文のいちばん最後に書き足します", next: "NEXT（次の一手）を書き換えます。自分で書いたNEXTはAIが上書きしません" }[L.write];
@@ -1250,7 +1283,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       const t = known.get(L.id); const before = t.next;
       t.next = v; L.view = "fields"; drawLeaf(); render();
       if (S.mode === "demo") { toast("見本なので Notion は変わりません"); return; }
-      try { await call("update", { page_id: L.id, command: "update_properties", properties: { NEXT: v }, allow_async: false }, { read: false }); toast("行先を書き換えました"); saveSnap(); }
+      try { await call("update", { page_id: L.id, command: "update_properties", properties: { NEXT: v }, allow_async: false }, { read: false }); toast("次の作業を書き換えました"); saveSnap(); }
       catch (err) { t.next = before; render(); if (S.leaf === L) drawLeaf(); toast(errText(err)); }
       return;
     }
@@ -1291,16 +1324,16 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     return raw.split(last).length === 2 ? last : null; // 同じ行が2つあると場所を決められない
   }
 
-  // ================= 新しく書く（臨時列車） =================
+  // ================= 新しく書く（新規入荷） =================
   function openNew() {
     S.leaf = { kind: "new", id: "new", title: "新しく書く", where: "inbox" };
     const sh = $("#sheet"); sh.dataset.id = "new"; sh.style.animation = "";
     sh.innerHTML = `<div class="ticket" style="--tc:var(--accent)" role="dialog" aria-modal="true" aria-label="新しく書く">
-      <div class="band"><div class="k"><span class="code">臨</span>臨時列車を出す</div><h3>✎ 新しく書く</h3><button type="button" class="x" data-close="1" aria-label="閉じる">×</button></div><div class="perf"></div>
+      <div class="band"><div class="k"><span class="code">入</span>新規入荷</div><h3>✎ 新しく書く</h3><button type="button" class="x" data-close="1" aria-label="閉じる">×</button></div><div class="perf"></div>
       <div class="tbody"><div class="write"><label for="n-name">やること（名前）</label><input id="n-name" type="text" maxlength="200" placeholder="例）郵便受けの対策を決める">
       <label for="n-next">次の一手（なくてもよい）</label><input id="n-next" type="text" maxlength="200">
       <label for="n-memo">メモ（本文に入ります）</label><textarea id="n-memo" aria-label="メモ"></textarea>
-      <label>発車する駅</label><div class="xfer" id="n-where">${[["inbox", "倉庫", "--l-inbox"], ["next", "次にやる", "--l-next"], ["today", "今日やる", "--l-today"], ["tomorrow", "明日（予定あり）", "--l-plan"]].map(([k, n, c]) => `<button type="button" data-where="${k}" class="${k === "inbox" ? "pri" : ""}" style="--xc:var(${c})"><i></i>${n}</button>`).join("")}</div>
+      <label>投入する工程</label><div class="xfer" id="n-where">${[["inbox", "受入（倉庫）", "--l-inbox"], ["next", "仕分け（次にやる）", "--l-next"], ["today", "加工（今日やる）", "--l-today"], ["tomorrow", "予定棚（明日）", "--l-plan"]].map(([k, n, c]) => `<button type="button" data-where="${k}" class="${k === "inbox" ? "pri" : ""}" style="--xc:var(${c})"><i></i>${n}</button>`).join("")}</div>
       <div class="acts"><button type="button" class="pri" data-create="1">書き込む</button><button type="button" data-close="1">やめる</button></div></div></div></div>`;
     sh.hidden = false;
     setTimeout(() => $("#n-name")?.focus(), 60);
@@ -1315,13 +1348,13 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const content = [next ? `## やること\n- [ ] ${next}` : "", memo ? `## メモ\n${memo}` : ""].filter(Boolean).join("\n\n");
     const local = () => ({ url: "", 名前: name, NEXT: next, ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, 最終更新日時: new Date().toISOString() });
     const finish = (t) => { S.tasks.push(t); closeSheet(); S.tab = "map"; S.station = laneOf(t) || "inbox"; S.bump = S.station; render(); };
-    if (S.mode === "demo") { finish(toTask({ ...local(), url: `https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}` })); toast("臨時列車を出しました（見本なので Notion は変わりません）"); return; }
+    if (S.mode === "demo") { finish(toTask({ ...local(), url: `https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}` })); toast("入荷しました（見本なので Notion は変わりません）"); return; }
     const btn = $("[data-create]"); btn.disabled = true; btn.textContent = "書き込み中…";
     try {
       const res = await call("create", { parent: { type: "data_source_id", data_source_id: DS.task }, pages: [{ properties: props, ...(content ? { content } : {}) }], allow_async: false }, { read: false });
       const pg = (res.pages || [])[0] || {};
       finish(toTask({ ...local(), url: pg.url || `https://www.notion.so/${String(pg.id || "").replace(/-/g, "")}` }));
-      saveSnap(); toast("臨時列車を出しました");
+      saveSnap(); toast("入荷しました");
     } catch (err) {
       btn.disabled = false; btn.textContent = "書き込む";
       toast(err?.code === "server_unavailable" ? "Notion の返事がありません。重なって作られないよう、「↻」で確かめてから書き直してください" : `書き込めませんでした：${errText(err)}`);
@@ -1329,7 +1362,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   }
 
   // ================= スワイプ =================
-  // 発車標・一覧・本文を指で左右に動かし、離したら次（前）の頁へ
+  // アンドン・一覧・本文を指で左右に動かし、離したら次（前）の頁へ
   const swipe = (() => {
     let g = null, suppress = false;
     const cur = (k) => (k === "leaf" ? S.leaf?.pg || 0 : S.page[k] || 0);
