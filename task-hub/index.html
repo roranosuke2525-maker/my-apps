@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=DotGothic16&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
-/* 工場の生産ライン。上：時計と構内放送、中：ライン（工程＝今どこ、箱＝タスク）、下：選んだ工程のアンドン（作業指示）。タブで 生産管理（診断）・受注（目標とPJ）・倉庫（すべてのDB） */
+/* 工場のフロア（間取り図）。部屋＝今どこの工程、箱＝タスク。下は選んだ部屋のアンドン（作業指示）。管理室（診断）・営業室（目標とPJ）・資材倉庫（すべてのDB）も部屋として入れる */
 :root {
   --bg: #eceae6;
   --surface: #ffffff;
@@ -33,6 +33,7 @@
   --crate: #c79a5b;
   --crate-edge: #8a6435;
   --hazard: #f2b705;
+  --wall: #5b6068;
   --good: #0f9a55;
   --warn: #d98a00;
   --bad: #d7262b;
@@ -44,7 +45,7 @@
   :root:not([data-theme="light"]) {
     --bg: #121417; --surface: #1c2026; --ink: #e6ebf1; --sub: #95a1b0; --rule: #2a3542; --accent: #6aa8f0;
     --board: #07090c; --board-2: #12161c; --led-dim: #4d4024;
-    --l-main: #f5c431; --l-today: #ffae3d; --l-plan: #5a9be8; --l-next: #ff6e4f; --l-inbox: #9aa5b0; --l-wait: #c4a46e; --l-proj: #a888dc; --l-ai: #3cc7b5; --l-done: #4cc27a; --belt: #0b0d10; --floor: #1b1f24; --floor-line: #262b32; --crate: #b98c50; --crate-edge: #6e4f28; --hazard: #f5c431;
+    --l-main: #f5c431; --l-today: #ffae3d; --l-plan: #5a9be8; --l-next: #ff6e4f; --l-inbox: #9aa5b0; --l-wait: #c4a46e; --l-proj: #a888dc; --l-ai: #3cc7b5; --l-done: #4cc27a; --belt: #0b0d10; --floor: #1b1f24; --floor-line: #262b32; --crate: #b98c50; --crate-edge: #6e4f28; --hazard: #f5c431; --wall: #3c424b;
     --good: #3ccb7f; --warn: #ffb02e; --bad: #ff5a5e;
     color-scheme: dark;
   }
@@ -52,7 +53,7 @@
 :root[data-theme="dark"] {
   --bg: #121417; --surface: #1c2026; --ink: #e6ebf1; --sub: #95a1b0; --rule: #2a3542; --accent: #6aa8f0;
   --board: #07090c; --board-2: #12161c; --led-dim: #4d4024;
-  --l-main: #f5c431; --l-today: #ffae3d; --l-plan: #5a9be8; --l-next: #ff6e4f; --l-inbox: #9aa5b0; --l-wait: #c4a46e; --l-proj: #a888dc; --l-ai: #3cc7b5; --l-done: #4cc27a; --belt: #0b0d10; --floor: #1b1f24; --floor-line: #262b32; --crate: #b98c50; --crate-edge: #6e4f28; --hazard: #f5c431;
+  --l-main: #f5c431; --l-today: #ffae3d; --l-plan: #5a9be8; --l-next: #ff6e4f; --l-inbox: #9aa5b0; --l-wait: #c4a46e; --l-proj: #a888dc; --l-ai: #3cc7b5; --l-done: #4cc27a; --belt: #0b0d10; --floor: #1b1f24; --floor-line: #262b32; --crate: #b98c50; --crate-edge: #6e4f28; --hazard: #f5c431; --wall: #3c424b;
   --good: #3ccb7f; --warn: #ffb02e; --bad: #ff5a5e;
   color-scheme: dark;
 }
@@ -92,42 +93,59 @@ main { min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-t
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; animation: viewin .35s ease-out; }
 @keyframes viewin { from { opacity: 0; transform: translateY(6px); } }
 
-/* ライン（工場の床） */
-.map { flex: none; border-radius: 10px; border: 1px solid var(--rule); position: relative; overflow: hidden; background-color: var(--floor);
-  background-image: linear-gradient(var(--floor-line) 1px, transparent 1px), linear-gradient(90deg, var(--floor-line) 1px, transparent 1px); background-size: 24px 24px; }
+/* フロア（間取り図） */
+.map { flex: none; border-radius: 10px; position: relative; overflow: hidden; background: var(--wall); }
 .map svg { display: block; width: 100%; height: 100%; }
-.map .ln { fill: none; stroke: var(--belt); stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw 1.1s ease-out forwards; }
-.map.still .ln { animation: none; stroke-dashoffset: 0; }
-@keyframes draw { to { stroke-dashoffset: 0; } }
+.map .room { stroke: var(--wall); stroke-width: 3; }
+.map .st, .map .rm { cursor: pointer; }
+.map .st.sel .room { stroke: var(--ink); stroke-width: 3.5; }
+.map .door { fill: var(--floor); }
+.map .rname { font-family: var(--f-ui); font-weight: 900; font-size: 10.5px; fill: var(--ink); }
+.map .rsub { font-family: var(--f-ui); font-weight: 700; font-size: 8px; fill: var(--sub); }
+.map .rcnt { font-family: var(--f-code); font-weight: 700; font-size: 20px; }
+.map .rnote { font-family: var(--f-ui); font-weight: 700; font-size: 8px; fill: var(--sub); }
+.map .enter { font-family: var(--f-ui); font-weight: 900; font-size: 8px; fill: var(--accent); }
+.map .corridor { fill: var(--floor); }
+.map .lane-mark { stroke: var(--hazard); stroke-width: 1.5; stroke-dasharray: 8 6; fill: none; opacity: .8; }
+.map .ln { fill: none; stroke: var(--belt); stroke-width: 9; stroke-linecap: butt; }
 .map .beltmv { fill: none; stroke: rgba(255, 255, 255, .35); stroke-width: 2; stroke-dasharray: 4 6; animation: beltmove .55s linear infinite; }
-.map .beltmv.stop { animation: none; stroke: rgba(255, 255, 255, .15); }
 @keyframes beltmove { to { stroke-dashoffset: -10; } }
-.map .st { cursor: pointer; }
-.map .mc { stroke: rgba(0, 0, 0, .25); stroke-width: 1; }
-.map .st.sel .mc { stroke: var(--ink); stroke-width: 2.5; }
-.map .hz { fill: url(#hz); }
-.map .st text { font-family: var(--f-ui); font-weight: 900; }
-.map .st .nm { fill: #fff; font-size: 10px; }
-.map .st .cnt { fill: #fff; font-family: var(--f-code); font-size: 13px; }
-.map .st .sub { fill: var(--sub); font-size: 8.5px; font-weight: 700; }
-.map .st .cd { font-family: var(--f-code); font-size: 7.5px; letter-spacing: .05em; }
 .map .crate { fill: var(--crate); stroke: var(--crate-edge); stroke-width: .8; }
 .map .crate.bad { fill: var(--bad); stroke: #7a1515; }
-.map .gear { fill: rgba(255, 255, 255, .85); transform-box: view-box; animation: spin 2.6s linear infinite; }
-.map .gear.slow { animation-duration: 9s; } .map .gear.stop { animation: none; opacity: .6; }
+.map .pallet { fill: color-mix(in srgb, var(--crate-edge) 60%, var(--floor)); }
+.map .gear { fill: rgba(255, 255, 255, .9); transform-box: view-box; animation: spin 2.6s linear infinite; }
+.map .gear.slow { animation-duration: 9s; }
 .map .gear .hub { fill: rgba(0, 0, 0, .35); }
+.map .machine { fill: var(--l-today); stroke: rgba(0, 0, 0, .25); }
 .map .lamp { fill: var(--good); stroke: rgba(0, 0, 0, .3); }
 .map .lamp.on { fill: var(--bad); animation: colon .7s steps(1) infinite; }
+.map .beacon { fill: var(--hazard); animation: colon .9s steps(1) infinite; }
+.map .hold { fill: url(#hz); opacity: .35; }
 .map .arm { fill: var(--l-ai); transform-box: view-box; animation: armswing 2.6s ease-in-out infinite alternate; }
 .map .arm2 { transform-box: view-box; animation: armswing2 1.7s ease-in-out infinite alternate; }
 @keyframes armswing { from { transform: rotate(-28deg); } to { transform: rotate(22deg); } }
 @keyframes armswing2 { from { transform: rotate(-20deg); } to { transform: rotate(35deg); } }
+.map .truck { animation: idle 1.4s ease-in-out infinite alternate; }
+@keyframes idle { to { transform: translateY(-1px); } }
+.map .shelf { stroke: var(--sub); stroke-width: 1.5; }
+.map .table { fill: color-mix(in srgb, var(--sub) 30%, var(--floor)); stroke: var(--sub); stroke-width: .8; }
+.map .screen { fill: var(--board); }
+.map .spark { fill: none; stroke: var(--led-2); stroke-width: 1.5; stroke-dasharray: 120; stroke-dashoffset: 120; animation: dash 1.6s ease-out forwards, blinkline 3s 1.6s ease-in-out infinite; }
+@keyframes blinkline { 50% { opacity: .55; } }
+.map .bar-bg { fill: var(--rule); }
+.map .bar-fill { fill: var(--l-proj); transform-box: fill-box; transform-origin: left; animation: growx 1.2s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes growx { from { transform: scaleX(0); } }
+.map .flag { fill: var(--bad); transform-box: fill-box; transform-origin: left; animation: wave 1.2s ease-in-out infinite alternate; }
+@keyframes wave { to { transform: skewY(-12deg) scaleX(.85); } }
+.map .rack { fill: color-mix(in srgb, var(--l-plan) 55%, var(--floor)); }
+.map .worker { fill: var(--ink); }
 .map .pulse { fill: none; stroke-width: 2; animation: pulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes pulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
+@keyframes pulse { from { opacity: .8; transform: scale(1); } to { opacity: 0; transform: scale(1.08); } }
 .map .delay { font-family: var(--f-ui); font-size: 8.5px; font-weight: 900; fill: #fff; }
 .map .bump { animation: bump .55s ease-out; transform-box: fill-box; transform-origin: center; }
-@keyframes bump { 40% { transform: scale(1.18); } }
-.map .floor-label { font-family: var(--f-code); font-size: 9px; fill: var(--sub); letter-spacing: .12em; font-weight: 700; }
+@keyframes bump { 40% { transform: scale(1.06); } }
+.view.zoom { transition: transform .32s ease-in, opacity .32s ease-in; transform: scale(2.4); opacity: 0; pointer-events: none; }
+@keyframes dash { to { stroke-dashoffset: 0; } }
 
 /* アンドン（作業指示の電光板） */
 .board { flex: 1; min-height: 0; background: var(--board); border-radius: 8px; color: var(--led); font-family: var(--f-led); display: flex; flex-direction: column; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
@@ -319,10 +337,10 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   <div class="ticker" aria-live="off"><b>構内放送</b><div class="tr" id="ticker"></div></div>
   <main id="main"></main>
   <nav>
-    <button type="button" data-tab="map" aria-pressed="true" style="--nc:var(--l-main)"><i></i>ライン</button>
-    <button type="button" data-tab="ops" style="--nc:var(--l-today)"><i></i>生産管理</button>
-    <button type="button" data-tab="goal" style="--nc:var(--l-proj)"><i></i>受注</button>
-    <button type="button" data-tab="net" style="--nc:var(--l-plan)"><i></i>倉庫</button>
+    <button type="button" data-tab="map" aria-pressed="true" style="--nc:var(--l-next)"><i></i>フロア</button>
+    <button type="button" data-tab="ops" style="--nc:var(--l-today)"><i></i>管理室</button>
+    <button type="button" data-tab="goal" style="--nc:var(--l-main)"><i></i>営業室</button>
+    <button type="button" data-tab="net" style="--nc:var(--l-plan)"><i></i>資材倉庫</button>
   </nav>
 </div>
 <div id="sheet" hidden></div>
@@ -343,26 +361,34 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   const PLAYER = "https://www.notion.so/3e962844acbe81b0843ff78fe19791fa"; // DB_プレイヤー（Satoshi）
   const STORE = "imadoko:v2";
 
-  // 今どこ（DB_タスク管理の計算式）を工程にする。MCPは計算式の値を返さないので、ステータスと実行日から同じ規則で出し直す
-  // 座標はライン図（viewBox 360×262）の上の位置
+  // 今どこ（DB_タスク管理の計算式）を工場の部屋にする。MCPは計算式の値を返さないので、ステータスと実行日から同じ規則で出し直す
   const STATIONS = {
-    inbox: { code: "K01", name: "受入", sub: "倉庫", x: 40, y: 150, c: "--l-inbox" },
-    next: { code: "K02", name: "仕分け", sub: "次にやる", x: 128, y: 150, c: "--l-next" },
-    plan: { code: "K03", name: "予定棚", sub: "予定あり", x: 190, y: 64, c: "--l-plan" },
-    today: { code: "K04", name: "加工", sub: "今日やる", x: 252, y: 150, c: "--l-today" },
-    done: { code: "K05", name: "出荷", sub: "済み", x: 326, y: 150, c: "--l-done" },
-    wait: { code: "K06", name: "保留棚", sub: "待ち", x: 128, y: 230, c: "--l-wait" },
-    proj: { code: "P01", name: "組立", sub: "プロジェクト", x: 278, y: 230, c: "--l-proj" },
-    ai: { code: "A01", name: "AIロボ", sub: "AI", x: 52, y: 64, c: "--l-ai" },
+    inbox: { code: "K01", name: "受入室", sub: "倉庫", c: "--l-inbox" },
+    next: { code: "K02", name: "仕分け室", sub: "次にやる", c: "--l-next" },
+    plan: { code: "K03", name: "予定倉庫", sub: "予定あり", c: "--l-plan" },
+    today: { code: "K04", name: "加工室", sub: "今日やる", c: "--l-today" },
+    done: { code: "K05", name: "出荷場", sub: "済み", c: "--l-done" },
+    wait: { code: "K06", name: "保留室", sub: "待ち", c: "--l-wait" },
+    proj: { code: "P01", name: "組立室", sub: "プロジェクト", c: "--l-proj" },
+    ai: { code: "A01", name: "AIラボ", sub: "AI", c: "--l-ai" },
   };
-  // ベルトコンベア（箱が流れる道）
-  const LINES = [
-    { id: "main", d: "M12 150 H348", n: 5, v: 26 },
-    { id: "plan", d: "M128 150 C152 150 160 64 190 64 C220 64 228 150 252 150", n: 2, v: 18 },
-    { id: "ai", d: "M40 150 C40 110 52 104 52 64", n: 1, v: 12 },
-    { id: "wait", d: "M128 150 V230", n: 0, v: 0 },
-    { id: "proj", d: "M206 230 H348", n: 2, v: 14 },
+  // 間取り（viewBox 360×282）。上段・通路・中段（ベルトが通る工程）・下段。tab がある部屋はタップで中へ入る
+  const ROOMS = [
+    { k: "ai", x: 4, y: 4, w: 114, h: 80, door: "b" },
+    { k: "plan", x: 118, y: 4, w: 122, h: 80, door: "b" },
+    { k: "ops", x: 240, y: 4, w: 116, h: 80, door: "b", tab: "ops", name: "管理室", sub: "生産管理・診断", c: "--l-today" },
+    { k: "inbox", x: 4, y: 110, w: 88, h: 86, door: "t" },
+    { k: "next", x: 92, y: 110, w: 88, h: 86, door: "t" },
+    { k: "today", x: 180, y: 110, w: 88, h: 86, door: "t" },
+    { k: "done", x: 268, y: 110, w: 88, h: 86, door: "t" },
+    { k: "wait", x: 4, y: 196, w: 88, h: 82, door: "t" },
+    { k: "proj", x: 92, y: 196, w: 108, h: 82, door: "t" },
+    { k: "goal", x: 200, y: 196, w: 78, h: 82, door: "t", tab: "goal", name: "営業室", sub: "受注・目標", c: "--l-main" },
+    { k: "net", x: 278, y: 196, w: 78, h: 82, door: "t", tab: "net", name: "資材倉庫", sub: "すべてのDB", c: "--l-plan" },
   ];
+  for (const r of ROOMS) if (STATIONS[r.k]) Object.assign(STATIONS[r.k], { x: r.x + r.w / 2, y: r.y + r.h / 2 });
+  const BELT_Y = 180; // 中段を左から右へ通るベルト
+  const LINES = [{ id: "belt", d: `M4 ${BELT_Y} H356`, n: 6, v: 24 }];
   const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
   const WAKU = { "☼ 朝": "朝", "💻 PC": "PC", "🏠 家・外": "外", "作業中": "作" };
@@ -560,15 +586,15 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   // ================= 書き込み：プロパティ（工程の移動） =================
   const ACTIONS = {
     done: { label: "出荷（済み）", to: "done", props: () => ({ "ステータス": ST.done }), msg: "出荷しました" },
-    today: { label: "加工へ（今日）", to: "today", props: () => dateProps(TODAY()), msg: "加工ライン（今日やる）に載せました" },
-    tomorrow: { label: "予定棚（明日）", to: "plan", props: () => dateProps(addDays(TODAY(), 1)), msg: "予定棚（明日）に移しました" },
-    weekend: { label: "予定棚（週末）", to: "plan", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: "予定棚（週末・土）に移しました" },
+    today: { label: "加工室へ（今日）", to: "today", props: () => dateProps(TODAY()), msg: "加工室（今日やる）に運びました" },
+    tomorrow: { label: "予定倉庫（明日）", to: "plan", props: () => dateProps(addDays(TODAY(), 1)), msg: "予定倉庫（明日）に運びました" },
+    weekend: { label: "予定倉庫（週末）", to: "plan", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: "予定倉庫（週末・土）に運びました" },
     nodate: { label: "日付を外す", to: null, props: () => ({ "date:実行日:start": null }), msg: "日付を外しました" },
-    adopt: { label: "仕分けへ（次にやる）", to: "next", props: () => ({ "ステータス": ST.next }), msg: "仕分け（次にやる）に回しました" },
-    wait: { label: "保留棚へ（待ち）", to: "wait", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: "保留棚に置きました（日付は外しました）" },
+    adopt: { label: "仕分け室へ（次にやる）", to: "next", props: () => ({ "ステータス": ST.next }), msg: "仕分け室（次にやる）に運びました" },
+    wait: { label: "保留室へ（待ち）", to: "wait", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: "保留室に置きました（日付は外しました）" },
     someday: { label: "寝かせる（1か月後）", to: "plan", props: () => ({ "ステータス": ST.some, ...dateProps(addMonths(TODAY(), 1)) }), msg: "SOMEDAYにしました（見直しは1か月後）" },
     ref: { label: "資料室へ", to: null, props: () => ({ "ステータス": ST.ref }), msg: "REFERENCEにしました" },
-    research: { label: "AIロボへ（🔍）", to: "ai", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: "AIロボに預けました（🔍）" },
+    research: { label: "AIラボへ（🔍）", to: "ai", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: "AIラボに預けました（🔍）" },
   };
   function dateProps(d) { return { "date:実行日:start": d, "date:実行日:is_datetime": 0 }; }
   function applyLocal(t, props) {
@@ -606,7 +632,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const svg = $("#map svg");
     if (!svg || reduce || !from || !to || from === to || !STATIONS[from] || !STATIONS[to]) return Promise.resolve();
     const A = STATIONS[from], B = STATIONS[to];
-    const cx = (A.x + B.x) / 2, cy = Math.min(A.y, B.y) - 50;
+    const cx = (A.x + B.x) / 2, cy = 97; // 通路を通って運ぶ
     const box = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     box.setAttribute("width", "11"); box.setAttribute("height", "11"); box.setAttribute("rx", "1.5"); box.setAttribute("class", "mover");
     svg.append(box);
@@ -614,7 +640,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       const t0 = performance.now(), dur = 800;
       const step = (now) => {
         const k = Math.min(1, (now - t0) / dur); const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-        const x = (1 - e) ** 2 * A.x + 2 * (1 - e) * e * cx + e * e * B.x, y = (1 - e) ** 2 * (A.y - 20) + 2 * (1 - e) * e * cy + e * e * (B.y - 20);
+        const x = (1 - e) ** 2 * A.x + 2 * (1 - e) * e * cx + e * e * B.x, y = (1 - e) ** 2 * A.y + 2 * (1 - e) * e * cy + e * e * B.y;
         box.setAttribute("x", x - 5.5); box.setAttribute("y", y - 5.5); box.setAttribute("transform", `rotate(${k * 360} ${x} ${y})`);
         if (k < 1) requestAnimationFrame(step); else { box.remove(); S.bump = to; res(); }
       };
@@ -625,35 +651,92 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const teeth = Array.from({ length: 6 }, (_, i) => `<rect x="${x - 1.6}" y="${y - 8.5}" width="3.2" height="4" transform="rotate(${i * 60} ${x} ${y})"></rect>`).join("");
     return `<g class="gear ${cls}" style="transform-origin:${x}px ${y}px" aria-hidden="true">${teeth}<circle cx="${x}" cy="${y}" r="5.5"></circle><circle class="hub" cx="${x}" cy="${y}" r="2"></circle></g>`;
   }
+  function crates(n, x, y, cols, late = 0, max = cols * 2) {
+    if (typeof n !== "number") return "";
+    const k = Math.min(n, max);
+    return Array.from({ length: k }, (_, i) => `<rect class="crate${i < late ? " bad" : ""}" x="${x + (i % cols) * 7.6}" y="${y - Math.floor(i / cols) * 7.6}" width="6.6" height="6.6" rx=".8"></rect>`).join("")
+      + (n > max ? `<text class="rnote" x="${x + cols * 7.6 + 2}" y="${y + 6}">+${n - max}</text>` : "");
+  }
+  // 部屋ごとの中身（家具・機械・箱）
+  function decor(r, n, late) {
+    const { x, y, w, h } = r;
+    const fx = x + 6, by = y + h - 13; // 箱を置く左下
+    switch (r.k) {
+      case "ai": {
+        const ax = x + w - 26, ay = y + h - 14;
+        return `<rect class="table" x="${fx}" y="${by - 4}" width="44" height="12" rx="2"></rect>${crates(n, fx + 2, by - 12, 5)}
+          <g aria-hidden="true"><rect x="${ax - 7}" y="${ay}" width="14" height="6" rx="2" fill="var(--sub)"></rect><g class="arm" style="transform-origin:${ax}px ${ay}px"><rect x="${ax - 2.5}" y="${ay - 28}" width="5" height="28" rx="2.5"></rect>
+          <g class="arm2" style="transform-origin:${ax}px ${ay - 26}px"><rect x="${ax - 24}" y="${ay - 28}" width="24" height="4.5" rx="2"></rect><rect x="${ax - 25}" y="${ay - 28}" width="3" height="10" rx="1"></rect></g></g></g>`;
+      }
+      case "plan": {
+        const next = at("plan").map((t) => t.date).sort()[0];
+        return `<line class="shelf" x1="${fx}" x2="${x + w - 8}" y1="${by + 8}" y2="${by + 8}"></line><line class="shelf" x1="${fx}" x2="${x + w - 8}" y1="${by - 9}" y2="${by - 9}"></line>
+          ${crates(n, fx + 2, by, 13, 0, 26)}${next ? `<text class="rnote" x="${x + w - 6}" y="${y + 34}" text-anchor="end">次 ${md(next)}（${WD[dow(next)]}）</text>` : ""}`;
+      }
+      case "inbox": return `<rect class="pallet" x="${fx - 1}" y="${y + 36}" width="${w - 12}" height="30" rx="2"></rect>${crates(n, fx + 1, y + 58, 10, 0, 30)}`;
+      case "next": return `<rect class="table" x="${fx}" y="${y + 34}" width="${w - 14}" height="22" rx="3"></rect>${crates(n, fx + 3, y + 46, 9, 0, 18)}<circle class="worker" cx="${x + w - 12}" cy="${y + 64}" r="3.5"></circle>`;
+      case "today": {
+        const mx = x + w - 30, my = y + 30;
+        return `${crates(n, fx, y + 58, 6, late, 18)}<rect class="machine" x="${mx}" y="${my}" width="24" height="28" rx="4"></rect>${gear(mx + 12, my + 12, late ? "slow" : "")}
+          <circle class="lamp${late ? " on" : ""}" cx="${mx + 20}" cy="${my - 4}" r="4"></circle>
+          ${late ? `<g transform="translate(${x + w - 52},${y + 17})"><rect x="0" y="-7" width="32" height="13" rx="3" fill="var(--bad)"></rect><text class="delay" x="16" y="2.5" text-anchor="middle">遅れ${late}</text></g>` : ""}`;
+      }
+      case "done": {
+        const tx = x + w - 40, ty = y + 34;
+        return `${crates(n, fx, y + 58, 5, 0, 15)}<g class="truck"><rect x="${tx}" y="${ty}" width="26" height="16" rx="2" fill="var(--l-done)"></rect><rect x="${tx + 26}" y="${ty + 4}" width="9" height="12" rx="2" fill="color-mix(in srgb, var(--l-done) 70%, #000)"></rect><circle cx="${tx + 6}" cy="${ty + 17}" r="3" fill="var(--ink)"></circle><circle cx="${tx + 28}" cy="${ty + 17}" r="3" fill="var(--ink)"></circle></g>`;
+      }
+      case "wait": return `<rect class="hold" x="${fx - 1}" y="${y + 32}" width="${w - 12}" height="${h - 40}" rx="2"></rect><circle class="beacon" cx="${x + w - 12}" cy="${y + 14}" r="4"></circle>${crates(n, fx + 4, by - 2, 8, 0, 24)}`;
+      case "proj": {
+        const ps = S.projects.filter((p) => p.status.includes("進行中")).slice(0, 3);
+        return ps.map((p, i) => { const st = projStats(p); const yy = y + 36 + i * 15; return `<text class="rnote" x="${fx}" y="${yy}">${esc(p.name.slice(0, 9))}</text><rect class="bar-bg" x="${fx}" y="${yy + 3}" width="${w - 14}" height="5" rx="2"></rect><rect class="bar-fill" x="${fx}" y="${yy + 3}" width="${Math.max(2, (w - 14) * st.pct / 100)}" height="5" rx="2" style="animation-delay:${i * 150}ms"></rect>`; }).join("") || `<text class="rnote" x="${fx}" y="${y + 44}">進行中のロットなし</text>`;
+      }
+      case "ops": {
+        const ds = S.diag.slice(-6); const sw = 44, sh = 22, sx = fx, sy = y + 36;
+        const pts = ds.map((d, i) => `${sx + 3 + (i * (sw - 6)) / Math.max(1, ds.length - 1)},${sy + sh - 3 - d.rate * (sh - 6)}`).join(" ");
+        const last = ds.at(-1);
+        return `<rect class="screen" x="${sx}" y="${sy}" width="${sw}" height="${sh}" rx="2"></rect>${ds.length > 1 ? `<polyline class="spark" points="${pts}"></polyline>` : ""}
+          <rect class="screen" x="${sx + sw + 6}" y="${sy}" width="${w - sw - 24}" height="${sh}" rx="2"></rect><text x="${sx + sw + 10}" y="${sy + 14}" style="font-family:var(--f-led);font-size:9px;fill:var(--led)">${last ? `${Math.round(last.rate * 100)}%` : "—"}</text>
+          <text class="rnote" x="${fx}" y="${y + h - 6}">${last ? `第${last.no}回「${esc(last.verdict.slice(0, 9))}」` : "診断なし"}</text>`;
+      }
+      case "goal": {
+        const live = S.goals.filter((g) => /挑戦中/.test(g.status));
+        return `<rect class="table" x="${fx}" y="${y + 46}" width="${w - 14}" height="14" rx="2"></rect>${live.slice(0, 4).map((g, i) => `<line x1="${fx + 6 + i * 14}" x2="${fx + 6 + i * 14}" y1="${y + 46}" y2="${y + 28}" stroke="var(--sub)" stroke-width="1.2"></line><rect class="flag" x="${fx + 6 + i * 14}" y="${y + 28}" width="10" height="7" style="animation-delay:${i * 200}ms"></rect>`).join("")}
+          <text class="rnote" x="${fx}" y="${y + h - 6}">挑戦中 ${live.length}・ロット ${S.projects.filter((p) => !p.status.includes("完了")).length}</text>`;
+      }
+      case "net": {
+        const k = S.dbs.length, per = 13;
+        return Array.from({ length: Math.min(k, 52) }, (_, i) => `<rect class="rack" x="${fx + (i % per) * 5}" y="${y + 32 + Math.floor(i / per) * 9}" width="4" height="6"></rect>`).join("") + `<text class="rnote" x="${fx}" y="${y + h - 6}">${k} 品目</text>`;
+      }
+    }
+    return "";
+  }
   function mapSvg() {
     const late = lateCount();
     const loading = S.mode === "loading" && !S.tasks.length;
     const defs = `<defs><pattern id="hz" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="8" fill="#f2b705"></rect><rect x="4" width="4" height="8" fill="#1b1b1b"></rect></pattern></defs>`;
-    const belts = LINES.map((l) => `<path class="ln" data-belt="${l.id}" d="${l.d}"></path><path class="beltmv${l.v ? "" : " stop"}" d="${l.d}"></path>`).join("");
-    const A = STATIONS.ai, ax = A.x + 30, ay = A.y + 18;
-    const arm = `<g aria-hidden="true"><rect x="${ax - 7}" y="${ay}" width="14" height="6" rx="2" fill="var(--sub)"></rect><g class="arm" style="transform-origin:${ax}px ${ay}px"><rect x="${ax - 2.5}" y="${ay - 30}" width="5" height="30" rx="2.5"></rect>
-      <g class="arm2" style="transform-origin:${ax}px ${ay - 28}px"><rect x="${ax - 2}" y="${ay - 30}" width="24" height="4.5" rx="2"></rect><rect x="${ax + 20}" y="${ay - 30}" width="3" height="10" rx="1"></rect></g></g></g>`;
-    const sts = Object.entries(STATIONS).map(([k, s]) => {
-      const n = loading ? "–" : countOf(k);
-      const sel = S.station === k;
-      const W = 52, H = 30, x0 = s.x - W / 2, y0 = s.y - H / 2;
-      const lateN = k === "today" ? late : 0;
-      const stack = typeof n === "number" ? Array.from({ length: Math.min(n, 12) }, (_, i) => `<rect class="crate${i < lateN ? " bad" : ""}" x="${x0 + 3 + (i % 6) * 7.6}" y="${y0 - 8 - Math.floor(i / 6) * 7.6}" width="6.6" height="6.6" rx=".8"></rect>`).join("") + (n > 12 ? `<text class="sub" x="${x0 + W - 2}" y="${y0 - 18}" text-anchor="end">+${n - 12}</text>` : "") : "";
-      return `<g class="st${sel ? " sel" : ""}" data-station="${k}" role="button" tabindex="0" aria-label="${s.name}（${s.sub}） ${n}件">
-        ${sel ? `<rect class="pulse" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="6" stroke="var(${s.c})"></rect>` : ""}
-        ${stack}
-        <rect class="mc${S.bump === k ? " bump" : ""}" x="${x0}" y="${y0}" width="${W}" height="${H}" rx="6" fill="var(${s.c})"></rect>
-        <rect class="hz" x="${x0 + 2}" y="${y0 + H - 5}" width="${W - 4}" height="4" rx="1"></rect>
-        <text class="nm" x="${s.x - 7}" y="${s.y - 2}" text-anchor="middle">${s.name}</text>
-        <text class="cnt" x="${s.x - 7}" y="${s.y + 9}" text-anchor="middle">${n}</text>
-        ${gear(x0 + W - 10, s.y - 2, k === "today" && late ? "slow" : k === "wait" ? "stop" : "")}
-        ${k === "today" ? `<circle class="lamp${late ? " on" : ""}" cx="${x0 + W - 4}" cy="${y0 - 4}" r="4"></circle>` : ""}
-        <text class="sub" x="${s.x}" y="${y0 + H + 10}" text-anchor="middle">${s.sub}<tspan class="cd" dx="3">${s.code}</tspan></text>
-        ${lateN ? `<g transform="translate(${x0 + W - 6},${y0 - 20})"><rect x="0" y="-7" width="36" height="13" rx="3" fill="var(--bad)"></rect><text class="delay" x="18" y="2.5" text-anchor="middle">遅れ${lateN}</text></g>` : ""}
-      </g>`;
+    const corridor = `<rect class="corridor" x="4" y="84" width="352" height="26"></rect><path class="lane-mark" d="M10 97 H350"></path><text class="rnote" x="350" y="93" text-anchor="end">通路</text>`;
+    const rooms = ROOMS.map((r) => {
+      const s = STATIONS[r.k] || r;
+      const isTask = !!STATIONS[r.k];
+      const n = isTask ? (loading ? "–" : countOf(r.k)) : null;
+      const sel = isTask && S.station === r.k;
+      const door = r.door === "b" ? `<rect class="door" x="${r.x + r.w / 2 - 9}" y="${r.y + r.h - 2}" width="18" height="5"></rect>` : `<rect class="door" x="${r.x + r.w / 2 - 9}" y="${r.y - 3}" width="18" height="5"></rect>`;
+      const attrs = isTask ? `class="st${sel ? " sel" : ""}" data-station="${r.k}" aria-label="${s.name}（${s.sub}） ${n}件"` : `class="rm" data-room="${r.tab}" aria-label="${s.name}（${s.sub}）に入る"`;
+      return `<g ${attrs} role="button" tabindex="0">
+        <rect class="room${S.bump === r.k ? " bump" : ""}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" style="fill:color-mix(in srgb, var(${s.c}) 13%, var(--floor))"></rect>
+        ${sel ? `<rect class="pulse" x="${r.x + 2}" y="${r.y + 2}" width="${r.w - 4}" height="${r.h - 4}" stroke="var(${s.c})"></rect>` : ""}
+        <rect x="${r.x + 1.5}" y="${r.y + 1.5}" width="${r.w - 3}" height="4" fill="var(${s.c})"></rect>
+        <text class="rname" x="${r.x + 6}" y="${r.y + 17}">${s.name}</text><text class="rsub" x="${r.x + 6}" y="${r.y + 27}">${s.sub}${isTask ? `　${s.code}` : ""}</text>
+        ${isTask ? `<text class="rcnt" x="${r.x + r.w - 6}" y="${r.y + 24}" text-anchor="end" fill="var(${s.c})">${n}</text>` : `<text class="enter" x="${r.x + r.w - 6}" y="${r.y + 16}" text-anchor="end">入る ›</text>`}
+        ${loading && isTask ? "" : decor(r, n, r.k === "today" ? late : 0)}
+      </g>${door}`;
     }).join("");
+    // 中段の部屋の間の出入口（ベルトが通る）
+    const gaps = [92, 180, 268].map((x) => `<rect class="door" x="${x - 3}" y="${BELT_Y - 9}" width="6" height="18"></rect>`).join("");
+    const belt = LINES.map((l) => `<path class="ln" data-belt="${l.id}" d="${l.d}"></path><path class="beltmv" d="${l.d}"></path>`).join("");
     S.bump = null;
-    return `<svg viewBox="0 0 360 262" preserveAspectRatio="xMidYMid meet" role="img" aria-label="今どこ工場のライン">${defs}<text class="floor-label" x="8" y="14">LINE 1　今どこ</text>${belts}<g id="crates"></g>${arm}${sts}</svg>`;
+    return `<svg viewBox="0 0 360 282" preserveAspectRatio="xMidYMid meet" role="img" aria-label="今どこ工場のフロア">${defs}${corridor}${rooms}${gaps}${belt}<g id="crates"></g>
+      <g id="fork" aria-hidden="true"><rect x="-9" y="-6" width="16" height="12" rx="2" fill="var(--hazard)"></rect><rect x="7" y="-5" width="6" height="2" fill="var(--ink)"></rect><rect x="7" y="3" width="6" height="2" fill="var(--ink)"></rect><rect x="-6" y="-4" width="6" height="8" rx="1" fill="var(--ink)"></rect></g></svg>`;
   }
 
   // ベルトの上を流れる箱
@@ -671,17 +754,20 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
           list.push({ p, len, el, s: (i / L.n) * len, v: L.v });
         }
       }
+      fork = $("#fork"); fx = 30; fv = 38;
       last = performance.now(); raf = requestAnimationFrame(tick);
     }
+    let fork = null, fx = 30, fv = 38;
     function tick(now) {
       raf = 0;
       if (!list.length || !list[0].el.isConnected) return;
+      if (fork) { fx += fv * Math.min(0.05, (now - last) / 1000); if (fx > 340 || fx < 20) { fv *= -1; fx = Math.max(20, Math.min(340, fx)); } fork.setAttribute("transform", `translate(${fx.toFixed(1)},97) scale(${fv > 0 ? 1 : -1},1)`); }
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       for (const t of list) {
         t.s = (t.s + t.v * dt) % t.len;
         const a = t.p.getPointAtLength(t.s), b = t.p.getPointAtLength(Math.min(t.len, t.s + 1));
         const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-        t.el.setAttribute("transform", `translate(${a.x.toFixed(1)},${(a.y - 6).toFixed(1)}) rotate(${ang.toFixed(0)})`);
+        t.el.setAttribute("transform", `translate(${a.x.toFixed(1)},${a.y.toFixed(1)}) rotate(${ang.toFixed(0)})`);
       }
       if (!document.hidden) raf = requestAnimationFrame(tick);
     }
@@ -760,7 +846,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       draw = (t, i) => `<div class="brow" style="--i:${i}">${kindCell(t.weight)}<span class="dest"><span>${esc(t.name)}</span></span><span class="time ok">出荷済</span><span class="plat">${esc(WAKU[t.waku] || "")}</span></div>`;
     } else if (k === "proj") {
       items = S.projects.filter((p) => !p.status.includes("完了")).sort((a, b) => (a.status.includes("進行中") ? 0 : 1) - (b.status.includes("進行中") ? 0 : 1) || (b.edited || "").localeCompare(a.edited || ""));
-      note = "受注タブでロットごとに見られます";
+      note = "営業室でロットごとに見られます";
       cols = ["状態", "ロット", "完成", "残り"];
       draw = (p, i) => { const st = projStats(p); return `<div class="brow" role="button" tabindex="0" data-proj-open="${p.id}" style="--i:${i}"><span class="kind" style="--k:${p.status.includes("進行中") ? "#ff8a3d" : "#9aa6b2"}">${esc(p.status.split(" ")[1] || "")}</span><span class="dest"><span>${esc(p.name)}</span></span><span class="time">${st.done}/${p.total}</span><span class="plat">${st.open.length}</span></div>`; };
     }
@@ -768,7 +854,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       <div class="cols">${cols.map((c, i) => `<span style="${i === 2 ? "text-align:right" : i === 3 ? "text-align:center" : ""}">${c}</span>`).join("")}</div>
       <div class="rows"></div><div class="dots"></div></div>`);
     const box = $(".board .rows", view);
-    if (!items.length) { box.outerHTML = `<div class="empty">${k === "done" ? "本日の出荷はまだありません" : "この工程に仕掛かり中の品はありません"}</div>`; return; }
+    if (!items.length) { box.outerHTML = `<div class="empty">${k === "done" ? "本日の出荷はまだありません" : "この部屋に置いてある品はありません"}</div>`; return; }
     fill(box, `st:${k}`, items, 30, draw, $(".board .dots", view));
   }
 
@@ -789,7 +875,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     if (S.tab === "map") trains.mount(); else trains.stop();
   }
   function renderMap(view, keep) {
-    const h = Math.min(250, Math.max(190, Math.round(main.clientWidth * 262 / 360)));
+    const h = Math.min(300, Math.max(210, Math.round(main.clientWidth * 282 / 360)));
     view.insertAdjacentHTML("beforeend", `<div class="map${keep ? " still" : ""}" id="map" style="height:${h}px">${mapSvg()}</div>`);
     if (S.mode === "loading" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="board"><div class="empty">Notion から生産計画を読み込んでいます…</div></div>`); return; }
     stationBoard(view);
@@ -804,10 +890,10 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const parts = [];
     if (S.mode === "loading" && !S.tasks.length) parts.push("ただいま生産計画を読み込んでいます");
     else {
-      parts.push(late ? `加工ラインで ${late}件 の遅れが出ています` : "加工ラインは予定どおり稼働中です");
+      parts.push(late ? `加工室で ${late}件 の遅れが出ています` : "加工室は予定どおり稼働中です");
       parts.push(`本日の出荷 ${S.doneToday.length}件／加工待ち ${at("today").length}件／受入 ${at("inbox").length}件`);
-      if (waits.length) parts.push(`保留棚は最長 ${Math.max(...waits)}日 止まっています`);
-      if (mine) parts.push(`AIロボ：あなたの回答・判定待ちが ${mine}件 あります`);
+      if (waits.length) parts.push(`保留室は最長 ${Math.max(...waits)}日 止まっています`);
+      if (mine) parts.push(`AIラボ：あなたの回答・判定待ちが ${mine}件 あります`);
       if (d) parts.push(`第${d.no}回 診断「${d.verdict}」　改善：${d.next}`);
       const lg = S.logs[0]; if (lg) parts.push(`最新の作業日報　${lg.event}：${lg.name}`);
     }
@@ -827,6 +913,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       <b data-count="${value}">0</b><span>${label}（${unit}）</span></div>`;
   }
   function renderOps(view) {
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-tab="map">‹ フロア</button><h2>管理室　<span>生産管理（診断・作業日報）</span></h2></div>`);
     const d = S.diag.at(-1);
     const ok = d && /壊れない/.test(d.verdict);
     const late = lateCount();
@@ -877,7 +964,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     requestAnimationFrame(step);
   }
 
-  // ================= 受注（目標とプロジェクト） =================
+  // ================= 営業室（目標とプロジェクト） =================
   function projStats(p) {
     const open = S.tasks.filter((t) => t.projects.includes(p.id) && t.status !== ST.done && t.status !== ST.ref);
     const done = Math.max(0, p.total - open.length);
@@ -895,7 +982,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const rest = S.projects.filter((p) => !used.has(p.id) && !p.status.includes("完了"));
     if (rest.length) { flat.push({ k: "g", g: { name: "受注先（目標）がまだないロット", status: "", area: "", id: "" } }); rest.forEach((p, j) => flat.push({ k: "p", p, c: PJ_COLORS[j % PJ_COLORS.length] })); }
     const live = goals.filter((g) => /挑戦中/.test(g.status)).length;
-    view.insertAdjacentHTML("beforeend", `<div class="crumb"><h2>受注　<span>目標＝受注、プロジェクト＝製造ロット（箱の位置＝完成度）　挑戦中 ${live}</span></h2></div><div class="stack" id="goalstack"></div><div class="pager-dots" id="goaldots"></div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-tab="map">‹ フロア</button><h2>営業室　<span>目標＝受注、プロジェクト＝製造ロット（箱の位置＝完成度）　挑戦中 ${live}</span></h2></div><div class="stack" id="goalstack"></div><div class="pager-dots" id="goaldots"></div>`);
     const box = $("#goalstack", view);
     if (!flat.length) { box.outerHTML = `<div class="empty">${esc(S.extraErr.goal || "目標・プロジェクトはまだありません")}</div>`; return; }
     fill(box, "goal", flat, 36, (x, i) => {
@@ -911,7 +998,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     requestAnimationFrame(() => requestAnimationFrame(() => { for (const t of box.querySelectorAll(".train")) t.style.left = `${t.dataset.left}%`; }));
   }
 
-  // ================= 倉庫（すべてのDB） =================
+  // ================= 資材倉庫（すべてのDB） =================
   function initDbs() {
     const names = store.get("dbnames") || {};
     S.dbs = SECTIONS.flatMap(([sec, items]) => items.map(([id, name]) => ({ id, name: name || names[id] || "", sec })));
@@ -961,7 +1048,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const lines = netLines();
     const L = S.netLine && lines.find((l) => l.sec === S.netLine);
     if (!L) {
-      view.insertAdjacentHTML("beforeend", `<div class="crumb"><h2>倉庫　<span>🗄 データベース ページの ${S.dbs.length} 品目・${lines.length} 棚</span></h2></div><div class="stack" id="netstack"></div><div class="pager-dots" id="netdots"></div>`);
+      view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-tab="map">‹ フロア</button><h2>資材倉庫　<span>🗄 データベース ページの ${S.dbs.length} 品目・${lines.length} 棚</span></h2></div><div class="stack" id="netstack"></div><div class="pager-dots" id="netdots"></div>`);
       fill($("#netstack", view), "net", lines, 40, (l, i) => {
         const n = l.dbs.length;
         const stops = l.dbs.map((_, j) => `<i style="left:${n === 1 ? 50 : 4 + (j * 92) / (n - 1)}%"></i>`).join("");
@@ -969,7 +1056,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       }, $("#netdots", view));
       return;
     }
-    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-line="">‹ 倉庫</button><span class="lb" style="--lc:var(${L.c})">${L.code}</span><h2>${esc(L.sec)}</h2></div><div class="strip" id="strip" style="--lc:var(${L.c})"></div><div class="pager-dots" id="stripdots"></div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="crumb"><button type="button" data-line="">‹ 資材倉庫</button><span class="lb" style="--lc:var(${L.c})">${L.code}</span><h2>${esc(L.sec)}</h2></div><div class="strip" id="strip" style="--lc:var(${L.c})"></div><div class="pager-dots" id="stripdots"></div>`);
     fill($("#strip", view), `line:${L.sec}`, L.dbs, 40, (d, i) => `<button type="button" class="sta-row" style="--i:${i}" data-db="${d.id}"><i></i><b>${esc(d.name || "…")}</b><span class="code">${L.code}-${String(L.dbs.indexOf(d) + 1).padStart(2, "0")}</span></button>`, $("#stripdots", view));
   }
 
@@ -1155,7 +1242,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     if (L.kind === "task") {
       const t = known.get(L.id); const s = stationOfTask(t);
       const p = S.projects.find((x) => t.projects.includes(x.id));
-      return `<dl class="fields"><dt>工程</dt><dd>${esc(s.name)}（${esc(s.sub)}・${s.code}）　<span style="color:var(--sub)">${esc(t.status)}${t.ai ? ` ${esc(t.ai)}` : ""}</span></dd>
+      return `<dl class="fields"><dt>いまの部屋</dt><dd>${esc(s.name)}（${esc(s.sub)}・${s.code}）　<span style="color:var(--sub)">${esc(t.status)}${t.ai ? ` ${esc(t.ai)}` : ""}</span></dd>
         <dt>次の作業</dt><dd class="big">${esc(t.next || "—")}</dd><dt>日付</dt><dd>${t.date ? `${md(t.date)}(${WD[dow(t.date)]})` : "—"}　ライン ${esc(t.waku || "—")}　品種 ${esc((KIND[t.weight] || ["—"])[0])}（${esc(t.weight || "—")}）　${esc(t.tag || "")}</dd>
         ${p ? `<dt>ロット</dt><dd>${esc(p.name)}</dd>` : ""}${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link.slice(0, 60))}</a></dd>` : ""}</dl>`;
     }
@@ -1191,7 +1278,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     const t = L.kind === "task" ? known.get(L.id) : null;
     const s = t ? stationOfTask(t) : null;
     const tc = s ? s.c : L.kind === "proj" || L.sub === "goal" ? "--l-proj" : L.sub === "diag" || L.sub === "log" ? "--l-today" : "--l-plan";
-    const kicker = t ? `<span class="code">${s.code}</span>作業伝票　工程：${esc(s.name)}（${esc(s.sub)}）` : L.kind === "proj" ? `<span class="code">PJ</span>製造ロット（プロジェクト）` : L.sub === "goal" ? `<span class="code">受</span>受注（目標）` : L.sub === "diag" ? `<span class="code">診</span>生産管理（診断）` : L.sub === "log" ? `<span class="code">LOG</span>作業日報` : `<span class="code">DB</span>${esc(S.dbOpen?.name || "")}`;
+    const kicker = t ? `<span class="code">${s.code}</span>作業伝票　いまの部屋：${esc(s.name)}（${esc(s.sub)}）` : L.kind === "proj" ? `<span class="code">PJ</span>製造ロット（プロジェクト）` : L.sub === "goal" ? `<span class="code">受</span>受注（目標）` : L.sub === "diag" ? `<span class="code">診</span>生産管理（診断）` : L.sub === "log" ? `<span class="code">LOG</span>作業日報` : `<span class="code">DB</span>${esc(S.dbOpen?.name || "")}`;
     const views = L.kind === "proj" ? [["fields", "子タスク"], ["body", "本文"], ["write", "書く"]] : [["body", "本文"], ["fields", "項目"], ["write", "書く"]];
     const fresh = sh.dataset.id !== L.id;
     sh.dataset.id = L.id;
@@ -1333,7 +1420,7 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
       <div class="tbody"><div class="write"><label for="n-name">やること（名前）</label><input id="n-name" type="text" maxlength="200" placeholder="例）郵便受けの対策を決める">
       <label for="n-next">次の一手（なくてもよい）</label><input id="n-next" type="text" maxlength="200">
       <label for="n-memo">メモ（本文に入ります）</label><textarea id="n-memo" aria-label="メモ"></textarea>
-      <label>投入する工程</label><div class="xfer" id="n-where">${[["inbox", "受入（倉庫）", "--l-inbox"], ["next", "仕分け（次にやる）", "--l-next"], ["today", "加工（今日やる）", "--l-today"], ["tomorrow", "予定棚（明日）", "--l-plan"]].map(([k, n, c]) => `<button type="button" data-where="${k}" class="${k === "inbox" ? "pri" : ""}" style="--xc:var(${c})"><i></i>${n}</button>`).join("")}</div>
+      <label>運び込む部屋</label><div class="xfer" id="n-where">${[["inbox", "受入室（倉庫）", "--l-inbox"], ["next", "仕分け室（次にやる）", "--l-next"], ["today", "加工室（今日やる）", "--l-today"], ["tomorrow", "予定倉庫（明日）", "--l-plan"]].map(([k, n, c]) => `<button type="button" data-where="${k}" class="${k === "inbox" ? "pri" : ""}" style="--xc:var(${c})"><i></i>${n}</button>`).join("")}</div>
       <div class="acts"><button type="button" class="pri" data-create="1">書き込む</button><button type="button" data-close="1">やめる</button></div></div></div></div>`;
     sh.hidden = false;
     setTimeout(() => $("#n-name")?.focus(), 60);
@@ -1403,11 +1490,12 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
   // ================= 操作 =================
   document.addEventListener("click", (e) => { if (swipe.suppress) { e.stopPropagation(); e.preventDefault(); } }, true);
   document.addEventListener("click", (e) => {
-    const el = e.target.closest("button, [data-open], [data-dbrow], [data-db], [data-station], [data-proj-open], [data-goal], [data-diag], [data-log], [data-line]");
+    const el = e.target.closest("button, [data-open], [data-dbrow], [data-db], [data-station], [data-room], [data-proj-open], [data-goal], [data-diag], [data-log], [data-line]");
     if (!el) { if (e.target.id === "sheet") closeSheet(); return; }
     const ds = el.dataset;
     if (ds.tab) { S.tab = ds.tab; if (ds.tab !== "net") S.dbOpen = null; render(); return; }
     if (ds.station) { S.station = ds.station; render(); return; }
+    if (ds.room) { enterRoom(el, ds.room); return; }
     if (ds.act) { e.stopPropagation(); act(ds.id, ds.act); return; }
     if (ds.projOpen) { openProject(ds.projOpen); return; }
     if (ds.goal) { openPage("goal", ds.goal); return; }
@@ -1428,9 +1516,18 @@ nav button[aria-pressed="true"] i { transform: scale(1.15); background: var(--nc
     if (ds.create) { createTask(); return; }
     if (ds.open) { openTask(ds.open); return; }
   });
+  // 部屋をタップすると、その部屋に寄っていくように拡大してから中に入る
+  function enterRoom(el, tab) {
+    const view = $(".view", main);
+    if (reduce || !view) { S.tab = tab; render(); return; }
+    const r = el.getBoundingClientRect(), v = view.getBoundingClientRect();
+    view.style.transformOrigin = `${r.left + r.width / 2 - v.left}px ${r.top + r.height / 2 - v.top}px`;
+    view.classList.add("zoom");
+    setTimeout(() => { S.tab = tab; render(); }, 300);
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeSheet();
-    if (e.key === "Enter" && e.target.matches("[data-open], [data-dbrow], [data-db], [data-station], [data-proj-open], [data-goal], [data-diag], [data-log]")) { e.preventDefault(); e.target.click(); }
+    if (e.key === "Enter" && e.target.matches("[data-open], [data-dbrow], [data-db], [data-station], [data-room], [data-proj-open], [data-goal], [data-diag], [data-log]")) { e.preventDefault(); e.target.click(); }
   });
   document.addEventListener("input", (e) => {
     if (e.target.id !== "dbq") return;
