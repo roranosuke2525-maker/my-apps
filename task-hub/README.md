@@ -69,3 +69,7 @@ Notion 連携がないところ（ブラウザで直接開くなど）では、�
 ## 別案集
 
 `concepts.html`：別のコンセプト5案（水族館・天気図・夜の街・工場・庭）を見本データで動かして比べる試作。Notion にはつながない。公開先：[今どこ 別案集](https://claude.ai/artifact/LSNKBt5nQUNxufCzLYG8BV)
+
+## UIコンペ
+
+`compe.html`：10案を同じ基準（6区分がひと目・スクロールなし・診断と全DB・本文・動き・飽きにくさ・毎日の速さ）で採点し、入賞3案（ベント・ボード／タイムライン・リバー／トリアージ・デッキ）を見本データで触れるようにした比較ページ。Notion にはつながない。公開先：[今どこ UIコンペ](https://claude.ai/artifact/5tp69XYqLdVj3LgzZ6dhYX)
