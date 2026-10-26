@@ -103,7 +103,7 @@ test("ねんね記録は月齢の新しい順に、選択肢は DB の設定か�
   const { status, data } = await api("GET", "/api/sleep");
   assert.equal(status, 200);
   assert.deepEqual(data.options, { place: ["ベビーベッド", "布団（親と一緒）"], methods: ["抱っこ", "トントン", "ひとりで"], who: ["自分", "妻"] });
-  assert.deepEqual(data.records.map((r) => r.month), [9, 8, null]);
+  assert.deepEqual(data.records.map((r) => r.month), [9, 8, 7]);
   const r8 = data.records[1];
   assert.deepEqual([r8.place, r8.methods, r8.bed, r8.night, r8.naps, r8.date], ["ベビーベッド", ["抱っこ", "トントン"], "20:00", 3, null, "2026-09-20"]);
 });
@@ -143,4 +143,35 @@ test("ねんね記録はおかしな値を書かない", async () => {
   ];
   for (const b of bad) assert.equal((await api("PUT", "/api/sleep", b)).status, 400, JSON.stringify(b));
   assert.ok(!mcp.calls.some((c) => c.name === "notion-update-page" || c.name === "notion-create-pages"));
+});
+
+test("本文を読み、変わったときだけ書き換える（表などを含む本文は書き換えない）", async () => {
+  const { api, mcp } = setup();
+  await api("GET", "/api/sleep");
+  const b8 = await api("GET", `/api/sleep/${hex(31)}/body`);
+  assert.deepEqual(b8.data, { body: "寝る前に絵本1冊。\n\n電気は真っ暗に", editable: true });
+  assert.deepEqual((await api("GET", `/api/sleep/${hex(32)}/body`)).data, { body: "", editable: true });
+  const b7 = await api("GET", `/api/sleep/${hex(33)}/body`);
+  assert.equal(b7.data.editable, false);
+  assert.equal((await api("GET", `/api/sleep/${hex(99)}/body`)).status, 403);
+
+  // 同じ本文なら本文は書き換えない
+  await api("PUT", "/api/sleep", { month: 9, body: "" });
+  assert.ok(!mcp.calls.some((c) => c.input.command === "replace_content"));
+  // 変えたら書き換える。< > は全角に
+  const r = await api("PUT", "/api/sleep", { month: 9, body: "21時に就寝 <早め>\n- 白湯" });
+  assert.equal(r.status, 200);
+  const rc = mcp.calls.find((c) => c.input.command === "replace_content");
+  assert.deepEqual([rc.input.page_id, rc.input.new_str], [hex(32), "21時に就寝 ＜早め＞\n- 白湯"]);
+  // 表を含む本文は変えられない
+  assert.equal((await api("PUT", "/api/sleep", { month: 7, body: "上書き" })).status, 409);
+});
+
+test("新しい月の行は本文ごと作る", async () => {
+  const { api, mcp } = setup();
+  await api("GET", "/api/sleep");
+  await api("PUT", "/api/sleep", { month: 10, body: "はじめての寝返り" });
+  const c = mcp.calls.find((x) => x.name === "notion-create-pages");
+  assert.equal(c.input.pages[0].content, "はじめての寝返り");
+  assert.equal((await api("PUT", "/api/sleep", { month: 10, body: "あ".repeat(5001) })).status, 400);
 });

@@ -248,7 +248,23 @@ function sleepDraft(month) {
     place: base.place || "", methods: [...(base.methods || [])], who: base.who || "",
     bed: hhmm(base.bed), wake: hhmm(base.wake), night: base.night ?? "", naps: base.naps ?? "",
     good: same?.good || "", trouble: same?.trouble || "",
+    // 本文：既存の行はページから読む（読むまで書き換えない）。新しい行は空から
+    id: same?.id || null, body: "", bodyLoaded: !same, bodyEditable: true, bodyUrl: same?.url || "",
   };
+}
+
+async function loadSleepBody(draft) {
+  if (!draft.id || draft.bodyLoaded) return;
+  $("#sl-body-note").textContent = "本文を読み込み中…";
+  try {
+    const { body, editable } = await api(`/api/sleep/${draft.id}/body`);
+    if (state.draft !== draft) return;
+    Object.assign(draft, { body, bodyLoaded: true, bodyEditable: editable });
+    $("#sl-body").value = body;
+  } catch (err) {
+    if (state.draft === draft) draft.bodyError = err.message;
+  }
+  if (state.draft === draft) renderSleepForm();
 }
 
 function chipGroup(box, options, isOn, toggle) {
@@ -263,6 +279,11 @@ function renderSleepForm() {
   chipGroup($("#sl-place"), opts.place, (o) => d.place === o, (o) => { d.place = d.place === o ? "" : o; });
   chipGroup($("#sl-methods"), opts.methods, (o) => d.methods.includes(o), (o) => { d.methods = d.methods.includes(o) ? d.methods.filter((x) => x !== o) : [...d.methods, o]; });
   chipGroup($("#sl-who"), opts.who, (o) => d.who === o, (o) => { d.who = d.who === o ? "" : o; });
+  const area = $("#sl-body");
+  area.disabled = !d.bodyLoaded || !d.bodyEditable;
+  $("#sl-body-note").replaceChildren(
+    d.bodyError ? `本文を読めませんでした：${d.bodyError}` : !d.bodyLoaded ? "本文を読み込み中…" : !d.bodyEditable ? "表や画像などを含むので、本文は Notion で直してください。" : "",
+    d.bodyUrl && (d.bodyError || (d.bodyLoaded && !d.bodyEditable)) ? el("a", { href: d.bodyUrl, target: "_blank", rel: "noopener", style: "margin-left:6px;color:var(--accent)" }, "Notion で開く") : "");
 }
 
 function renderSleep(today) {
@@ -277,7 +298,8 @@ function renderSleep(today) {
   form.hidden = false;
   if (!state.draft || state.draft.month !== month) {
     state.draft = sleepDraft(month);
-    for (const k of ["bed", "wake", "night", "naps", "good", "trouble"]) $(`#sl-${k}`).value = state.draft[k];
+    for (const k of ["bed", "wake", "night", "naps", "good", "trouble", "body"]) $(`#sl-${k}`).value = state.draft[k];
+    loadSleepBody(state.draft);
   }
   renderSleepForm();
   const recs = state.sleep.records.filter((r) => r.month != null);
@@ -303,10 +325,12 @@ async function saveSleepForm(e) {
   const d = state.draft;
   if (!d) return;
   for (const k of ["bed", "wake", "night", "naps", "good", "trouble"]) d[k] = $(`#sl-${k}`).value;
+  // 本文は読み込めて、文字だけのときに送る（それ以外は Notion の本文に触らない）
+  const payload = { ...d, body: d.bodyLoaded && d.bodyEditable ? $("#sl-body").value : undefined };
   const btn = $("#sl-save");
   btn.disabled = true;
   try {
-    state.sleep = await api("/api/sleep", { method: "PUT", body: d });
+    state.sleep = await api("/api/sleep", { method: "PUT", body: payload });
     state.draft = null;
     setStatus(`${monthLabel(d.month)}のねんねを記録しました`);
   } catch (err) {

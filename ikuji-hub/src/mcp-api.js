@@ -27,6 +27,7 @@
   const TITLE_MAX = 100;
   const SLEEP_TEXT_MAX = 500;
   const SLEEP_MONTH_MAX = 72;
+  const SLEEP_BODY_MAX = 5000;
 
   // ---------- MCP 呼び出し ----------
   let mcpPromise = null;
@@ -202,6 +203,7 @@
 
   // ---------- ねんね（DB_ねんね記録） ----------
   const knownSleep = new Map(); // 月齢 → 行（書き換えは読み込んだ行だけ。同じ月齢は1行にまとめる）
+  const knownBody = new Map(); // ページID → { body, editable }（本文はこの画面で読んだものだけ書き換える）
   let sleepOptions = null;
 
   const list = (v) => {
@@ -246,6 +248,20 @@
     return { records, options };
   }
 
+  // 本文（ページの中身）。表・画像・子ページなど文字だけでないものがあれば、アプリでは書き換えない
+  async function getSleepBody(id) {
+    if (![...knownSleep.values()].some((r) => r.id === id)) throw apiError(403, "この画面で読み込んだねんね記録だけ開けます");
+    const res = await call("fetch", { id }, { read: true });
+    const raw = String(res.text || "").includes("<blank-page>") ? "" : (between(res.text, "content") || "");
+    const editable = !/<(?!br\s*\/?>)[a-z][^>]*>/i.test(raw);
+    const body = editable ? decode(raw.replace(/<br\s*\/?>/g, "\n")).trim() : text(raw);
+    knownBody.set(id, { body, editable });
+    return { body, editable };
+  }
+
+  // 文字はそのまま本文にする。< > はタグと読まれないよう全角にする
+  const bodyMarkdown = (t) => t.replace(/</g, "＜").replace(/>/g, "＞");
+
   async function saveSleep(body) {
     const opts = sleepOptions || (await loadSleepOptions());
     const month = Number(body?.month);
@@ -289,12 +305,25 @@
       うまくいったこと: note(body.good),
       困っていること: note(body.trouble),
     };
+    const newBody = typeof body.body === "string" ? body.body.replace(/\r\n/g, "\n").trim() : null;
+    if (newBody != null && newBody.length > SLEEP_BODY_MAX) throw apiError(400, `本文は${SLEEP_BODY_MAX}文字までです`);
     const known = knownSleep.get(month);
     if (known) {
+      // 本文は、読み込んだ本文から変わったときだけ書き換える（読んでいない・文字だけでない本文は触らない）
+      const loaded = knownBody.get(known.id);
+      const bodyChanged = newBody != null && loaded && newBody !== loaded.body;
+      if (bodyChanged && !loaded.editable) throw apiError(409, "この本文は表や画像などを含むので、Notion で直してください");
+      if (newBody != null && !loaded && newBody !== "") throw apiError(409, "本文を読み込んでから保存してください");
       await call("update", { page_id: known.id, command: "update_properties", properties, allow_async: false });
+      if (bodyChanged) {
+        await call("update", { page_id: known.id, command: "replace_content", new_str: bodyMarkdown(newBody), allow_async: false });
+        knownBody.set(known.id, { body: newBody, editable: true });
+      }
     } else {
       if (!sleepOptions) throw apiError(409, "先にねんね記録を読み込んでください");
-      await call("create", { parent: { type: "data_source_id", data_source_id: DS.sleep }, pages: [{ properties }], allow_async: false });
+      const page = { properties };
+      if (newBody) page.content = bodyMarkdown(newBody);
+      await call("create", { parent: { type: "data_source_id", data_source_id: DS.sleep }, pages: [page], allow_async: false });
     }
     return getSleep();
   }
@@ -377,6 +406,8 @@
     if (p === "/api/calendar" && method === "GET") return getCalendar();
     if (p === "/api/sleep" && method === "GET") return getSleep();
     if (p === "/api/sleep" && method === "PUT") return saveSleep(body);
+    const sleepBody = p.match(/^\/api\/sleep\/([0-9a-f]{32})\/body$/i);
+    if (sleepBody && method === "GET") return getSleepBody(sleepBody[1].toLowerCase());
     if (p === "/api/tasks" && method === "POST") return addTask(body);
     if (task && method === "PATCH") return setTaskStatus(task[1].toLowerCase(), body);
     throw apiError(404, "not found");

@@ -30,13 +30,19 @@ export function fakeNotionMcp() {
     [DS.sleep]: [
       { url: url(31), 名前: "生後8か月", 月齢: 8, "date:記録日:start": "2026-09-20", 寝る場所: "ベビーベッド", 寝かしつけ: '["抱っこ","トントン"]', 寝る時刻: "20:00", 夜中に起きる回数: 3 },
       { url: url(32), 名前: "生後9か月", 月齢: 9, "date:記録日:start": "2026-10-26" },
-      { url: url(33), 名前: "（テスト）" },
+      { url: url(33), 名前: "生後7か月", 月齢: 7 },
     ],
     [DS.aid]: [
       { url: url(21), 名前: "子ども医療費の受給者証", 申請状況: "申請中", ステータス: "進行中", 申請先: "市役所", 助成内容: "<p>\n通院・入院の自己負担 &amp; 薬代\n</p>", "date:期限:start": "2026-11-30" },
     ],
   };
   const calls = [];
+  // ページの本文（fetch で <content> として返す）
+  const bodies = {
+    [hex(31)]: "寝る前に絵本1冊。\n<br>電気は真っ暗に",
+    [hex(32)]: null, // 空のページ
+    [hex(33)]: '<table header-row="true">\n<tr><td>a</td></tr>\n</table>',
+  };
   const calendars = [
     { id: "ja.japanese#holiday@group.v.calendar.google.com", summary: "日本の祝日" },
     { id: "me@example.test", summary: "me" },
@@ -62,6 +68,7 @@ export function fakeNotionMcp() {
   const self = {
     calls,
     tables,
+    bodies,
     noCalendar: false,
     async callTool(server, name, input, opts) {
       calls.push({ server, name, input, opts });
@@ -73,6 +80,10 @@ export function fakeNotionMcp() {
       if (name === "notion-fetch" && input.id === `collection://${DS.sleep}`) {
         return { payload: { text: `<data-source url="collection://${DS.sleep}">\n<data-source-state>\n${JSON.stringify({ name: "DB_ねんね記録", schema: sleepSchema })}\n</data-source-state>\n</data-source>` } };
       }
+      if (name === "notion-fetch" && input.id in bodies) {
+        const b = bodies[input.id];
+        return { payload: { text: `<page url="${url(0)}">\n<properties>\n{}\n</properties>\n${b == null ? "<blank-page>This page is blank and has no content.</blank-page>" : `<content>\n${b}\n</content>`}\n</page>` } };
+      }
       if (name === "notion-query-data-sources") {
         const d = input.data;
         const rows = tables[d.data_source_url.replace("collection://", "")] || [];
@@ -82,6 +93,10 @@ export function fakeNotionMcp() {
         const row = { url: url(100 + calls.length), ...input.pages[0].properties };
         tables[input.parent.data_source_id].push(row);
         return { payload: { pages: [{ id: row.url.slice(-32), url: row.url }] } };
+      }
+      if (name === "notion-update-page" && input.command === "replace_content") {
+        bodies[input.page_id] = input.new_str;
+        return { payload: { page_id: input.page_id } };
       }
       if (name === "notion-update-page") {
         const row = Object.values(tables).flat().find((r) => r.url.endsWith(input.page_id));
