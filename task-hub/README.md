@@ -52,3 +52,7 @@ DB_タスク管理の「今どこ」の式を変えたら `index.html` の `lane
 ```
 
 Notion 連携がないところ（ブラウザで直接開くなど）では、（例）の付いた見本で動く。
+
+## 別案集
+
+`concepts.html`：別のコンセプト5案（水族館・天気図・夜の街・工場・庭）を見本データで動かして比べる試作。Notion にはつながない。公開先：[今どこ 別案集](https://claude.ai/artifact/LSNKBt5nQUNxufCzLYG8BV)

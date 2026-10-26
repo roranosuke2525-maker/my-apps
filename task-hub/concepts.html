@@ -1,0 +1,456 @@
+<title>今どこ 別案集</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* 別案を1枚ずつのカードにして横に並べる。カードの中心は動く試作（canvas）、下に「何を何に見立てるか」の対応表 */
+:root {
+  --bg: #f1f2f4;
+  --card: #ffffff;
+  --ink: #1d2128;
+  --sub: #646b77;
+  --rule: #d9dde3;
+  --accent: #2f62c9;
+  --good: #1f8a50;
+  --warn: #b7791f;
+  --f-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --f-num: "Barlow Condensed", "Arial Narrow", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #101318; --card: #1a1f27; --ink: #e8ebf0; --sub: #9aa3b0; --rule: #2c333e; --accent: #7aa5f2; --good: #5fcf8e; --warn: #f0b85a; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #101318; --card: #1a1f27; --ink: #e8ebf0; --sub: #9aa3b0; --rule: #2c333e; --accent: #7aa5f2; --good: #5fcf8e; --warn: #f0b85a; color-scheme: dark; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-weight: 500; font-size: 12px; line-height: 1.4; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; max-width: 720px; margin: 0 auto; }
+.top { padding: 8px max(12px, env(safe-area-inset-right, 0px)) 4px max(12px, env(safe-area-inset-left, 0px)); display: grid; gap: 6px; }
+.top h1 { margin: 0; font-size: 15px; font-weight: 900; display: flex; align-items: baseline; gap: 8px; }
+.top h1 span { font-size: 10.5px; font-weight: 500; color: var(--sub); }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.chips button { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card); color: var(--sub); white-space: nowrap; }
+.chips button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.viewport { overflow: hidden; min-height: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.track { display: flex; height: 100%; transition: transform .45s cubic-bezier(.2, .8, .2, 1); will-change: transform; }
+.card { flex: 0 0 100%; height: 100%; padding: 4px max(12px, env(safe-area-inset-right, 0px)) 4px max(12px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ch { display: flex; align-items: baseline; gap: 8px; }
+.ch .no { font-family: var(--f-num); font-weight: 700; font-size: 13px; color: var(--accent); }
+.ch h2 { margin: 0; font-size: 18px; font-weight: 900; }
+.ch .tag { font-size: 11px; color: var(--sub); }
+.lead { margin: 0; font-size: 11.5px; color: var(--sub); }
+.stage { position: relative; flex: 1; min-height: 180px; border-radius: 14px; overflow: hidden; background: #0d1520; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.poke { position: absolute; right: 8px; bottom: 8px; font-size: 11px; font-weight: 900; padding: 5px 10px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: #1d2128; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }
+.sample { position: absolute; left: 8px; bottom: 8px; font-size: 9.5px; padding: 2px 6px; border-radius: 4px; background: rgba(0, 0, 0, .45); color: #fff; }
+.mapping { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 11px; flex: none; background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 7px 10px; }
+.mapping dt { font-weight: 900; white-space: nowrap; }
+.mapping dd { margin: 0; color: var(--sub); min-width: 0; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: none; font-size: 10.5px; }
+.pc span { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 5px 8px; }
+.pc .good b { color: var(--good); } .pc .bad b { color: var(--warn); }
+
+/* 比べる */
+.cmp { flex: 1; min-height: 0; overflow: auto; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; }
+.cmp table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.cmp th, .cmp td { padding: 6px 6px; border-bottom: 1px solid var(--rule); text-align: center; white-space: nowrap; }
+.cmp th:first-child, .cmp td:first-child { text-align: left; }
+.cmp thead th { font-size: 10px; color: var(--sub); font-weight: 700; position: sticky; top: 0; background: var(--card); }
+.cmp td b { font-weight: 900; }
+.cmp .star { color: var(--warn); letter-spacing: -1px; }
+.cmp td.note { white-space: normal; text-align: left; color: var(--sub); font-size: 10.5px; min-width: 120px; }
+.ask { font-size: 11.5px; background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 10px; flex: none; }
+
+.foot { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 4px 0 8px; }
+.foot button { width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--rule); background: var(--card); font-size: 15px; }
+.foot button:disabled { opacity: .3; }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--rule); transition: width .2s; }
+.dots i.on { width: 18px; border-radius: 3px; background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .track { transition: none; } }
+</style>
+
+<div id="app">
+  <div class="top">
+    <h1>今どこ 別案集<span>どれも見本のデータで動いています　左右スワイプで切り替え</span></h1>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="viewport" id="vp"><div class="track" id="track"></div></div>
+  <div class="foot"><button type="button" id="prev" aria-label="前の案">‹</button><div class="dots" id="dots"></div><button type="button" id="next" aria-label="次の案">›</button></div>
+</div>
+
+<script>
+(() => {
+  // ================= 見本のデータ（全案共通） =================
+  const D = {
+    today: 4, late: 1, plan: 3, next: 4, inbox: 8, wait: 2, ai: 3, done: 2,
+    proj: [{ n: "書斎", p: 0.83 }, { n: "外構", p: 0.78 }, { n: "タスクアプリ", p: 0.25 }],
+    diag: [0.20, 0.49, 0.31, 0.35],
+    areas: [["家", 9, 1], ["お金", 4, 1], ["子ども", 5, 0], ["健康", 3, 0], ["学び", 6, 0], ["仕組み", 7, 2]], // [名前, 未完了, 遅れ]
+    secs: [["タスク", 6], ["AI", 1], ["お金", 4], ["アカウント", 3], ["料理", 5], ["習慣", 7], ["暮らし", 6], ["家族", 3], ["記録", 6], ["コーヒー", 7], ["ニュース", 2]],
+  };
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const TAU = Math.PI * 2;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const ease = (k) => (k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
+  function label(c, text, x, y, { size = 11, color = "#fff", align = "left", weight = 700, bg } = {}) {
+    c.font = `${weight} ${size}px "Zen Kaku Gothic New", system-ui, sans-serif`;
+    c.textAlign = align; c.textBaseline = "middle";
+    if (bg) { const w = c.measureText(text).width + 10; const x0 = align === "center" ? x - w / 2 : align === "right" ? x - w + 5 : x - 5; c.fillStyle = bg; c.beginPath(); c.roundRect(x0, y - size * .75, w, size * 1.5, 5); c.fill(); }
+    c.fillStyle = color; c.fillText(text, x, y);
+  }
+
+  // ================= 案1 水族館 =================
+  const aquarium = {
+    id: "aqua", title: "水族館", tag: "今どこ水槽", desc: "タスクは魚。泳ぐ深さが今どこ。大きさ＝重さ、赤く光るのは遅れ。見ていて和む・眺めて全体がつかめる。",
+    map: [["今どこ", "水面＝今日やる／中層＝次にやる・予定（色違い）／海底＝倉庫／小瓶＝待ち／クラゲ＝AI"], ["済み", "泡になって水面へ上っていく"], ["診断", "左の水質計（透明度＝今日やる完了率）、濁ると水が曇る"], ["全DB", "奥に並ぶ小さな水槽＝路線。タップでその水槽を正面に"]],
+    good: "眺めているだけで状態が分かる。いちばん癒やし系", bad: "細かい件数・名前は水槽をタップしてから",
+    init(w, h) {
+      const layer = (k) => ({ today: [.16, .30], plan: [.40, .52], next: [.48, .60], inbox: [.70, .82] })[k];
+      const fish = [];
+      const add = (k, n, color) => { for (let i = 0; i < n; i++) { const [a, b] = layer(k); fish.push({ k, x: rnd(70, w - 50), y0: rnd(a, b) * h, ty: null, amp: rnd(4, 10), sp: rnd(18, 34) * (Math.random() < .5 ? -1 : 1), sz: rnd(7, 14), ph: rnd(0, TAU), color, late: k === "today" && i < D.late }); } };
+      add("today", D.today, "#ffb347"); add("plan", D.plan, "#7fd3ff"); add("next", D.next, "#ff7a7a"); add("inbox", D.inbox, "#c7c2b8");
+      fish.filter((f) => f.k === "inbox").forEach((f) => { f.sp *= 0.4; f.sz *= 0.75; });
+      return { fish, bubbles: [], jelly: Array.from({ length: D.ai }, (_, i) => ({ x: w * (0.3 + i * 0.18), y: h * rnd(.3, .6), ph: rnd(0, TAU) })), t0: 0, moved: null };
+    },
+    draw(c, w, h, t, s) {
+      const clear = D.diag.at(-1); // 透明度
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#1f8fd1"); g.addColorStop(.5, "#0e5b95"); g.addColorStop(1, "#06243f");
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      // 光の筋
+      c.save(); c.globalAlpha = .08;
+      for (let i = 0; i < 4; i++) { const x = w * (.2 + i * .22) + Math.sin(t * .4 + i) * 20; c.fillStyle = "#fff"; c.beginPath(); c.moveTo(x - 12, 0); c.lineTo(x + 12, 0); c.lineTo(x + 60, h); c.lineTo(x + 20, h); c.fill(); }
+      c.restore();
+      // 奥の小さな水槽（全DB＝路線）
+      D.secs.forEach(([n, k], i) => { const x = 66 + i * ((w - 80) / D.secs.length); c.fillStyle = "rgba(255,255,255,.06)"; c.fillRect(x, h * .05, (w - 80) / D.secs.length - 4, 16 + k * 2); });
+      // 水面のゆらぎ
+      c.strokeStyle = "rgba(255,255,255,.5)"; c.lineWidth = 1.5; c.beginPath();
+      for (let x = 0; x <= w; x += 6) c.lineTo(x, h * .1 + Math.sin(x / 22 + t * 1.6) * 3); c.stroke();
+      // 砂と海藻
+      c.fillStyle = "#c9b183"; c.beginPath(); c.moveTo(0, h); for (let x = 0; x <= w; x += 10) c.lineTo(x, h * .9 + Math.sin(x / 40) * 5); c.lineTo(w, h); c.fill();
+      for (let i = 0; i < 9; i++) { const x = 40 + i * (w / 9); c.strokeStyle = "#2f8f5b"; c.lineWidth = 4; c.lineCap = "round"; c.beginPath(); c.moveTo(x, h * .93); for (let k = 1; k <= 6; k++) c.lineTo(x + Math.sin(t * 1.2 + i + k * .6) * k * 1.6, h * .93 - k * 9); c.stroke(); }
+      // 層の名前
+      [["水面＝今日やる", .22, D.today], ["中層＝次にやる・予定", .5, D.next + D.plan], ["海底＝倉庫", .76, D.inbox]].forEach(([n, y, k]) => label(c, `${n} ${k}`, w - 8, h * y, { size: 10, align: "right", color: "rgba(255,255,255,.75)" }));
+      // クラゲ（AI）
+      s.jelly.forEach((j, i) => { const y = j.y + Math.sin(t * .8 + j.ph) * 14; c.fillStyle = "rgba(220,170,255,.55)"; c.beginPath(); c.arc(j.x, y, 10, Math.PI, 0); c.fill(); c.strokeStyle = "rgba(220,170,255,.5)"; c.lineWidth = 1.5; for (let k = -1; k <= 1; k++) { c.beginPath(); c.moveTo(j.x + k * 5, y); c.quadraticCurveTo(j.x + k * 5 + Math.sin(t * 3 + k) * 4, y + 10, j.x + k * 5, y + 18); c.stroke(); } });
+      // 魚
+      for (const f of s.fish) {
+        f.x += f.sp * s.dt; if (f.x < 70 || f.x > w - 30) { f.sp *= -1; f.x = Math.max(70, Math.min(w - 30, f.x)); }
+        if (f.ty != null) { f.y0 = lerp(f.y0, f.ty, .04); if (Math.abs(f.y0 - f.ty) < 1) { f.ty = null; } }
+        const jit = f.late ? Math.sin(t * 12) * 2 : 0;
+        const y = f.y0 + Math.sin(t * 1.6 + f.ph) * f.amp + jit; const dir = Math.sign(f.sp);
+        c.save(); c.translate(f.x, y); c.scale(dir, 1);
+        if (f.late) { c.shadowColor = "#ff3b3b"; c.shadowBlur = 12 + Math.sin(t * 6) * 6; }
+        c.fillStyle = f.late ? "#ff5a4a" : f.color;
+        c.beginPath(); c.ellipse(0, 0, f.sz, f.sz * .55, 0, 0, TAU); c.fill();
+        c.beginPath(); c.moveTo(-f.sz * .8, 0); c.lineTo(-f.sz * 1.5, -f.sz * .5 + Math.sin(t * 8 + f.ph) * 2); c.lineTo(-f.sz * 1.5, f.sz * .5 + Math.sin(t * 8 + f.ph) * 2); c.fill();
+        c.shadowBlur = 0; c.fillStyle = "#08131f"; c.beginPath(); c.arc(f.sz * .5, -f.sz * .12, 1.6, 0, TAU); c.fill();
+        c.restore();
+      }
+      // 待ちの小瓶
+      const jx = w - 54, jy = h * .62; c.strokeStyle = "rgba(255,255,255,.7)"; c.lineWidth = 2; c.beginPath(); c.roundRect(jx, jy, 40, 46, 8); c.stroke();
+      for (let i = 0; i < D.wait; i++) { c.fillStyle = "#e3c27a"; c.beginPath(); c.ellipse(jx + 12 + i * 14, jy + 26 + Math.sin(t * 2 + i) * 4, 5, 3, 0, 0, TAU); c.fill(); }
+      label(c, `待ち ${D.wait}`, jx + 20, jy - 8, { size: 9.5, align: "center", color: "#fff" });
+      // 済みの泡
+      if (Math.random() < s.dt * 1.2) s.bubbles.push({ x: rnd(80, w - 80), y: h * .9, r: rnd(2, 5) });
+      s.bubbles.forEach((b) => { b.y -= 40 * s.dt; b.x += Math.sin(b.y / 10) * .3; c.strokeStyle = "rgba(255,255,255,.7)"; c.lineWidth = 1; c.beginPath(); c.arc(b.x, b.y, b.r, 0, TAU); c.stroke(); });
+      s.bubbles = s.bubbles.filter((b) => b.y > h * .1);
+      // 水質計（診断）
+      c.fillStyle = "rgba(0,0,0,.35)"; c.beginPath(); c.roundRect(10, h * .16, 40, h * .62, 8); c.fill();
+      c.fillStyle = "#6fe0ff"; const lv = h * .56 * clear; c.beginPath(); c.roundRect(18, h * .19 + h * .56 - lv, 24, lv, 5); c.fill();
+      label(c, "水質", 30, h * .16 - 9, { size: 9.5, align: "center" }); label(c, `${Math.round(clear * 100)}%`, 30, h * .8, { size: 11, align: "center" });
+      // 濁り
+      c.fillStyle = `rgba(90,110,90,${(0.5 - clear) * .35})`; c.fillRect(0, 0, w, h);
+    },
+    poke(s, w, h) { const f = s.fish.find((x) => x.k === "next" && x.ty == null); if (f) { f.k = "today"; f.color = "#ffb347"; f.ty = h * rnd(.17, .28); } return "次にやるの魚が、水面（今日やる）へ上がりました"; },
+  };
+
+  // ================= 案2 天気図 =================
+  const weather = {
+    id: "wx", title: "天気図", tag: "今どこ天気", desc: "暮らしの分野を地方に見立てた天気図。遅れが溜まると雨雲・雷、片付くと晴れ。風（粒）は倉庫から今日やるへ流れる。",
+    map: [["今どこ", "西（左）＝倉庫から東（右）＝今日やるへ吹く風。粒の数＝件数、東端の前線＝今日やる"], ["分野", "家・お金・子ども…が地方。未完了と遅れで 晴れ／くもり／雨／雷"], ["診断", "下の週間予報＝診断の回ごと（完了率で天気）"], ["全DB", "観測所の点＝DB。路線ごとに色分け"]],
+    good: "どの分野が荒れているか一瞬で分かる", bad: "1件ずつの操作は地方をタップしてから",
+    init(w, h) {
+      const n = D.inbox + D.next + D.plan + D.today;
+      return { parts: Array.from({ length: n * 6 }, () => ({ x: rnd(0, w), y: rnd(h * .1, h * .7), v: rnd(30, 70) })), regions: D.areas.map(([name, open, late], i) => ({ name, open, late, x: w * (.18 + (i % 3) * .32), y: h * (.24 + Math.floor(i / 3) * .3) })), flash: 0 };
+    },
+    draw(c, w, h, t, s) {
+      const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, "#dfe9f1"); g.addColorStop(1, "#c9d8e6"); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      // 等圧線（遅れの多いところが低気圧）
+      s.regions.forEach((r) => { if (!r.late) return; for (let k = 1; k <= 4; k++) { c.strokeStyle = "rgba(60,80,120,.35)"; c.lineWidth = 1; c.beginPath(); for (let a = 0; a <= TAU + .1; a += .2) { const rr = k * 16 + Math.sin(a * 3 + t + k) * 3; c.lineTo(r.x + Math.cos(a) * rr, r.y + Math.sin(a) * rr * .8); } c.stroke(); } label(c, "低", r.x - 30, r.y - 34, { size: 12, color: "#c0392b", weight: 900 }); });
+      // 風の粒
+      c.fillStyle = "rgba(40,90,170,.55)";
+      for (const p of s.parts) { p.x += p.v * s.dt; p.y += Math.sin(p.x / 50 + t) * .4; if (p.x > w) { p.x = 0; p.y = rnd(h * .1, h * .7); } c.fillRect(p.x, p.y, 3, 1.4); }
+      // 前線（今日やる）
+      c.strokeStyle = "#e0572b"; c.lineWidth = 3; c.beginPath(); for (let y = h * .08; y < h * .72; y += 4) c.lineTo(w - 26 + Math.sin(y / 18 + t * 2) * 5, y); c.stroke();
+      for (let y = h * .1; y < h * .7; y += 22) { c.fillStyle = "#e0572b"; c.beginPath(); c.arc(w - 26 + Math.sin(y / 18 + t * 2) * 5, y, 4, Math.PI / 2, -Math.PI / 2); c.fill(); }
+      label(c, `今日やる ${D.today}`, w - 34, h * .05, { size: 10, align: "right", color: "#b8441f" });
+      label(c, `倉庫 ${D.inbox}`, 8, h * .05, { size: 10, color: "#2f4f80" });
+      // 地方の天気
+      s.regions.forEach((r) => {
+        const kind = r.late >= 2 ? "thunder" : r.late ? "rain" : r.open > 6 ? "cloud" : "sun";
+        c.fillStyle = "rgba(255,255,255,.75)"; c.beginPath(); c.arc(r.x, r.y, 30, 0, TAU); c.fill();
+        icon(c, kind, r.x, r.y - 4, t, s);
+        label(c, `${r.name} ${r.open}${r.late ? `（遅${r.late}）` : ""}`, r.x, r.y + 22, { size: 10, align: "center", color: "#1d2128" });
+      });
+      // 観測所（全DB）
+      D.secs.forEach(([n, k], i) => { for (let j = 0; j < k; j++) { const x = 14 + ((i * 37 + j * 23) % (w - 28)), y = h * .74 + ((i * 13 + j * 7) % 14); c.fillStyle = `hsl(${i * 33},55%,45%)`; c.beginPath(); c.arc(x, y, 2.2, 0, TAU); c.fill(); } });
+      // 週間予報（診断）
+      const y0 = h * .8, cw = (w - 20) / D.diag.length;
+      D.diag.forEach((r, i) => { const x = 10 + i * cw; c.fillStyle = "rgba(255,255,255,.85)"; c.beginPath(); c.roundRect(x + 2, y0, cw - 4, h * .18, 8); c.fill(); icon(c, r >= .45 ? "sun" : r >= .3 ? "cloud" : "rain", x + cw / 2, y0 + h * .07, t, s, .6); label(c, `第${i + 1}回 ${Math.round(r * 100)}%`, x + cw / 2, y0 + h * .145, { size: 9.5, align: "center", color: "#1d2128" }); });
+    },
+    poke(s) { const r = s.regions.find((x) => x.late); if (r) r.late -= 1; return "遅れを1件片付けて、その地方の雨が弱まりました"; },
+  };
+  function icon(c, kind, x, y, t, s, k = 1) {
+    c.save(); c.translate(x, y); c.scale(k, k);
+    const cloud = (dx, col) => { c.fillStyle = col; c.beginPath(); c.arc(dx - 8, 2, 8, 0, TAU); c.arc(dx + 2, -3, 10, 0, TAU); c.arc(dx + 11, 3, 7, 0, TAU); c.fill(); };
+    if (kind === "sun") { c.strokeStyle = "#f2a516"; c.lineWidth = 2.5; for (let a = 0; a < 8; a++) { const r = a * TAU / 8 + t * .6; c.beginPath(); c.moveTo(Math.cos(r) * 13, Math.sin(r) * 13); c.lineTo(Math.cos(r) * 18, Math.sin(r) * 18); c.stroke(); } c.fillStyle = "#ffc23a"; c.beginPath(); c.arc(0, 0, 10, 0, TAU); c.fill(); }
+    if (kind === "cloud") cloud(Math.sin(t) * 3, "#9fb0c2");
+    if (kind === "rain" || kind === "thunder") {
+      cloud(0, kind === "thunder" ? "#5f6f82" : "#8494a7");
+      c.strokeStyle = "#3b7fd1"; c.lineWidth = 1.6; for (let i = 0; i < 4; i++) { const yy = ((t * 40 + i * 9) % 18) + 10; c.beginPath(); c.moveTo(-9 + i * 6, yy); c.lineTo(-11 + i * 6, yy + 5); c.stroke(); }
+      if (kind === "thunder" && (Math.sin(t * 3) > .93)) { c.fillStyle = "#ffd400"; c.beginPath(); c.moveTo(2, 4); c.lineTo(-4, 16); c.lineTo(1, 16); c.lineTo(-3, 26); c.lineTo(7, 12); c.lineTo(2, 12); c.fill(); }
+    }
+    c.restore();
+  }
+
+  // ================= 案3 夜の街 =================
+  const city = {
+    id: "city", title: "夜の街", tag: "今どこシティ", desc: "DBの路線はビル、窓の明かりは未完了のタスク。中央の「今どこタワー」は階が今どこ。プロジェクトはクレーン、済みは出口へ走る車。",
+    map: [["今どこ", "今どこタワーの階：最上階＝今日やる（瞬く）→予定→次にやる→1階＝倉庫。遅れは屋上の赤い灯"], ["プロジェクト", "工事中のビル。クレーンの高さ＝進み具合"], ["診断", "月の満ち欠け＝今日やる完了率"], ["全DB", "まわりのビル＝路線、高さ＝DBの数"]],
+    good: "情報量が多くても落ち着いて見える。夜に開くと気分が出る", bad: "ビルが多いと小さい画面では窮屈",
+    init(w, h) {
+      const bs = D.secs.map(([n, k], i) => ({ n, k, x: 0, w: 0, h: 30 + k * 13, win: Array.from({ length: k * 6 }, () => Math.random() < .55) }));
+      return { bs, cars: [], stars: Array.from({ length: 50 }, () => ({ x: rnd(0, w), y: rnd(0, h * .45), p: rnd(0, TAU) })), lift: null };
+    },
+    draw(c, w, h, t, s) {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#0b1430"); g.addColorStop(1, "#2a2350"); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      s.stars.forEach((st) => { c.fillStyle = `rgba(255,255,255,${.4 + Math.sin(t * 2 + st.p) * .3})`; c.fillRect(st.x, st.y, 1.6, 1.6); });
+      // 月（診断）
+      const r = D.diag.at(-1), mx = w - 40, my = 34;
+      c.fillStyle = "#fff3c4"; c.beginPath(); c.arc(mx, my, 16, 0, TAU); c.fill();
+      c.fillStyle = "#0e1735"; c.beginPath(); c.arc(mx - 32 * r + 6, my - 2, 16, 0, TAU); c.fill();
+      label(c, `完了率 ${Math.round(r * 100)}%`, mx, my + 26, { size: 9.5, align: "center", color: "#fff3c4" });
+      const ground = h * .84;
+      // まわりのビル（全DB）
+      const left = s.bs.slice(0, 6), right = s.bs.slice(6);
+      const place = (arr, x0, x1) => { const bw = (x1 - x0) / arr.length; arr.forEach((b, i) => { b.x = x0 + i * bw + 2; b.w = bw - 4; }); };
+      place(left, 4, w * .38); place(right, w * .62, w - 4);
+      for (const b of s.bs) {
+        c.fillStyle = "#1a2245"; c.fillRect(b.x, ground - b.h, b.w, b.h);
+        const cols = Math.max(2, Math.floor(b.w / 7)), rows = Math.floor((b.h - 8) / 9);
+        for (let rr = 0; rr < rows; rr++) for (let cc = 0; cc < cols; cc++) { const on = b.win[(rr * cols + cc) % b.win.length] && Math.sin(t * .3 + rr * 3.1 + cc * 1.7 + b.x) > -.8; c.fillStyle = on ? "rgba(255,214,120,.85)" : "rgba(255,255,255,.06)"; c.fillRect(b.x + 3 + cc * 7, ground - b.h + 5 + rr * 9, 4, 5); }
+        label(c, b.n, b.x + b.w / 2, ground + 8, { size: 8, align: "center", color: "rgba(255,255,255,.6)", weight: 500 });
+      }
+      // 今どこタワー
+      const tw = w * .2, tx = w / 2 - tw / 2;
+      const floors = [["今日やる", D.today, "#ffd166", true], ["予定", D.plan, "#7fc8ff"], ["次にやる", D.next, "#ff8f7a"], ["倉庫", D.inbox, "#c9c3b6"]];
+      const fh = (ground - h * .2) / floors.length;
+      c.fillStyle = "#222c58"; c.fillRect(tx, h * .2, tw, ground - h * .2);
+      floors.forEach(([n, k, col, blink], i) => {
+        const y = h * .2 + i * fh; c.strokeStyle = "rgba(255,255,255,.15)"; c.beginPath(); c.moveTo(tx, y); c.lineTo(tx + tw, y); c.stroke();
+        for (let j = 0; j < 8; j++) { const lit = j < k; const a = blink && lit ? .6 + Math.sin(t * 4 + j) * .4 : lit ? .95 : .08; c.fillStyle = lit ? col : "#fff"; c.globalAlpha = a; c.fillRect(tx + 6 + (j % 4) * (tw - 12) / 4, y + 8 + Math.floor(j / 4) * (fh / 2 - 4), (tw - 12) / 4 - 4, fh / 2 - 12); c.globalAlpha = 1; }
+        label(c, `${n} ${k}`, tx - 4, y + fh / 2, { size: 9.5, align: "right", color: col });
+      });
+      // 屋上の赤い灯（遅れ）
+      if (D.late) { c.fillStyle = `rgba(255,60,60,${.5 + Math.sin(t * 5) * .5})`; c.beginPath(); c.arc(w / 2, h * .2 - 8, 5, 0, TAU); c.fill(); label(c, `遅れ ${D.late}`, w / 2 + 10, h * .2 - 8, { size: 9.5, color: "#ff8080" }); }
+      // エレベーター（乗り換え）
+      if (s.lift) { s.lift.k = Math.min(1, s.lift.k + s.dt * .7); const y = lerp(s.lift.from, s.lift.to, ease(s.lift.k)); c.fillStyle = "#fff"; c.shadowColor = "#fff"; c.shadowBlur = 14; c.fillRect(tx + tw - 10, y, 6, 10); c.shadowBlur = 0; if (s.lift.k >= 1) s.lift = null; }
+      // クレーン（プロジェクト）
+      D.proj.forEach((p, i) => { const b = s.bs[[1, 7, 9][i]]; const top = ground - b.h; const ch = 26 + p.p * 40; c.strokeStyle = "#f5a623"; c.lineWidth = 2; c.beginPath(); c.moveTo(b.x + b.w / 2, top); c.lineTo(b.x + b.w / 2, top - ch); c.stroke(); const arm = 22, a = Math.sin(t * .6 + i) * .4; c.beginPath(); c.moveTo(b.x + b.w / 2 - 6, top - ch); c.lineTo(b.x + b.w / 2 + Math.cos(a) * arm, top - ch + Math.sin(a) * 4); c.stroke(); label(c, `${p.n} ${Math.round(p.p * 100)}%`, b.x + b.w / 2, top - ch - 8, { size: 8.5, align: "center", color: "#f5c46a" }); });
+      // 道路と車（済み＝出口へ、待ち＝路肩でハザード）
+      c.fillStyle = "#11152b"; c.fillRect(0, ground, w, h - ground);
+      c.strokeStyle = "rgba(255,255,255,.3)"; c.setLineDash([10, 10]); c.lineDashOffset = -t * 30; c.beginPath(); c.moveTo(0, ground + (h - ground) * .6); c.lineTo(w, ground + (h - ground) * .6); c.stroke(); c.setLineDash([]);
+      if (Math.random() < s.dt * .5) s.cars.push({ x: -20, sp: rnd(50, 80) });
+      s.cars.forEach((car) => { car.x += car.sp * s.dt; c.fillStyle = "#ffe08a"; c.fillRect(car.x, ground + (h - ground) * .62, 14, 6); c.fillStyle = "#ff5050"; c.fillRect(car.x - 1, ground + (h - ground) * .62 + 1, 2, 3); });
+      s.cars = s.cars.filter((car) => car.x < w + 20);
+      for (let i = 0; i < D.wait; i++) { const on = Math.sin(t * 6) > 0; c.fillStyle = "#6b7a99"; c.fillRect(20 + i * 22, ground + 4, 14, 6); c.fillStyle = on ? "#ffb000" : "#553"; c.fillRect(20 + i * 22, ground + 5, 2, 2); c.fillRect(32 + i * 22, ground + 5, 2, 2); }
+      label(c, `待ち ${D.wait}`, 20, ground + 18, { size: 8.5, color: "rgba(255,255,255,.7)", weight: 500 });
+      label(c, `出口＝済み ${D.done} →`, w - 6, h - 6, { size: 9, align: "right", color: "#9ff0c0" });
+    },
+    poke(s, w, h) { const fh = (h * .84 - h * .2) / 4; s.lift = { from: h * .2 + 2.5 * fh, to: h * .2 + .5 * fh, k: 0 }; D.next = Math.max(0, D.next - 1); D.today += 1; return "次にやるの窓の明かりが、エレベーターで最上階（今日やる）へ"; },
+  };
+
+  // ================= 案4 工場 =================
+  const factory = {
+    id: "fac", title: "工場", tag: "今どこ工場", desc: "タスクは箱。ベルトコンベアが倉庫→仕分け→加工（今日）→出荷（済み）へ運ぶ。詰まっている工程がひと目で分かる。",
+    map: [["今どこ", "受入（倉庫）→仕分け（次にやる）→予定棚→加工（今日やる）→出荷（済み）。箱の山＝件数"], ["待ち・AI", "待ち＝止まった保留棚（ランプ）、AI＝ロボットアーム"], ["診断", "上の計器：出荷率・不良（遅れ）・在庫（倉庫）。回ごとの推移は棒"], ["全DB", "奥の棚＝路線、段の数＝DB"]],
+    good: "流れと詰まり（ボトルネック）が一番よく分かる", bad: "見た目は機械的で、可愛さは少ない",
+    init() { return { boxes: [], gear: 0, mv: null }; },
+    draw(c, w, h, t, s) {
+      c.fillStyle = "#e9e4da"; c.fillRect(0, 0, w, h);
+      // 奥の棚（全DB）
+      D.secs.forEach(([n, k], i) => { const x = 8 + i * ((w - 16) / D.secs.length), bw = (w - 16) / D.secs.length - 4; c.fillStyle = "#d3ccbf"; c.fillRect(x, h * .04, bw, 36); for (let j = 0; j < k; j++) { c.fillStyle = `hsl(${i * 33},45%,55%)`; c.fillRect(x + 2 + (j % 4) * (bw / 4), h * .04 + 4 + Math.floor(j / 4) * 14, bw / 4 - 2, 10); } });
+      // 計器（診断）
+      const meters = [["出荷率", D.diag.at(-1), "#2f8a50"], ["不良（遅れ）", D.late / Math.max(1, D.today), "#c0392b"], ["在庫", D.inbox / 20, "#7b6f5d"]];
+      meters.forEach(([n, v, col], i) => { const cx = w * (.17 + i * .33), cy = h * .3; c.strokeStyle = "#cfc6b6"; c.lineWidth = 7; c.beginPath(); c.arc(cx, cy, 22, Math.PI, 0); c.stroke(); c.strokeStyle = col; c.beginPath(); c.arc(cx, cy, 22, Math.PI, Math.PI + Math.PI * Math.min(1, v) * (0.9 + Math.sin(t * 2 + i) * .03)); c.stroke(); label(c, `${Math.round(v * 100)}%`, cx, cy - 6, { size: 11, align: "center", color: "#333", weight: 900 }); label(c, n, cx, cy + 9, { size: 9, align: "center", color: "#555", weight: 500 }); });
+      // コンベア
+      const y = h * .62, x0 = 16, x1 = w - 16;
+      const st = [["受入\n倉庫", D.inbox, "#8c8577"], ["仕分け\n次", D.next, "#d2553f"], ["予定棚", D.plan, "#3a79c4"], ["加工\n今日", D.today, "#e3962b"], ["出荷\n済み", D.done, "#2f8a50"]];
+      c.fillStyle = "#4a4a4a"; c.fillRect(x0, y, x1 - x0, 10);
+      c.strokeStyle = "#777"; c.setLineDash([6, 6]); c.lineDashOffset = -t * 40; c.beginPath(); c.moveTo(x0, y + 5); c.lineTo(x1, y + 5); c.stroke(); c.setLineDash([]);
+      st.forEach(([n, k, col], i) => {
+        const cx = x0 + (i + .5) * (x1 - x0) / st.length;
+        // 機械と歯車
+        c.fillStyle = col; c.beginPath(); c.roundRect(cx - 22, y + 14, 44, 30, 6); c.fill();
+        c.save(); c.translate(cx, y + 29); c.rotate(t * (i === 3 && D.late ? .6 : 1.6) * (i % 2 ? -1 : 1)); c.fillStyle = "rgba(255,255,255,.85)"; for (let a = 0; a < 8; a++) { c.rotate(TAU / 8); c.fillRect(-2, -10, 4, 5); } c.beginPath(); c.arc(0, 0, 6, 0, TAU); c.fill(); c.restore();
+        n.split("\n").forEach((line, j) => label(c, line, cx, y + 54 + j * 12, { size: 9.5, align: "center", color: "#333", weight: j ? 500 : 900 }));
+        // 箱の山
+        for (let j = 0; j < Math.min(k, 10); j++) { const bx = cx - 16 + (j % 4) * 8, by = y - 9 - Math.floor(j / 4) * 9; c.fillStyle = i === 3 && j < D.late ? "#e04b3a" : "#c79a5b"; c.fillRect(bx, by, 7, 8); c.strokeStyle = "#8a6435"; c.strokeRect(bx, by, 7, 8); }
+        label(c, String(k), cx + 20, y - 18, { size: 11, color: col, weight: 900 });
+      });
+      // 流れる箱
+      if (Math.random() < s.dt * 1.4) s.boxes.push({ x: x0, sp: rnd(30, 45) });
+      s.boxes.forEach((b) => { b.x += b.sp * s.dt; c.fillStyle = "#c79a5b"; c.fillRect(b.x, y - 7, 7, 7); });
+      s.boxes = s.boxes.filter((b) => b.x < x1);
+      if (s.mv) { s.mv.k = Math.min(1, s.mv.k + s.dt * .8); const bx = lerp(s.mv.a, s.mv.b, ease(s.mv.k)); c.fillStyle = "#ffcf5a"; c.shadowColor = "#ffcf5a"; c.shadowBlur = 10; c.fillRect(bx, y - 22 - Math.sin(s.mv.k * Math.PI) * 18, 10, 10); c.shadowBlur = 0; if (s.mv.k >= 1) s.mv = null; }
+      // 保留棚（待ち）とロボットアーム（AI）
+      const sx = w * .08, sy = h * .86; c.fillStyle = "#bdb4a5"; c.fillRect(sx, sy, 60, 6); for (let i = 0; i < D.wait; i++) { c.fillStyle = "#c79a5b"; c.fillRect(sx + 6 + i * 12, sy - 9, 9, 9); }
+      c.fillStyle = Math.sin(t * 4) > 0 ? "#e04b3a" : "#5a2a24"; c.beginPath(); c.arc(sx + 54, sy - 6, 4, 0, TAU); c.fill(); label(c, `保留棚（待ち ${D.wait}）`, sx, sy + 14, { size: 9, color: "#555", weight: 500 });
+      const ax = w * .8, ay = h * .9, a1 = -1.2 + Math.sin(t * 1.2) * .5, a2 = a1 + .9 + Math.sin(t * 1.7) * .4;
+      c.strokeStyle = "#2a7c6f"; c.lineWidth = 6; c.lineCap = "round"; c.beginPath(); c.moveTo(ax, ay); const ex = ax + Math.cos(a1) * 30, ey = ay + Math.sin(a1) * 30; c.lineTo(ex, ey); c.lineTo(ex + Math.cos(a2) * 22, ey + Math.sin(a2) * 22); c.stroke();
+      label(c, `AI ${D.ai}`, ax + 14, ay - 4, { size: 9.5, color: "#2a7c6f", weight: 900 });
+    },
+    poke(s, w) { const x0 = 16, x1 = w - 16, step = (x1 - x0) / 5; s.mv = { a: x0 + 1.5 * step, b: x0 + 3.5 * step, k: 0 }; D.next = Math.max(0, D.next - 1); D.today += 1; return "仕分け（次にやる）の箱を、加工（今日やる）へ流しました"; },
+  };
+
+  // ================= 案5 庭 =================
+  const garden = {
+    id: "gdn", title: "庭", tag: "今どこガーデン", desc: "タスクは植物。倉庫は種、次にやるは芽、予定はつぼみ、今日やるは花。遅れた花はしおれる。済みは収穫かごへ。",
+    map: [["今どこ", "左から 種（倉庫）→芽（次にやる）→つぼみ（予定）→花（今日やる）→かご（済み）"], ["待ち・AI", "待ち＝雨雲の下の鉢、AI＝飛び回るミツバチ"], ["プロジェクト・目標", "奥の木＝プロジェクト（育ち具合＝進み）、太陽＝挑戦中の目標"], ["診断・全DB", "空の明るさ＝完了率。花壇の区画＝路線"]],
+    good: "育てる感覚で、毎日開きたくなる", bad: "数が増えると植物が密集して見分けにくい",
+    init(w, h) {
+      const beds = [["種", D.inbox, "seed"], ["芽", D.next, "sprout"], ["つぼみ", D.plan, "bud"], ["花", D.today, "flower"]];
+      const plants = [];
+      beds.forEach(([n, k, kind], i) => { for (let j = 0; j < k; j++) plants.push({ bed: i, kind, x: w * (.06 + i * .2) + (j % 4) * (w * .045) + rnd(-2, 2), row: Math.floor(j / 4), ph: rnd(0, TAU), wilt: kind === "flower" && j < D.late, hue: rnd(0, 360), grow: 1 }); });
+      return { beds, plants, bees: Array.from({ length: D.ai }, () => ({ ph: rnd(0, TAU), r: rnd(30, 60) })) };
+    },
+    draw(c, w, h, t, s) {
+      const r = D.diag.at(-1);
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `hsl(205,${50 + r * 40}%,${60 + r * 20}%)`); g.addColorStop(1, "#f6eedd"); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      // 太陽（目標）
+      c.fillStyle = "#ffd25a"; c.beginPath(); c.arc(w - 40, 36, 16 + Math.sin(t * 2) * 1.5, 0, TAU); c.fill(); label(c, "目標", w - 40, 62, { size: 9, align: "center", color: "#8a6a10" });
+      // 木（プロジェクト）
+      D.proj.forEach((p, i) => { const x = w * (.2 + i * .28), base = h * .55, th = 20 + p.p * 50; c.strokeStyle = "#7a5634"; c.lineWidth = 5; c.beginPath(); c.moveTo(x, base); c.lineTo(x, base - th); c.stroke(); c.fillStyle = `rgba(70,${130 + i * 20},80,.85)`; c.beginPath(); c.arc(x + Math.sin(t + i) * 2, base - th, 10 + p.p * 16, 0, TAU); c.fill(); label(c, `${p.n} ${Math.round(p.p * 100)}%`, x, base + 8, { size: 8.5, align: "center", color: "#3c5a2a" }); });
+      // 地面と花壇
+      const gy = h * .78;
+      c.fillStyle = "#8fbf6a"; c.fillRect(0, h * .55, w, gy - h * .55);
+      c.fillStyle = "#6b4a2e"; c.fillRect(0, gy, w, h - gy);
+      s.beds.forEach(([n, k], i) => { const x = w * (.04 + i * .2); c.fillStyle = "#5a3d24"; c.fillRect(x, gy - 4, w * .18, 8); label(c, `${n}（${["倉庫", "次にやる", "予定", "今日やる"][i]}）${k}`, x + w * .09, h - 10, { size: 9, align: "center", color: "#f4e6cf" }); });
+      // 植物
+      for (const p of s.plants) {
+        const base = gy - 2 - p.row * 16, sway = Math.sin(t * 1.4 + p.ph) * 3;
+        if (p.kind === "seed") { c.fillStyle = "#3b2a1a"; c.beginPath(); c.ellipse(p.x, base - 2, 3, 2, 0, 0, TAU); c.fill(); continue; }
+        const hgt = { sprout: 14, bud: 24, flower: 32 }[p.kind] * p.grow;
+        const tipX = p.x + sway * (p.wilt ? 0.3 : 1) + (p.wilt ? 8 : 0), tipY = base - hgt + (p.wilt ? 10 : 0);
+        c.strokeStyle = "#3f8a3a"; c.lineWidth = 2; c.beginPath(); c.moveTo(p.x, base); c.quadraticCurveTo(p.x, base - hgt * .6, tipX, tipY); c.stroke();
+        c.fillStyle = "#4fa04a"; c.beginPath(); c.ellipse(p.x + 4, base - hgt * .35, 4, 2, -.5, 0, TAU); c.fill();
+        if (p.kind === "bud") { c.fillStyle = "#e88aa6"; c.beginPath(); c.ellipse(tipX, tipY, 3, 5, 0, 0, TAU); c.fill(); }
+        if (p.kind === "flower") { const col = p.wilt ? "#b9a68f" : `hsl(${p.hue},75%,62%)`; for (let a = 0; a < 6; a++) { c.fillStyle = col; c.beginPath(); c.ellipse(tipX + Math.cos(a + t * .2) * 5, tipY + Math.sin(a + t * .2) * 5, 4, 2.5, a, 0, TAU); c.fill(); } c.fillStyle = p.wilt ? "#8a7a64" : "#ffd25a"; c.beginPath(); c.arc(tipX, tipY, 3, 0, TAU); c.fill(); }
+      }
+      if (D.late) label(c, `しおれ（遅れ）${D.late}`, w * .7, gy - 52, { size: 9, color: "#8a5a3a" });
+      // 収穫かご（済み）
+      const bx = w * .87, by = gy - 6; c.fillStyle = "#b07a3c"; c.beginPath(); c.moveTo(bx - 18, by - 12); c.lineTo(bx + 18, by - 12); c.lineTo(bx + 13, by + 6); c.lineTo(bx - 13, by + 6); c.fill();
+      for (let i = 0; i < D.done; i++) { c.fillStyle = "#e0473a"; c.beginPath(); c.arc(bx - 8 + i * 8, by - 14, 4, 0, TAU); c.fill(); }
+      label(c, `かご（済み）${D.done}`, bx, h - 10, { size: 9, align: "center", color: "#f4e6cf" });
+      // 雨雲と鉢（待ち）
+      const cx = w * .1, cy = h * .14; c.fillStyle = "#9aa6b5"; c.beginPath(); c.arc(cx - 8, cy, 9, 0, TAU); c.arc(cx + 4, cy - 4, 11, 0, TAU); c.arc(cx + 15, cy, 8, 0, TAU); c.fill();
+      c.strokeStyle = "#5b8fd6"; c.lineWidth = 1.3; for (let i = 0; i < 4; i++) { const yy = cy + 10 + ((t * 30 + i * 8) % 20); c.beginPath(); c.moveTo(cx - 8 + i * 6, yy); c.lineTo(cx - 9 + i * 6, yy + 4); c.stroke(); }
+      for (let i = 0; i < D.wait; i++) { c.fillStyle = "#b5653a"; c.fillRect(cx - 14 + i * 16, cy + 34, 12, 10); c.strokeStyle = "#3f8a3a"; c.beginPath(); c.moveTo(cx - 8 + i * 16, cy + 34); c.lineTo(cx - 8 + i * 16, cy + 26); c.stroke(); }
+      label(c, `待ち ${D.wait}`, cx, cy + 54, { size: 9, align: "center", color: "#3a4a5a" });
+      // ミツバチ（AI）
+      s.bees.forEach((b, i) => { const x = w * .5 + Math.cos(t * .9 + b.ph) * b.r * 2, y = h * .35 + Math.sin(t * 1.7 + b.ph) * b.r * .5; c.fillStyle = "#ffcc33"; c.beginPath(); c.ellipse(x, y, 5, 3.5, 0, 0, TAU); c.fill(); c.fillStyle = "#222"; c.fillRect(x - 1, y - 3, 2, 6); c.fillStyle = `rgba(255,255,255,${.5 + Math.sin(t * 30) * .3})`; c.beginPath(); c.ellipse(x, y - 4, 3, 2, 0, 0, TAU); c.fill(); });
+      // 育つ植物
+      s.plants.forEach((p) => { if (p.grow < 1) p.grow = Math.min(1, p.grow + s.dt * .6); });
+    },
+    poke(s, w) { const p = s.plants.find((x) => x.kind === "sprout"); if (p) { p.kind = "flower"; p.bed = 3; p.grow = .3; p.x = w * .66 + rnd(0, w * .12); p.row = 1; } return "芽（次にやる）が、花壇で花（今日やる）に育ちました"; },
+  };
+
+  const CONCEPTS = [aquarium, weather, city, factory, garden];
+
+  // ================= 描画のしくみ =================
+  const track = $("#track");
+  function $(s, el = document) { return el.querySelector(s); }
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  track.innerHTML = CONCEPTS.map((k, i) => `<section class="card" aria-label="案${i + 1} ${esc(k.title)}">
+    <div class="ch"><span class="no">案${i + 1}</span><h2>${esc(k.title)}</h2><span class="tag">${esc(k.tag)}</span></div>
+    <p class="lead">${esc(k.desc)}</p>
+    <div class="stage"><canvas data-i="${i}" aria-label="${esc(k.title)}の試作"></canvas><span class="sample">見本のデータ</span><button type="button" class="poke" data-poke="${i}">▶ 動かしてみる</button></div>
+    <dl class="mapping">${k.map.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join("")}</dl>
+    <div class="pc"><span class="good"><b>◎</b> ${esc(k.good)}</span><span class="bad"><b>△</b> ${esc(k.bad)}</span></div></section>`).join("")
+    + `<section class="card" aria-label="比べる"><div class="ch"><span class="no">比較</span><h2>どれにする？</h2><span class="tag">今の「今どこ線」も並べました</span></div>
+      <div class="cmp"><table><thead><tr><th>案</th><th>動き</th><th>情報量</th><th>ひと目で</th><th>作る手間</th><th>向いている人・場面</th></tr></thead><tbody>
+      ${[["今どこ線（今）", 4, 5, 4, "済", "件数・名前まで細かく見たい"], ["水族館", 5, 3, 4, "中", "眺めて全体の様子をつかみたい"], ["天気図", 4, 3, 5, "中", "どの分野が荒れているか知りたい"], ["夜の街", 4, 4, 4, "大", "夜に1日を振り返る"], ["工場", 4, 4, 5, "中", "詰まり（ボトルネック）を見つけたい"], ["庭", 5, 3, 3, "中", "毎日開く楽しさを重視"]].map(([n, a, b, c, d, e]) => `<tr><td><b>${n}</b></td><td class="star">${"★".repeat(a)}</td><td class="star">${"★".repeat(b)}</td><td class="star">${"★".repeat(c)}</td><td>${d}</td><td class="note">${e}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="ask">気に入った案を教えてください。「今どこ線＋天気図の分野表示」のような組み合わせもできます。決まった案を、今のアプリと同じように Notion とつないで作ります。</div></section>`;
+  const N = CONCEPTS.length + 1;
+  $("#chips").innerHTML = [...CONCEPTS.map((k, i) => `案${i + 1} ${k.title}`), "比べる"].map((n, i) => `<button type="button" data-go="${i}">${esc(n)}</button>`).join("");
+  $("#dots").innerHTML = Array.from({ length: N }, () => "<i></i>").join("");
+
+  let cur = 0;
+  try { cur = Math.min(N - 1, Math.max(0, +(localStorage.getItem("imadoko-concepts:cur") || 0))); } catch { /* 最初から */ }
+  function go(i) {
+    cur = Math.max(0, Math.min(N - 1, i));
+    track.style.transform = `translateX(${-cur * 100}%)`;
+    document.querySelectorAll("#chips button").forEach((b, j) => b.setAttribute("aria-pressed", String(j === cur)));
+    document.querySelectorAll("#dots i").forEach((d, j) => d.classList.toggle("on", j === cur));
+    $("#prev").disabled = cur === 0; $("#next").disabled = cur === N - 1;
+    try { localStorage.setItem("imadoko-concepts:cur", String(cur)); } catch { /* 覚えなくてよい */ }
+  }
+
+  // 見えているカードの試作だけを動かす
+  const states = new Map();
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    const k = CONCEPTS[cur];
+    if (k) {
+      const cv = document.querySelector(`canvas[data-i="${cur}"]`);
+      const w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); states.delete(cur); }
+      if (!states.has(cur)) states.set(cur, Object.assign(k.init(w, h), { dt: 0 }));
+      const s = states.get(cur); s.dt = reduce ? 0 : dt;
+      const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      k.draw(c, w, h, reduce ? 1 : now / 1000, s);
+      if (s.msg && now < s.msgUntil) label(c, s.msg, w / 2, 16, { size: 11, align: "center", color: "#fff", bg: "rgba(0,0,0,.6)" });
+    }
+    if (!reduce) requestAnimationFrame(frame); else setTimeout(() => requestAnimationFrame(frame), 500);
+  }
+
+  // スワイプで案を切り替える
+  let g = null, suppress = false;
+  const vp = $("#vp");
+  vp.addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, on: false, w: vp.clientWidth }; });
+  addEventListener("pointermove", (e) => {
+    if (!g) return; const dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (!g.on) { if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } if (Math.abs(dx) < 10) return; g.on = true; track.style.transition = "none"; }
+    const edge = (cur === 0 && dx > 0) || (cur === N - 1 && dx < 0) ? .25 : 1;
+    track.style.transform = `translateX(calc(${-cur * 100}% + ${dx * edge}px))`;
+  });
+  addEventListener("pointerup", (e) => {
+    if (!g) return; const G = g; g = null; if (!G.on) return;
+    track.style.transition = ""; suppress = true; setTimeout(() => { suppress = false; }, 250);
+    const dx = e.clientX - G.x; go(Math.abs(dx) > G.w * .18 ? cur + (dx < 0 ? 1 : -1) : cur);
+  });
+  addEventListener("pointercancel", () => { if (g?.on) { track.style.transition = ""; go(cur); } g = null; });
+  document.addEventListener("click", (e) => {
+    if (suppress) { e.preventDefault(); e.stopPropagation(); return; }
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.go) go(+b.dataset.go);
+    if (b.dataset.poke) {
+      const i = +b.dataset.poke; const s = states.get(i); const cv = document.querySelector(`canvas[data-i="${i}"]`);
+      if (s) { s.msg = CONCEPTS[i].poke(s, cv.clientWidth, cv.clientHeight); s.msgUntil = performance.now() + 2600; }
+    }
+  }, true);
+  $("#prev").addEventListener("click", () => go(cur - 1));
+  $("#next").addEventListener("click", () => go(cur + 1));
+  addEventListener("keydown", (e) => { if (e.key === "ArrowRight") go(cur + 1); if (e.key === "ArrowLeft") go(cur - 1); });
+  go(cur);
+  requestAnimationFrame(frame);
+})();
+</script>
