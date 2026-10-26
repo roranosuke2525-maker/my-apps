@@ -22,7 +22,7 @@ test("3つのDBから育児の項目だけをまとめて返す", async () => {
   const { api, mcp } = setup();
   const { status, data } = await api("GET", "/api/hub");
   assert.equal(status, 200);
-  assert.deepEqual(data.child, { name: "奏輔", birth: "2026-01-19" });
+  assert.deepEqual(data.child, { name: "奏輔", birth: "2026-01-19", backToWork: "2027-01-19" });
   const titles = data.items.map((i) => i.title);
   assert.ok(!titles.includes("仕事の資料"), "CHILD 以外のタスクは出さない");
   assert.ok(!titles.includes("済んだ育児タスク"), "DONE のタスクは出さない");
@@ -74,4 +74,26 @@ test("Notion 連携がないときは分かる言葉で返す", async () => {
   const res = await win.fetch("/api/hub");
   assert.equal(res.status, 503);
   assert.match((await res.json()).error, /claude\.ai で開いてください/);
+});
+
+test("予定は祝日以外のカレンダーから、育児の言葉を含むものだけを返す", async () => {
+  const { api, mcp } = setup();
+  const { status, data } = await api("GET", "/api/calendar");
+  assert.equal(status, 200);
+  assert.deepEqual(data.events.map((e) => [e.date, e.time, e.title]), [
+    ["2026-11-19", "09:00", "9か月検診"],
+    ["2026-12-01", "", "保育園 面談"],
+  ]);
+  assert.ok(!JSON.stringify(data).includes("美容室"), "育児と関係ない予定は渡さない");
+  const ids = mcp.calls.filter((c) => c.name === "list_events").map((c) => c.input.calendarId);
+  assert.deepEqual(ids.sort(), ["family@example.test", "me@example.test"]);
+  assert.ok(mcp.calls.filter((c) => c.name.startsWith("list_")).every((c) => c.server === "Google Calendar"));
+  assert.match(mcp.calls.find((c) => c.name === "list_events").input.startTime, /^\d{4}-\d{2}-\d{2}T00:00:00$/);
+});
+
+test("カレンダー連携がなくても、育児の項目はそのまま読める", async () => {
+  const { api, mcp } = setup();
+  mcp.noCalendar = true;
+  assert.equal((await api("GET", "/api/calendar")).status, 502);
+  assert.equal((await api("GET", "/api/hub")).status, 200);
 });

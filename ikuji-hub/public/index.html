@@ -4,61 +4,126 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>育児ハブ</title>
-  <meta name="theme-color" content="#2f6f8f">
+  <meta name="theme-color" content="#141a45">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="育児ハブ">
   <meta name="robots" content="noindex">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700;900&family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
-  <header class="top">
-    <div class="who">
-      <span class="name" id="child-name">—</span>
-      <span class="age" id="child-age">読み込み中…</span>
+  <header class="sky">
+    <canvas id="stars" aria-hidden="true"></canvas>
+    <svg class="castle" viewBox="0 0 360 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+      <path d="M0 120V96h40V70l8-14 8 14v26h22V58l10-20 10 20v18h20V44l9-22 9 22v12h14V20l16-20 16 20v36h14V44l9-22 9 22v32h20V58l10-20 10 20v38h22V70l8-14 8 14v26h40v24z"/>
+      <path class="win" d="M174 74h12v18h-12zM126 82h8v12h-8zM226 82h8v12h-8z"/>
+    </svg>
+    <div class="sky-row">
+      <div class="who">
+        <span class="name" id="child-name">—</span>
+        <span class="age" id="child-age">読み込み中…</span>
+        <span class="sub" id="child-sub"></span>
+      </div>
+      <button type="button" id="reload" class="icon-btn" aria-label="Notion から読み直す">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+      </button>
     </div>
-    <button type="button" id="reload" class="icon-btn" aria-label="Notion から読み直す">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
-    </button>
   </header>
 
-  <main id="main">
+  <main>
     <p id="status" class="status" role="status" aria-live="polite"></p>
 
-    <section id="soon-wrap" class="block" hidden>
-      <h2 class="sec">ちかい予定 <em>60日以内</em></h2>
-      <div id="soon" class="soon"></div>
+    <!-- たな -->
+    <section id="view-park" class="view">
+      <section id="soon-wrap" class="block" hidden>
+        <h2 class="sec">これからの予定 <em>60日以内</em></h2>
+        <div id="soon" class="soon"></div>
+      </section>
+
+      <section id="pin-wrap" class="block" hidden>
+        <h2 class="sec">★ ピン留め</h2>
+        <div id="pins" class="pins"></div>
+      </section>
+
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+        <input id="q" type="search" placeholder="さがす（例：離乳食）" aria-label="さがす" autocomplete="off">
+      </label>
+
+      <div id="shelves" class="shelves"></div>
+      <div id="srcs" class="chips" aria-label="元のデータで絞る"></div>
+
+      <section class="block">
+        <h2 class="sec"><span id="list-title">すべて</span><em id="list-count"></em></h2>
+        <div id="list" class="list"></div>
+        <label class="done-toggle"><input type="checkbox" id="show-done"> 済んだものも見る</label>
+      </section>
+
+      <form id="add" class="add">
+        <input id="add-title" maxlength="100" placeholder="育児のタスクを追加（INBOXへ）" aria-label="追加するタスク" autocomplete="off">
+        <button type="submit" class="primary">追加</button>
+      </form>
     </section>
 
-    <section id="pin-wrap" class="block" hidden>
-      <h2 class="sec">★ ピン留め</h2>
-      <div id="pins" class="pins"></div>
+    <!-- ごはん -->
+    <section id="view-food" class="view" hidden>
+      <section class="card milk">
+        <h2 class="title">ミルクの分量</h2>
+        <p class="note-s">アイクレオ（標準）でつくるとき。育児メモ「🍼 ミルクの分量」の表から、1mlあたり 0.127g で計算します。</p>
+        <div class="milk-out" aria-live="polite"><b id="milk-g">12.70</b><span>g</span></div>
+        <div class="milk-in">
+          <button type="button" class="round" id="milk-minus" aria-label="10ml へらす">−</button>
+          <label class="milk-ml"><input id="milk-ml" type="number" inputmode="numeric" min="10" max="300" step="10" value="100" aria-label="出来上がりの量（ml）"><span>ml</span></label>
+          <button type="button" class="round" id="milk-plus" aria-label="10ml ふやす">＋</button>
+        </div>
+        <input id="milk-range" type="range" min="10" max="300" step="10" value="100" aria-label="出来上がりの量（ml）">
+        <div class="presets" id="milk-presets"></div>
+      </section>
+      <section class="block">
+        <h2 class="sec">離乳食・ミルクの棚 <em id="food-count"></em></h2>
+        <div id="food-list" class="list"></div>
+      </section>
     </section>
 
-    <label class="search">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
-      <input id="q" type="search" placeholder="さがす（例：離乳食）" aria-label="さがす" autocomplete="off">
-    </label>
+    <!-- よぼうせっしゅ -->
+    <section id="view-vax" class="view" hidden>
+      <p class="note-s">一般的な目安です（育児メモ「予防接種」と調べた結果より）。予定と接種の記録は母子手帳と妻のカレンダーが正です。</p>
+      <section id="vax-cal-wrap" class="block" hidden>
+        <h2 class="sec">カレンダーの予定</h2>
+        <div id="vax-cal" class="list"></div>
+      </section>
+      <div id="vax" class="road"></div>
+    </section>
 
-    <div id="shelves" class="shelves"></div>
-    <div id="srcs" class="chips" aria-label="元のデータで絞る"></div>
-
-    <section class="block">
-      <h2 class="sec"><span id="list-title">すべて</span><em id="list-count"></em></h2>
-      <div id="list" class="list"></div>
-      <label class="done-toggle"><input type="checkbox" id="show-done"> 済んだものも見る</label>
+    <!-- ほいくえん -->
+    <section id="view-nursery" class="view" hidden>
+      <section class="card countdown">
+        <span class="label">ママの復職まで</span>
+        <b id="back-days">—</b>
+        <span class="label" id="back-date"></span>
+      </section>
+      <section class="block">
+        <h2 class="sec">保育園の予定 <em>カレンダーと Notion から</em></h2>
+        <div id="nursery-road" class="road"></div>
+      </section>
+      <section class="block">
+        <h2 class="sec">保育園のやること・メモ <em id="nursery-count"></em></h2>
+        <div id="nursery-list" class="list"></div>
+      </section>
     </section>
   </main>
 
-  <form id="add" class="add">
-    <input id="add-title" maxlength="100" placeholder="育児のタスクを追加（INBOXへ）" aria-label="追加するタスク" autocomplete="off">
-    <button type="submit" class="primary">追加</button>
-  </form>
+  <nav class="tabbar" role="tablist" aria-label="画面">
+    <button type="button" role="tab" data-view="park" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l4-4 4 4 4-4 4 4v10zM10 20v-5h4v5"/></svg>たな</button>
+    <button type="button" role="tab" data-view="food" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v3l-2 3v11h8V9l-2-3V3M8 13h8"/></svg>ごはん</button>
+    <button type="button" role="tab" data-view="vax" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>よぼうせっしゅ</button>
+    <button type="button" role="tab" data-view="nursery" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg>ほいくえん</button>
+  </nav>
 </div>
 
 <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">

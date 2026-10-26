@@ -1,9 +1,9 @@
-"""アプリのアイコン（青の角丸にひよこ色の丸）を作る。python3 scripts/make-icons.py"""
+"""アプリのアイコン（夜空の紺の角丸に金の月）を作る。python3 scripts/make-icons.py"""
 from pathlib import Path
 from PIL import Image, ImageDraw
 
 OUT = Path(__file__).resolve().parent.parent / "public" / "icons"
-BLUE = (47, 111, 143, 255)
+BLUE = (20, 26, 69, 255)  # 夜空の紺
 HIYOKO = (243, 196, 55, 255)
 WHITE = (255, 255, 255, 255)
 

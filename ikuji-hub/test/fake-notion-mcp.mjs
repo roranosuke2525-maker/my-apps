@@ -25,6 +25,21 @@ export function fakeNotionMcp() {
     ],
   };
   const calls = [];
+  const calendars = [
+    { id: "ja.japanese#holiday@group.v.calendar.google.com", summary: "日本の祝日" },
+    { id: "me@example.test", summary: "me" },
+    { id: "family@example.test", summary: "家族" },
+  ];
+  const events = {
+    "me@example.test": [
+      { summary: "美容室", start: { dateTime: "2026-11-15T12:30:00+09:00" }, status: "confirmed" },
+      { summary: "9か月検診", start: { dateTime: "2026-11-19T09:00:00+09:00" }, status: "confirmed", htmlLink: "https://www.google.com/calendar/event?eid=abc" },
+    ],
+    "family@example.test": [
+      { summary: "保育園 面談", start: { date: "2026-12-01" }, status: "confirmed" },
+      { summary: "保育園 見学", start: { date: "2026-12-02" }, status: "cancelled" },
+    ],
+  };
   const match = (row, f) => {
     if (f.type === "group") return f.operator === "and" ? f.filters.every((x) => match(row, x)) : f.filters.some((x) => match(row, x));
     const v = row[f.property];
@@ -32,11 +47,17 @@ export function fakeNotionMcp() {
     if (f.operator === "status_is_not") return v !== f.value.value;
     throw Object.assign(new Error(`unsupported ${f.operator}`), { code: "bad_request" });
   };
-  return {
+  const self = {
     calls,
     tables,
+    noCalendar: false,
     async callTool(server, name, input, opts) {
       calls.push({ server, name, input, opts });
+      if (server === "Google Calendar") {
+        if (self.noCalendar) throw Object.assign(new Error("not connected"), { code: "server_not_connected" });
+        if (name === "list_calendars") return { payload: { calendars } };
+        if (name === "list_events") return { payload: { events: events[input.calendarId] || [] } };
+      }
       if (name === "notion-query-data-sources") {
         const d = input.data;
         const rows = tables[d.data_source_url.replace("collection://", "")] || [];
@@ -55,4 +76,5 @@ export function fakeNotionMcp() {
       throw Object.assign(new Error("not in manifest"), { code: "not_in_manifest" });
     },
   };
+  return self;
 }

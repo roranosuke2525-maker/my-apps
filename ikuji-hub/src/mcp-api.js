@@ -1,12 +1,14 @@
 // 育児ハブ：claude.ai のアーティファクトで動かすときの /api。
 // 見ている人の Notion 連携（MCP）で、育児まわりの3つのDBを読み、DB_タスク管理 にだけ書く。トークンは使わない。
+// 予定は Google カレンダー連携から読むだけ（育児の言葉を含む予定だけを画面に渡す）。
 (() => {
-  const SERVER = "Notion";
   // 連携のツール名。先頭が見つからなければ次を試す
   const TOOLS = {
-    query: ["notion-query-data-sources", "query-data-sources"],
-    update: ["notion-update-page", "update-page"],
-    create: ["notion-create-pages", "create-pages"],
+    query: ["Notion", "notion-query-data-sources", "query-data-sources"],
+    update: ["Notion", "notion-update-page", "update-page"],
+    create: ["Notion", "notion-create-pages", "create-pages"],
+    calendars: ["Google Calendar", "list_calendars"],
+    events: ["Google Calendar", "list_events"],
   };
   const DS = {
     task: "21762844-acbe-8075-bbe6-000bcaf22801", // DB_タスク管理（分類タグ CHILD だけ読む）
@@ -14,7 +16,9 @@
     aid: "21c62844-acbe-800b-8b6b-000b7d8e1e7c", // 支援の申請・給付
   };
   // 「大事な日」の 奏輔誕生日 から。変わることはないのでここに置く
-  const CHILD = { name: "奏輔", birth: "2026-01-19" };
+  const CHILD = { name: "奏輔", birth: "2026-01-19", backToWork: "2027-01-19" }; // 妻の復職日（10/26 の棚卸しで 1/19 に統一）
+  const CAL_WORDS = /奏輔|そうすけ|検診|健診|接種|ワクチン|保育園|慣らし|離乳食|小児科/;
+  const CAL_DAYS = 180;
   const TASK_TAG = "CHILD";
   const DONE = "✅ DONE";
   const TASK_STATUSES = ["⏭ NEXT", "▶️ DOING", "⏳ WAITING", "🕰 SOMEDAY", "📥 INBOX", DONE];
@@ -40,12 +44,13 @@
   async function call(kind, input, { read = false } = {}) {
     const mcp = await getMcp();
     if (!mcp) throw apiError(503, "このページでは Notion 連携が使えません。claude.ai で開いてください");
-    const names = chosen[kind] ? [chosen[kind]] : TOOLS[kind];
+    const [server, ...tools] = TOOLS[kind];
+    const names = chosen[kind] ? [chosen[kind]] : tools;
     let last;
     for (const name of names) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const res = await mcp.callTool(SERVER, name, input, read ? undefined : { cache: false });
+          const res = await mcp.callTool(server, name, input, read ? undefined : { cache: false });
           chosen[kind] = name;
           return res.payload ?? res;
         } catch (err) {
@@ -60,24 +65,24 @@
       }
       if (!["not_in_manifest", "bad_request"].includes(last?.code) || chosen[kind]) break;
     }
-    throw toApiError(last);
+    throw toApiError(last, server);
   }
 
-  function toApiError(err) {
+  function toApiError(err, server) {
     const code = err?.code;
     const msg = {
-      needs_reauth: "Notion の連携が切れています。claude.ai の 設定 → コネクタ で Notion を再接続してください",
-      server_not_connected: "Notion 連携がありません。claude.ai の 設定 → コネクタ で Notion を追加してください",
-      selection_required: "Notion 連携が複数あります。どれを使うか選んでください",
-      not_in_manifest: "このページで Notion の利用が許可されていません。ページの権限から Notion を許可してください",
-      approval_required: "Notion の利用を許可してください（許可の確認が出たら「許可」）",
-      consent_required: "Notion の利用を許可してください（許可の確認が出たら「許可」）",
-      blocked_by_policy: "組織の設定で Notion 連携が使えません",
-      server_unavailable: "Notion が混み合っています。少し待ってから更新してください",
-      rate_limited: "Notion が混み合っています。少し待ってから更新してください",
-      not_granted: "このページでは Notion 連携が使えません。claude.ai で開いてください",
-      capability_disabled: "このページでは Notion 連携が使えません。claude.ai で開いてください",
-      tool_error: `Notion でエラーが起きました${shortMessage(err?.message)}`,
+      needs_reauth: `${server} の連携が切れています。claude.ai の 設定 → コネクタ で ${server} を再接続してください`,
+      server_not_connected: `${server} 連携がありません。claude.ai の 設定 → コネクタ で ${server} を追加してください`,
+      selection_required: `${server} 連携が複数あります。どれを使うか選んでください`,
+      not_in_manifest: `このページで ${server} の利用が許可されていません。ページの権限から ${server} を許可してください`,
+      approval_required: `${server} の利用を許可してください（許可の確認が出たら「許可」）`,
+      consent_required: `${server} の利用を許可してください（許可の確認が出たら「許可」）`,
+      blocked_by_policy: `組織の設定で ${server} 連携が使えません`,
+      server_unavailable: `${server} が混み合っています。少し待ってから更新してください`,
+      rate_limited: `${server} が混み合っています。少し待ってから更新してください`,
+      not_granted: "このページでは連携が使えません。claude.ai で開いてください",
+      capability_disabled: "このページでは連携が使えません。claude.ai で開いてください",
+      tool_error: `${server} でエラーが起きました${shortMessage(err?.message)}`,
     }[code];
     return apiError(code === "server_unavailable" || code === "rate_limited" ? 503 : 502, msg || "Notion との通信でエラーが起きました");
   }
@@ -190,6 +195,42 @@
     };
   }
 
+  // ---------- 予定（Google カレンダー・読むだけ） ----------
+  // 祝日以外の見えているカレンダーから、育児の言葉を含む予定だけを返す（ほかの予定の名前は画面に渡さない）
+  async function getCalendar() {
+    const res = await call("calendars", {}, { read: true });
+    const cals = (res.calendars || []).filter((c) => c.id && !/#holiday@/.test(c.id));
+    const today = jstToday();
+    const lists = await Promise.all(cals.map((c) => call("events", {
+      calendarId: c.id,
+      startTime: `${today}T00:00:00`,
+      endTime: `${addDays(today, CAL_DAYS)}T00:00:00`,
+      orderBy: "startTime",
+      pageSize: 100,
+    }, { read: true }).then((r) => r.events || [], () => [])));
+    const seen = new Set();
+    const events = lists.flat()
+      .filter((e) => e.status !== "cancelled" && CAL_WORDS.test(`${e.summary || ""} ${e.description || ""}`))
+      .map((e) => ({
+        title: String(e.summary || "（予定）"),
+        date: (e.start?.dateTime ? jstDate(e.start.dateTime) : String(e.start?.date || "").slice(0, 10)),
+        time: e.start?.dateTime ? jstTime(e.start.dateTime) : "",
+        url: /^https:\/\/www\.google\.com\/calendar\//.test(e.htmlLink || "") ? e.htmlLink : "",
+      }))
+      .filter((e) => e.date && !seen.has(`${e.date}|${e.time}|${e.title}`) && seen.add(`${e.date}|${e.time}|${e.title}`))
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    return { events };
+  }
+
+  const jstToday = () => jstDate(new Date().toISOString());
+  const jstDate = (iso) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 10);
+  const jstTime = (iso) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(11, 16);
+  function addDays(date, n) {
+    const d = new Date(`${date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
   // ---------- 書く（DB_タスク管理 だけ） ----------
   async function addTask(body) {
     const title = String(body?.title || "").replace(/\s+/g, " ").trim();
@@ -229,6 +270,7 @@
     const p = url.pathname;
     const task = p.match(/^\/api\/tasks\/([0-9a-f]{32})$/i);
     if (p === "/api/hub" && method === "GET") return getHub();
+    if (p === "/api/calendar" && method === "GET") return getCalendar();
     if (p === "/api/tasks" && method === "POST") return addTask(body);
     if (task && method === "PATCH") return setTaskStatus(task[1].toLowerCase(), body);
     throw apiError(404, "not found");
