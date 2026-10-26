@@ -43,7 +43,7 @@ const VAX = [
 ];
 
 const $ = (s) => document.querySelector(s);
-const state = { child: null, items: [], events: [], calError: "", shelf: null, src: null, q: "", showDone: false, view: "park", busy: false };
+const state = { child: null, items: [], events: [], calError: "", sleep: null, sleepError: "", draft: null, shelf: null, src: null, q: "", showDone: false, view: "park", busy: false };
 
 function shelfOf(item) {
   if (item.src === "aid") return "money";
@@ -108,8 +108,9 @@ async function load() {
     setStatus("");
   }, (err) => setStatus(err.message, true));
   // カレンダーは読めなくても画面は使えるので、失敗は予定の欄にだけ出す
+  const sleep = api("/api/sleep").then((data) => { state.sleep = data; state.sleepError = ""; }, (err) => { state.sleepError = err.message; });
   const cal = api("/api/calendar").then((data) => { state.events = data.events || []; state.calError = ""; }, (err) => { state.calError = err.message; });
-  await Promise.all([hub, cal]);
+  await Promise.all([hub, cal, sleep]);
   state.busy = false;
   $("#reload").classList.remove("spin");
   render();
@@ -170,6 +171,7 @@ function render() {
   }
   renderPark(today);
   renderFood();
+  renderSleep(today);
   renderVax(today);
   renderNursery(today);
 }
@@ -222,6 +224,97 @@ function setMilk(ml) {
   $("#milk-g").textContent = (v * MILK_G_PER_ML).toFixed(2);
   try { localStorage.setItem("ikuji-hub:milk", String(v)); } catch { /* 保存できなくても計算はできる */ }
   document.querySelectorAll("#milk-presets .chip").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.ml) === v)));
+}
+
+// ---------- ねんね ----------
+const monthLabel = (m) => (m < 12 ? `生後${m}か月` : `${Math.floor(m / 12)}歳${m % 12}か月`);
+
+function currentMonth(today) {
+  return state.child ? monthsOld(state.child.birth, today).months : null;
+}
+
+const filled = (r) => Boolean(r && (r.place || r.methods.length || r.who || r.bed || r.wake || r.night != null || r.naps != null));
+// time 入力は 06:30 の形しか受けないので、Notion に 6:30 と書いてあってもそろえる
+const hhmm = (t) => (/^\d:\d\d$/.test(t || "") ? `0${t}` : t || "");
+
+// 今月の行に中身があればそれを、なければ前の月の内容を下書きにする（毎月ゼロから入れなくてよいように）
+function sleepDraft(month) {
+  const recs = state.sleep?.records || [];
+  const same = recs.find((r) => r.month === month);
+  const prev = recs.find((r) => r.month != null && r.month < month && filled(r));
+  const base = filled(same) ? same : prev || same || {};
+  return {
+    month, exists: Boolean(same), from: base !== same && base.month != null ? base.month : null,
+    place: base.place || "", methods: [...(base.methods || [])], who: base.who || "",
+    bed: hhmm(base.bed), wake: hhmm(base.wake), night: base.night ?? "", naps: base.naps ?? "",
+    good: same?.good || "", trouble: same?.trouble || "",
+  };
+}
+
+function chipGroup(box, options, isOn, toggle) {
+  box.replaceChildren(...options.map((o) => el("button", { type: "button", class: "chip", "aria-pressed": String(isOn(o)), onclick: () => { toggle(o); renderSleepForm(); } }, o)));
+}
+
+function renderSleepForm() {
+  const d = state.draft;
+  const opts = state.sleep?.options || { place: [], methods: [], who: [] };
+  $("#sleep-title").textContent = `${monthLabel(d.month)}のねんね`;
+  $("#sleep-state").textContent = d.from != null ? `${monthLabel(d.from)}の内容を下書きにしています` : d.exists ? "この月の記録あり・直して保存できます" : "この月はまだ記録なし";
+  chipGroup($("#sl-place"), opts.place, (o) => d.place === o, (o) => { d.place = d.place === o ? "" : o; });
+  chipGroup($("#sl-methods"), opts.methods, (o) => d.methods.includes(o), (o) => { d.methods = d.methods.includes(o) ? d.methods.filter((x) => x !== o) : [...d.methods, o]; });
+  chipGroup($("#sl-who"), opts.who, (o) => d.who === o, (o) => { d.who = d.who === o ? "" : o; });
+}
+
+function renderSleep(today) {
+  const month = currentMonth(today);
+  const form = $("#sleep-form");
+  if (state.sleepError) {
+    form.hidden = true;
+    $("#sleep-road").replaceChildren(el("p", { class: "note-s" }, `ねんね記録を読めませんでした：${state.sleepError}`));
+    return;
+  }
+  if (month == null || !state.sleep) { form.hidden = true; $("#sleep-road").replaceChildren(el("p", { class: "empty" }, "読み込み中…")); return; }
+  form.hidden = false;
+  if (!state.draft || state.draft.month !== month) {
+    state.draft = sleepDraft(month);
+    for (const k of ["bed", "wake", "night", "naps", "good", "trouble"]) $(`#sl-${k}`).value = state.draft[k];
+  }
+  renderSleepForm();
+  const recs = state.sleep.records.filter((r) => r.month != null);
+  $("#sleep-count").textContent = `${recs.length}か月分`;
+  $("#sleep-road").replaceChildren(...(recs.length ? recs.map((r) => el("div", { class: `stop ${r.month === month ? "now" : "past"}` },
+    el("span", { class: "when" }, r.date ? `${ymd(r.date)} に記録` : ""),
+    el("a", { class: "what", href: r.url, target: "_blank", rel: "noopener", style: "color:inherit;text-decoration:none" }, monthLabel(r.month), r.month === month ? el("span", { class: "tag" }, "今月") : null),
+    el("div", { class: "facts" },
+      r.place ? el("span", {}, "🛏 ", el("b", {}, r.place)) : null,
+      r.bed || r.wake ? el("span", {}, "🌙 ", el("b", {}, `${r.bed || "?"} → ${r.wake || "?"}`)) : null,
+      r.night != null ? el("span", {}, "夜中 ", el("b", {}, `${r.night}回`)) : null,
+      r.naps != null ? el("span", {}, "昼寝 ", el("b", {}, `${r.naps}回`)) : null,
+      r.methods.length ? el("span", {}, "寝かしつけ ", el("b", {}, r.methods.join("・"))) : null,
+      r.who ? el("span", {}, "担当 ", el("b", {}, r.who)) : null,
+      r.good ? el("span", { class: "line" }, `◎ ${r.good}`) : null,
+      r.trouble ? el("span", { class: "line" }, `△ ${r.trouble}`) : null,
+      !(r.place || r.bed || r.wake || r.night != null || r.naps != null || r.methods.length || r.who) ? el("span", { class: "line" }, "まだ空です。上で入れて保存すると埋まります") : null)))
+    : [el("p", { class: "empty" }, "まだ記録がありません。上で入れて「Notion に記録」")]));
+}
+
+async function saveSleepForm(e) {
+  e.preventDefault();
+  const d = state.draft;
+  if (!d) return;
+  for (const k of ["bed", "wake", "night", "naps", "good", "trouble"]) d[k] = $(`#sl-${k}`).value;
+  const btn = $("#sl-save");
+  btn.disabled = true;
+  try {
+    state.sleep = await api("/api/sleep", { method: "PUT", body: d });
+    state.draft = null;
+    setStatus(`${monthLabel(d.month)}のねんねを記録しました`);
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    btn.disabled = false;
+    render();
+  }
 }
 
 function renderVax(today) {
@@ -357,6 +450,7 @@ $("#milk-range").addEventListener("input", (e) => setMilk(e.target.value));
 $("#milk-minus").addEventListener("click", () => setMilk(Number($("#milk-ml").value) - 10));
 $("#milk-plus").addEventListener("click", () => setMilk(Number($("#milk-ml").value) + 10));
 $("#milk-presets").replaceChildren(...MILK_PRESETS.map((ml) => el("button", { type: "button", class: "chip", "data-ml": ml, onclick: () => setMilk(ml) }, `${ml}ml`)));
+$("#sleep-form").addEventListener("submit", saveSleepForm);
 $("#add").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("#add-title");
@@ -383,7 +477,7 @@ try {
   savedView = localStorage.getItem("ikuji-hub:view") || "park";
 } catch { /* 初期値のまま */ }
 setMilk(savedMilk);
-showView(["park", "food", "vax", "nursery"].includes(savedView) ? savedView : "park");
+showView(["park", "food", "sleep", "vax", "nursery"].includes(savedView) ? savedView : "park");
 drawStars();
 render();
 load();

@@ -97,3 +97,50 @@ test("カレンダー連携がなくても、育児の項目はそのまま読�
   assert.equal((await api("GET", "/api/calendar")).status, 502);
   assert.equal((await api("GET", "/api/hub")).status, 200);
 });
+
+test("ねんね記録は月齢の新しい順に、選択肢は DB の設定から返す", async () => {
+  const { api } = setup();
+  const { status, data } = await api("GET", "/api/sleep");
+  assert.equal(status, 200);
+  assert.deepEqual(data.options, { place: ["ベビーベッド", "布団（親と一緒）"], methods: ["抱っこ", "トントン", "ひとりで"], who: ["自分", "妻"] });
+  assert.deepEqual(data.records.map((r) => r.month), [9, 8, null]);
+  const r8 = data.records[1];
+  assert.deepEqual([r8.place, r8.methods, r8.bed, r8.night, r8.naps, r8.date], ["ベビーベッド", ["抱っこ", "トントン"], "20:00", 3, null, "2026-09-20"]);
+});
+
+test("同じ月齢の行があれば書き換え、なければ1行足す", async () => {
+  const { api, mcp } = setup();
+  await api("GET", "/api/sleep");
+  const body = { month: 9, place: "布団（親と一緒）", methods: ["抱っこ", "ひとりで"], who: "自分", bed: "20:30", wake: "6:30", night: "2", naps: 2, good: "トントンで寝た", trouble: "" };
+  const up = await api("PUT", "/api/sleep", body);
+  assert.equal(up.status, 200);
+  const u = mcp.calls.find((c) => c.name === "notion-update-page");
+  assert.equal(u.input.page_id, hex(32));
+  assert.equal(u.input.properties.名前, "生後9か月");
+  assert.deepEqual(u.input.properties.寝かしつけ, ["抱っこ", "ひとりで"]);
+  assert.equal(u.input.properties.夜中に起きる回数, 2);
+  assert.equal(up.data.records.find((r) => r.month === 9).place, "布団（親と一緒）");
+
+  const add = await api("PUT", "/api/sleep", { month: 13, methods: [] });
+  assert.equal(add.status, 200);
+  const c = mcp.calls.find((x) => x.name === "notion-create-pages");
+  assert.equal(c.input.parent.data_source_id, "5d665394-581e-4294-9bc1-adb8bad27784");
+  assert.equal(c.input.pages[0].properties.名前, "1歳1か月");
+  assert.equal(c.input.pages[0].properties.寝る場所, null);
+});
+
+test("ねんね記録はおかしな値を書かない", async () => {
+  const { api, mcp } = setup();
+  await api("GET", "/api/sleep");
+  const bad = [
+    { month: 9, place: "ハンモック" },
+    { month: 9, methods: ["魔法"] },
+    { month: 9, bed: "25:00" },
+    { month: 9, night: -1 },
+    { month: 9, good: "あ".repeat(501) },
+    { month: 1.5 },
+    { month: 99 },
+  ];
+  for (const b of bad) assert.equal((await api("PUT", "/api/sleep", b)).status, 400, JSON.stringify(b));
+  assert.ok(!mcp.calls.some((c) => c.name === "notion-update-page" || c.name === "notion-create-pages"));
+});

@@ -90,6 +90,34 @@
       </section>
     </section>
 
+    <!-- ねんね -->
+    <section id="view-sleep" class="view" hidden>
+      <form id="sleep-form" class="card sleep">
+        <div class="sleep-head">
+          <h2 class="title" id="sleep-title">今月のねんね</h2>
+          <span class="note-s" id="sleep-state"></span>
+        </div>
+        <fieldset><legend>寝る場所</legend><div class="chips" id="sl-place"></div></fieldset>
+        <fieldset><legend>寝かしつけ（いくつでも）</legend><div class="chips" id="sl-methods"></div></fieldset>
+        <fieldset><legend>寝かしつけ担当</legend><div class="chips" id="sl-who"></div></fieldset>
+        <div class="pair">
+          <label>寝る時刻<input id="sl-bed" type="time"></label>
+          <label>起きる時刻<input id="sl-wake" type="time"></label>
+        </div>
+        <div class="pair">
+          <label>夜中に起きる回数<input id="sl-night" type="number" inputmode="numeric" min="0" max="20" placeholder="—"></label>
+          <label>昼寝の回数<input id="sl-naps" type="number" inputmode="numeric" min="0" max="20" placeholder="—"></label>
+        </div>
+        <label class="full">うまくいったこと<textarea id="sl-good" rows="2" maxlength="500"></textarea></label>
+        <label class="full">困っていること<textarea id="sl-trouble" rows="2" maxlength="500"></textarea></label>
+        <button type="submit" class="primary" id="sl-save">Notion に記録</button>
+      </form>
+      <section class="block">
+        <h2 class="sec">月齢ごとのねんね <em id="sleep-count"></em></h2>
+        <div id="sleep-road" class="road"></div>
+      </section>
+    </section>
+
     <!-- よぼうせっしゅ -->
     <section id="view-vax" class="view" hidden>
       <p class="note-s">一般的な目安です（育児メモ「予防接種」と調べた結果より）。予定と接種の記録は母子手帳と妻のカレンダーが正です。</p>
@@ -121,7 +149,8 @@
   <nav class="tabbar" role="tablist" aria-label="画面">
     <button type="button" role="tab" data-view="park" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l4-4 4 4 4-4 4 4v10zM10 20v-5h4v5"/></svg>たな</button>
     <button type="button" role="tab" data-view="food" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v3l-2 3v11h8V9l-2-3V3M8 13h8"/></svg>ごはん</button>
-    <button type="button" role="tab" data-view="vax" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>よぼうせっしゅ</button>
+    <button type="button" role="tab" data-view="sleep" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>ねんね</button>
+    <button type="button" role="tab" data-view="vax" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>せっしゅ</button>
     <button type="button" role="tab" data-view="nursery" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg>ほいくえん</button>
   </nav>
 </div>

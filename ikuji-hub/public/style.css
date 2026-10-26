@@ -126,6 +126,23 @@ a.item { color: inherit; text-decoration: none; }
 #milk-range { width: 100%; accent-color: var(--accent); }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 
+/* ---------- ねんね ---------- */
+.sleep { gap: 12px; background: linear-gradient(180deg, var(--paper), var(--accent-soft)); }
+.sleep-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sleep fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sleep legend, .sleep label { font-size: 12px; color: var(--mute); font-weight: 700; padding: 0; }
+.sleep label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sleep input[type="time"], .sleep input[type="number"], .sleep textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink);
+  padding: 8px 10px; font: inherit; font-size: 15px; font-weight: 400; font-variant-numeric: tabular-nums;
+}
+.sleep textarea { resize: vertical; }
+.sleep .primary { align-self: stretch; padding: 10px; }
+.stop .facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; padding: 10px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
+.stop .facts b { font-weight: 700; }
+.stop .facts .line { flex-basis: 100%; color: var(--mute); }
+
 /* ---------- 道（予防接種・保育園） ---------- */
 .road { display: flex; flex-direction: column; position: relative; padding-left: 22px; }
 .road::before { content: ""; position: absolute; left: 8px; top: 10px; bottom: 10px; width: 2px; background: repeating-linear-gradient(var(--line) 0 6px, transparent 6px 10px); }
@@ -148,7 +165,7 @@ a.item { color: inherit; text-decoration: none; }
 /* ---------- 下のタブ ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; max-width: 560px; margin: 0 auto;
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
   background: var(--paper); border-top: 1px solid var(--line); border-radius: 22px 22px 0 0;
   padding: 6px max(10px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 8px) max(10px, env(safe-area-inset-left, 0px));
   box-shadow: 0 -10px 24px -22px rgba(31, 37, 80, 0.7);

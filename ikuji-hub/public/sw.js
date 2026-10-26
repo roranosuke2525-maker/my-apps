@@ -1,5 +1,5 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク）
-const CACHE = "ikuji-hub-v2";
+const CACHE = "ikuji-hub-v3";
 const SHELL = ["./", "index.html", "app.js", "style.css", "manifest.webmanifest", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

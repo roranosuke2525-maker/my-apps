@@ -4,6 +4,7 @@
 (() => {
   // 連携のツール名。先頭が見つからなければ次を試す
   const TOOLS = {
+    fetch: ["Notion", "notion-fetch", "fetch"],
     query: ["Notion", "notion-query-data-sources", "query-data-sources"],
     update: ["Notion", "notion-update-page", "update-page"],
     create: ["Notion", "notion-create-pages", "create-pages"],
@@ -14,6 +15,7 @@
     task: "21762844-acbe-8075-bbe6-000bcaf22801", // DB_タスク管理（分類タグ CHILD だけ読む）
     memo: "2f362844-acbe-804a-9314-000be9fe07fa", // DB_childcare memo
     aid: "21c62844-acbe-800b-8b6b-000b7d8e1e7c", // 支援の申請・給付
+    sleep: "5d665394-581e-4294-9bc1-adb8bad27784", // DB_ねんね記録（月齢ごとに1行）
   };
   // 「大事な日」の 奏輔誕生日 から。変わることはないのでここに置く
   const CHILD = { name: "奏輔", birth: "2026-01-19", backToWork: "2027-01-19" }; // 妻の復職日（10/26 の棚卸しで 1/19 に統一）
@@ -23,6 +25,8 @@
   const DONE = "✅ DONE";
   const TASK_STATUSES = ["⏭ NEXT", "▶️ DOING", "⏳ WAITING", "🕰 SOMEDAY", "📥 INBOX", DONE];
   const TITLE_MAX = 100;
+  const SLEEP_TEXT_MAX = 500;
+  const SLEEP_MONTH_MAX = 72;
 
   // ---------- MCP 呼び出し ----------
   let mcpPromise = null;
@@ -110,6 +114,7 @@
     return s.replace(/&(lt|gt|amp|quot|#39|nbsp);/g, (_, e) => ({ lt: "<", gt: ">", amp: "&", quot: '"', "#39": "'", nbsp: " " })[e]);
   }
 
+  const between = (str, tag) => (String(str || "").match(new RegExp(`<${tag}[^>]*>\\s*([\\s\\S]*?)\\s*</${tag}>`)) || [])[1];
   const dateOf = (r, prop) => String(r[`date:${prop}:start`] || "").slice(0, 10) || null;
 
   async function queryRows(dsId, { filters, sort, limit = 100 } = {}) {
@@ -195,6 +200,105 @@
     };
   }
 
+  // ---------- ねんね（DB_ねんね記録） ----------
+  const knownSleep = new Map(); // 月齢 → 行（書き換えは読み込んだ行だけ。同じ月齢は1行にまとめる）
+  let sleepOptions = null;
+
+  const list = (v) => {
+    if (Array.isArray(v)) return v.map(String);
+    try { const a = JSON.parse(v || "[]"); return Array.isArray(a) ? a.map(String) : []; } catch { return []; }
+  };
+  const count = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+  function sleepRow(r) {
+    return {
+      id: idOf(r.url),
+      url: r.url,
+      title: text(r["名前"]),
+      date: dateOf(r, "記録日"),
+      month: count(r["月齢"]),
+      place: text(r["寝る場所"]),
+      methods: list(r["寝かしつけ"]),
+      who: text(r["寝かしつけ担当"]),
+      bed: text(r["寝る時刻"]),
+      wake: text(r["起きる時刻"]),
+      night: count(r["夜中に起きる回数"]),
+      naps: count(r["昼寝の回数"]),
+      good: text(r["うまくいったこと"]),
+      trouble: text(r["困っていること"]),
+    };
+  }
+
+  // 選択肢は DB の設定から読む（Notion で選択肢を足せばアプリにも出る）
+  async function loadSleepOptions() {
+    const res = await call("fetch", { id: `collection://${DS.sleep}` }, { read: true });
+    const schema = JSON.parse(between(res.text, "data-source-state") || "{}").schema || {};
+    const names = (p) => (schema[p]?.options || []).map((o) => o.name);
+    sleepOptions = { place: names("寝る場所"), methods: names("寝かしつけ"), who: names("寝かしつけ担当") };
+    return sleepOptions;
+  }
+
+  async function getSleep() {
+    const [options, rows] = await Promise.all([loadSleepOptions(), queryRows(DS.sleep)]);
+    knownSleep.clear();
+    const records = rows.map(sleepRow).sort((a, b) => (b.month ?? -1) - (a.month ?? -1) || String(b.date).localeCompare(String(a.date)));
+    for (const r of records) if (r.month != null && !knownSleep.has(r.month)) knownSleep.set(r.month, r);
+    return { records, options };
+  }
+
+  async function saveSleep(body) {
+    const opts = sleepOptions || (await loadSleepOptions());
+    const month = Number(body?.month);
+    if (!Number.isInteger(month) || month < 0 || month > SLEEP_MONTH_MAX) throw apiError(400, "月齢が正しくありません");
+    const pick = (v, allowed) => {
+      const t = String(v || "");
+      if (t && !allowed.includes(t)) throw apiError(400, `選べない値です：${t}`);
+      return t || null;
+    };
+    const time = (v) => {
+      const t = String(v || "").trim();
+      if (t && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)) throw apiError(400, "時刻は 20:30 の形で入れてください");
+      return t;
+    };
+    const times = (v) => {
+      if (v === "" || v == null) return null;
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 0 || n > 20) throw apiError(400, "回数は 0〜20 で入れてください");
+      return n;
+    };
+    const note = (v) => {
+      const t = String(v || "").trim();
+      if (t.length > SLEEP_TEXT_MAX) throw apiError(400, `メモは${SLEEP_TEXT_MAX}文字までです`);
+      return t;
+    };
+    const methods = Array.isArray(body.methods) ? [...new Set(body.methods.map(String))] : [];
+    for (const m of methods) pick(m, opts.methods);
+    const title = month < 12 ? `生後${month}か月` : `${Math.floor(month / 12)}歳${month % 12}か月`;
+    const properties = {
+      名前: title,
+      "date:記録日:start": jstToday(),
+      "date:記録日:is_datetime": 0,
+      月齢: month,
+      寝る場所: pick(body.place, opts.place),
+      寝かしつけ: methods,
+      寝かしつけ担当: pick(body.who, opts.who),
+      寝る時刻: time(body.bed),
+      起きる時刻: time(body.wake),
+      夜中に起きる回数: times(body.night),
+      昼寝の回数: times(body.naps),
+      うまくいったこと: note(body.good),
+      困っていること: note(body.trouble),
+    };
+    const known = knownSleep.get(month);
+    if (known) {
+      await call("update", { page_id: known.id, command: "update_properties", properties, allow_async: false });
+    } else {
+      if (!sleepOptions) throw apiError(409, "先にねんね記録を読み込んでください");
+      await call("create", { parent: { type: "data_source_id", data_source_id: DS.sleep }, pages: [{ properties }], allow_async: false });
+    }
+    return getSleep();
+  }
+
   // ---------- 予定（Google カレンダー・読むだけ） ----------
   // 祝日以外の見えているカレンダーから、育児の言葉を含む予定だけを返す（ほかの予定の名前は画面に渡さない）
   async function getCalendar() {
@@ -271,6 +375,8 @@
     const task = p.match(/^\/api\/tasks\/([0-9a-f]{32})$/i);
     if (p === "/api/hub" && method === "GET") return getHub();
     if (p === "/api/calendar" && method === "GET") return getCalendar();
+    if (p === "/api/sleep" && method === "GET") return getSleep();
+    if (p === "/api/sleep" && method === "PUT") return saveSleep(body);
     if (p === "/api/tasks" && method === "POST") return addTask(body);
     if (task && method === "PATCH") return setTaskStatus(task[1].toLowerCase(), body);
     throw apiError(404, "not found");

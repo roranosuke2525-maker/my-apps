@@ -5,6 +5,13 @@ export function fakeNotionMcp() {
     task: "21762844-acbe-8075-bbe6-000bcaf22801",
     memo: "2f362844-acbe-804a-9314-000be9fe07fa",
     aid: "21c62844-acbe-800b-8b6b-000b7d8e1e7c",
+    sleep: "5d665394-581e-4294-9bc1-adb8bad27784",
+  };
+  const sleepSchema = {
+    名前: { name: "名前", type: "title" },
+    寝る場所: { name: "寝る場所", type: "select", options: [{ name: "ベビーベッド" }, { name: "布団（親と一緒）" }] },
+    寝かしつけ: { name: "寝かしつけ", type: "multi_select", options: [{ name: "抱っこ" }, { name: "トントン" }, { name: "ひとりで" }] },
+    寝かしつけ担当: { name: "寝かしつけ担当", type: "select", options: [{ name: "自分" }, { name: "妻" }] },
   };
   const hex = (n) => n.toString(16).padStart(32, "0");
   const url = (n) => `https://app.notion.com/p/${hex(n)}`;
@@ -19,6 +26,11 @@ export function fakeNotionMcp() {
     [DS.memo]: [
       { url: url(11), 名前: "ミルクの量", "": "継続", 分類タグ: "授乳/ミルク", Star: "☆" },
       { url: url(12), 名前: "肌着のサイズ", "": "完了", 分類タグ: "おむつ" },
+    ],
+    [DS.sleep]: [
+      { url: url(31), 名前: "生後8か月", 月齢: 8, "date:記録日:start": "2026-09-20", 寝る場所: "ベビーベッド", 寝かしつけ: '["抱っこ","トントン"]', 寝る時刻: "20:00", 夜中に起きる回数: 3 },
+      { url: url(32), 名前: "生後9か月", 月齢: 9, "date:記録日:start": "2026-10-26" },
+      { url: url(33), 名前: "（テスト）" },
     ],
     [DS.aid]: [
       { url: url(21), 名前: "子ども医療費の受給者証", 申請状況: "申請中", ステータス: "進行中", 申請先: "市役所", 助成内容: "<p>\n通院・入院の自己負担 &amp; 薬代\n</p>", "date:期限:start": "2026-11-30" },
@@ -57,6 +69,9 @@ export function fakeNotionMcp() {
         if (self.noCalendar) throw Object.assign(new Error("not connected"), { code: "server_not_connected" });
         if (name === "list_calendars") return { payload: { calendars } };
         if (name === "list_events") return { payload: { events: events[input.calendarId] || [] } };
+      }
+      if (name === "notion-fetch" && input.id === `collection://${DS.sleep}`) {
+        return { payload: { text: `<data-source url="collection://${DS.sleep}">\n<data-source-state>\n${JSON.stringify({ name: "DB_ねんね記録", schema: sleepSchema })}\n</data-source-state>\n</data-source>` } };
       }
       if (name === "notion-query-data-sources") {
         const d = input.data;
