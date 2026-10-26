@@ -1,4 +1,4 @@
 # my-apps
 
 - [habit-check](habit-check/) — Notion の習慣チェックをスマホから入力するWebアプリ（PWA）
-- [task-hub](task-hub/) — 今どこ♡ダイアリー：Notion のタスク・診断・目標・すべてのDBを、恋愛ADV風（6人のヒロインが今どこを受け持つ）で見て操作するアプリ（アーティファクト）
+- [task-hub](task-hub/) — 今どこ：AIリサーチの回答・判定を中心に、GTDの流れ・仕分け・診断・全DBをまとめ、本文をNotionと同じ書き方で編集できるタスクアプリ（アーティファクト）
