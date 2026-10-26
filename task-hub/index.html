@@ -1,195 +1,269 @@
-<title>今どこクエスト</title>
+<title>今どこダイアリー</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap">
 <style>
-/* 8ビット時代のRPGの画面。黒地に白枠のウィンドウ、ドット文字。上：ステータス、中：まち（ドット絵の町）・たたかう・つよさ・ふくろ、下：コマンドウィンドウ。わざと夜の黒一色にしている */
+/* 恋愛ADV風。パステルの背景、白い角丸のカード、会話ウィンドウ。ヒロイン・背景はSVGで描く（キャラの色は昼夜とも同じ） */
 :root {
-  --bg: #000000;
-  --win: #000000;
-  --line: #ffffff;
-  --text: #ffffff;
-  --dim: #8f8f8f;
-  --hi: #ffd84a;
-  --danger: #ff6a4a;
-  --good: #7cf06a;
-  --mp: #6cc8ff;
-  --f: "DotGothic16", "Osaka-Mono", "MS Gothic", ui-monospace, monospace;
-  color-scheme: dark;
+  --bg1: #fff0f6;
+  --bg2: #eef0ff;
+  --card: #ffffff;
+  --card2: #fff6fa;
+  --ink: #4b3a50;
+  --dim: #9b8aa3;
+  --pink: #ff6f9f;
+  --pink2: #ffc2d6;
+  --line: #f4d6e4;
+  --hi: #ff4f8b;
+  --warn: #ff6a4a;
+  --good: #31b884;
+  --blue: #5d9cf0;
+  --dlg: rgba(255, 255, 255, .93);
+  --shadow: 0 4px 16px rgba(255, 111, 159, .16);
+  --bgfilter: none;
+  --f: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg1: #251a30; --bg2: #191a33; --card: #2f2542; --card2: #372b4c; --ink: #f7ebf4; --dim: #b8a6c2; --pink: #ff82ad; --pink2: #6d3a5a; --line: #4a3a5e; --hi: #ff8fb7; --warn: #ff8a6a; --good: #5ad6a2; --blue: #8ab8ff;
+    --dlg: rgba(47, 37, 66, .93); --shadow: 0 4px 16px rgba(0, 0, 0, .35); --bgfilter: brightness(.62) saturate(.9); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg1: #251a30; --bg2: #191a33; --card: #2f2542; --card2: #372b4c; --ink: #f7ebf4; --dim: #b8a6c2; --pink: #ff82ad; --pink2: #6d3a5a; --line: #4a3a5e; --hi: #ff8fb7; --warn: #ff8a6a; --good: #5ad6a2; --blue: #8ab8ff;
+  --dlg: rgba(47, 37, 66, .93); --shadow: 0 4px 16px rgba(0, 0, 0, .35); --bgfilter: brightness(.62) saturate(.9); color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; }
-body { background: var(--bg); color: var(--text); font-family: var(--f); font-size: 13px; line-height: 1.45; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: linear-gradient(160deg, var(--bg1), var(--bg2)); color: var(--ink); font-family: var(--f); font-size: 13.5px; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-input, textarea { font: inherit; color: var(--text); }
-button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px dashed var(--hi); outline-offset: 2px; }
-
-#app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 6px; max-width: 640px; margin: 0 auto; padding: 6px max(8px, env(safe-area-inset-right, 0px)) 6px max(8px, env(safe-area-inset-left, 0px)); }
-@media (min-width: 420px) { #app { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
-
-/* ウィンドウ（白い二重の枠） */
-.win { background: var(--win); border: 2px solid var(--line); border-radius: 7px; box-shadow: 0 0 0 2px #000, 0 0 0 3px #555; padding: 5px 9px; position: relative; }
-.win.tight { padding: 3px 8px; }
-.win .ttl { position: absolute; top: -10px; left: 10px; background: #000; padding: 0 5px; font-size: 11px; }
-.cur { color: var(--text); }
-.cur::before { content: "▶"; display: inline-block; width: 1.1em; color: transparent; }
-.cur[aria-pressed="true"]::before, .cur.on::before { color: var(--text); animation: blink .8s steps(1) infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-.more { position: absolute; right: 8px; bottom: 1px; font-size: 11px; animation: down .8s steps(2) infinite; }
-@keyframes down { 50% { transform: translateY(2px); } }
+input, textarea { font: inherit; color: var(--ink); }
+button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
 .dim { color: var(--dim); }
 .hi { color: var(--hi); }
-.danger { color: var(--danger); }
+.danger { color: var(--warn); }
 
-/* 上のステータス */
-.top { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-.top b { font-weight: 400; }
-.top .clock { margin-left: auto; }
-.top .clock .c { animation: blink 1s steps(1) infinite; }
-.loading .top .clock::after { content: "…"; animation: blink .6s steps(1) infinite; }
+#app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 8px; max-width: 640px; margin: 0 auto; padding: 8px max(10px, env(safe-area-inset-right, 0px)) 6px max(10px, env(safe-area-inset-left, 0px)); }
+@media (min-width: 420px) { #app { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
 
-main { min-height: 0; display: flex; flex-direction: column; gap: 8px; position: relative; }
+/* 上：タイトルと今日の好感度 */
+.top { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.logo { font-weight: 800; color: var(--hi); letter-spacing: .02em; white-space: nowrap; }
+.logo i { font-style: normal; display: inline-block; animation: beat 1.4s ease-in-out infinite; }
+@keyframes beat { 0%, 60%, 100% { transform: scale(1); } 30% { transform: scale(1.25); } }
+#lv { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clock { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.loading .clock::after { content: " …"; }
+
+main { min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 9px; }
-.view.fade { animation: fadein .25s steps(4); }
-@keyframes fadein { from { opacity: 0; } }
+.view.fade { animation: fadein .3s ease-out; }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } }
+.panel { background: var(--card); border: 1.5px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 8px 12px; position: relative; }
+.more { position: absolute; right: 12px; bottom: 4px; font-size: 10.5px; color: var(--pink); }
 
-/* まち */
-.town { position: relative; flex: none; border: 2px solid var(--line); border-radius: 7px; overflow: hidden; box-shadow: 0 0 0 2px #000, 0 0 0 3px #555; }
-.town canvas { display: block; width: 100%; image-rendering: pixelated; image-rendering: crisp-edges; aspect-ratio: 320 / 208; }
-.sign { position: absolute; transform: translate(-50%, -100%); background: #000; border: 1.5px solid #fff; border-radius: 4px; font-size: 10px; line-height: 1.25; padding: 1px 4px; white-space: nowrap; pointer-events: none; }
-.sign .n { color: var(--hi); }
-.sign .n.danger { color: var(--danger); }
-.towntap { position: absolute; inset: 0; }
-.msg { min-height: 56px; font-size: 13px; }
-.msg p { margin: 0; white-space: pre-wrap; }
-.places { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; align-content: start; gap: 2px 8px; overflow: hidden; }
-.places button { display: flex; align-items: baseline; gap: 4px; padding: 3px 0; white-space: nowrap; overflow: hidden; }
-.places .n { margin-left: auto; color: var(--hi); }
-.places .s { font-size: 10px; }
+/* ヒロインの絵 */
+.girl { display: block; overflow: visible; }
+.girl .eyes { transform-origin: 100px 114px; animation: blinkeye 5s infinite; }
+@keyframes blinkeye { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.08); } }
+.girl .tail { animation: tail 3.2s ease-in-out infinite; }
+.girl .tail.r { animation-delay: -1.6s; }
+.girl .tail.l { transform-origin: 62px 80px; } .girl .tail.r { transform-origin: 138px 80px; }
+@keyframes tail { 50% { transform: rotate(3deg); } }
+.girl .fx { animation: fx 1.6s ease-in-out infinite; }
+@keyframes fx { 50% { transform: translateY(-3px); } }
 
-/* 建物の中・一覧 */
-.list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.li { display: grid; grid-template-columns: 1.1em 1fr auto; align-items: center; gap: 4px; height: 30px; flex: none; width: 100%; white-space: nowrap; animation: appear .2s steps(3) both; animation-delay: calc(var(--i, 0) * 40ms); }
-@keyframes appear { from { opacity: 0; } }
-.li .nm { overflow: hidden; text-overflow: ellipsis; }
-.li .r { font-size: 11px; color: var(--dim); }
-.li .r.danger { color: var(--danger); }
-.li .r.hi { color: var(--hi); }
-.li::before { content: "▶"; color: transparent; }
-.li:hover::before, .li:focus-visible::before, .li.on::before { color: var(--text); }
-.li.sub { height: 26px; font-size: 12px; padding-left: 1em; }
-.pg { font-size: 11px; color: var(--dim); text-align: right; }
-.in-l { animation: slidel .22s steps(4); } .in-r { animation: slider .22s steps(4); }
-@keyframes slidel { from { transform: translateX(30%); opacity: 0; } }
-@keyframes slider { from { transform: translateX(-30%); opacity: 0; } }
-.cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
-.cmds button { padding: 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row2 { display: flex; gap: 8px; align-items: stretch; }
+/* みんな（ホーム） */
+.notice { display: flex; gap: 10px; align-items: center; min-height: 74px; }
+.ava { flex: none; width: 54px; height: 54px; border-radius: 50%; overflow: hidden; background: var(--card2); border: 2px solid var(--c, var(--pink)); }
+.ava svg { width: 100%; height: 100%; }
+.notice b { font-size: 12px; color: var(--c, var(--pink)); }
+.notice p { margin: 0; white-space: pre-wrap; font-size: 12.5px; }
+.grid6 { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; gap: 8px; }
+.gcard { position: relative; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; text-align: center; background: var(--card); border: 1.5px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; padding: 0 4px 8px; animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: calc(var(--i) * 60ms); }
+@keyframes pop { from { opacity: 0; transform: scale(.85); } }
+.gcard::before { content: ""; position: absolute; inset: 0 0 46% 0; background: linear-gradient(var(--c), transparent); opacity: .22; }
+.gcard .face { position: relative; flex: 1; min-height: 0; width: 100%; display: grid; place-items: end center; }
+.gcard .face svg { height: 100%; max-width: 100%; }
+.gcard .face::after { content: ""; position: absolute; left: -4px; right: -4px; bottom: 0; height: 34%; background: linear-gradient(transparent, var(--card) 80%); }
+.gcard b { position: relative; font-size: 14px; font-weight: 800; color: var(--c); line-height: 1.2; }
+.gcard small { position: relative; font-size: 10.5px; color: var(--dim); }
+.gcard .cnt { position: absolute; top: 6px; right: 7px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--c); color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+.gcard .love { position: absolute; top: 8px; left: 8px; font-size: 10px; color: var(--hi); font-weight: 700; }
+.gcard .badge { position: absolute; top: 34px; right: 6px; font-size: 10px; background: var(--warn); color: #fff; border-radius: 8px; padding: 0 5px; }
+.gcard:active { transform: scale(.97); }
+
+/* デート（会話シーン） */
+.scene { position: relative; flex: 0 0 54%; min-height: 230px; border-radius: 20px; overflow: hidden; box-shadow: var(--shadow); border: 1.5px solid var(--line); animation: scenein .4s ease-out; }
+@keyframes scenein { from { opacity: 0; transform: scale(1.03); } }
+.scene .bg { position: absolute; inset: 0; width: 100%; height: 100%; filter: var(--bgfilter); }
+.girlwrap { position: absolute; left: 50%; bottom: 0; height: 100%; transform: translateX(-50%); animation: comein .5s ease-out; }
+@keyframes comein { from { opacity: 0; transform: translate(-46%, 8px); } }
+.girlwrap svg { height: 100%; width: auto; animation: breathe 4s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes breathe { 50% { transform: translateY(2px) scaleY(.995); } }
+.girlwrap.hop svg { animation: hop .5s ease-out 2; }
+@keyframes hop { 40% { transform: translateY(-14px); } }
+.dlg { position: absolute; left: 8px; right: 8px; bottom: 8px; min-height: 82px; background: var(--dlg); border: 2px solid var(--c); border-radius: 14px; padding: 14px 12px 8px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.dlg p { margin: 0; white-space: pre-wrap; font-size: 13px; line-height: 1.55; }
+.dlg p::after { content: "▼"; font-size: 9px; color: var(--c); margin-left: 4px; animation: nudge .9s ease-in-out infinite; display: inline-block; }
+@keyframes nudge { 50% { transform: translateY(2px); } }
+.plate { position: absolute; top: -13px; left: 12px; background: var(--c); color: #fff; font-weight: 800; padding: 1px 12px; border-radius: 12px; font-size: 13px; box-shadow: 0 2px 6px rgba(0, 0, 0, .15); }
+.plate small { font-weight: 400; font-size: 10px; margin-left: 6px; opacity: .9; }
+.back { position: absolute; top: -12px; right: 10px; background: var(--card); color: var(--ink); border: 1.5px solid var(--c); border-radius: 12px; padding: 0 9px; font-size: 11px; }
+.hearts { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.hearts span { position: absolute; bottom: 30%; color: var(--hi); font-size: var(--s, 18px); animation: rise 1.4s ease-out forwards; text-shadow: 0 0 6px #fff; }
+@keyframes rise { 0% { transform: translate(0, 0) scale(.4); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(var(--dx, 0), -170px) scale(1.1); opacity: 0; } }
+.hearts .gain { left: 50%; top: 22%; bottom: auto; font-weight: 800; font-size: 22px; transform: translateX(-50%); animation: gain 1.3s ease-out forwards; }
+@keyframes gain { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.6); } 25% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -30px); } }
+.petals i { position: absolute; top: -10px; width: 7px; height: 5px; border-radius: 60% 0; background: #ffc6da; animation: fall linear infinite; opacity: .9; }
+@keyframes fall { to { transform: translate(-40px, 330px) rotate(300deg); } }
+.choices { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px; }
+.list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.opt { display: flex; align-items: center; gap: 8px; width: 100%; height: 38px; flex: none; padding: 0 12px; border-radius: 19px; background: var(--card2); border: 1.5px solid var(--line); white-space: nowrap; animation: optin .3s ease-out both; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes optin { from { opacity: 0; transform: translateX(10px); } }
+.opt:hover, .opt:focus-visible { border-color: var(--c, var(--pink)); }
+.opt .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.opt .r { font-size: 11px; color: var(--dim); }
+.opt .r.danger { color: var(--warn); font-weight: 700; }
+.opt .r.hi { color: var(--hi); font-weight: 700; }
+.opt::before { content: "♡"; color: var(--c, var(--pink)); font-size: 12px; }
+.opt.main { background: var(--c, var(--pink)); color: #fff; border-color: transparent; font-weight: 700; }
+.opt.main::before { content: "♥"; color: #fff; }
+.opt.ghost { background: none; color: var(--dim); }
+.opt.ghost::before { content: ""; }
+.acts { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; overflow: hidden; }
+.acts .opt { height: 36px; font-size: 12.5px; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 33px; }
+.acts .opt::before { margin-right: 4px; }
+.in-l { animation: slidel .25s ease-out; } .in-r { animation: slider .25s ease-out; }
+@keyframes slidel { from { transform: translateX(24%); opacity: 0; } }
+@keyframes slider { from { transform: translateX(-24%); opacity: 0; } }
+.empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--dim); padding: 10px; white-space: pre-wrap; }
+
+/* 思い出（診断・目標・運用ログ） */
+.row2 { display: flex; gap: 9px; }
 .row2 > * { min-width: 0; }
+.heartcard { flex: 0 0 44%; display: flex; align-items: center; gap: 8px; }
+.heartcard svg { width: 52px; flex: none; }
+.heartcard b { display: block; font-size: 24px; font-weight: 800; color: var(--hi); line-height: 1.1; }
+.heartcard small { white-space: nowrap; font-size: 10px; color: var(--dim); }
+.stat { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 12px; margin: 0; }
+.stat dt { color: var(--dim); }
+.stat dd { margin: 0; text-align: right; font-weight: 700; }
+.letter { display: flex; gap: 10px; align-items: center; width: 100%; background: linear-gradient(135deg, var(--card), var(--card2)); }
+.letter .seal { font-size: 26px; animation: fx 2s ease-in-out infinite; }
+.letter b { font-size: 12px; color: var(--hi); }
+.letter p { margin: 0; font-size: 12px; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.seg { display: flex; gap: 4px; background: var(--card2); border-radius: 16px; padding: 3px; border: 1.5px solid var(--line); }
+.seg button { flex: 1; text-align: center; border-radius: 13px; padding: 4px 0; font-size: 11.5px; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--pink); color: #fff; font-weight: 700; }
+.memo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.chart { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.chart svg { flex: 1; min-height: 0; width: 100%; }
+.chart text { font-family: var(--f); font-size: 9px; fill: var(--dim); }
+.chart text.pct { fill: var(--hi); font-weight: 700; }
+.legend { font-size: 10.5px; color: var(--dim); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin: 0 3px 0 8px; vertical-align: -1px; }
+.row { display: flex; align-items: center; gap: 8px; height: 34px; flex: none; width: 100%; border-bottom: 1px dashed var(--line); animation: optin .3s ease-out both; animation-delay: calc(var(--i, 0) * 40ms); }
+.row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .r { font-size: 11px; color: var(--dim); white-space: nowrap; }
+.row .r.hi { color: var(--hi); font-weight: 700; }
+.row.sub { padding-left: 14px; height: 30px; font-size: 12.5px; }
+.row.head { color: var(--dim); font-size: 11px; height: 26px; border: 0; }
 
-/* たたかう */
-.stage { position: relative; flex: none; height: 168px; border: 2px solid var(--line); border-radius: 7px; overflow: hidden; background: linear-gradient(#000 0 60%, #0b1a0b 60%, #142a14); box-shadow: 0 0 0 2px #000, 0 0 0 3px #555; touch-action: pan-y; }
-.mons { position: absolute; inset: 0; display: flex; justify-content: space-evenly; align-items: flex-end; padding-bottom: 18px; }
-.mon { position: relative; display: grid; justify-items: center; animation: bob 1.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.4s); }
-@keyframes bob { 50% { transform: translateY(-4px); } }
-.mon canvas { image-rendering: pixelated; display: block; }
-.mon.sel::after { content: "▼"; position: absolute; top: -16px; animation: blink .6s steps(1) infinite; }
-.mon.angry canvas { animation: shake .25s steps(2) infinite; filter: drop-shadow(0 0 4px #ff3b2b); }
-@keyframes shake { 50% { transform: translateX(2px); } }
-.mon.die { animation: die .7s steps(7) forwards; }
-@keyframes die { 0%, 40% { opacity: 1; filter: brightness(3); } 100% { opacity: 0; transform: scaleY(.1) translateY(30px); } }
-.mon.flee { animation: flee .5s steps(5) forwards; }
-@keyframes flee { to { transform: translateX(160px); opacity: 0; } }
-.flash { position: absolute; inset: 0; background: #fff; animation: flash .25s steps(2) forwards; pointer-events: none; }
-@keyframes flash { to { opacity: 0; } }
-.pop { position: absolute; font-size: 14px; color: var(--hi); animation: pop 1s ease-out forwards; pointer-events: none; }
-@keyframes pop { to { transform: translateY(-34px); opacity: 0; } }
-.wave { position: absolute; right: 8px; top: 6px; font-size: 11px; }
-.names .li { height: 26px; }
+/* スマホ（すべてのDB） */
+.phone { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1.5px solid var(--line); border-radius: 26px; box-shadow: var(--shadow); padding: 8px 12px 10px; }
+.pbar { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--dim); padding: 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 11px; padding: 2px 9px; border-radius: 12px; background: var(--card2); border: 1.5px solid var(--line); white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--pink); border-color: var(--pink); color: #fff; font-weight: 700; }
+.apps { flex: 1; min-height: 0; display: grid; align-content: start; gap: 10px 4px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.app { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 78px; animation: pop .4s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: calc(var(--i) * 30ms); }
+.app .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-weight: 800; font-size: 19px; color: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .15); }
+.app .an { font-size: 10px; width: 72px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dots { display: flex; justify-content: center; gap: 5px; min-height: 8px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.dots i.on { background: var(--pink); }
+.apphead { display: flex; align-items: center; gap: 8px; }
+.apphead b { font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apphead button { font-size: 20px; color: var(--pink); width: 28px; }
+.search { width: 100%; background: var(--card2); border: 1.5px solid var(--line); border-radius: 14px; padding: 5px 12px; font-size: 13px; }
+.status { font-size: 12px; color: var(--dim); }
 
-/* つよさ */
-.stat { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; font-size: 12.5px; }
-.stat dt { color: var(--text); }
-.stat dd { margin: 0; text-align: right; }
-.bar { height: 7px; border: 1px solid #fff; margin-top: 3px; position: relative; }
-.bar i { position: absolute; inset: 1px auto 1px 1px; background: var(--good); width: 0; transition: width 1.2s steps(12); }
-.chart svg { display: block; width: 100%; height: 96px; shape-rendering: crispEdges; }
-.chart text { font-family: var(--f); font-size: 9px; fill: #bbb; }
-.chart text.pct { fill: var(--hi); }
-.legend { font-size: 10px; color: var(--dim); margin: 2px 0 0; }
-.legend i { display: inline-block; width: 8px; height: 8px; margin: 0 2px 0 6px; }
-.legend b { color: var(--hi); font-weight: 400; margin-left: 6px; }
-#who { white-space: nowrap; }
-.notebody, .nb { text-align: left; }
-.nb.todo .box { font-size: 0; }
-.nb.todo .box::before { font-size: 13px; }
-.row2 { margin-top: 4px; }
+/* 下のメニュー */
+nav { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; background: var(--card); border: 1.5px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 5px 4px; margin-bottom: env(safe-area-inset-bottom, 0px); }
+nav button { display: flex; flex-direction: column; align-items: center; gap: 0; font-size: 10.5px; padding: 3px 0; border-radius: 14px; white-space: nowrap; color: var(--dim); }
+nav button .e { font-size: 18px; line-height: 1.2; filter: grayscale(.5); }
+nav button[aria-pressed="true"] { color: var(--hi); font-weight: 700; background: var(--card2); }
+nav button[aria-pressed="true"] .e { filter: none; animation: beat 1.6s ease-in-out infinite; }
 
-/* コマンド */
-nav.win { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 8px; padding: 6px 9px; }
-nav button { padding: 3px 0; white-space: nowrap; }
-
-/* しらべる（詳細） */
-#sheet { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, .7); display: flex; align-items: center; justify-content: center; padding: calc(8px + env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
-.leaf { width: 100%; max-width: 600px; height: 100%; max-height: 760px; display: flex; flex-direction: column; gap: 9px; animation: open .18s steps(3); }
-@keyframes open { from { transform: scale(.9); opacity: 0; } }
-.leaf h3 { margin: 0; font-weight: 400; font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding-right: 30px; }
-.leaf .x { position: absolute; right: 6px; top: 4px; font-size: 13px; }
+/* 中身（詳細） */
+#sheet { position: fixed; inset: 0; z-index: 30; background: rgba(60, 30, 60, .38); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: calc(10px + env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); }
+.leaf { width: 100%; max-width: 600px; height: 100%; max-height: 780px; display: flex; flex-direction: column; gap: 8px; animation: sheetin .3s cubic-bezier(.2, 1.2, .4, 1); }
+@keyframes sheetin { from { transform: translateY(20px) scale(.97); opacity: 0; } }
+.leaf .head { display: flex; gap: 10px; align-items: center; padding-right: 36px; }
+.leaf h3 { margin: 0; font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .leaf .where { font-size: 11px; color: var(--dim); }
-.tabs { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-.tabs a { margin-left: auto; font-size: 11px; color: var(--mp); }
+.leaf .x { position: absolute; right: 10px; top: 8px; width: 28px; height: 28px; border-radius: 50%; background: var(--card2); text-align: center; font-size: 15px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tabs button { font-size: 12px; padding: 3px 11px; border-radius: 13px; background: var(--card2); border: 1.5px solid var(--line); }
+.tabs button[aria-pressed="true"], .tabs button.on { background: var(--pink); border-color: var(--pink); color: #fff; font-weight: 700; }
+.tabs a { margin-left: auto; font-size: 11px; color: var(--blue); }
+.sheetacts { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.sheetacts .opt { height: 32px; font-size: 12px; padding: 0 10px; display: block; line-height: 29px; overflow: hidden; text-overflow: ellipsis; }
 .leafbody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.fields { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; margin: 0; }
+.fields { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; margin: 0; }
 .fields dt { color: var(--dim); white-space: nowrap; }
 .fields dd { margin: 0; overflow-wrap: anywhere; }
-.fields a, .notebody a { color: var(--mp); }
-.notebody { flex: 1; min-height: 0; overflow: hidden; font-size: 13px; line-height: 1.65; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.nb { display: block; margin: 0 0 3px; overflow-wrap: anywhere; }
-.nb.h { color: var(--hi); margin-top: 6px; }
-.nb.h::before { content: "◆ "; }
-.nb.h3 { color: var(--hi); }
-.nb.h3::before { content: "◇ "; }
-.nb.todo { display: grid; grid-template-columns: 1.6em 1fr; text-align: left; width: 100%; }
-.nb.todo .box::before { content: "□"; }
-.nb.todo.done .box::before { content: "■"; color: var(--good); }
+.fields a, .notebody a { color: var(--blue); }
+.notebody { flex: 1; min-height: 0; overflow: hidden; font-size: 13px; line-height: 1.7; text-align: left; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.nb { display: block; margin: 0 0 3px; overflow-wrap: anywhere; text-align: left; }
+.nb.h { color: var(--hi); font-weight: 800; margin-top: 6px; }
+.nb.h::before { content: "♡ "; }
+.nb.h3 { color: var(--hi); font-weight: 700; }
+.nb.todo { display: grid; grid-template-columns: 1.7em 1fr; width: 100%; }
+.nb.todo .box { font-size: 0; }
+.nb.todo .box::before { content: "♡"; font-size: 14px; color: var(--pink); }
+.nb.todo.done .box::before { content: "♥"; }
 .nb.todo.done span:last-child { color: var(--dim); text-decoration: line-through; }
 .nb.li { padding-left: 1em; text-indent: -1em; }
 .nb.li::before { content: "・"; }
-.nb.quote { color: var(--dim); padding-left: 8px; border-left: 2px solid #555; }
-.nb.callout { border: 1px dashed #888; padding: 3px 6px; }
-.nb.tog { text-align: left; width: 100%; color: var(--mp); }
-.nb.tbl { font-size: 11px; line-height: 1.5; border-left: 2px solid #555; padding-left: 6px; }
+.nb.quote { color: var(--dim); padding-left: 8px; border-left: 3px solid var(--pink2); }
+.nb.callout { background: var(--card2); border-radius: 10px; padding: 4px 8px; }
+.nb.tog { width: 100%; color: var(--blue); }
+.nb.tbl { font-size: 11.5px; line-height: 1.55; border-left: 3px solid var(--pink2); padding-left: 7px; }
 .nb.tbl span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nb.code { font-size: 10.5px; white-space: pre-wrap; color: #ccc; }
+.nb.code { font-size: 11px; white-space: pre-wrap; font-family: ui-monospace, monospace; }
 .nb.media, .nb.muted { color: var(--dim); font-size: 11px; }
 .write { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.write textarea, .write input { background: #000; border: 1.5px solid #fff; border-radius: 4px; padding: 5px 7px; font-size: 13px; }
+.write textarea, .write input { background: var(--card2); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 10px; font-size: 13.5px; }
 .write textarea { flex: 1; min-height: 80px; resize: none; }
 .write label, .write .note { font-size: 11px; color: var(--dim); }
-.tfoot { display: flex; justify-content: center; gap: 12px; font-size: 12px; color: var(--dim); min-height: 18px; }
+.tfoot { display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 11.5px; color: var(--dim); min-height: 20px; }
+.tfoot button { color: var(--pink); font-size: 14px; }
 .tfoot button:disabled { opacity: .3; }
 .secret { color: var(--dim); }
-.empty { flex: 1; display: grid; place-items: center; text-align: center; color: var(--dim); padding: 10px; }
 
-#say { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(560px, calc(100% - 24px)); z-index: 60; }
+#say { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(560px, calc(100% - 24px)); z-index: 60; background: var(--dlg); border: 2px solid var(--pink); border-radius: 14px; padding: 9px 12px; box-shadow: var(--shadow); animation: fadein .25s ease-out; }
+#say p { white-space: pre-wrap; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 
 <div id="app">
-  <div class="win tight top"><b id="who">ゆうしゃ</b><span id="lv" class="dim"></span><span class="clock" id="clock"></span></div>
+  <div class="top"><span class="logo">今どこ<i>♡</i>ダイアリー</span><span id="lv"></span><span class="clock" id="clock"></span></div>
   <main id="main"></main>
-  <nav class="win" aria-label="コマンド">
-    <button type="button" class="cur" data-tab="town" aria-pressed="true">まち</button>
-    <button type="button" class="cur" data-tab="battle">たたかう</button>
-    <button type="button" class="cur" data-tab="status">つよさ</button>
-    <button type="button" class="cur" data-tab="bag">ふくろ</button>
-    <button type="button" class="cur" id="add">かきこむ</button>
-    <button type="button" class="cur" id="reload">さいしん</button>
+  <nav aria-label="メニュー">
+    <button type="button" data-tab="home" aria-pressed="true"><span class="e">💕</span>みんな</button>
+    <button type="button" data-tab="date"><span class="e">🌸</span>デート</button>
+    <button type="button" data-tab="memory"><span class="e">📔</span>思い出</button>
+    <button type="button" data-tab="phone"><span class="e">📱</span>スマホ</button>
+    <button type="button" id="add"><span class="e">💌</span>メモを渡す</button>
+    <button type="button" id="reload"><span class="e">🔄</span>更新</button>
   </nav>
 </div>
 <div id="sheet" hidden></div>
-<div id="say" class="win" hidden><p id="saytext" style="margin:0"></p></div>
+<div id="say" hidden><p id="saytext" style="margin:0"></p></div>
 
 <script>
 (() => {
@@ -209,23 +283,75 @@ nav button { padding: 3px 0; white-space: nowrap; }
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
   const WAKU = { "☼ 朝": "あさ", "💻 PC": "PC", "🏠 家・外": "そと", "作業中": "さぎょう" };
   const WAKU_ORDER = ["作業中", "☼ 朝", "💻 PC", "🏠 家・外"];
-  // 討伐EXP（DB_タスク管理の重さと同じ）：S10・M20・L40・XL80、空はM扱い
+  // 好感度（DB_タスク管理の討伐EXPと同じ）：S10・M20・L40・XL80、空はM扱い
   const EXP = { S: 10, M: 20, L: 40, XL: 80 };
   const expOf = (w) => EXP[w] || 20;
 
-  // 今どこ（DB_タスク管理の計算式）を町の建物にする。MCPは計算式の値を返さないので、ステータスと実行日から同じ規則で出し直す
-  // 町は 20×13 マス（1マス16ドット）。door＝入口のマス、stand＝勇者が立つマス
-  const PLACES = {
-    castle: { name: "おしろ", sub: "目標・クエスト", x: 7, y: 0, w: 6, h: 3, door: [9, 2], stand: [9, 3], roof: "#5a5ab0", say: "おうさま「よくぞ きた。わしの ねがい（目標）と クエスト（プロジェクト）じゃ。」" },
-    inbox: { name: "さかば", sub: "倉庫", x: 1, y: 1, w: 4, h: 3, door: [2, 3], stand: [2, 4], roof: "#b5562e", say: "「いらっしゃい！ ここは たびびとの さかば。つれていく ものを えらんでね。」" },
-    next: { name: "ギルド", sub: "次にやる", x: 15, y: 1, w: 4, h: 3, door: [16, 3], stand: [16, 4], roof: "#2f7d3a", say: "「ぼうけんしゃギルドへ ようこそ。うけた いらいが のこっているぞ。ふるい じゅんだ。」" },
-    plan: { name: "とけいとう", sub: "予定あり", x: 1, y: 5, w: 3, h: 3, door: [2, 7], stand: [2, 8], roof: "#3a62b8", say: "ばんにん「よていの ひづけ じゅんに ならんでおる。」" },
-    ai: { name: "けんじゃのとう", sub: "AI", x: 16, y: 5, w: 3, h: 3, door: [17, 7], stand: [17, 8], roof: "#6d3fb0", say: "けんじゃ「わしに あずけた しらべものじゃ。💭と🔍✅は そなたの ばんじゃぞ。」" },
-    wait: { name: "やどや", sub: "待ち", x: 3, y: 9, w: 4, h: 3, door: [4, 9], stand: [4, 8], roof: "#8a5a2a", say: "「やどやへ ようこそ。へんじを まって やすんでいる なかまが いますよ。」" },
-    done: { name: "きょうかい", sub: "済み", x: 13, y: 9, w: 4, h: 3, door: [14, 9], stand: [14, 8], roof: "#c9c9c9", say: "しんぷ「きょう そなたが なしとげた ことと、ぼうけんのしょ（運用ログ）です。」" },
-    gate: { name: "まちのそと", sub: "今日やる", x: 9, y: 12, w: 2, h: 1, door: [9, 12], stand: [9, 12], roof: "#666", say: "" },
+  // 今どこ（DB_タスク管理の計算式）の6区分を、6人のヒロインが1つずつ受け持つ。MCPは計算式の値を返さないので、ステータスと実行日から同じ規則で出し直す
+  // みんな大人（社会人・大学院生）。hair＝[明・基本・影]、eye＝[明・暗]、cloth＝[服・差し色]
+  const GIRLS = {
+    today: {
+      name: "ヒナタ", role: "今日やる", place: "公園", prof: "幼なじみ・24さい", color: "#ff7a3d",
+      hair: ["#ffc890", "#f28a3e", "#b95a22"], eye: ["#ffb35a", "#c8541a"], cloth: ["#fff6ec", "#ff9a52"], style: "bob", acc: "star", kind: "hoodie", ahoge: true,
+      ok: "りょーかい！ まかせて♪",
+      hello: (n, x) => x.late ? `ねぇ…${x.late}こも約束の日すぎてるんだけど。むー。\nいっしょに片づけよ？ ほら、手つないであげるから。` : `おはよ！ 今日のデートプラン、${n}こあるよ♪\nいっしょに片づけよ？`,
+      empty: "今日のぶん、ぜんぶ終わり！ えへへ、がんばったね♡\nあとはのんびりしよ？",
+      pick: (t) => `「${t.name}」かぁ。${t.next ? `まずは「${t.next}」だね。` : ""}\nどうする？ わたしはあなたについてくよ。`,
+      done: (n) => `「${n}」終わったの!? すごいすごい！\nえらいね、なでなでしてあげる♡`,
+      mood: (n, x) => (x.late ? "pout" : n ? "normal" : "joy"),
+    },
+    next: {
+      name: "シオリ", role: "次にやる", place: "図書館", prof: "図書館司書・27さい", color: "#5b63c9",
+      hair: ["#74749a", "#33334c", "#17171f"], eye: ["#a796f0", "#4a38a8"], cloth: ["#3c4a80", "#ffffff"], style: "long", acc: "glasses", kind: "cardigan",
+      ok: "ええ、承ったわ。",
+      hello: (n, x) => `あら、いらっしゃい。\n次にやること、${n}件預かっているわ。${x.old ? `${x.old}件は少し埃をかぶってきたかしら。` : "ゆっくり選んでね。"}`,
+      empty: "今日はなにも預かっていないわ。\n…ふふ、たまには私とお茶でもどう？",
+      pick: (t) => `「${t.name}」ね。預かって${ageOf(t)}日目よ。\n今日やる？ それとももう少し寝かせておく？`,
+      done: (n) => `「${n}」、済ませたのね。\n…ふふ、頑張り屋さんは嫌いじゃないわ。`,
+      mood: (n, x) => (x.old > 2 ? "shy" : n ? "normal" : "joy"),
+    },
+    plan: {
+      name: "ツムギ", role: "予定あり", place: "時計店", prof: "時計店の店員・22さい", color: "#3d7fe0",
+      hair: ["#b0d2ff", "#4f8ee8", "#2a5cb0"], eye: ["#86c0ff", "#1d58c4"], cloth: ["#ffffff", "#2f62b8"], style: "twin", acc: "ribbon", kind: "vest",
+      ok: "し、仕方ないわね。直しておいたわよ。",
+      hello: (n, x) => `べ、別にあなたの予定を管理したいわけじゃないんだからね！\n予定は${n}件。いちばん近いのは${x.soon}よ。`,
+      empty: "予定、ひとつもないの？ …ふーん。\nじゃあ、わたしが入れてあげてもいいけど？",
+      pick: (t) => `「${t.name}」は ${md(t.date)}（${WD[dow(t.date)]}）の予定よ。\n…変えるなら今のうちだからね。`,
+      done: (n) => `「${n}」、もう終わらせたの？\n…ま、まあまあね。ほめてあげなくもないわ。`,
+      mood: (n) => (n ? "pout" : "shy"),
+    },
+    inbox: {
+      name: "モモ", role: "倉庫", place: "雑貨屋", prof: "雑貨屋の後輩・23さい", color: "#ff5f95",
+      hair: ["#ffd7e4", "#ff9cbc", "#d86a92"], eye: ["#ffa0c0", "#cc3a6a"], cloth: ["#fff5f8", "#ff7aa2"], style: "bun", acc: "flower", kind: "apron",
+      ok: "はーいっ！ 運んでおきますね！",
+      hello: (n) => n > 15 ? `せんぱ〜い！ 倉庫に${n}こも届いてて、もう棚がいっぱいですぅ…\nどれから仕分けます？` : `せんぱい、いらっしゃいませっ！\n倉庫に${n}こ入ってます。どれ連れていきます？`,
+      empty: "倉庫、からっぽです！\nせんぱい、えらいです♡",
+      pick: (t) => `「${t.name}」ですね！\nどこに連れていきましょう？`,
+      done: (n) => `「${n}」終わってたんですか!?\nさすがせんぱいです〜♡`,
+      mood: (n) => (n > 15 ? "surprise" : "joy"),
+    },
+    wait: {
+      name: "ナギ", role: "待ち", place: "カフェ", prof: "カフェ店員・25さい", color: "#9474d6",
+      hair: ["#ebe2ff", "#bba4ea", "#7f68b8"], eye: ["#c6aef4", "#7556c4"], cloth: ["#ffffff", "#7a5644"], style: "wavy", acc: "leaf", kind: "cafe",
+      ok: "うん……わかった……",
+      hello: (n, x) => `ふわぁ……いらっしゃい。\nお返事待ちのが${n}こ、ここでいっしょに待ってるよ。いちばん長いのは${x.longest}日目……`,
+      empty: "待ってる人、いないみたい……。\nじゃあ、となりでお昼寝しよ……？",
+      pick: (t) => `「${t.name}」……${ageOf(t)}日待ってる。\nお返事、来た？ 来たなら動かしてあげよ……`,
+      done: (n) => `「${n}」おわったんだ……\nよかったね……えへへ。`,
+      mood: () => "sleepy",
+    },
+    ai: {
+      name: "アイ", role: "AI", place: "ラボ", prof: "研究所のAI助手", color: "#1fb3d4",
+      hair: ["#ffffff", "#e2e9f2", "#a3b1c4"], eye: ["#96f2ff", "#1a9fc0"], cloth: ["#f6fafc", "#30c8e8"], style: "short", acc: "headset", kind: "coat",
+      ok: "処理しました。……ほめてくれても、いいですよ？",
+      hello: (n, x) => x.mine ? `解析中のタスク${n}件。うち${x.mine}件は、あなたの返事待ちです。\n……早く会いに来てくれて、うれしいです。` : `解析中のタスク${n}件。結果が出たらお知らせしますね。\nあなたのために、がんばります。`,
+      empty: "現在、依頼はありません。\n……ひまなので、あなたを観察していてもいいですか？",
+      pick: (t) => `「${t.name}」。状態は ${t.ai || "未設定"}。\n${t.ai === "💭" ? "質問に答えてくれたら、続きを調べます。" : t.ai === "🔍✅" ? "調べ終わっています。見てくれますか？" : "どう処理しますか？"}`,
+      done: (n) => `「${n}」の完了を確認。\n……そういうところ、好きです。`,
+      mood: (n, x) => (x.mine ? "shy" : "normal"),
+    },
   };
-  const LANE_PLACE = { inbox: "inbox", next: "next", plan: "plan", today: "gate", done: "done", wait: "wait", ai: "ai" };
+  const GIRL_ORDER = ["today", "next", "plan", "inbox", "wait", "ai"];
 
   // 🗄 データベース ページの並び（ページが読めないときの控え。読めたらページの内容で置き換える）
   const SECTIONS = [
@@ -246,10 +372,10 @@ nav button { padding: 3px 0; white-space: nowrap; }
 
   // ================= 状態 =================
   const S = {
-    mode: "loading", tab: "town", place: null, target: null,
+    mode: "loading", tab: "home", place: null, target: null, react: null, memTab: "chart",
     tasks: [], projects: [], doneToday: [], inboxMore: false,
     diag: [], logs: [], goals: [], extraErr: {},
-    page: {}, slide: null, error: null, loadedAt: null, churchTab: "today", bagSec: null,
+    page: {}, slide: null, error: null, loadedAt: null, bagSec: null, love: {},
     dbs: [], dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false,
     leaf: null,
   };
@@ -408,18 +534,18 @@ nav button { padding: 3px 0; white-space: nowrap; }
     saveSnap();
   }
 
-  // ================= 書き込み：プロパティ（なかまを うごかす） =================
+  // ================= 書き込み：プロパティ（タスクを動かす） =================
   const ACTIONS = {
-    done: { label: "たおした（済み）", to: "done", props: () => ({ "ステータス": ST.done }), msg: (n) => `${n}を やっつけた！` },
-    today: { label: "きょう たたかう", to: "today", props: () => dateProps(TODAY()), msg: (n) => `${n}が まちのそとに あらわれた！（今日やる）` },
-    tomorrow: { label: "あしたへ", to: "plan", props: () => dateProps(addDays(TODAY(), 1)), msg: (n) => `${n}は あしたの よていに なった。` },
-    weekend: { label: "しゅうまつへ", to: "plan", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: (n) => `${n}は しゅうまつ（土）の よていに なった。` },
-    nodate: { label: "ひづけを けす", to: null, props: () => ({ "date:実行日:start": null }), msg: (n) => `${n}の ひづけを けした。` },
-    adopt: { label: "ギルドへ（次にやる）", to: "next", props: () => ({ "ステータス": ST.next }), msg: (n) => `${n}を ギルドの いらいに した！` },
-    wait: { label: "やどやで まつ", to: "wait", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: (n) => `${n}は やどやで へんじを まつ。` },
-    someday: { label: "ねむらせる（1かげつ）", to: "plan", props: () => ({ "ステータス": ST.some, ...dateProps(addMonths(TODAY(), 1)) }), msg: (n) => `${n}は ねむってしまった。（1かげつごに みなおす）` },
-    ref: { label: "しょこへ（資料）", to: null, props: () => ({ "ステータス": ST.ref }), msg: (n) => `${n}を しょこに おさめた。（REFERENCE）` },
-    research: { label: "けんじゃに たのむ（🔍）", to: "ai", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: (n) => `けんじゃに ${n}の しらべものを たのんだ。` },
+    done: { label: "済ませたよ♡", props: () => ({ "ステータス": ST.done }), msg: (n) => `「${n}」を済ませた！` },
+    today: { label: "今日いっしょにやろ", props: () => dateProps(TODAY()), msg: (n) => `「${n}」は今日やることに。` },
+    tomorrow: { label: "明日にしよ", props: () => dateProps(addDays(TODAY(), 1)), msg: (n) => `「${n}」は明日の予定に。` },
+    weekend: { label: "週末にしよ（土）", props: () => { const d = TODAY(); return dateProps(addDays(d, (6 - dow(d) + 7) % 7 || 7)); }, msg: (n) => `「${n}」は週末（土）の予定に。` },
+    nodate: { label: "日付はなしで", props: () => ({ "date:実行日:start": null }), msg: (n) => `「${n}」の日付を外した。` },
+    adopt: { label: "シオリに預ける（次にやる）", props: () => ({ "ステータス": ST.next }), msg: (n) => `「${n}」をシオリに預けた（次にやる）。` },
+    wait: { label: "ナギと待つ（待ち）", props: () => ({ "ステータス": ST.wait, "date:実行日:start": null }), msg: (n) => `「${n}」はナギのカフェで返事待ち。` },
+    someday: { label: "また今度ね（1か月）", props: () => ({ "ステータス": ST.some, ...dateProps(addMonths(TODAY(), 1)) }), msg: (n) => `「${n}」はまた今度（1か月後に見直す）。` },
+    ref: { label: "本棚にしまう（資料）", props: () => ({ "ステータス": ST.ref }), msg: (n) => `「${n}」を本棚にしまった（REFERENCE）。` },
+    research: { label: "アイに調べてもらう（🔍）", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔍" }), msg: (n) => `「${n}」の調べものをアイにお願いした。` },
   };
   const KEYS_BY_LANE = {
     today: ["done", "tomorrow", "weekend", "nodate", "wait", "someday", "ref", "research"],
@@ -429,6 +555,7 @@ nav button { padding: 3px 0; white-space: nowrap; }
     wait: ["adopt", "today", "done", "someday", "ref"],
     ai: ["adopt", "today", "someday", "ref", "research", "done"],
   };
+  const REACT_EXPR = { today: "joy", tomorrow: "normal", weekend: "shy", nodate: "normal", adopt: "normal", wait: "sleepy", someday: "pout", ref: "normal", research: "surprise" };
   function dateProps(d) { return { "date:実行日:start": d, "date:実行日:is_datetime": 0 }; }
   function applyLocal(t, props) {
     if ("ステータス" in props) t.status = props["ステータス"];
@@ -437,30 +564,40 @@ nav button { padding: 3px 0; white-space: nowrap; }
     if ("NEXT" in props) t.next = props.NEXT;
   }
   const short = (s, n = 12) => (s.length > n ? `${s.slice(0, n)}…` : s);
+  // 好感度：済ませたタスクの重さぶん、そのタスクを受け持っていたヒロインに入る（この端末に覚えておく）
+  const lvOf = (k) => 1 + Math.floor((S.love[k] || 0) / 100);
   async function act(id, key, { quiet = false } = {}) {
     const t = known.get(id); const a = ACTIONS[key];
     if (!t || !a) return;
     const before = { status: t.status, ai: t.ai, date: t.date };
+    const from = laneOf(t);
     const props = a.props();
     applyLocal(t, props);
-    if (laneOf(t) === "done") { S.doneToday.push({ id: t.id, url: t.url, name: t.name, weight: t.weight, waku: t.waku }); S.gained = (S.gained || 0) + expOf(t.weight); }
+    const gain = expOf(t.weight);
+    if (laneOf(t) === "done") {
+      S.doneToday.push({ id: t.id, url: t.url, name: t.name, weight: t.weight, waku: t.waku, girl: from });
+      if (GIRLS[from]) { S.love[from] = (S.love[from] || 0) + gain; store.set("love", S.love); }
+    }
     closeSheet(); S.target = null;
     render();
-    if (!quiet) say(a.msg(short(t.name)) + (key === "done" ? `\n${expOf(t.weight)}ポイントの けいけんちを かくとく！` : "") + (S.mode === "demo" ? "\n（みほんなので Notion は かわりません）" : ""));
+    if (!quiet) say(a.msg(short(t.name)) + (key === "done" ? `\n${GIRLS[from]?.name || "みんな"}の好感度 +${gain}♡` : "") + (S.mode === "demo" ? "\n（見本なので Notion は変わりません）" : ""));
     if (S.mode === "demo") return;
     try {
       await call("update", { page_id: id, command: "update_properties", properties: props, allow_async: false }, { read: false });
       saveSnap();
     } catch (err) {
       Object.assign(t, before);
-      if (key === "done") { S.doneToday = S.doneToday.filter((x) => x.id !== t.id); S.gained -= expOf(t.weight); }
-      render(); say(`しかし うまく いかなかった！\n${errText(err)}`);
+      if (key === "done") {
+        S.doneToday = S.doneToday.filter((x) => x.id !== t.id);
+        if (GIRLS[from]) { S.love[from] = Math.max(0, (S.love[from] || 0) - gain); store.set("love", S.love); }
+      }
+      render(); say(`ごめん、Notion に届かなかったみたい…\n${errText(err)}`);
     }
   }
 
-  // ================= メッセージ（1文字ずつ） =================
+  // ================= セリフ（1文字ずつ） =================
   const typers = new WeakMap();
-  function type(el, textv, speed = 26) {
+  function type(el, textv, speed = 28) {
     if (!el) return;
     clearTimeout(typers.get(el));
     if (reduce) { el.textContent = textv; return; }
@@ -482,334 +619,303 @@ nav button { padding: 3px 0; white-space: nowrap; }
     S.page[key] = p;
     return { slice: items.slice(p * per, p * per + per), p, pages };
   }
-  // 枠の高さから1頁の件数を決める。続きがあれば右下に ▼ と頁
+  // 枠の高さから1頁の件数を決める。続きがあれば右下に頁
   function fill(box, key, items, unit, draw) {
-    const per = Math.max(1, Math.floor((box.clientHeight - 4) / unit));
+    const per = Math.max(1, Math.floor((box.clientHeight + 6) / unit));
     const { slice, p, pages } = pageOf(key, items, per);
     box.innerHTML = slice.map((x, i) => draw(x, i)).join("");
     box.dataset.swipe = key; box.dataset.pages = pages;
     if (S.slide?.key === key) box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
-    const win = box.closest(".win");
-    if (win && pages > 1) win.insertAdjacentHTML("beforeend", `<span class="more">${p + 1}/${pages}${p < pages - 1 ? " ▼" : ""}</span>`);
+    const win = box.closest(".panel, .phone");
+    if (win && pages > 1) win.insertAdjacentHTML("beforeend", `<span class="more">${p + 1}/${pages} ${p < pages - 1 ? "スワイプで次へ ›" : ""}</span>`);
   }
 
-  // ================= まち（ドット絵の町） =================
-  const TW = 20, TH = 13, T = 16;
-  const grid = (() => {
-    const g = Array.from({ length: TH }, () => Array(TW).fill("g"));
-    for (let x = 0; x < TW; x++) { g[0][x] = "t"; g[TH - 1][x] = "t"; }
-    for (let y = 0; y < TH; y++) { g[y][0] = "t"; g[y][TW - 1] = "t"; }
-    for (let x = 1; x < TW - 1; x++) { g[4][x] = "p"; g[8][x] = "p"; }
-    for (let y = 3; y < TH; y++) { g[y][9] = "p"; g[y][10] = "p"; }
-    for (const [k, b] of Object.entries(PLACES)) {
-      if (k === "gate") continue;
-      for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) g[y][x] = "B";
-      g[b.door[1]][b.door[0]] = "D";
-      g[b.stand[1]][b.stand[0]] = "p";
+  // ================= ヒロインの絵（SVG） =================
+  let gid = 0;
+  const SKIN = "#ffe7da", SKIN2 = "#f6c7b5", LINE = "#5a3640";
+  const BACKS = {
+    bob: "M50,100 C46,44 154,44 150,100 C153,128 149,148 138,156 C128,146 72,146 62,156 C51,148 47,128 50,100Z",
+    long: "M54,96 C48,38 152,38 146,96 C150,150 156,200 162,240 L38,240 C44,200 50,150 54,96Z",
+    twin: "M52,100 C48,44 152,44 148,100 C150,124 146,140 138,146 L62,146 C54,140 50,124 52,100Z",
+    bun: "M52,100 C48,44 152,44 148,100 C151,126 147,144 138,150 L62,150 C53,144 49,126 52,100Z",
+    wavy: "M54,96 C46,38 154,38 146,96 C158,130 142,160 156,190 C146,214 160,230 152,240 L48,240 C40,230 54,214 44,190 C58,160 42,130 54,96Z",
+    short: "M53,100 C49,44 151,44 147,100 C149,122 145,134 137,140 L63,140 C55,134 51,122 53,100Z",
+  };
+  const BANGS = "M54,104 C50,50 78,36 100,36 C122,36 150,50 146,104 C144,96 141,88 137,82 L133,100 L125,77 L116,99 L107,74 L99,98 L90,75 L82,99 L74,79 L67,100 C63,92 58,98 54,104Z";
+  const BROWS = {
+    normal: ["M74,95 Q83,91 92,94", "M108,94 Q117,91 126,95"], joy: ["M74,94 Q83,89 92,93", "M108,93 Q117,89 126,94"],
+    pout: ["M74,90 L92,97", "M126,90 L108,97"], shy: ["M74,95 Q83,94 92,90", "M108,90 Q117,94 126,95"],
+    surprise: ["M74,90 Q83,84 92,89", "M108,89 Q117,84 126,90"], sleepy: ["M74,96 Q83,95 92,96", "M108,96 Q117,95 126,96"],
+  };
+  const MOUTH = {
+    normal: `<path d="M93,141 Q100,147 107,141" fill="none" stroke="#b04a58" stroke-width="2" stroke-linecap="round"/>`,
+    joy: `<path d="M91,139 Q100,153 109,139Z" fill="#c8485a"/><path d="M95,146.5 Q100,143 105,146.5 Q100,150 95,146.5Z" fill="#ff8c9c"/>`,
+    pout: `<path d="M95,145 Q100,140.5 105,145" fill="none" stroke="#b04a58" stroke-width="2" stroke-linecap="round"/>`,
+    shy: `<path d="M94,142 q3,-2.5 6,0 q3,2.5 6,0" fill="none" stroke="#b04a58" stroke-width="1.8" stroke-linecap="round"/>`,
+    surprise: `<ellipse cx="100" cy="143" rx="3.6" ry="4.6" fill="#b04a58"/>`,
+    sleepy: `<path d="M96,142 Q100,144.5 104,142" fill="none" stroke="#b04a58" stroke-width="1.8" stroke-linecap="round"/>`,
+  };
+  const CLOTHES = {
+    hoodie: (c1, c2) => `<path d="M86,178 Q100,196 114,178Z" fill="${SKIN}"/><path d="M68,182 C80,200 120,200 132,182" fill="none" stroke="${c2}" stroke-width="7" stroke-linecap="round"/><path d="M92,194 L90,224 M108,194 L110,224" stroke="${c2}" stroke-width="2.2" stroke-linecap="round"/><circle cx="90" cy="225" r="2.4" fill="${c2}"/><circle cx="110" cy="225" r="2.4" fill="${c2}"/>`,
+    cardigan: (c1, c2) => `<path d="M84,177 L100,216 L116,177Z" fill="${c2}"/><path d="M90,177 L100,192 L110,177Z" fill="${SKIN}"/><path d="M84,177 L100,216 L116,177" fill="none" stroke="#2a3460" stroke-width="1.5"/><circle cx="100" cy="224" r="2.6" fill="#f0dca8"/><circle cx="100" cy="235" r="2.6" fill="#f0dca8"/>`,
+    vest: (c1, c2) => `<path d="M88,177 Q100,190 112,177Z" fill="${SKIN}"/><path d="M48,240 C52,208 68,192 86,186 L100,228 L114,186 C132,192 148,208 152,240Z" fill="${c2}"/><path d="M100,192 l-11,-7 v14Z M100,192 l11,-7 v14Z" fill="#ff4f6a"/><circle cx="100" cy="192" r="3.2" fill="#d83050"/><path d="M98,195 L94,212 L100,208 L106,212 L102,195Z" fill="#ff4f6a"/>`,
+    apron: (c1, c2) => `<path d="M88,177 Q100,190 112,177Z" fill="${SKIN}"/><path d="M76,206 L124,206 L130,240 L70,240Z" fill="${c2}"/><path d="M78,206 L70,182 M122,206 L130,182" stroke="${c2}" stroke-width="3.5" stroke-linecap="round"/><path d="M100,226 C96,221 90,224 93,229 L100,234 L107,229 C110,224 104,221 100,226Z" fill="#fff" opacity=".85"/>`,
+    cafe: (c1, c2) => `<path d="M88,177 Q100,188 112,177Z" fill="${SKIN}"/><path d="M100,186 l-9,-5 v10Z M100,186 l9,-5 v10Z" fill="${c2}"/><circle cx="100" cy="186" r="2.4" fill="${c2}"/><path d="M68,216 L132,216 L138,240 L62,240Z" fill="${c2}"/><path d="M72,216 L64,186 M128,216 L136,186" stroke="${c2}" stroke-width="3" stroke-linecap="round"/>`,
+    coat: (c1, c2) => `<path d="M86,176 L114,176 L112,192 L88,192Z" fill="#2c3d50"/><path d="M84,178 L96,226 L86,240 M116,178 L104,226 L114,240" fill="none" stroke="#c4d0dc" stroke-width="2"/><rect x="122" y="210" width="18" height="3" rx="1.5" fill="${c2}"/><circle cx="131" cy="222" r="3" fill="${c2}" opacity=".8"/>`,
+  };
+  function bow(x, y) { return `<path d="M${x},${y} l-11,-8 v16Z M${x},${y} l11,-8 v16Z" fill="#ff4f6a"/><circle cx="${x}" cy="${y}" r="3.4" fill="#d83050"/>`; }
+  const ACC = {
+    star: () => `<path transform="translate(131,70)" d="M0,-8 L2.4,-2.5 8,-2.5 3.5,1 5.2,7 0,3.5 -5.2,7 -3.5,1 -8,-2.5 -2.4,-2.5Z" fill="#ffd84a" stroke="#e8a420" stroke-width="1"/>`,
+    glasses: () => `<g fill="rgba(255,255,255,.12)" stroke="#7a5a4c" stroke-width="1.8"><rect x="70" y="103" width="26" height="22" rx="8"/><rect x="104" y="103" width="26" height="22" rx="8"/></g><path d="M96,111 Q100,108 104,111" fill="none" stroke="#7a5a4c" stroke-width="1.6"/><path d="M74,108 l6,-3 M108,108 l6,-3" stroke="#fff" stroke-width="1.6" opacity=".8"/>`,
+    ribbon: () => bow(62, 80) + bow(138, 80),
+    flower: () => `<g transform="translate(132,70)">${[0, 72, 144, 216, 288].map((a) => `<circle cx="${(Math.cos((a * Math.PI) / 180) * 5).toFixed(1)}" cy="${(Math.sin((a * Math.PI) / 180) * 5).toFixed(1)}" r="4" fill="#fff"/>`).join("")}<circle r="3" fill="#ffd84a"/></g>`,
+    leaf: () => `<path transform="translate(130,72) rotate(-30)" d="M0,0 C4,-8 14,-8 16,0 C14,8 4,8 0,0Z" fill="#7fcf8a" stroke="#4aa060" stroke-width="1"/>`,
+    headset: () => `<path d="M48,104 C44,26 156,26 152,104" fill="none" stroke="#2c3d50" stroke-width="4.5"/><rect x="41" y="94" width="15" height="24" rx="7" fill="#2c3d50"/><rect x="144" y="94" width="15" height="24" rx="7" fill="#2c3d50"/><circle cx="48.5" cy="106" r="3" fill="#30e0ff"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle><circle cx="151.5" cy="106" r="3" fill="#30e0ff"/><path d="M47,116 Q54,142 80,144" fill="none" stroke="#2c3d50" stroke-width="2"/><circle cx="81" cy="144" r="3" fill="#2c3d50"/>`,
+  };
+  const FX = {
+    joy: `<g class="fx"><path transform="translate(156,62) scale(.9)" d="M0,4 C-4,-2 -10,0 -8,5 L0,12 L8,5 C10,0 4,-2 0,4Z" fill="#ff5f8f"/><path transform="translate(44,78) scale(.6)" d="M0,4 C-4,-2 -10,0 -8,5 L0,12 L8,5 C10,0 4,-2 0,4Z" fill="#ff8fb0"/></g>`,
+    pout: `<g class="fx" stroke="#ff4060" stroke-width="2.4" stroke-linecap="round" fill="none"><path d="M150,58 q4,4 0,8 M158,58 q-4,4 0,8 M150,58 q4,-4 8,0 M150,66 q4,4 8,0"/></g>`,
+    shy: `<g class="fx" stroke="#ff7d96" stroke-width="1.6" stroke-linecap="round"><path d="M70,128 l3,-5 M75,129 l3,-5 M80,130 l3,-5 M118,130 l3,-5 M123,129 l3,-5 M128,128 l3,-5"/></g>`,
+    surprise: `<g class="fx" stroke="#ffb020" stroke-width="2.6" stroke-linecap="round"><path d="M152,50 l4,-10 M160,58 l9,-5 M146,46 l-1,-10"/></g>`,
+    sleepy: `<g class="fx" fill="#9a8ad0" font-family="sans-serif" font-weight="700"><text x="150" y="66" font-size="13">z</text><text x="160" y="54" font-size="10">z</text></g>`,
+    normal: "",
+  };
+  // expr：normal・joy・pout・shy・surprise・sleepy。face＝顔だけ切り取る
+  function girl(g, expr = "normal", face = false) {
+    const id = `g${++gid}`; const [hl, hb, hd] = g.hair; const [el, ed] = g.eye; const [c1, c2] = g.cloth;
+    const hair = `url(#${id}h)`;
+    const eye = (cx, side) => {
+      if (expr === "joy") return `<path d="M${cx - 10},116 Q${cx},103 ${cx + 10},116" fill="none" stroke="${LINE}" stroke-width="3.4" stroke-linecap="round"/>`;
+      const dx = expr === "shy" ? -3 : 0; const sm = expr === "surprise";
+      const [rx, ry] = sm ? [6.5, 8.5] : [8.5, 10.5];
+      let s = `<ellipse cx="${cx}" cy="114" rx="11" ry="12.5" fill="#fff"/>
+        <ellipse cx="${cx + dx}" cy="116" rx="${rx}" ry="${ry}" fill="url(#${id}e)"/>
+        <ellipse cx="${cx + dx}" cy="117" rx="${sm ? 3 : 4}" ry="${sm ? 4 : 5.5}" fill="#2a1a2e" opacity=".6"/>
+        <circle cx="${cx + dx + 3}" cy="110" r="3.2" fill="#fff"/><circle cx="${cx + dx - 3.5}" cy="121" r="1.6" fill="#fff"/>
+        <path d="M${cx - 6},127.5 Q${cx},129 ${cx + 6},127.5" fill="none" stroke="#d4a2a2" stroke-width="1"/>`;
+      if (expr === "sleepy") return s + `<path d="M${cx - 13},99 H${cx + 13} V114.5 Q${cx},117.5 ${cx - 13},114.5Z" fill="${SKIN}"/><path d="M${cx - 12},115 Q${cx},119 ${cx + 12},114" fill="none" stroke="${LINE}" stroke-width="3" stroke-linecap="round"/>`;
+      const ox = side < 0 ? cx - 12 : cx + 12, oy = side < 0 ? 109 : 107;
+      return s + `<path d="M${cx - 12},109 Q${cx},98 ${cx + 12},107" fill="none" stroke="${LINE}" stroke-width="3.4" stroke-linecap="round"/><path d="M${ox},${oy} l${side * 3.2},-3.2" stroke="${LINE}" stroke-width="2.4" stroke-linecap="round"/>`;
+    };
+    const blush = { normal: .28, joy: .45, pout: .5, shy: .72, surprise: .3, sleepy: .3 }[expr] ?? .3;
+    const side = g.style === "short" ? ["M56,98 C51,120 54,138 62,152 C67,136 68,118 70,104Z", "M144,98 C149,120 146,138 138,152 C133,136 132,118 130,104Z"]
+      : ["M56,98 C50,128 54,156 64,176 C70,150 70,124 70,104Z", "M144,98 C150,128 146,156 136,176 C130,150 130,124 130,104Z"];
+    let behind = "";
+    if (g.style === "twin") behind = `<path class="tail l" d="M62,76 C22,92 14,176 34,232 C44,204 46,150 72,100Z" fill="${hair}"/><path class="tail r" d="M138,76 C178,92 186,176 166,232 C156,204 154,150 128,100Z" fill="${hair}"/>`;
+    if (g.style === "bun") behind = `<circle cx="64" cy="52" r="17" fill="${hair}"/><circle cx="136" cy="52" r="17" fill="${hair}"/><path d="M54,46 q10,-8 20,0 M126,46 q10,-8 20,0" stroke="${hl}" stroke-width="2.5" fill="none" opacity=".7"/>`;
+    return `<svg viewBox="${face === "bust" ? "22 20 156 196" : face ? "38 26 124 136" : "0 0 200 240"}" class="girl" ${face ? 'style="overflow:hidden"' : ""} aria-hidden="true" focusable="false">
+      <defs><linearGradient id="${id}h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hl}"/><stop offset=".3" stop-color="${hb}"/><stop offset="1" stop-color="${hd}"/></linearGradient>
+      <linearGradient id="${id}e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ed}"/><stop offset=".6" stop-color="${el}"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs>
+      ${behind}<path d="${BACKS[g.style]}" fill="${hair}"/>
+      <path d="M90,146 L90,182 Q100,188 110,182 L110,146Z" fill="${SKIN}"/><path d="M90,152 Q100,168 110,152Z" fill="${SKIN2}"/>
+      <path d="M28,240 C32,204 60,184 92,178 L108,178 C140,184 168,204 172,240Z" fill="${c1}"/>${CLOTHES[g.kind](c1, c2)}
+      <path d="M62,100 C62,62 80,50 100,50 C120,50 138,62 138,100 C138,128 124,148 100,160 C76,148 62,128 62,100Z" fill="${SKIN}"/>
+      <path d="M64,100 Q100,114 136,100 L136,92 L64,92Z" fill="${SKIN2}" opacity=".55"/>
+      <g class="eyes">${eye(83, -1)}${eye(117, 1)}</g>
+      <path d="M100.5,129 l-1.2,3" stroke="#e0a090" stroke-width="1.4" stroke-linecap="round"/>
+      ${MOUTH[expr] || MOUTH.normal}
+      <ellipse cx="75" cy="131" rx="9" ry="4.5" fill="#ff7d96" opacity="${blush}"/><ellipse cx="125" cy="131" rx="9" ry="4.5" fill="#ff7d96" opacity="${blush}"/>
+      <path d="${BANGS}" fill="${hair}"/><path d="${side[0]}" fill="${hair}"/><path d="${side[1]}" fill="${hair}"/>
+      <path d="M68,62 Q100,46 132,62" fill="none" stroke="${hl}" stroke-width="5" stroke-linecap="round" opacity=".75"/><path d="M80,56 l-3,10 M120,56 l3,10" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+      ${g.ahoge ? `<path d="M102,38 C96,20 114,16 118,26 C108,24 104,30 102,38Z" fill="${hb}"/>` : ""}
+      <g fill="none" stroke="${hd}" stroke-width="2.3" stroke-linecap="round" opacity=".9"><path d="${(BROWS[expr] || BROWS.normal)[0]}"/><path d="${(BROWS[expr] || BROWS.normal)[1]}"/></g>
+      ${ACC[g.acc]()}${FX[expr] || ""}
+    </svg>`;
+  }
+
+  // ================= 背景（場所ごと） =================
+  function hashOf(s) { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); }
+  function bg(k) {
+    const id = `b${++gid}`;
+    const svg = (inner) => `<svg class="bg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>`;
+    if (k === "today") return svg(`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ed4ff"/><stop offset=".75" stop-color="#ffeaf3"/></linearGradient></defs>
+      <rect width="400" height="300" fill="url(#${id})"/><circle cx="330" cy="58" r="24" fill="#fff4c4"/>
+      <g fill="#fff" opacity=".9"><ellipse cx="80" cy="60" rx="40" ry="13"/><ellipse cx="108" cy="52" rx="24" ry="13"/><ellipse cx="250" cy="92" rx="34" ry="10"><animate attributeName="cx" values="250;270;250" dur="14s" repeatCount="indefinite"/></ellipse></g>
+      <path d="M0,200 C80,172 160,192 220,182 C300,170 360,186 400,176 V300 H0Z" fill="#bfe8a8"/><path d="M0,232 C100,212 200,242 400,218 V300 H0Z" fill="#9ad88a"/>
+      <g><rect x="40" y="150" width="9" height="56" fill="#a07850"/><circle cx="44" cy="138" r="30" fill="#ffc6da"/><circle cx="26" cy="152" r="18" fill="#ffb3cd"/><circle cx="64" cy="150" r="18" fill="#ffd3e2"/></g>
+      <g><rect x="352" y="146" width="9" height="60" fill="#a07850"/><circle cx="356" cy="134" r="30" fill="#ffc6da"/><circle cx="376" cy="150" r="18" fill="#ffb3cd"/><circle cx="336" cy="148" r="18" fill="#ffd3e2"/></g>
+      <rect x="250" y="206" width="70" height="7" rx="3" fill="#c48a5a"/><rect x="250" y="216" width="70" height="5" rx="2" fill="#b07a4e"/><rect x="256" y="216" width="5" height="20" fill="#7a5a40"/><rect x="309" y="216" width="5" height="20" fill="#7a5a40"/>`);
+    if (k === "next") {
+      const cols = ["#c85a5a", "#5a7ac8", "#e0b050", "#6aa87a", "#a070c0", "#d88a5a", "#4a8a9a"];
+      let books = "";
+      for (const y of [40, 112, 184]) { books += `<rect x="8" y="${y + 56}" width="268" height="7" fill="#9a6a44"/>`; let x = 14; let i = 0; while (x < 268) { const h = hashOf(`${x}:${y}`); const w = 8 + (h % 7), hh = 38 + (h % 18); books += `<rect x="${x}" y="${y + 56 - hh}" width="${w - 1}" height="${hh}" rx="1" fill="${cols[(h >> 3) % cols.length]}"/><rect x="${x + 2}" y="${y + 60 - hh}" width="${w - 5}" height="2" fill="#fff" opacity=".35"/>`; x += w; i += 1; } }
+      return svg(`<rect width="400" height="300" fill="#f5e4cc"/><rect x="296" y="26" width="90" height="120" rx="6" fill="#cfeaff" stroke="#c49a6c" stroke-width="6"/><path d="M341,26 V146 M296,86 H386" stroke="#c49a6c" stroke-width="4"/>
+        <path d="M296,146 L230,300 H400 V146Z" fill="#fff" opacity=".22"/>${books}<rect y="252" width="400" height="48" fill="#e2c9a6"/>`);
     }
-    g[12][9] = "G"; g[12][10] = "G";
-    [[12, 5], [13, 5], [12, 6], [13, 6]].forEach(([x, y]) => { g[y][x] = "F"; });
-    [[1, 10], [2, 10], [1, 11], [2, 11]].forEach(([x, y]) => { g[y][x] = "w"; });
-    [[6, 5], [7, 6], [5, 6], [11, 10], [8, 10], [17, 10], [18, 11]].forEach(([x, y]) => { if (g[y][x] === "g") g[y][x] = "f"; });
-    [[5, 2], [6, 2], [13, 2], [14, 2], [7, 10], [11, 11], [18, 10]].forEach(([x, y]) => { if (g[y][x] === "g") g[y][x] = "t"; });
-    return g;
-  })();
-  const walk = (x, y) => x >= 0 && y >= 0 && x < TW && y < TH && "gpfG".includes(grid[y][x]);
-  function bfs(from, to) {
-    const key = (x, y) => y * TW + x; const prev = new Map([[key(...from), null]]); const q = [from];
-    while (q.length) {
-      const [x, y] = q.shift();
-      if (x === to[0] && y === to[1]) break;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (walk(nx, ny) && !prev.has(key(nx, ny))) { prev.set(key(nx, ny), [x, y]); q.push([nx, ny]); }
-      }
+    if (k === "plan") {
+      let ticks = ""; for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ticks += `<line x1="${200 + Math.sin(a) * 56}" y1="${108 - Math.cos(a) * 56}" x2="${200 + Math.sin(a) * 64}" y2="${108 - Math.cos(a) * 64}" stroke="#8a6a40" stroke-width="${i % 3 ? 2 : 4}"/>`; }
+      const small = [[60, 70, 22], [340, 80, 26], [70, 200, 18], [334, 206, 20]].map(([x, y, r], i) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#fffaf0" stroke="${["#e0a0b0", "#a0b8e0", "#b0d8a0", "#e0c080"][i]}" stroke-width="5"/><line x1="${x}" y1="${y}" x2="${x}" y2="${y - r * .6}" stroke="#555" stroke-width="2"/><line x1="${x}" y1="${y}" x2="${x + r * .45}" y2="${y}" stroke="#555" stroke-width="2"/>`).join("");
+      return svg(`<rect width="400" height="300" fill="#e3ebff"/>${Array.from({ length: 20 }, (_, i) => `<rect x="${i * 20}" width="10" height="300" fill="#fff" opacity=".35"/>`).join("")}
+        <circle cx="200" cy="108" r="72" fill="#fffaf0" stroke="#c8a060" stroke-width="9"/>${ticks}
+        <line x1="200" y1="108" x2="200" y2="70" stroke="#4a3a30" stroke-width="5" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 200 108" to="360 200 108" dur="120s" repeatCount="indefinite"/></line>
+        <line x1="200" y1="108" x2="236" y2="108" stroke="#4a3a30" stroke-width="3" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 200 108" to="360 200 108" dur="10s" repeatCount="indefinite"/></line>
+        <circle cx="200" cy="108" r="5" fill="#c8a060"/>${small}<rect y="256" width="400" height="44" fill="#c9b8e8"/>`);
     }
-    const path = []; let c = to;
-    if (!prev.has(key(...to))) return [];
-    while (c) { path.unshift(c); c = prev.get(key(...c)); }
-    return path;
-  }
-  // ドット絵（オリジナル）。1文字＝1ドット
-  const HERO = [
-    "......aaaa......", ".....aaaaaa.....", "....aaaaaaaa....", "....abbbbbba....", "....bcbbbbcb....", "....bbbbbbbb....", ".....bbddbb.....", "....eeeeeeee....",
-    "...eeefffeeee...", "...beeeeeeeeb...", "...beeeeeeeeb...", "....eeeeeeee....", "....gg....gg....", "....gg....gg....", "...hhh....hhh...", "................"];
-  const HERO2 = HERO.slice(0, 12).concat(["....gg...gg.....", "...hhg...gg.....", "...hh....hhh....", "................"]);
-  const HERO_PAL = { a: "#2f8f4a", b: "#f2c9a0", c: "#1b1b1b", d: "#b35a4a", e: "#3460c8", f: "#e8c050", g: "#5a3a22", h: "#2a1a10" };
-  const NPC_PALS = [{ ...HERO_PAL, a: "#b03050", e: "#c87830" }, { ...HERO_PAL, a: "#ddd", e: "#7a4ab0", f: "#ddd" }];
-  function sprite(c, rows, pal, x, y, flip = false) {
-    for (let r = 0; r < 16; r++) for (let k = 0; k < 16; k++) { const ch = rows[r][flip ? 15 - k : k]; if (ch !== ".") { c.fillStyle = pal[ch]; c.fillRect(x + k, y + r, 1, 1); } }
-  }
-  let staticLayer = null;
-  function drawStatic() {
-    const cv = document.createElement("canvas"); cv.width = TW * T; cv.height = TH * T;
-    const c = cv.getContext("2d");
-    const h = (x, y) => ((x * 73856093) ^ (y * 19349663)) >>> 0;
-    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
-      const ch = grid[y][x], px = x * T, py = y * T;
-      c.fillStyle = "#3c8a3c"; c.fillRect(px, py, T, T);
-      for (let i = 0; i < 5; i++) { const v = h(x * 7 + i, y * 3 + i); c.fillStyle = "#52a852"; c.fillRect(px + (v % 15), py + ((v >> 5) % 15), 1, 2); }
-      if (ch === "p" || ch === "D" || ch === "G") { c.fillStyle = "#c9a76a"; c.fillRect(px, py, T, T); for (let i = 0; i < 4; i++) { const v = h(x + i * 11, y + i); c.fillStyle = "#b08f55"; c.fillRect(px + (v % 15), py + ((v >> 4) % 15), 2, 1); } }
-      if (ch === "t") { c.fillStyle = "#1f5a24"; c.beginPath(); c.arc(px + 8, py + 7, 7, 0, 7); c.fill(); c.fillStyle = "#2e7a33"; c.beginPath(); c.arc(px + 6, py + 5, 4, 0, 7); c.fill(); c.fillStyle = "#5a3a22"; c.fillRect(px + 7, py + 12, 3, 4); }
-      if (ch === "f") { const cols = ["#ff7aa0", "#ffe066", "#ffffff"]; for (let i = 0; i < 4; i++) { const v = h(x + i, y * 5 + i); c.fillStyle = cols[i % 3]; c.fillRect(px + 2 + (v % 11), py + 2 + ((v >> 3) % 11), 2, 2); } }
+    if (k === "inbox") {
+      const box = (x, y, w, h, c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="${c}"/><rect x="${x}" y="${y + h / 2 - 2}" width="${w}" height="4" fill="#fff" opacity=".5"/>`;
+      return svg(`<rect width="400" height="300" fill="#ffe8f0"/><path d="M0,30 Q100,60 200,30 T400,30" fill="none" stroke="#e8b0c8" stroke-width="1.5"/>
+        ${[20, 60, 100, 140, 180, 220, 260, 300, 340, 380].map((x, i) => `<circle cx="${x}" cy="${30 + Math.sin(i * 1.6) * 12}" r="5" fill="${["#ffd84a", "#7ad0ff", "#ff8fb0", "#9be08a"][i % 4]}"><animate attributeName="opacity" values="1;.4;1" dur="${1.5 + (i % 3) * .5}s" repeatCount="indefinite"/></circle>`).join("")}
+        <rect x="10" y="120" width="380" height="7" fill="#d79ab4"/><rect x="10" y="200" width="380" height="7" fill="#d79ab4"/>
+        ${box(20, 84, 46, 36, "#ffc2d6")}${box(72, 94, 36, 26, "#c9e4ff")}${box(116, 76, 52, 44, "#fff0b0")}${box(300, 88, 40, 32, "#d7f0c8")}${box(346, 98, 34, 22, "#ffd7b0")}
+        ${box(30, 166, 40, 34, "#e2d4ff")}${box(78, 176, 56, 24, "#ffc2d6")}${box(286, 160, 48, 40, "#c9e4ff")}${box(340, 172, 40, 28, "#fff0b0")}
+        <g><rect x="250" y="98" width="16" height="22" rx="4" fill="#fff" opacity=".8"/><path d="M258,98 c-6,-14 6,-18 0,-26 c8,6 8,14 0,26" fill="#8fd47f"/></g><rect y="250" width="400" height="50" fill="#f3c9d8"/>`);
     }
-    // 建物
-    for (const [k, b] of Object.entries(PLACES)) {
-      if (k === "gate") continue;
-      const px = b.x * T, py = b.y * T, pw = b.w * T, ph = b.h * T;
-      c.fillStyle = k === "castle" ? "#9a9aa8" : "#d8c8a4"; c.fillRect(px, py, pw, ph);
-      c.fillStyle = "rgba(0,0,0,.15)"; for (let yy = py + 22; yy < py + ph; yy += 6) c.fillRect(px, yy, pw, 1);
-      if (k === "castle") { c.fillStyle = "#7a7a88"; for (let xx = px; xx < px + pw; xx += 8) c.fillRect(xx, py, 4, 6); c.fillStyle = "#5a5ab0"; c.fillRect(px + 2, py + 10, 14, 10); c.fillRect(px + pw - 16, py + 10, 14, 10); }
-      else { c.fillStyle = b.roof; c.fillRect(px - 1, py, pw + 2, 16); c.fillStyle = "rgba(0,0,0,.2)"; for (let xx = px; xx < px + pw; xx += 4) c.fillRect(xx, py + 2, 1, 13); }
-      if (k === "ai") { c.fillStyle = b.roof; c.beginPath(); c.moveTo(px - 2, py + 16); c.lineTo(px + pw / 2, py - 10); c.lineTo(px + pw + 2, py + 16); c.fill(); }
-      if (k === "done") { c.fillStyle = "#e8e8e8"; c.fillRect(px + pw / 2 - 1, py - 8, 3, 10); c.fillRect(px + pw / 2 - 4, py - 5, 9, 3); }
-      if (k === "plan") { c.fillStyle = "#fff"; c.beginPath(); c.arc(px + pw / 2, py + 26, 7, 0, 7); c.fill(); c.strokeStyle = "#222"; c.beginPath(); c.moveTo(px + pw / 2, py + 26); c.lineTo(px + pw / 2, py + 21); c.moveTo(px + pw / 2, py + 26); c.lineTo(px + pw / 2 + 4, py + 26); c.stroke(); }
-      // 窓と扉
-      c.fillStyle = "#3a5a8a"; for (let i = 0; i < b.w; i++) if (i !== b.door[0] - b.x) c.fillRect(px + i * T + 5, py + ph - 14, 6, 6);
-      const dx = b.door[0] * T, dy = b.door[1] * T;
-      c.fillStyle = "#5a3417"; c.fillRect(dx + 3, dy + (b.door[1] === b.y ? 0 : 4), 10, 12); c.fillStyle = "#e8c050"; c.fillRect(dx + 10, dy + 10, 1, 2);
+    if (k === "wait") return svg(`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc79a"/><stop offset="1" stop-color="#ffe9dc"/></linearGradient></defs>
+      <rect width="400" height="300" fill="#f2dcc8"/><rect x="30" y="40" width="170" height="130" rx="8" fill="url(#${id})" stroke="#9a6a4a" stroke-width="6"/><path d="M115,40 V170" stroke="#9a6a4a" stroke-width="4"/>
+      <circle cx="160" cy="140" r="20" fill="#ffad7a" opacity=".8"/><path d="M24,36 Q50,100 34,176 L24,176Z M206,36 Q180,100 196,176 L206,176Z" fill="#f4a8c0"/>
+      ${[270, 340].map((x) => `<line x1="${x}" y1="0" x2="${x}" y2="50" stroke="#6a4a3a" stroke-width="2"/><path d="M${x - 16},66 L${x - 8},50 L${x + 8},50 L${x + 16},66Z" fill="#6a4a3a"/><circle cx="${x}" cy="70" r="16" fill="#ffe08a" opacity=".45"><animate attributeName="opacity" values=".45;.25;.45" dur="3s" repeatCount="indefinite"/></circle>`).join("")}
+      <rect y="214" width="400" height="86" fill="#8a5a40"/><rect y="210" width="400" height="8" fill="#a97452"/>
+      <g><rect x="280" y="190" width="18" height="20" rx="3" fill="#fff"/><path d="M298,194 q8,0 8,7 q0,6 -8,6" fill="none" stroke="#fff" stroke-width="3"/><path d="M286,186 q-3,-8 2,-14 M292,186 q-3,-8 2,-14" stroke="#fff" stroke-width="1.6" fill="none" opacity=".7"><animate attributeName="opacity" values=".7;.1;.7" dur="2.4s" repeatCount="indefinite"/></path></g>`);
+    return svg(`<rect width="400" height="300" fill="#e6fbff"/>${Array.from({ length: 21 }, (_, i) => `<line x1="${i * 20}" y1="0" x2="${i * 20}" y2="300" stroke="#c4eef6"/>`).join("")}${Array.from({ length: 16 }, (_, i) => `<line x1="0" y1="${i * 20}" x2="400" y2="${i * 20}" stroke="#c4eef6"/>`).join("")}
+      ${[[24, 60, 96, 70], [290, 50, 90, 64], [300, 130, 76, 54]].map(([x, y, w, h], i) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#1c3440"/>${[0, 1, 2, 3].map((r) => `<rect x="${x + 8}" y="${y + 10 + r * 13}" width="${(w - 16) * (.4 + ((r + i) % 3) * .25)}" height="4" rx="2" fill="#30e0ff" opacity=".8"><animate attributeName="width" values="${(w - 16) * .3};${(w - 16) * .9};${(w - 16) * .3}" dur="${2 + r * .7 + i}s" repeatCount="indefinite"/></rect>`).join("")}`).join("")}
+      ${[[90, 200], [330, 230], [60, 250]].map(([x, y]) => `<path transform="translate(${x},${y})" d="M0,-14 L12,-7 12,7 0,14 -12,7 -12,-7Z" fill="none" stroke="#30c8e8" stroke-width="2" opacity=".6"/>`).join("")}<rect y="262" width="400" height="38" fill="#c8eef6"/>`);
+  }
+
+  // ================= みんな（ホーム） =================
+  // ヒロインごとの今の様子（件数・遅れ・古さ・自分の番）
+  function situation(k) {
+    const items = sceneItems(k); const today = TODAY();
+    const x = { n: items.length, late: 0, old: 0, mine: 0, soon: "", longest: 0 };
+    if (k === "today") x.late = items.filter((t) => t.date < today).length;
+    if (k === "next") x.old = items.filter((t) => ageOf(t) > 14).length;
+    if (k === "ai") x.mine = items.filter((t) => t.ai === "💭" || t.ai === "🔍✅").length;
+    if (k === "plan" && items[0]) x.soon = `${md(items[0].date)}（${WD[dow(items[0].date)]}）の「${short(items[0].name, 10)}」`;
+    if (k === "wait") x.longest = Math.max(0, ...items.map(ageOf));
+    x.mood = GIRLS[k].mood(x.n, x);
+    return x;
+  }
+  function sceneItems(k) {
+    const items = at(k); const today = TODAY();
+    if (k === "today") return items.sort((a, b) => (b.date < today) - (a.date < today) || WAKU_ORDER.indexOf(a.waku) - WAKU_ORDER.indexOf(b.waku));
+    if (k === "plan") return items.sort((a, b) => a.date.localeCompare(b.date));
+    if (k === "ai") { const o = { "💭": 0, "🔍✅": 1, "💬": 2, "🔍": 3, "🔬": 4 }; return items.sort((a, b) => (o[a.ai] ?? 9) - (o[b.ai] ?? 9)); }
+    if (k === "inbox") return items.sort((a, b) => (b.edited || "").localeCompare(a.edited || ""));
+    return items.sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
+  }
+  function renderHome(view) {
+    if (S.place) return renderScene(view, S.place);
+    const loading = S.mode === "loading" && !S.tasks.length;
+    const sit = Object.fromEntries(GIRL_ORDER.map((k) => [k, situation(k)]));
+    // いちばん声をかけたい子：遅れ → AIの自分の番 → 今日やる
+    const who = sit.today.late ? "today" : sit.ai.mine ? "ai" : sit.inbox.n > 15 ? "inbox" : "today";
+    const g = GIRLS[who];
+    view.insertAdjacentHTML("beforeend", `<div class="panel notice" style="--c:${g.color}"><span class="ava">${girl(g, sit[who].mood, true)}</span><div style="min-width:0"><b>📱 ${g.name}からメッセージ</b><p id="homemsg"></p></div></div>
+      <div class="grid6">${GIRL_ORDER.map((k, i) => { const h = GIRLS[k]; const x = sit[k];
+        const badge = x.late ? `遅れ${x.late}` : x.mine ? `あなたの番${x.mine}` : x.old ? `ほこり${x.old}` : "";
+        return `<button type="button" class="gcard" data-goto="${k}" style="--c:${h.color};--i:${i}" aria-label="${h.name}（${h.role}）${loading ? "" : `${x.n}件`}"><span class="love">♡Lv${lvOf(k)}</span><span class="cnt">${loading ? "…" : x.n}</span>${badge ? `<span class="badge">${badge}</span>` : ""}<span class="face">${girl(h, x.mood, "bust")}</span><b>${h.name}</b><small>${h.place}・${h.role}</small></button>`; }).join("")}</div>`);
+    const x = sit[who];
+    type($("#homemsg"), loading ? "Notion から、みんなの予定を読みこんでるよ…ちょっと待っててね。"
+      : S.error ? `うまくつながらないみたい…\n${S.error}`
+      : x.n ? g.hello(x.n, x).replace(/\n/g, " ") : g.empty.replace(/\n/g, " "));
+  }
+  function goTo(k) { S.place = k; S.target = null; S.page[`sc:${k}`] = 0; render(); }
+
+  // ================= デート（会話シーン） =================
+  function renderScene(view, k) {
+    const g = GIRLS[k]; const items = sceneItems(k); const x = situation(k); const today = TODAY();
+    const pick = S.target && items.find((t) => t.id === S.target);
+    if (!pick) S.target = null;
+    const r = S.react && S.react.k === k ? S.react : null; S.react = null;
+    const loading = S.mode === "loading" && !S.tasks.length;
+    const expr = r ? r.expr : pick ? (k === "wait" ? "sleepy" : k === "plan" ? "shy" : "normal") : x.mood;
+    const text = r ? r.text : loading ? `……（${g.name}が、あなたを待っている）` : S.error ? `通信がうまくいかないみたい…\n${S.error}` : pick ? g.pick(pick) : items.length ? g.hello(items.length, x) : g.empty;
+    const petals = k === "today" && !reduce ? `<div class="petals">${Array.from({ length: 8 }, (_, i) => `<i style="left:${8 + i * 12}%;animation-duration:${6 + (i % 3) * 2}s;animation-delay:${-i * 1.3}s"></i>`).join("")}</div>` : "";
+    view.insertAdjacentHTML("beforeend", `<div class="scene" style="--c:${g.color}">${bg(k)}${petals}<div class="girlwrap${r && r.expr === "joy" ? " hop" : ""}">${girl(g, expr)}</div><div class="hearts" id="hearts"></div>
+      <div class="dlg"><span class="plate">${g.name}<small>${g.prof}</small></span><button type="button" class="back" data-leave="1">‹ みんな</button><p id="dlgtext"></p></div></div>
+      <div class="panel choices" id="choices" style="--c:${g.color}"></div>`);
+    type($("#dlgtext"), text);
+    const box = $("#choices");
+    if (pick) {
+      box.innerHTML = `<div class="acts">${KEYS_BY_LANE[k].map((a, i) => `<button type="button" class="opt${a === "done" ? " main" : ""}" data-choose="${a}" style="--i:${i}">${ACTIONS[a].label}</button>`).join("")}<button type="button" class="opt" data-open="${pick.id}" style="--i:9">中身を見る</button><button type="button" class="opt ghost" data-pick="" style="--i:10">‹ ほかのにする</button></div>`;
+      return;
     }
-    // 門
-    c.fillStyle = "#8a8a8a"; c.fillRect(9 * T - 4, 12 * T, 5, T); c.fillRect(11 * T - 1, 12 * T, 5, T); c.fillRect(9 * T - 4, 12 * T, 2 * T + 8, 4);
-    staticLayer = cv;
-  }
-  const hero = { x: 9, y: 6, path: [], dir: 1, t: 0 };
-  const npcs = [{ x: 6, y: 4, path: [], pal: NPC_PALS[0] }, { x: 13, y: 8, path: [], pal: NPC_PALS[1] }];
-  let townRaf = 0, lastT = 0;
-  function townLoop(now) {
-    townRaf = 0;
-    const cv = $("#towncv"); if (!cv) return;
-    const c = cv.getContext("2d"); c.imageSmoothingEnabled = false;
-    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
-    if (!staticLayer) drawStatic();
-    c.drawImage(staticLayer, 0, 0);
-    const t = now / 1000;
-    // 水・噴水・旗
-    for (let y = 10; y < 12; y++) for (let x = 1; x < 3; x++) { c.fillStyle = "#2a64c8"; c.fillRect(x * T, y * T, T, T); c.fillStyle = "#7fb2ff"; for (let i = 0; i < 3; i++) c.fillRect(x * T + ((Math.floor(t * 6) + i * 5 + x * 3) % 14), y * T + 3 + i * 5, 3, 1); }
-    c.fillStyle = "#9a9aa8"; c.fillRect(12 * T, 5 * T, 2 * T, 2 * T); c.fillStyle = "#2a64c8"; c.fillRect(12 * T + 3, 5 * T + 3, 2 * T - 6, 2 * T - 6);
-    for (let i = 0; i < 6; i++) { const a = t * 3 + i; c.fillStyle = i % 2 ? "#cfe4ff" : "#7fb2ff"; c.fillRect(13 * T + Math.cos(a) * 7, 6 * T - 2 + Math.sin(a * 1.3) * 5 - Math.abs(Math.sin(a)) * 6, 2, 2); }
-    [[7 * T + 3, 0], [13 * T - 6, 0]].forEach(([fx, fy], i) => { c.fillStyle = "#ddd"; c.fillRect(fx, fy, 1, 9); c.fillStyle = "#c83030"; const w = Math.floor(t * 4 + i) % 2; c.fillRect(fx + 1, fy + w, 6, 4); });
-    // 町の人
-    for (const n of npcs) {
-      if (!n.path.length && Math.random() < dt * .5) { const tx = Math.floor(Math.random() * TW), ty = Math.floor(Math.random() * TH); if (walk(tx, ty)) n.path = bfs([Math.round(n.x), Math.round(n.y)], [tx, ty]).slice(1, 8); }
-      step(n, dt, 3); sprite(c, (Math.floor(t * 4) % 2 ? HERO : HERO2), n.pal, Math.round(n.x * T), Math.round(n.y * T) - 2, n.dir < 0);
-    }
-    // 勇者
-    const arrived = step(hero, dt, 7);
-    sprite(c, hero.path.length && Math.floor(t * 8) % 2 ? HERO2 : HERO, HERO_PAL, Math.round(hero.x * T), Math.round(hero.y * T) - 2, hero.dir < 0);
-    if (arrived && hero.goal) { const g = hero.goal; hero.goal = null; enterPlace(g); }
-    if (!document.hidden && !reduce) townRaf = requestAnimationFrame(townLoop);
-  }
-  function step(o, dt, speed) {
-    if (!o.path.length) return false;
-    const [tx, ty] = o.path[0];
-    const dx = tx - o.x, dy = ty - o.y; const d = Math.hypot(dx, dy); const mv = speed * dt;
-    if (dx) o.dir = Math.sign(dx);
-    if (d <= mv) { o.x = tx; o.y = ty; o.path.shift(); return !o.path.length; }
-    o.x += (dx / d) * mv; o.y += (dy / d) * mv; return false;
-  }
-  function goTo(k) {
-    const p = PLACES[k];
-    const path = bfs([Math.round(hero.x), Math.round(hero.y)], p.stand);
-    if (reduce || path.length <= 1) { hero.x = p.stand[0]; hero.y = p.stand[1]; enterPlace(k); return; }
-    hero.path = path.slice(1); hero.goal = k;
-    type($("#townmsg"), `${p.name}へ むかった。`);
-    if (!townRaf) { lastT = performance.now(); townRaf = requestAnimationFrame(townLoop); }
-  }
-  function enterPlace(k) {
-    if (k === "gate") { S.tab = "battle"; render(); return; }
-    S.place = k; S.page[`pl:${k}`] = 0; render();
-  }
-  // 建物ごとの人数（今どこの件数）
-  function placeCount(k) {
-    if (k === "castle") return S.goals.filter((g) => /挑戦中/.test(g.status)).length;
-    if (k === "gate") return at("today").length;
-    if (k === "done") return S.doneToday.length;
-    return at(k).length;
-  }
-  function renderTown(view) {
-    if (S.place) return renderPlace(view, S.place);
-    const late = lateCount();
-    const signs = Object.entries(PLACES).map(([k, p]) => {
-      const n = S.mode === "loading" && !S.tasks.length ? "…" : placeCount(k);
-      const x = ((p.x + p.w / 2) / TW) * 100, y = (Math.max(1.3, k === "gate" ? p.y - .1 : p.y) / TH) * 100;
-      return `<span class="sign" style="left:${x}%;top:${y}%">${p.name} <span class="n${k === "gate" && late ? " danger" : ""}">${n}${k === "gate" && late ? `（いかり${late}）` : ""}</span></span>`;
-    }).join("");
-    view.insertAdjacentHTML("beforeend", `<div class="town"><canvas id="towncv" width="${TW * T}" height="${TH * T}" aria-label="まちの地図"></canvas>${signs}<div class="towntap" id="towntap" role="presentation"></div></div>
-      <div class="win msg"><p id="townmsg"></p></div>
-      <div class="win places" style="flex:1">${Object.entries(PLACES).map(([k, p]) => `<button type="button" class="cur" data-goto="${k}">${p.name}<span class="s dim">${p.sub}</span><span class="n${k === "gate" && late ? " danger" : ""}">${S.mode === "loading" && !S.tasks.length ? "…" : placeCount(k)}</span></button>`).join("")}</div>`);
-    const today = at("today").length;
-    type($("#townmsg"), S.mode === "loading" && !S.tasks.length ? "Notion から ぼうけんのしょを よみこんでいます…"
-      : S.error ? `じゅもんが とどかない！\n${S.error}`
-      : today ? `まちのそとに まものが ${today}ひき いる！${late ? `\nうち ${late}ひきは いかっている（遅れ）。` : ""}\nたてものを タップすると ゆうしゃが あるいていく。`
-      : "まちは へいわだ。\nギルドで いらいを うけて、きょう たたかう ものを えらぼう。");
-    $("#towntap").addEventListener("click", (e) => {
-      const r = e.currentTarget.getBoundingClientRect();
-      const tx = Math.floor(((e.clientX - r.left) / r.width) * TW), ty = Math.floor(((e.clientY - r.top) / r.height) * TH);
-      const hit = Object.entries(PLACES).find(([, p]) => tx >= p.x && tx < p.x + p.w && ty >= p.y && ty < p.y + p.h + 1);
-      if (hit) goTo(hit[0]);
-      else if (walk(tx, ty)) { hero.path = bfs([Math.round(hero.x), Math.round(hero.y)], [tx, ty]).slice(1); hero.goal = null; }
+    box.innerHTML = `<div class="list" id="choicelist"></div>`;
+    const list = $("#choicelist");
+    if (!items.length) { list.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : "ここには、なにもないよ。"}</div>`; return; }
+    fill(list, `sc:${k}`, items, 44, (t, i) => {
+      const late = t.date && t.date < today;
+      const rr = k === "today" ? (late ? `遅れ${diffDays(t.date, today)}日` : WAKU[t.waku] || "") : k === "plan" ? `${md(t.date)}（${WD[dow(t.date)]}）` : k === "ai" ? (t.ai || "") : k === "inbox" ? (t.tag || "") : `${ageOf(t)}日`;
+      const cls = late || (k === "next" && ageOf(t) > 14) ? "danger" : k === "ai" && (t.ai === "💭" || t.ai === "🔍✅") ? "hi" : "";
+      return `<button type="button" class="opt" data-pick="${t.id}" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r ${cls}">${esc(rr)}</span></button>`;
     });
-    lastT = performance.now();
-    if (townRaf) cancelAnimationFrame(townRaf);
-    townRaf = requestAnimationFrame(townLoop);
+  }
+  // 選んだ答えに、ヒロインが反応してから Notion を書き換える
+  async function choose(key) {
+    const k = S.place; const g = GIRLS[k]; const t = known.get(S.target); if (!g || !t) return;
+    const n = short(t.name, 14);
+    if (key === "done") {
+      const gain = expOf(t.weight);
+      S.react = { k, expr: "joy", text: `${g.done(n)}\n（${g.name}の好感度 +${gain}♡）` };
+      if (!reduce) {
+        const wrap = $(".girlwrap"); wrap.innerHTML = girl(g, "joy"); wrap.classList.add("hop");
+        burst(gain); type($("#dlgtext"), S.react.text);
+        for (const b of document.querySelectorAll("#choices button")) b.disabled = true;
+        await sleep(1300);
+      }
+    } else {
+      S.react = { k, expr: REACT_EXPR[key] || "normal", text: `${ACTIONS[key].msg(n)}\n${g.ok}` };
+    }
+    S.react.text += S.mode === "demo" ? "（見本なので Notion は変わりません）" : "";
+    act(t.id, key, { quiet: true });
+  }
+  function burst(gain) {
+    const box = $("#hearts"); if (!box) return;
+    box.innerHTML = Array.from({ length: 14 }, (_, i) => `<span style="left:${20 + Math.random() * 60}%;--dx:${(Math.random() - .5) * 120}px;--s:${12 + Math.random() * 16}px;animation-delay:${i * 50}ms">${i % 3 ? "♥" : "♡"}</span>`).join("") + `<span class="gain">+${gain}♡</span>`;
   }
 
-  // 建物の中：店の人のことば＋一覧
-  function renderPlace(view, k) {
-    const p = PLACES[k]; const today = TODAY();
-    view.insertAdjacentHTML("beforeend", `<div class="win msg"><span class="ttl">${p.name}（${p.sub}）</span><p id="placemsg"></p></div>`);
-    type($("#placemsg"), p.say);
-    let items = [], draw, extra = "";
-    if (k === "castle") {
-      const live = S.goals.filter((g) => !/達成|完了|手放/.test(g.status)).sort((a, b) => (/挑戦中/.test(b.status) ? 1 : 0) - (/挑戦中/.test(a.status) ? 1 : 0));
+  // ================= 思い出（診断・目標・運用ログ・今日の済み） =================
+  function heartSvg(pct) {
+    const id = `h${++gid}`; const y = 90 - (90 * pct) / 100;
+    const d = "M50,86 C20,64 4,46 4,28 C4,14 15,4 28,4 C38,4 46,10 50,18 C54,10 62,4 72,4 C85,4 96,14 96,28 C96,46 80,64 50,86Z";
+    return `<svg viewBox="0 0 100 90" aria-hidden="true"><defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs><path d="${d}" style="fill:var(--card2)"/>
+      <rect x="0" width="100" height="90" y="90" style="fill:var(--pink)" clip-path="url(#${id})"><animate attributeName="y" from="90" to="${y}" dur="1.2s" fill="freeze"/></rect><path d="${d}" style="fill:none;stroke:var(--pink)" stroke-width="4"/></svg>`;
+  }
+  function renderMemory(view) {
+    const today = TODAY();
+    const left = at("today").length, done = S.doneToday.length, late = lateCount(), mine = mineCount();
+    const pct = left + done ? Math.round((done / (left + done)) * 100) : 0;
+    const exp = S.doneToday.reduce((a, t) => a + expOf(t.weight), 0);
+    const d = S.diag.at(-1);
+    view.insertAdjacentHTML("beforeend", `<div class="row2"><div class="panel heartcard">${heartSvg(pct)}<div><b>${pct}%</b><small>今日のときめき<br>今日やるの完了率</small></div></div>
+      <div class="panel" style="flex:1"><dl class="stat"><dt>済ませた</dt><dd>${done} / ${left + done}</dd><dt>のこり</dt><dd>${left}</dd><dt>遅れ</dt><dd class="${late ? "danger" : ""}">${late}</dd><dt>好感度</dt><dd class="hi">+${exp}♡</dd><dt>あなたの番</dt><dd>${mine}</dd><dt>倉庫</dt><dd>${at("inbox").length}</dd></dl></div></div>
+      <button type="button" class="panel letter" ${d ? `data-diag="${d.id}"` : "disabled"}><span class="seal">💌</span><div style="min-width:0"><b>シオリからの手紙${d ? `（第${d.no}回の診断）` : ""}</b><p>${d ? esc(`「${d.verdict}」と出たわ。\n次は、${d.next}`) : esc(S.extraErr.diag ? `手紙が届かなかったみたい…（${S.extraErr.diag}）` : "まだ診断の手紙は来ていないわ。")}</p></div></button>
+      <div class="seg" role="group" aria-label="思い出の種類">${[["chart", "ふたりの記録"], ["promise", "約束"], ["diary", "日記"], ["done", "今日の思い出"]].map(([k, n]) => `<button type="button" data-mem="${k}" aria-pressed="${S.memTab === k}">${n}</button>`).join("")}</div>
+      <div class="panel memo" id="memo"></div>`);
+    const box = $("#memo");
+    if (S.memTab === "chart") {
+      const ds = S.diag.slice(-8);
+      if (!ds.length) { box.innerHTML = `<div class="empty">まだ診断の記録はないよ。</div>`; return; }
+      const W = 320, H = 150, pad = 14, bw = Math.min(16, (W - pad * 2) / ds.length / 3);
+      const max = Math.max(10, ...ds.map((x) => Math.max(x.done, x.inflow)));
+      const xs = ds.map((_, i) => pad + ((i + .5) * (W - pad * 2)) / ds.length);
+      const yv = (v) => H - 16 - (v / max) * (H - 34);
+      const bars = ds.map((x, i) => `<rect x="${(xs[i] - bw - 1).toFixed(1)}" y="${yv(x.inflow).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - 16 - yv(x.inflow)).toFixed(1)}" rx="3" fill="#cdb8e6"><animate attributeName="height" from="0" to="${(H - 16 - yv(x.inflow)).toFixed(1)}" dur=".7s" fill="freeze"/><animate attributeName="y" from="${H - 16}" to="${yv(x.inflow).toFixed(1)}" dur=".7s" fill="freeze"/></rect>
+        <rect x="${(xs[i] + 1).toFixed(1)}" y="${yv(x.done).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - 16 - yv(x.done)).toFixed(1)}" rx="3" fill="#ff7aa6"><animate attributeName="height" from="0" to="${(H - 16 - yv(x.done)).toFixed(1)}" dur=".9s" fill="freeze"/><animate attributeName="y" from="${H - 16}" to="${yv(x.done).toFixed(1)}" dur=".9s" fill="freeze"/></rect>
+        <text x="${xs[i].toFixed(1)}" y="${H - 3}" text-anchor="middle">第${x.no}回</text><text x="${xs[i].toFixed(1)}" y="${(yv(Math.max(x.done, x.inflow)) - 4).toFixed(1)}" text-anchor="middle" class="pct">${Math.round(x.rate * 100)}%</text>`).join("");
+      box.innerHTML = `<div class="chart"><div class="legend"><i style="background:#cdb8e6"></i>入ってきた<i style="background:#ff7aa6"></i>済ませた<i style="background:none;width:auto;color:var(--hi)">%</i>今日やるの完了率</div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="診断の推移">${bars}</svg></div>`;
+      return;
+    }
+    box.innerHTML = `<div class="list" id="memlist" style="gap:0"></div>`;
+    const list = $("#memlist");
+    if (S.memTab === "promise") {
+      const items = []; const live = S.goals.filter((g) => !/達成|完了|手放/.test(g.status)).sort((a, b) => (/挑戦中/.test(b.status) ? 1 : 0) - (/挑戦中/.test(a.status) ? 1 : 0));
       const used = new Set();
       for (const g of live) { items.push({ k: "g", g }); for (const pid of g.projects) { const pj = S.projects.find((x) => x.id === pid); if (pj && !pj.status.includes("完了")) { items.push({ k: "p", p: pj }); used.add(pj.id); } } }
       const rest = S.projects.filter((x) => !used.has(x.id) && !x.status.includes("完了"));
-      if (rest.length) { items.push({ k: "h", name: "（ねがいに つながっていない クエスト）" }); rest.forEach((x) => items.push({ k: "p", p: x })); }
-      draw = (x, i) => x.k === "g" ? `<button type="button" class="li" data-goal="${x.g.id}" style="--i:${i}"><span class="nm">${/挑戦中/.test(x.g.status) ? "🔥" : "・"}${esc(x.g.name)}</span><span class="r">${esc(x.g.area || "")}</span></button>`
-        : x.k === "h" ? `<div class="li sub dim" style="--i:${i}"><span class="nm">${esc(x.name)}</span></div>`
-        : (() => { const st = projStats(x.p); const n = 8, f = Math.round((st.pct / 100) * n); return `<button type="button" class="li sub" data-proj-open="${x.p.id}" style="--i:${i}"><span class="nm">${esc(x.p.name)}</span><span class="r hi">${"■".repeat(f)}${"□".repeat(n - f)} ${st.done}/${x.p.total}</span></button>`; })();
-    } else if (k === "done") {
-      extra = `<div class="tabs"><button type="button" class="cur" data-church="today" aria-pressed="${S.churchTab === "today"}">きょうの きろく</button><button type="button" class="cur" data-church="log" aria-pressed="${S.churchTab === "log"}">ぼうけんのしょ</button></div>`;
-      if (S.churchTab === "today") { items = S.doneToday; draw = (t, i) => `<div class="li" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r hi">${expOf(t.weight)}EXP</span></div>`; }
-      else { items = S.logs; draw = (l, i) => `<button type="button" class="li" data-log="${l.id}" style="--i:${i}"><span class="nm">${esc(l.name)}</span><span class="r">${esc(l.event)} ${l.at ? md(jst(Date.parse(l.at))) : ""}</span></button>`; }
-    } else {
-      items = at(k);
-      if (k === "plan") items.sort((a, b) => a.date.localeCompare(b.date));
-      else if (k === "ai") { const o = { "💭": 0, "🔍✅": 1, "💬": 2, "🔍": 3, "🔬": 4 }; items.sort((a, b) => (o[a.ai] ?? 9) - (o[b.ai] ?? 9)); }
-      else if (k === "inbox") items.sort((a, b) => (b.edited || "").localeCompare(a.edited || ""));
-      else items.sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
-      draw = (t, i) => {
-        const r = k === "plan" ? `${md(t.date)}（${WD[dow(t.date)]}）` : k === "ai" ? (t.ai || "・") : k === "inbox" ? (t.tag || "") : `${ageOf(t)}にち`;
-        const cls = k === "ai" && (t.ai === "💭" || t.ai === "🔍✅") ? "hi" : (k === "next" && ageOf(t) > 14) || k === "wait" ? "danger" : "";
-        return `<button type="button" class="li${S.target === t.id ? " on" : ""}" data-pick="${t.id}" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r ${cls}">${esc(r)}</span></button>`;
-      };
-    }
-    const pick = S.target && known.get(S.target);
-    view.insertAdjacentHTML("beforeend", `<div class="win" style="flex:1;min-height:0;display:flex;flex-direction:column;gap:4px">${extra}<div class="list" id="placelist"></div></div>
-      ${pick && KEYS_BY_LANE[k] ? `<div class="win cmds">${KEYS_BY_LANE[k].map((a) => `<button type="button" class="cur" data-act="${a}" data-id="${pick.id}">${ACTIONS[a].label}</button>`).join("")}<button type="button" class="cur" data-open="${pick.id}">しらべる（本文）</button></div>` : ""}
-      <div class="win tight"><button type="button" class="cur on" data-leave="1">そとへ でる</button>${k !== "castle" && k !== "done" ? `<span class="dim" style="font-size:11px;margin-left:10px">なまえを えらぶと コマンドが でる</span>` : ""}</div>`);
-    const box = $("#placelist", view);
-    if (!items.length) { box.innerHTML = `<div class="empty">${k === "done" && S.churchTab === "today" ? "まだ きょうは なにも なしとげていない。" : "だれも いないようだ。"}</div>`; return; }
-    fill(box, `pl:${k}:${S.churchTab}`, items, k === "castle" ? 28 : 30, draw);
-  }
-
-  // ================= たたかう（今日やる） =================
-  // まものはタスクのIDから毎回同じ形に描く（左右対称のドット絵）
-  function mulberry(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-  const TAG_HUE = { HOME: 120, BUILD: 30, CHILD: 330, FAMILY: 340, MONEY: 0, FOOD: 20, HEALTH: 150, BEAUTY: 290, LEARN: 210, AI: 270, NOTION: 260, TECH: 200, BUY: 50, ROUTINE: 90, INPUT: 190, BOOK: 280, COFFEE: 25, TRIP: 40, CAR: 220, WORK: 10 };
-  function monsterCanvas(t, angry) {
-    let seed = 0; for (const ch of t.id || t.name) seed = (seed * 31 + ch.charCodeAt(0)) | 0;
-    const rnd = mulberry(seed); const N = 16; const g = Array.from({ length: N }, () => Array(N).fill(0));
-    for (let y = 2; y < 15; y++) for (let x = 0; x < 8; x++) { const d = Math.hypot((x - 7.5) / 8, (y - 8.5) / 7); if (rnd() < 1.05 - d * 1.1) { g[y][x] = 1; g[y][N - 1 - x] = 1; } }
-    for (let y = 6; y < 12; y++) for (let x = 5; x < 11; x++) g[y][x] = 1; // 体のまんなかは埋める
-    const scale = { S: 3, M: 3.6, L: 4.2, XL: 4.8 }[t.weight] || 3.6;
-    const cv = document.createElement("canvas"); cv.width = N; cv.height = N; cv.style.width = cv.style.height = `${Math.round(N * scale)}px`;
-    const c = cv.getContext("2d"); const hue = angry ? 0 : (TAG_HUE[t.tag] ?? Math.floor(rnd() * 360));
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (g[y][x]) { c.fillStyle = `hsl(${hue},65%,${y > 10 ? 38 : 55}%)`; c.fillRect(x, y, 1, 1); }
-      else if ((g[y - 1]?.[x] || g[y + 1]?.[x] || g[y][x - 1] || g[y][x + 1])) { c.fillStyle = "#111"; c.fillRect(x, y, 1, 1); }
-    }
-    c.fillStyle = "#fff"; c.fillRect(5, 7, 2, 2); c.fillRect(9, 7, 2, 2); c.fillStyle = angry ? "#ff2020" : "#000"; c.fillRect(6, 8, 1, 1); c.fillRect(9, 8, 1, 1);
-    c.fillStyle = "#111"; c.fillRect(7, 11, 2, 1);
-    return cv;
-  }
-  function battleItems() {
-    const today = TODAY();
-    return at("today").sort((a, b) => (b.date < today) - (a.date < today) || WAKU_ORDER.indexOf(a.waku) - WAKU_ORDER.indexOf(b.waku));
-  }
-  function renderBattle(view) {
-    const today = TODAY();
-    const all = battleItems();
-    view.insertAdjacentHTML("beforeend", `<div class="stage" id="stage" data-swipe="wave"><div class="mons" id="mons"></div><span class="wave" id="wave"></span></div>
-      <div class="win names" style="flex:1;min-height:0;display:flex;flex-direction:column"><div class="list" id="names"></div></div>
-      <div class="win msg"><p id="bmsg"></p></div>
-      <div class="win cmds" id="bcmd"></div>`);
-    if (!all.length) {
-      $("#mons").innerHTML = `<div class="empty" style="align-self:center">まものの すがたは ない。</div>`;
-      type($("#bmsg"), S.mode === "loading" && !S.tasks.length ? "まものの けはいを さがしている…" : `きょうの まものは もう いない！\nほんじつ ${S.doneToday.length}ひき たおした。ギルドで いらいを うけよう。`);
-      $("#bcmd").innerHTML = `<button type="button" class="cur on" data-tab="town">まちへ もどる</button>`;
+      if (rest.length) { items.push({ k: "h" }); rest.forEach((x) => items.push({ k: "p", p: x })); }
+      if (!items.length) { list.innerHTML = `<div class="empty">${esc(S.extraErr.goal || "まだ約束（目標）はないよ。")}</div>`; return; }
+      fill(list, "promise", items, 33, (x, i) => x.k === "g" ? `<button type="button" class="row" data-goal="${x.g.id}" style="--i:${i}"><span class="nm">${/挑戦中/.test(x.g.status) ? "💍" : "💭"} ${esc(x.g.name)}</span><span class="r">${esc(x.g.area || "")}</span></button>`
+        : x.k === "h" ? `<div class="row head" style="--i:${i}">約束につながっていないプロジェクト</div>`
+        : (() => { const st = projStats(x.p); const f = Math.round((st.pct / 100) * 5); return `<button type="button" class="row sub" data-proj-open="${x.p.id}" style="--i:${i}"><span class="nm">${esc(x.p.name)}</span><span class="r hi">${"♥".repeat(f)}${"♡".repeat(5 - f)} ${st.done}/${x.p.total}</span></button>`; })());
       return;
     }
-    const per = 4; const pages = Math.ceil(all.length / per);
-    const p = Math.max(0, Math.min(S.page.wave || 0, pages - 1)); S.page.wave = p;
-    const wave = all.slice(p * per, p * per + per);
-    $("#stage").dataset.pages = pages;
-    if (!wave.some((t) => t.id === S.target)) S.target = wave[0].id;
-    const mons = $("#mons");
-    wave.forEach((t, i) => {
-      const angry = t.date < today;
-      const el = document.createElement("button"); el.type = "button"; el.className = `mon${angry ? " angry" : ""}${t.id === S.target ? " sel" : ""}`; el.dataset.target = t.id; el.style.setProperty("--i", i);
-      el.setAttribute("aria-label", `${t.name}${angry ? "（いかっている）" : ""}`);
-      el.append(monsterCanvas(t, angry)); mons.append(el);
-    });
-    if (S.slide?.key === "wave") mons.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
-    $("#wave").textContent = pages > 1 ? `むれ ${p + 1}/${pages} ▶` : "";
-    const sel = known.get(S.target);
-    $("#names").innerHTML = wave.map((t, i) => `<button type="button" class="li${t.id === S.target ? " on" : ""}" data-target="${t.id}" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r ${t.date < today ? "danger" : ""}">${t.date < today ? `いかり${diffDays(t.date, today)}` : WAKU[t.waku] || ""} ${t.weight || "M"}</span></button>`).join("");
-    const late = all.filter((t) => t.date < today).length;
-    type($("#bmsg"), S.battleMsg || `まものの むれが あらわれた！（${all.length}ひき${late ? `・いかり${late}` : ""}）\n▶ ${short(sel.name, 16)}${sel.next ? `\n　つぎのいって：${short(sel.next, 18)}` : ""}`);
-    S.battleMsg = null;
-    $("#bcmd").innerHTML = `<button type="button" class="cur on" data-fight="done">たたかう（済み）</button><button type="button" class="cur" data-fight="tomorrow">にげる（あした）</button>
-      <button type="button" class="cur" data-fight="spell">じゅもん</button><button type="button" class="cur" data-open="${sel.id}">どうぐ（しらべる）</button>`;
-  }
-  // たたかう：光って消える → けいけんち
-  async function fight(key) {
-    const t = known.get(S.target); if (!t) return;
-    if (key === "spell") {
-      $("#bcmd").innerHTML = `<button type="button" class="cur on" data-fight="research">けんじゃに たのむ（🔍）</button><button type="button" class="cur" data-fight="wait">まってもらう（待ち）</button>
-        <button type="button" class="cur" data-fight="someday">ねむらせる（1かげつ）</button><button type="button" class="cur" data-fight="weekend">しゅうまつへ</button><button type="button" class="cur" data-fight="back">もどる</button>`;
-      type($("#bmsg"), `${short(t.name, 14)}に どの じゅもんを つかう？`);
+    if (S.memTab === "diary") {
+      if (!S.logs.length) { list.innerHTML = `<div class="empty">${esc(S.extraErr.log || "日記はまだ白紙だよ。")}</div>`; return; }
+      fill(list, "diary", S.logs, 34, (l, i) => `<button type="button" class="row" data-log="${l.id}" style="--i:${i}"><span class="nm">${esc(l.name)}</span><span class="r">${esc(l.event)} ${l.at ? (jst(Date.parse(l.at)) === today ? jstTime(Date.parse(l.at)) : md(jst(Date.parse(l.at)))) : ""}</span></button>`);
       return;
     }
-    if (key === "back") { render(); return; }
-    const el = document.querySelector(`.mon[data-target="${t.id}"]`);
-    const stage = $("#stage");
-    if (key === "done") {
-      if (!reduce && el) {
-        stage.insertAdjacentHTML("beforeend", `<div class="flash"></div>`);
-        el.classList.add("die");
-        const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
-        stage.insertAdjacentHTML("beforeend", `<span class="pop" style="left:${r.left - s.left + r.width / 2 - 14}px;top:${r.top - s.top}px">+${expOf(t.weight)}</span>`);
-        type($("#bmsg"), `ゆうしゃの こうげき！\n${short(t.name, 14)}を やっつけた！`);
-        await sleep(900);
-      }
-    } else if (!reduce && el) { el.classList.add("flee"); await sleep(450); }
-    S.target = null;
-    S.battleMsg = key === "done" ? `${short(t.name, 14)}を やっつけた！\n${expOf(t.weight)}ポイントの けいけんちを かくとく！` : ACTIONS[key].msg(short(t.name, 14));
-    act(t.id, key, { quiet: true });
-  }
-
-  // ================= つよさ（診断・運用ログ） =================
-  function renderStatus(view) {
-    const today = TODAY();
-    const left = at("today").length, done = S.doneToday.length, late = lateCount(), mine = mineCount();
-    const hp = left + done ? Math.round((done / (left + done)) * 100) : 0;
-    const exp = S.doneToday.reduce((a, t) => a + expOf(t.weight), 0);
-    const d = S.diag.at(-1);
-    view.insertAdjacentHTML("beforeend", `<div class="row2"><div class="win" style="flex:1"><span class="ttl">つよさ</span><dl class="stat">
-        <dt>たおした</dt><dd>${done} / ${left + done}</dd><dt>のこり</dt><dd>${left}ひき</dd><dt>いかり</dt><dd class="${late ? "danger" : ""}">${late}</dd><dt>けいけんち</dt><dd class="hi">+${exp}</dd><dt>じぶんのばん</dt><dd>${mine}</dd><dt>さかば</dt><dd>${at("inbox").length}にん</dd></dl></div>
-      <div class="win" style="flex:1.1"><span class="ttl">HP・MP</span><div style="font-size:12px">HP（きょうの たっせい）<div class="bar"><i data-w="${hp}"></i></div><div style="text-align:right">${hp}%</div>
-        MP（じゅもんの のこり）<div class="bar"><i data-w="${Math.max(0, 100 - mine * 20)}" style="background:var(--mp)"></i></div><div style="text-align:right">${Math.max(0, 100 - mine * 20)}%</div></div></div></div>
-      <div class="win msg" ${d ? `role="button" tabindex="0" data-diag="${d.id}"` : ""}><span class="ttl">おうさまの おことば</span><p id="kingmsg"></p></div>`);
-    type($("#kingmsg"), d ? `「第${d.no}回の しんだん：${d.verdict}。\nつぎは ${d.next}」` : S.extraErr.diag ? `しんだんが とどかない！ ${S.extraErr.diag}` : "「まだ しんだんは ない。」");
-    const ds = S.diag.slice(-8);
-    if (ds.length) {
-      const W = 320, H = 96, pad = 16, bw = Math.min(14, (W - pad * 2) / ds.length / 3);
-      const max = Math.max(10, ...ds.map((x) => Math.max(x.done, x.inflow)));
-      const xs = ds.map((_, i) => pad + ((i + .5) * (W - pad * 2)) / ds.length);
-      const yv = (v) => H - 14 - (v / max) * (H - 26);
-      const bars = ds.map((x, i) => `<rect x="${Math.round(xs[i] - bw - 1)}" y="${Math.round(yv(x.inflow))}" width="${Math.round(bw)}" height="${Math.round(H - 14 - yv(x.inflow))}" fill="#555"><animate attributeName="height" from="0" to="${Math.round(H - 14 - yv(x.inflow))}" dur=".6s" fill="freeze"/><animate attributeName="y" from="${H - 14}" to="${Math.round(yv(x.inflow))}" dur=".6s" fill="freeze"/></rect>
-        <rect x="${Math.round(xs[i] + 1)}" y="${Math.round(yv(x.done))}" width="${Math.round(bw)}" height="${Math.round(H - 14 - yv(x.done))}" fill="#7cf06a"><animate attributeName="height" from="0" to="${Math.round(H - 14 - yv(x.done))}" dur=".8s" fill="freeze"/><animate attributeName="y" from="${H - 14}" to="${Math.round(yv(x.done))}" dur=".8s" fill="freeze"/></rect>
-        <text x="${xs[i]}" y="${H - 3}" text-anchor="middle">${x.no}かいめ</text><text x="${xs[i]}" y="${Math.round(yv(Math.max(x.done, x.inflow))) - 3}" text-anchor="middle" class="pct">${Math.round(x.rate * 100)}%</text>`).join("");
-      view.insertAdjacentHTML("beforeend", `<div class="win chart"><span class="ttl">ぼうけんの きろく</span><div class="legend"><i style="background:#555"></i>はいってきた <i style="background:#7cf06a"></i>たおした <b>%</b> きょうやる たっせいりつ</div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="しんだんの すいい">${bars}</svg></div>`);
-    }
-    view.insertAdjacentHTML("beforeend", `<div class="win" style="flex:1;min-height:0;display:flex;flex-direction:column"><span class="ttl">できごと（運用ログ）</span><div class="list" id="loglist"></div></div>`);
-    const box = $("#loglist", view);
-    if (!S.logs.length) box.innerHTML = `<div class="empty">${esc(S.extraErr.log || "まだ なにも おきていない。")}</div>`;
-    else fill(box, "log", S.logs, 28, (l, i) => `<button type="button" class="li" data-log="${l.id}" style="--i:${i}"><span class="nm">${esc(l.name)}</span><span class="r">${esc(l.event)} ${l.at ? (jst(Date.parse(l.at)) === today ? jstTime(Date.parse(l.at)) : md(jst(Date.parse(l.at)))) : ""}</span></button>`);
-    requestAnimationFrame(() => requestAnimationFrame(() => { for (const b of view.querySelectorAll(".bar i")) b.style.width = `calc(${b.dataset.w}% - 2px)`; }));
+    if (!S.doneToday.length) { list.innerHTML = `<div class="empty">今日の思い出は、まだこれから。</div>`; return; }
+    fill(list, "donetoday", S.doneToday, 34, (t, i) => `<div class="row" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r hi">${GIRLS[t.girl] ? `${GIRLS[t.girl].name} ` : ""}+${expOf(t.weight)}♡</span></div>`);
   }
   function projStats(p) {
     const open = S.tasks.filter((t) => t.projects.includes(p.id) && t.status !== ST.done && t.status !== ST.ref);
@@ -817,11 +923,12 @@ nav button { padding: 3px 0; white-space: nowrap; }
     return { open, done, pct: p.total ? Math.round((done / p.total) * 100) : 0 };
   }
 
-  // ================= ふくろ（すべてのDB） =================
+  // ================= スマホ（すべてのDB） =================
   function initDbs() {
     const names = store.get("dbnames") || {};
     S.dbs = SECTIONS.flatMap(([sec, items]) => items.map(([id, name]) => ({ id, name: name || names[id] || "", sec })));
   }
+  const phoneIdle = () => S.tab === "phone" && !S.dbOpen && !S.leaf;
   async function refreshDbList() {
     try {
       const res = await call("fetch", { id: DB_PAGE });
@@ -836,7 +943,7 @@ nav button { padding: 3px 0; white-space: nowrap; }
       }
       if (out.length >= 5) S.dbs = out;
     } catch { /* 控えの一覧のまま */ }
-    if (S.tab === "bag" && !S.dbOpen && !S.leaf) render();
+    if (phoneIdle()) render();
     fillDbNames();
   }
   // 名前のないDBは1つずつ読んで名前を出す（3本ずつ・覚えておく）
@@ -844,7 +951,7 @@ nav button { padding: 3px 0; white-space: nowrap; }
     const names = store.get("dbnames") || {};
     const todo = S.dbs.filter((d) => !d.name);
     let timer;
-    const later = () => { clearTimeout(timer); timer = setTimeout(() => { if (S.tab === "bag" && !S.dbOpen && !S.leaf) render(); }, 300); };
+    const later = () => { clearTimeout(timer); timer = setTimeout(() => { if (phoneIdle()) render(); }, 300); };
     const worker = async () => {
       for (let d; (d = todo.shift());) {
         try {
@@ -858,21 +965,28 @@ nav button { padding: 3px 0; white-space: nowrap; }
     };
     await Promise.all([worker(), worker(), worker()]);
   }
-  function renderBag(view) {
+  function renderPhone(view) {
     if (S.dbOpen) return renderDb(view);
     const secs = [...new Set(S.dbs.map((d) => d.sec))];
     if (!S.bagSec || !secs.includes(S.bagSec)) S.bagSec = secs[0];
-    view.insertAdjacentHTML("beforeend", `<div class="win msg"><span class="ttl">ふくろ</span><p id="bagmsg"></p></div>
-      <div class="row2" style="flex:1;min-height:0"><div class="win" style="flex:0 0 38%;display:flex;flex-direction:column"><span class="ttl">しゅるい</span>${secs.map((s) => `<button type="button" class="cur" data-bagsec="${esc(s)}" aria-pressed="${s === S.bagSec}" style="padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.replace(/^\S+\s/, ""))}</button>`).join("")}</div>
-      <div class="win" style="flex:1;display:flex;flex-direction:column"><span class="ttl">どうぐ</span><div class="list" id="baglist"></div></div></div>`);
-    type($("#bagmsg"), `🗄 データベース ページの ${S.dbs.length}この どうぐが はいっている。\nつかう どうぐを えらんでね。`);
-    fill($("#baglist", view), `bag:${S.bagSec}`, S.dbs.filter((d) => d.sec === S.bagSec), 30, (d, i) => `<button type="button" class="li" data-db="${d.id}" style="--i:${i}"><span class="nm">${esc(d.name || "…")}</span><span class="r"></span></button>`);
+    const n = new Date(Date.now() + 9 * 3600e3).toISOString();
+    view.insertAdjacentHTML("beforeend", `<div class="phone"><div class="pbar"><span>Notion ●●●</span><span>${n.slice(11, 16)}</span><span>${S.dbs.length}こ 🔋</span></div>
+      <div class="chips">${secs.map((s) => `<button type="button" class="chip" data-bagsec="${esc(s)}" aria-pressed="${s === S.bagSec}">${esc(s)}</button>`).join("")}</div>
+      <div class="apps" id="apps"></div><div class="dots" id="dots"></div></div>`);
+    const box = $("#apps", view); const items = S.dbs.filter((d) => d.sec === S.bagSec);
+    const cols = Math.max(3, Math.floor(box.clientWidth / 80)); const rows = Math.max(1, Math.floor((box.clientHeight + 10) / 88));
+    const key = `apps:${S.bagSec}`; const { slice, p, pages } = pageOf(key, items, cols * rows);
+    box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    box.dataset.swipe = key; box.dataset.pages = pages;
+    if (S.slide?.key === key) box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
+    box.innerHTML = slice.map((d, i) => { const nm = (d.name || "…").replace(/^DB_/, ""); const h = hashOf(d.id) % 360; return `<button type="button" class="app" data-db="${d.id}" style="--i:${i}"><span class="ic" style="background:linear-gradient(135deg,hsl(${h},75%,72%),hsl(${(h + 40) % 360},70%,62%))">${esc([...nm][0] || "?")}</span><span class="an">${esc(nm)}</span></button>`; }).join("");
+    $("#dots", view).innerHTML = pages > 1 ? Array.from({ length: pages }, (_, i) => `<i class="${i === p ? "on" : ""}"></i>`).join("") : "";
   }
   async function openDb(id) {
     const d = S.dbs.find((x) => x.id === id); if (!d) return;
     S.dbOpen = d; S.dbRows = []; S.dbSchema = null; S.dbErr = null; S.dbQuery = ""; S.dbLoading = true; S.page.db = 0;
     render();
-    if (S.mode === "demo") { S.dbLoading = false; S.dbErr = "みほんでは なかみを よめない。（claude.ai で ひらくと よめる）"; render(); return; }
+    if (S.mode === "demo") { S.dbLoading = false; S.dbErr = "見本では中身を読めないの。\nclaude.ai で開くと読めるよ。"; render(); return; }
     try {
       const res = await call("fetch", { id: `collection://${id}` });
       const t = String(res.text || "");
@@ -907,23 +1021,22 @@ nav button { padding: 3px 0; white-space: nowrap; }
   }
   function renderDb(view) {
     const d = S.dbOpen;
-    view.insertAdjacentHTML("beforeend", `<div class="win msg"><span class="ttl">${esc(d.name || "どうぐ")}</span><p id="dbmsg"></p></div>`);
-    if (S.dbLoading) { type($("#dbmsg"), `${d.name}を しらべている…`); view.insertAdjacentHTML("beforeend", `<div class="win tight"><button type="button" class="cur on" data-dbback="1">もどる</button></div>`); return; }
-    if (S.dbErr) { type($("#dbmsg"), S.dbErr); view.insertAdjacentHTML("beforeend", `<div class="win tight"><button type="button" class="cur on" data-dbback="1">もどる</button></div>`); return; }
+    view.insertAdjacentHTML("beforeend", `<div class="phone"><div class="apphead"><button type="button" data-dbback="1" aria-label="戻る">‹</button><b>${esc(d.name || "アプリ")}</b></div><div class="status" id="dbmsg"></div><div id="dbbody" style="flex:1;min-height:0;display:flex;flex-direction:column;gap:8px"></div></div>`);
+    const body = $("#dbbody", view);
+    if (S.dbLoading) { $("#dbmsg").textContent = "読みこみ中…"; return; }
+    if (S.dbErr) { body.innerHTML = `<div class="empty">${esc(S.dbErr)}</div>`; return; }
     const { title, extra } = dbColumns();
     const q = S.dbQuery.trim().toLowerCase();
     const items = S.dbRows.filter((r) => !q || Object.values(r).some((v) => typeof v === "string" && !isRef(v) && text(v).toLowerCase().includes(q)));
-    type($("#dbmsg"), `${d.name}の なかに ${items.length}${S.dbMore ? "（あたらしい 100）" : ""}この ものが ある。`);
-    view.insertAdjacentHTML("beforeend", `<div class="win tight"><input id="dbq" type="search" placeholder="さがす" value="${esc(S.dbQuery)}" aria-label="さがす" style="width:100%;background:#000;border:0;border-bottom:1px solid #fff"></div>
-      <div class="win" style="flex:1;min-height:0;display:flex;flex-direction:column"><div class="list" id="dblist"></div></div>
-      <div class="win tight"><button type="button" class="cur on" data-dbback="1">ふくろに もどる</button></div>`);
+    $("#dbmsg").textContent = `${items.length}件${S.dbMore ? "（新しい100件）" : ""}`;
+    body.innerHTML = `<input id="dbq" class="search" type="search" placeholder="🔍 さがす" value="${esc(S.dbQuery)}" aria-label="さがす"><div class="list" id="dblist" style="gap:0"></div>`;
     const box = $("#dblist", view);
-    if (!items.length) { box.innerHTML = `<div class="empty">${q ? "みつからなかった。" : "なにも はいっていない。"}</div>`; return; }
-    fill(box, "db", items, 30, (r, i) => { const n = S.dbRows.indexOf(r); const sub = extra.map((p) => cell(r, p)).filter(Boolean); return `<button type="button" class="li" data-dbrow="${n}" style="--i:${i}"><span class="nm">${esc(text(r[title]) || "（無題）")}</span><span class="r">${esc((sub[0] || "").slice(0, 8))}</span></button>`; });
+    if (!items.length) { box.innerHTML = `<div class="empty">${q ? "見つからなかったよ。" : "なにも入っていないよ。"}</div>`; return; }
+    fill(box, "db", items, 34, (r, i) => { const n = S.dbRows.indexOf(r); const sub = extra.map((p) => cell(r, p)).filter(Boolean); return `<button type="button" class="row" data-dbrow="${n}" style="--i:${i}"><span class="nm">${esc(text(r[title]) || "（無題）")}</span><span class="r">${esc((sub[0] || "").slice(0, 10))}</span></button>`; });
   }
 
-  // ================= しらべる（詳細）：本文・つよさ・かきこむ =================
-  function placeOfTask(t) { const lane = laneOf(t); const k = LANE_PLACE[lane]; return k ? PLACES[k] : { name: "しょこ", sub: "REFERENCE" }; }
+  // ================= 中身（詳細）：本文・項目・書く =================
+  function girlOfTask(t) { const lane = laneOf(t); return GIRLS[lane] ? { name: GIRLS[lane].name, sub: GIRLS[lane].role, g: GIRLS[lane] } : lane === "done" ? { name: "思い出", sub: "済み" } : { name: "本棚", sub: "資料" }; }
   function openTask(id) {
     const t = known.get(id); if (!t) return;
     S.leaf = { kind: "task", id, url: t.url, title: t.name, view: "body", body: null, bodyErr: null, open: new Set(), pg: 0, write: "todo" };
@@ -944,7 +1057,7 @@ nav button { padding: 3px 0; white-space: nowrap; }
   function openPage(kind, id) {
     const src = { goal: S.goals, diag: S.diag, log: S.logs }[kind] || [];
     const x = src.find((r) => r.id === id); if (!x) return;
-    const fields = kind === "goal" ? [["ステータス", x.status], ["種別", x.kind], ["領域", x.area], ["期限", x.due ? md(x.due) : ""], ["なぜ", x.why], ["達成の目安", x.goalBy], ["クエスト", x.projects.map((pid) => S.projects.find((p) => p.id === pid)?.name).filter(Boolean).join("・")]]
+    const fields = kind === "goal" ? [["ステータス", x.status], ["種別", x.kind], ["領域", x.area], ["期限", x.due ? md(x.due) : ""], ["なぜ", x.why], ["達成の目安", x.goalBy], ["プロジェクト", x.projects.map((pid) => S.projects.find((p) => p.id === pid)?.name).filter(Boolean).join("・")]]
       : kind === "diag" ? [["期間", x.from ? `${md(x.from)}〜${md(x.to || x.from)}` : ""], ["判定", x.verdict], ["今日やる完了率", `${Math.round(x.rate * 100)}%`], ["完了／流入", `${x.done}／${x.inflow}`], ["次の一手", x.next]]
       : [["イベント", x.event], ["日時", x.at ? `${md(jst(Date.parse(x.at)))} ${jstTime(Date.parse(x.at))}` : ""], ["内容", x.body]];
     S.leaf = { kind: "page", sub: kind, id, url: x.url, title: x.name, fields, view: "body", body: null, bodyErr: null, open: new Set(), pg: 0, write: "memo" };
@@ -966,39 +1079,41 @@ nav button { padding: 3px 0; white-space: nowrap; }
   function fieldsHtml() {
     const L = S.leaf;
     if (L.kind === "task") {
-      const t = known.get(L.id); const pl = placeOfTask(t);
+      const t = known.get(L.id); const gw = girlOfTask(t);
       const p = S.projects.find((x) => t.projects.includes(x.id));
-      return `<dl class="fields"><dt>いるばしょ</dt><dd>${esc(pl.name)}（${esc(pl.sub)}）<span class="dim">　${esc(t.status)}${t.ai ? ` ${esc(t.ai)}` : ""}</span></dd>
-        <dt>つぎのいって</dt><dd class="hi">${esc(t.next || "—")}</dd><dt>ひづけ</dt><dd>${t.date ? `${md(t.date)}（${WD[dow(t.date)]}）` : "—"}</dd><dt>じかんたい</dt><dd>${esc(t.waku || "—")}</dd>
-        <dt>おもさ</dt><dd>${esc(t.weight || "—")}（${expOf(t.weight)}EXP）</dd><dt>しゅるい</dt><dd>${esc(t.tag || "—")}</dd>
-        ${p ? `<dt>クエスト</dt><dd>${esc(p.name)}</dd>` : ""}${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link.slice(0, 60))}</a></dd>` : ""}</dl>`;
+      return `<dl class="fields"><dt>担当</dt><dd>${esc(gw.name)}（${esc(gw.sub)}）<span class="dim">　${esc(t.status)}${t.ai ? ` ${esc(t.ai)}` : ""}</span></dd>
+        <dt>次の一歩</dt><dd class="hi">${esc(t.next || "—")}</dd><dt>実行日</dt><dd>${t.date ? `${md(t.date)}（${WD[dow(t.date)]}）` : "—"}</dd><dt>枠</dt><dd>${esc(t.waku || "—")}</dd>
+        <dt>重さ</dt><dd>${esc(t.weight || "—")}（好感度 ${expOf(t.weight)}♡）</dd><dt>分類</dt><dd>${esc(t.tag || "—")}</dd>
+        ${p ? `<dt>プロジェクト</dt><dd>${esc(p.name)}</dd>` : ""}${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link.slice(0, 60))}</a></dd>` : ""}</dl>`;
     }
     if (L.kind === "proj") {
       const p = S.projects.find((x) => x.id === L.id); const s = projStats(p);
       const order = [ST.doing, ST.next, ST.wait, ST.ai, ST.some, ST.inbox];
       const kids = s.open.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
-      return `<dl class="fields"><dt>じょうたい</dt><dd>${esc(p.status)}</dd><dt>すすみ</dt><dd class="hi">${s.done} / ${p.total}（${s.pct}%）</dd><dt>いま</dt><dd>${esc(p.now || "—")}</dd><dt>つぎのいっぽ</dt><dd class="hi">${esc(p.step || "—")}</dd></dl>
-        <div class="list">${kids.length ? kids.slice(0, 14).map((t, i) => `<button type="button" class="li" data-open="${t.id}" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r">${esc(placeOfTask(t).name)}</span></button>`).join("") : `<div class="empty">のこりの いらいは ない。</div>`}</div>`;
+      return `<dl class="fields"><dt>状態</dt><dd>${esc(p.status)}</dd><dt>進み</dt><dd class="hi">${s.done} / ${p.total}（${s.pct}%）</dd><dt>今</dt><dd>${esc(p.now || "—")}</dd><dt>次の一歩</dt><dd class="hi">${esc(p.step || "—")}</dd></dl>
+        <div class="list" style="gap:0">${kids.length ? kids.slice(0, 14).map((t, i) => `<button type="button" class="row" data-open="${t.id}" style="--i:${i}"><span class="nm">${esc(t.name)}</span><span class="r">${esc(girlOfTask(t).name)}</span></button>`).join("") : `<div class="empty">残りのタスクはないよ。</div>`}</div>`;
     }
     if (L.kind === "page") return `<dl class="fields">${L.fields.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
     const r = L.row; const schema = S.dbSchema || {}; const { title } = dbColumns();
     const props = Object.values(schema).filter((p) => p.name !== title && !["button", "formula", "rollup"].includes(p.type));
-    const shown = props.map((p) => { const v = cell(r, p); return v ? `<dt>${esc(p.name)}</dt><dd>${SECRET.test(p.name) ? `<span class="secret">••••（かくしています）</span>` : esc(v)}</dd>` : ""; }).join("");
+    const shown = props.map((p) => { const v = cell(r, p); return v ? `<dt>${esc(p.name)}</dt><dd>${SECRET.test(p.name) ? `<span class="secret">••••（隠しています）</span>` : esc(v)}</dd>` : ""; }).join("");
     const formulas = Object.values(schema).filter((p) => p.type === "formula" || p.type === "rollup").length;
-    return `<dl class="fields">${shown || "<dt>—</dt><dd>なにも かいていない</dd>"}</dl>${formulas ? `<div class="dim" style="font-size:11px">けいさんしき・ロールアップ ${formulas}こは Notion れんけいから よめないので だしていません</div>` : ""}`;
+    return `<dl class="fields">${shown || "<dt>—</dt><dd>なにも書いていない</dd>"}</dl>${formulas ? `<div class="dim" style="font-size:11px">計算式・ロールアップ ${formulas}つは Notion 連携から読めないので出していません</div>` : ""}`;
   }
   function drawLeaf(slide = 0) {
     const L = S.leaf; if (!L) return;
     const sh = $("#sheet");
     const t = L.kind === "task" ? known.get(L.id) : null;
-    const where = t ? `いるばしょ：${placeOfTask(t).name}（${placeOfTask(t).sub}）` : L.kind === "proj" ? "クエスト（プロジェクト）" : L.sub === "goal" ? "おうさまの ねがい（目標）" : L.sub === "diag" ? "しんだん" : L.sub === "log" ? "ぼうけんのしょ（運用ログ）" : `どうぐ：${S.dbOpen?.name || ""}`;
-    const views = L.kind === "proj" ? [["fields", "いらい"], ["body", "ほんぶん"], ["write", "かきこむ"]] : [["body", "ほんぶん"], ["fields", "つよさ"], ["write", "かきこむ"]];
+    const gw = t ? girlOfTask(t) : null;
+    const where = t ? `担当：${gw.name}（${gw.sub}）` : L.kind === "proj" ? "プロジェクト" : L.sub === "goal" ? "約束（目標）" : L.sub === "diag" ? "シオリからの手紙（診断）" : L.sub === "log" ? "日記（運用ログ）" : `スマホ：${S.dbOpen?.name || ""}`;
+    const views = L.kind === "proj" ? [["fields", "タスク"], ["body", "中身"], ["write", "書く"]] : [["body", "中身"], ["fields", "項目"], ["write", "書く"]];
     const lane = t ? laneOf(t) : null;
     const fresh = sh.dataset.id !== L.id; sh.dataset.id = L.id;
-    sh.innerHTML = `<div class="leaf" role="dialog" aria-modal="true" aria-label="${esc(L.title)}" style="${fresh ? "" : "animation:none"}">
-      <div class="win"><h3>${esc(L.title)}</h3><div class="where">${esc(where)}</div><button type="button" class="x" data-close="1" aria-label="とじる">×</button></div>
-      ${t && KEYS_BY_LANE[lane] ? `<div class="win cmds"><span class="ttl">コマンド</span>${KEYS_BY_LANE[lane].map((a) => `<button type="button" class="cur" data-act="${a}" data-id="${t.id}">${ACTIONS[a].label}</button>`).join("")}</div>` : ""}
-      <div class="win" style="flex:1;min-height:0;display:flex;flex-direction:column;gap:6px"><div class="tabs">${views.map(([k, n]) => `<button type="button" class="cur" data-view="${k}" aria-pressed="${L.view === k}">${n}</button>`).join("")}<a href="${esc(L.url)}" target="_blank" rel="noopener">Notionで ひらく</a></div>
+    const c = gw?.g?.color || "var(--pink)";
+    sh.innerHTML = `<div class="leaf" role="dialog" aria-modal="true" aria-label="${esc(L.title)}" style="--c:${c};${fresh ? "" : "animation:none"}">
+      <div class="panel head">${gw?.g ? `<span class="ava" style="--c:${c}">${girl(gw.g, "normal", true)}</span>` : ""}<div style="min-width:0"><h3>${esc(L.title)}</h3><div class="where">${esc(where)}</div></div><button type="button" class="x" data-close="1" aria-label="閉じる">×</button></div>
+      ${t && KEYS_BY_LANE[lane] ? `<div class="panel sheetacts">${KEYS_BY_LANE[lane].map((a) => `<button type="button" class="opt${a === "done" ? " main" : ""}" data-act="${a}" data-id="${t.id}">${ACTIONS[a].label}</button>`).join("")}</div>` : ""}
+      <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column;gap:8px"><div class="tabs">${views.map(([k, n]) => `<button type="button" data-view="${k}" aria-pressed="${L.view === k}">${n}</button>`).join("")}<a href="${esc(L.url)}" target="_blank" rel="noopener">Notionで開く</a></div>
         <div class="leafbody"></div><div class="tfoot"></div></div></div>`;
     sh.hidden = false;
     L.pages = 0;
@@ -1006,10 +1121,10 @@ nav button { padding: 3px 0; white-space: nowrap; }
     if (L.view === "fields") { box.innerHTML = fieldsHtml(); return; }
     if (L.view === "write") { box.innerHTML = writeHtml(); return; }
     if (L.bodyErr) { box.innerHTML = `<div class="empty">${esc(L.bodyErr)}</div>`; return; }
-    if (!L.body) { box.innerHTML = `<div class="empty">ほんぶんを よんでいる…</div>`; return; }
+    if (!L.body) { box.innerHTML = `<div class="empty">読みこみ中…</div>`; return; }
     const flat = flatten(L.body, L.open);
     L.flat = flat;
-    if (!flat.length) { box.innerHTML = `<div class="empty">まだ なにも かいていない。「かきこむ」から かける。</div>`; return; }
+    if (!flat.length) { box.innerHTML = `<div class="empty">まだなにも書いていないよ。「書く」から書けるよ。</div>`; return; }
     box.innerHTML = `<div class="notebody" data-swipe="leaf"><div class="pg">${flat.map(blockHtml).join("")}</div></div>`;
     // 本文を1頁ずつに割り付ける（入りきらない分は次の頁へ）
     const nb = $(".notebody", box); const pg = $(".pg", nb);
@@ -1025,36 +1140,37 @@ nav button { padding: 3px 0; white-space: nowrap; }
     for (const el of els) el.hidden = !pages[L.pg].includes(el);
     nb.dataset.pages = pages.length;
     if (slide) pg.classList.add(slide > 0 ? "in-l" : "in-r");
-    $(".tfoot", sh).innerHTML = pages.length > 1 ? `<button type="button" data-leafpg="-1" ${L.pg === 0 ? "disabled" : ""}>◀</button><span>${L.pg + 1} / ${pages.length}　スワイプで めくる</span><button type="button" data-leafpg="1" ${L.pg >= pages.length - 1 ? "disabled" : ""}>▶</button>` : "";
+    $(".tfoot", sh).innerHTML = pages.length > 1 ? `<button type="button" data-leafpg="-1" ${L.pg === 0 ? "disabled" : ""} aria-label="前の頁">◀</button><span>${L.pg + 1} / ${pages.length}　スワイプでめくれるよ</span><button type="button" data-leafpg="1" ${L.pg >= pages.length - 1 ? "disabled" : ""} aria-label="次の頁">▶</button>` : "";
   }
   function writeHtml() {
     const L = S.leaf;
-    const modes = L.kind === "task" ? [["todo", "やることに たす"], ["memo", "メモを かく"], ["next", "つぎのいってを かきかえる"]] : [["memo", "メモを かく"], ["todo", "チェックこうもくを たす"]];
+    const modes = L.kind === "task" ? [["todo", "やることに足す"], ["memo", "メモを書く"], ["next", "次の一歩を書き換える"]] : [["memo", "メモを書く"], ["todo", "チェック項目を足す"]];
     if (!modes.some(([k]) => k === L.write)) L.write = modes[0][0];
     const t = L.kind === "task" ? known.get(L.id) : null;
-    const note = { todo: "1ぎょう＝1こうもく。ほんぶんの「やること／ToDo」の さいごに たします（なければ さいごに みだしごと つくります）", memo: "ほんぶんの いちばん さいごに かきたします", next: "NEXT（つぎのいって）を かきかえます。じぶんで かいた NEXT は AI が うわがきしません" }[L.write];
-    const field = L.write === "next" ? `<label for="w-next">つぎのいって</label><input id="w-next" type="text" maxlength="200" value="${esc(t?.next || "")}">` : `<textarea id="w-text" placeholder="${L.write === "todo" ? "れい）サイズを はかる" : "ここに かく"}" aria-label="かく ないよう"></textarea>`;
-    return `<div class="write"><div class="tabs">${modes.map(([k, n]) => `<button type="button" class="cur" data-wmode="${k}" aria-pressed="${L.write === k}">${n}</button>`).join("")}</div>
+    const note = { todo: "1行＝1項目。本文の「やること／ToDo」の最後に足します（なければ最後に見出しごと作ります）", memo: "本文のいちばん最後に書き足します", next: "NEXT（次の一歩）を書き換えます。自分で書いた NEXT は AI が上書きしません" }[L.write];
+    const field = L.write === "next" ? `<label for="w-next">次の一歩</label><input id="w-next" type="text" maxlength="200" value="${esc(t?.next || "")}">` : `<textarea id="w-text" placeholder="${L.write === "todo" ? "例）サイズを測る" : "ここに書く"}" aria-label="書く内容"></textarea>`;
+    return `<div class="write"><div class="tabs">${modes.map(([k, n]) => `<button type="button" data-wmode="${k}" aria-pressed="${L.write === k}">${n}</button>`).join("")}</div>
       <div class="note">${note}</div>${field}${L.write === "next" ? `<div style="flex:1"></div>` : ""}
-      <div class="tabs"><button type="button" class="cur on" data-save="1">かきこむ</button><button type="button" class="cur" data-view="body">やめる</button></div></div>`;
+      <div class="tabs"><button type="button" class="on" data-save="1">書きこむ♡</button><button type="button" data-view="body">やめる</button></div></div>`;
   }
 
-  // ================= かきこむ（新しい いらい） =================
+  // ================= メモを渡す（新しいタスク） =================
+  const WHERE = [["inbox", "モモに渡す（倉庫）"], ["next", "シオリに預ける（次にやる）"], ["today", "ヒナタと今日やる"], ["tomorrow", "ツムギに明日の予定"]];
   function openNew() {
-    S.leaf = { kind: "new", id: "new", title: "あたらしい いらい", where: "inbox" };
+    S.leaf = { kind: "new", id: "new", title: "メモを渡す", where: "inbox" };
     const sh = $("#sheet"); sh.dataset.id = "new";
-    sh.innerHTML = `<div class="leaf" role="dialog" aria-modal="true" aria-label="あたらしい いらい">
-      <div class="win"><h3>あたらしい いらいを かきこむ</h3><button type="button" class="x" data-close="1" aria-label="とじる">×</button></div>
-      <div class="win write" style="flex:1"><label for="n-name">なまえ（やること）</label><input id="n-name" type="text" maxlength="200" placeholder="れい）ゆうびんうけの たいさくを きめる">
-      <label for="n-next">つぎのいって（なくてもよい）</label><input id="n-next" type="text" maxlength="200">
-      <label for="n-memo">メモ（ほんぶんに はいる）</label><textarea id="n-memo" aria-label="メモ"></textarea>
-      <label>どこへ つれていく？</label><div class="cmds" id="n-where">${[["inbox", "さかば（倉庫）"], ["next", "ギルド（次にやる）"], ["today", "きょう たたかう"], ["tomorrow", "あしたへ（予定）"]].map(([k, n]) => `<button type="button" class="cur${k === "inbox" ? " on" : ""}" data-where="${k}">${n}</button>`).join("")}</div>
-      <div class="tabs"><button type="button" class="cur on" data-create="1">かきこむ</button><button type="button" class="cur" data-close="1">やめる</button></div></div></div>`;
+    sh.innerHTML = `<div class="leaf" role="dialog" aria-modal="true" aria-label="メモを渡す">
+      <div class="panel head"><span class="ava" style="--c:${GIRLS.inbox.color}">${girl(GIRLS.inbox, "joy", true)}</span><div><h3>メモを渡す</h3><div class="where">新しいタスクを DB_タスク管理 に作るよ</div></div><button type="button" class="x" data-close="1" aria-label="閉じる">×</button></div>
+      <div class="panel write" style="flex:1"><label for="n-name">名前（やること）</label><input id="n-name" type="text" maxlength="200" placeholder="例）郵便受けの対策を決める">
+      <label for="n-next">次の一歩（なくてもいい）</label><input id="n-next" type="text" maxlength="200">
+      <label for="n-memo">メモ（本文に入る）</label><textarea id="n-memo" aria-label="メモ"></textarea>
+      <label>だれに渡す？</label><div class="tabs" id="n-where">${WHERE.map(([k, n]) => `<button type="button" class="${k === "inbox" ? "on" : ""}" data-where="${k}">${n}</button>`).join("")}</div>
+      <div class="tabs"><button type="button" class="on" data-create="1">渡す♡</button><button type="button" data-close="1">やめる</button></div></div></div>`;
     sh.hidden = false;
     setTimeout(() => $("#n-name")?.focus(), 60);
   }
   async function createTask() {
-    const name = $("#n-name").value.trim(); if (!name) { say("なまえを かいてください。"); return; }
+    const name = $("#n-name").value.trim(); if (!name) { say("名前を書いてね。"); return; }
     const next = $("#n-next").value.trim(); const memo = $("#n-memo").value.trim(); const where = S.leaf.where;
     const props = { "名前": name, "ステータス": where === "inbox" ? ST.inbox : ST.next, "プレイヤー": [PLAYER] };
     if (next) props.NEXT = next;
@@ -1062,34 +1178,34 @@ nav button { padding: 3px 0; white-space: nowrap; }
     if (where === "tomorrow") Object.assign(props, dateProps(addDays(TODAY(), 1)));
     const content = [next ? `## やること\n- [ ] ${next}` : "", memo ? `## メモ\n${memo}` : ""].filter(Boolean).join("\n\n");
     const local = () => ({ url: "", 名前: name, NEXT: next, ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, 最終更新日時: new Date().toISOString() });
-    const where2 = { inbox: "さかば", next: "ギルド", today: "まちのそと", tomorrow: "とけいとう" }[where];
-    const finish = (t) => { S.tasks.push(t); closeSheet(); S.tab = "town"; S.place = null; render(); say(`${short(name)}が ${where2}に くわわった！${S.mode === "demo" ? "\n（みほんなので Notion は かわりません）" : ""}`); };
+    const to = { inbox: "inbox", next: "next", today: "today", tomorrow: "plan" }[where];
+    const finish = (t) => { S.tasks.push(t); closeSheet(); S.tab = "home"; S.place = to; S.react = { k: to, expr: "joy", text: `「${short(name, 14)}」、たしかに受け取ったよ♡${S.mode === "demo" ? "\n（見本なので Notion は変わりません）" : ""}` }; render(); };
     if (S.mode === "demo") { finish(toTask({ ...local(), url: `https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}` })); return; }
-    const btn = $("[data-create]"); btn.disabled = true; btn.textContent = "かきこんでいる…";
+    const btn = $("[data-create]"); btn.disabled = true; btn.textContent = "渡しています…";
     try {
       const res = await call("create", { parent: { type: "data_source_id", data_source_id: DS.task }, pages: [{ properties: props, ...(content ? { content } : {}) }], allow_async: false }, { read: false });
       const pg = (res.pages || [])[0] || {};
       finish(toTask({ ...local(), url: pg.url || `https://www.notion.so/${String(pg.id || "").replace(/-/g, "")}` }));
       saveSnap();
     } catch (err) {
-      btn.disabled = false; btn.textContent = "かきこむ";
-      say(err?.code === "server_unavailable" ? "へんじが ない。かさならないよう「さいしん」で たしかめてから かきなおしてね。" : `かきこめなかった！\n${errText(err)}`);
+      btn.disabled = false; btn.textContent = "渡す♡";
+      say(err?.code === "server_unavailable" ? "返事がないみたい。重ならないよう「更新」で確かめてから書き直してね。" : `渡せなかった…\n${errText(err)}`);
     }
   }
 
   // ================= 描画 =================
   const main = $("#main");
   function render() {
-    for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
+    const navKey = S.tab === "home" && S.place === "today" ? "date" : S.tab;
+    for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === navKey));
     document.body.classList.toggle("loading", S.mode === "loading");
     const exp = S.doneToday.reduce((a, t) => a + expOf(t.weight), 0);
-    $("#lv").textContent = S.mode === "loading" && !S.tasks.length ? "よみこみちゅう" : `きょう ${S.doneToday.length}ひき たおした　EXP +${exp}${S.mode === "demo" ? "　（みほん）" : ""}`;
-    const keep = main.dataset.tab === `${S.tab}:${S.place || ""}:${S.dbOpen?.id || ""}`;
-    main.dataset.tab = `${S.tab}:${S.place || ""}:${S.dbOpen?.id || ""}`;
+    $("#lv").textContent = S.mode === "loading" && !S.tasks.length ? "読みこみ中…" : `今日 ${S.doneToday.length}こ済ませた ♡+${exp}${S.mode === "demo" ? "（見本）" : ""}`;
+    const k = `${S.tab}:${S.place || ""}:${S.dbOpen?.id || ""}`;
+    const keep = main.dataset.tab === k; main.dataset.tab = k;
     main.innerHTML = `<div class="view${keep ? "" : " fade"}"></div>`;
     const view = $(".view", main);
-    if (S.tab !== "town" && townRaf) { cancelAnimationFrame(townRaf); townRaf = 0; }
-    ({ town: renderTown, battle: renderBattle, status: renderStatus, bag: renderBag })[S.tab](view);
+    ({ home: renderHome, memory: renderMemory, phone: renderPhone })[S.tab](view);
     S.slide = null;
   }
 
@@ -1297,14 +1413,13 @@ nav button { padding: 3px 0; white-space: nowrap; }
     if (!el) { if (e.target.id === "sheet") closeSheet(); return; }
     if (el.id === "add" || el.id === "reload") return;
     const ds = el.dataset;
-    if (ds.tab) { S.tab = ds.tab; S.place = null; S.dbOpen = null; S.battleMsg = null; render(); return; }
+    if (ds.tab) { S.dbOpen = null; S.target = null; if (ds.tab === "date") { S.tab = "home"; S.place = "today"; } else { S.tab = ds.tab; S.place = null; } render(); return; }
     if (ds.goto) { goTo(ds.goto); return; }
-    if (ds.pick) { S.target = S.target === ds.pick ? null : ds.pick; render(); return; }
+    if (ds.pick !== undefined) { S.target = ds.pick || null; render(); return; }
     if (ds.leave) { S.place = null; S.target = null; render(); return; }
-    if (ds.target) { S.target = ds.target; render(); return; }
-    if (ds.fight) { fight(ds.fight); return; }
-    if (ds.church) { S.churchTab = ds.church; S.page.place = 0; render(); return; }
-    if (ds.bagsec) { S.bagSec = ds.bagsec; S.page.bagdb = 0; render(); return; }
+    if (ds.choose) { choose(ds.choose); return; }
+    if (ds.mem) { S.memTab = ds.mem; render(); return; }
+    if (ds.bagsec) { S.bagSec = ds.bagsec; render(); return; }
     if (ds.act) { e.stopPropagation(); act(ds.id, ds.act); return; }
     if (ds.projOpen) { openProject(ds.projOpen); return; }
     if (ds.goal) { openPage("goal", ds.goal); return; }
@@ -1338,14 +1453,14 @@ nav button { padding: 3px 0; white-space: nowrap; }
   addEventListener("pointerup", swipe.up);
   addEventListener("pointercancel", (e) => swipe.up(e));
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (!document.activeElement?.matches("textarea, input")) { render(); if (S.leaf && S.leaf.kind !== "new") drawLeaf(); } }, 150); });
-  $("#reload").addEventListener("click", () => { say("さいしんの じょうほうを よみこんでいる…"); load(); });
+  $("#reload").addEventListener("click", () => { say("最新の予定を読みこんでるよ…"); load(); });
   $("#add").addEventListener("click", () => openNew());
   // 時計（日本時間）
   function tick() {
     const n = new Date(Date.now() + 9 * 3600e3).toISOString();
-    $("#clock").innerHTML = `${n.slice(11, 13)}<span class="c">:</span>${n.slice(14, 16)}`;
+    $("#clock").textContent = n.slice(11, 16);
   }
-  tick(); setInterval(tick, 1000);
+  tick(); setInterval(tick, 10000);
 
   // ================= 起動 =================
   async function load() {
@@ -1397,13 +1512,14 @@ nav button { padding: 3px 0; white-space: nowrap; }
   }
 
   initDbs();
+  S.love = store.get("love") || {};
   const snap = store.get("snap");
   if (snap?.tasks?.length) {
     Object.assign(S, { tasks: snap.tasks, projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], inboxMore: !!snap.inboxMore, diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], loadedAt: snap.at });
     for (const t of S.tasks) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["town", "battle", "status", "bag"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["home", "memory", "phone"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseBody, laneOf, lastTodoOfSection }; // 確認用
