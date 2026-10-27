@@ -60,6 +60,8 @@ iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Work
 
 以後、このフォルダを GitHub で更新すると自動で再デプロイされる。
 
+> いま動いているもの：`https://shiori.roranosuke2525.workers.dev`（2026-10-27 に Claude のセッションから `npx wrangler deploy` で公開。Git の自動デプロイはつないでいないので、更新は同じく `npx wrangler deploy` で出す）
+
 ### 3. iPhone：ホーム画面に追加
 
 1. Safari で上のURLを開き、合言葉を入れる
