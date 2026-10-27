@@ -1,0 +1,13 @@
+name = "imadoko"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+# 秘密の値は wrangler secret put（またはダッシュボードの「変数とシークレット」）で入れる。このファイルには書かない
+#   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
+#   APP_KEY      : アプリを開くときの合言葉（16文字以上）
+# 読み書きするDB・ページのIDは画面（app/settings.js）に書いてある。IDだけでは読み書きできず、権限はインテグレーションの接続で決まる

@@ -4,7 +4,7 @@ Notion の私用タスク運用（GTD＋AIリサーチ）を1画面ずつで回�
 いちばん使う **AIリサーチの選別とやり取り**を中心に、タスクが濾過されていく流れ・仕分け・診断と運用ログ・すべてのDBをまとめ、本文は Notion と同じ書き方で直接編集できる。
 
 - 公開先：[今どこ](https://claude.ai/artifact/1eDZLbLLp3d6F7Mr7nKQE9)
-- Notion へは見ている人の claude.ai の Notion 連携（MCP）で入る。トークン・サーバーなし
+- Notion へは、claude.ai の中では Notion 連携（MCP）、Cloudflare版では Notion API（Worker が中継）で入る。下の「2つの動かし方」
 - 一覧は左右スワイプで頁送り（1頁の件数は画面の高さから自動で決める）。本文のエディタだけは中で縦に動く
 
 ## 画面
@@ -54,10 +54,91 @@ Notion の MCP は計算式の値を返さないので、アプリの中でス�
   - DB_タスク管理への新しい行（右上の「＋」：収集箱へ／AIに頼む）
 - ほかのDBのプロパティは読むだけ。パスワードらしい列は伏せる
 
-## 公開
+## 2つの動かし方
 
-`index.html` をそのままアーティファクトとして公開する。capabilities：
+| | アーティファクト版（MCP） | Cloudflare版（Notion API） |
+| --- | --- | --- |
+| 開き方 | claude.ai のアーティファクト（[今どこ](https://claude.ai/artifact/1eDZLbLLp3d6F7Mr7nKQE9)）を開く | 自分の `workers.dev` のURLを開く（ホーム画面に追加するとアプリのように使える） |
+| Notion への入り方 | 見ている人の claude.ai の Notion 連携（MCP）。トークン・合言葉・サーバーなし | Notion のインテグレーションのトークン（Cloudflare の秘密の値）。開くときは合言葉 |
+| 準備 | なし（初回に「Notion を使ってよいか」の確認が出たら許可） | 下の「セットアップ」 |
+| 読み書きできる範囲 | 自分の Notion アカウントで見えるもの全部 | インテグレーションを接続したページ・DBだけ |
 
+画面は同じ1枚（`public/index.html`）。開いた場所で自動で切り替わる：`/api/ping` に Worker が答えれば Cloudflare版、claude.ai の中なら MCP、どちらでもなければ見本データ。
+Worker は画面が MCP に出していた4つの道具（fetch・query・update・create）を Notion API に置き換え、MCP と同じ形で返す（`src/worker.js`）。
+
+- 本文は Notion API の Markdown（`GET/PATCH /v1/pages/:id/markdown`、`markdown_version: v2`＝MCP と同じ Notion-flavored Markdown、`Notion-Version: 2026-03-11`）で読み、`update_content`（old_str→new_str）で変わった所だけ置き換える
+- データソース・プロパティは `Notion-Version: 2025-09-03`
+- 子ページ・データベースを消す全体の置き換え（allow_deleting_content）は Worker が受け付けない。ページ・行の削除の窓口もない
+- Notion API は計算式の値を返す（MCP は返さない）が、画面は今までどおりステータスと実行日から段を出す
+
+### しくみ（Cloudflare版）
+
+```
+iPhone・PC（ブラウザ／ホーム画面） ──合言葉──▶ Cloudflare Worker ──トークン──▶ Notion API
+                                              （画面の配信＋中継）
+```
+
+- Notion のトークンは **Cloudflare 側の秘密の値にだけ**置く。スマホやブラウザ、社内PCには残らない
+- 合言葉（APP_KEY・16文字以上）は端末のブラウザにだけ保存される。違うと 401 で、画面が入れ直しを聞く
+- Cloudflare Workers の無料枠で動く
+
+## セットアップ（Cloudflare版・PCのブラウザだけでできる）
+
+### 1. Notion：インテグレーションを作る
+
+1. https://www.notion.so/profile/integrations で「新しいインテグレーション」→ 種類：内部、名前：今どこ
+2. 機能は「コンテンツを読み取る」「コンテンツを更新」「コンテンツを挿入」だけON（コメント・ユーザー情報はOFF）
+3. シークレット（`ntn_…`）をコピーしておく（Notionのページには貼らない）
+4. Notion で次に「•••」→「接続」→「今どこ」を追加する
+   - **DB_タスク管理**・**DB_プロジェクト**・**DB_診断レポート**・**DB_運用ログ**・**DB_目標**（流れ・AI・仕分け・記録に要る）
+   - DBタブで全DBを見るなら **🗄 データベース** のページ（中のDBにまとめて届く）。ただしアカウントなど見せたくないDBにも届くので、要るDBだけ個別に接続してもよい（接続していないDBは「接続されていません」と出るだけ）
+   - ME などのさらに上のページには接続しない
+
+### 2. Cloudflare：Worker を作る
+
+1. https://dash.cloudflare.com に無料登録（個人のメールアドレスで）
+2. 「Workers & Pages」→「作成」→「Gitリポジトリをインポート」→ GitHub の `my-apps` を選ぶ
+3. 設定
+   - プロジェクト名：`imadoko`
+   - ルートディレクトリ：`task-hub`
+   - ビルドコマンド：空欄／デプロイコマンド：`npx wrangler deploy`
+4. デプロイ後、Worker の「設定」→「変数とシークレット」で **シークレット**を2つ追加して再デプロイ
+   - `NOTION_TOKEN`：手順1でコピーした `ntn_…`
+   - `APP_KEY`：合言葉（16文字以上。パスワードマネージャーで作ると楽）
+5. `https://imadoko.<あなたのサブドメイン>.workers.dev` を開き、合言葉を入れて表示されたら完了
+
+以後、このフォルダを GitHub で更新すると自動で再デプロイされる。
+
+### 3. iPhone：ホーム画面に追加
+
+1. Safari で上のURLを開き、合言葉を入れる
+2. 共有ボタン →「ホーム画面に追加」
+
+### よくあるエラー
+
+| 表示 | 原因 |
+| --- | --- |
+| 合言葉が違います | APP_KEY と違う。入れ直す |
+| インテグレーションが接続されていません | 手順1-4 の接続忘れ（そのDB・ページだけ） |
+| Notion のトークンが正しくありません | NOTION_TOKEN の貼り間違い |
+| Worker の設定が足りません | シークレット2つが未設定、または APP_KEY が16文字未満 |
+| 機能がありません | 手順1-2 の「読み取り・更新・挿入」がOFF |
+
+## 開発
+
+```sh
+npm test                  # Worker のテスト（Notion は偽物に差し替え：test/fake-notion.mjs）
+node scripts/build.mjs    # app/ の部品をつないで public/index.html を作る
+npx wrangler dev          # ローカルで起動（.dev.vars に NOTION_TOKEN と APP_KEY を書く）
+```
+
+- `app/`：画面の部品（head.html・settings.js・data.js・editor.js・views.js・page.js・boot.js）。直したら build して `public/index.html` をコミットする
+- `src/worker.js`：Notion API の中継
+- `public/`：配る画面・manifest・アイコン
+
+## アーティファクト版の公開
+
+`public/index.html` をアーティファクトとして公開する。capabilities：
 ```json
 {"mcp": {"servers": [{"server": "Notion", "tools": ["notion-fetch", "notion-query-data-sources", "notion-update-page", "notion-create-pages"]}]}}
 ```

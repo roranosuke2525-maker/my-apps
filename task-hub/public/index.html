@@ -1,5 +1,10 @@
 <title>今どこ</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="今どこ">
+<meta name="theme-color" content="#f4f5f7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -444,15 +449,45 @@ table.grid tr.click:hover td { background: var(--sunk); }
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 5000 : 2800);
   }
 
-  // ================= MCP =================
-  let mcpP = null;
-  // 表示直後は window.claude がまだ無いことがあるので少し待つ
+  // ================= Notion へのつなぎ方 =================
+  // claude.ai のアーティファクト：見ている人の Notion 連携（MCP）
+  // Cloudflare版：同じ画面を Worker が配る。/api/notion に合言葉を付けて送り、Worker が Notion API に中継する（返事は MCP と同じ形）
+  let mcpP = null; let VIA = "demo";
   function getMcp() {
     if (!mcpP) mcpP = (async () => {
+      if (/^https?:$/.test(location.protocol) && !/[?&]demo\b/.test(location.search)) {
+        try { const r = await fetch("/api/ping", { headers: { Authorization: `Bearer ${store.get("key") || ""}` } }); if ([200, 401, 500].includes(r.status) && /json/.test(r.headers.get("content-type") || "")) { VIA = "api"; return apiClient(); } } catch { /* アーティファクトの中では届かない */ }
+      }
       for (let i = 0; i < 30 && !window.claude?.use; i++) await sleep(100);
-      return window.claude?.use ? window.claude.use("mcp") : null;
+      if (window.claude?.use) { VIA = "mcp"; return window.claude.use("mcp"); }
+      return null;
     })().catch(() => null);
     return mcpP;
+  }
+  // 合言葉を聞く（端末のブラウザにだけ保存）
+  function askKey(wrong) {
+    return new Promise((done) => {
+      const m = $("#modal"); m.hidden = false;
+      m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><h3>合言葉</h3><div class="form"><p class="mute" style="margin:0;font-size:12.5px">${wrong ? "合言葉が違います。入れ直してください。" : "Worker に設定した合言葉（APP_KEY）を入れてください。この端末のブラウザにだけ保存されます。"}</p><input id="appkey" type="password" autocomplete="current-password" aria-label="合言葉"><button type="button" class="btn pri" id="keyok">開く</button></div></div>`;
+      const i = $("#appkey"); i.focus();
+      const ok = () => { const v = i.value.trim(); if (v.length < 16) { i.focus(); return; } store.set("key", v); m.hidden = true; m.innerHTML = ""; done(v); };
+      $("#keyok").onclick = ok; i.onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) ok(); };
+    });
+  }
+  function apiClient() {
+    return {
+      async callTool(server, tool, input) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          let key = store.get("key"); if (!key) key = await askKey(false);
+          const r = await fetch("/api/notion", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ tool, input }) });
+          const data = await r.json().catch(() => ({}));
+          if (r.status === 401) { store.set("key", ""); await askKey(true); continue; }
+          if (!r.ok) throw Object.assign(new Error(data.error || `HTTP ${r.status}`), { code: data.code === "rate_limited" ? "rate_limited" : data.code === "config" ? "config" : "tool_error", retryable: r.status === 429 });
+          return data;
+        }
+        throw Object.assign(new Error("合言葉が違います"), { code: "bad_key" });
+      },
+    };
   }
   const TOOL = { fetch: "notion-fetch", query: "notion-query-data-sources", update: "notion-update-page", create: "notion-create-pages" };
   async function call(kind, input, { read = true } = {}) {
@@ -479,7 +514,9 @@ table.grid tr.click:hover td { background: var(--sunk); }
       blocked_by_policy: "組織の設定で Notion 連携が使えません",
       server_unavailable: "Notion の返事がありません。反映されたかもしれないので「↻」で確かめてください",
       rate_limited: "Notion が混み合っています。少し待ってから「↻」してください",
-      tool_error: `Notion がエラーを返しました（${String(err?.message || "").slice(0, 70)}）`,
+      tool_error: `Notion がエラーを返しました（${String(err?.message || "").slice(0, 90)}）`,
+      config: "Worker の設定（NOTION_TOKEN／APP_KEY）が足りません。README のセットアップを見てください",
+      bad_key: "合言葉が違います。入れ直してください",
     })[err?.code] || "Notion との通信でエラーが起きました。「↻」でやり直してください";
   }
   const statusFilter = (s) => ({ type: "property", property: "ステータス", propertyType: "status", operator: "status_is", value: { type: "is_option", value: s } });
@@ -1905,6 +1942,7 @@ table.grid tr.click:hover td { background: var(--sunk); }
     setSync("busy"); $("#synct").textContent = "読みこみ中";
     const mcp = await getMcp();
     if (!mcp) { useDemo(); return; }
+    if (VIA === "api" && !store.get("key")) await askKey(false);
     try { await loadLive(); S.mode = "live"; S.error = null; setSync("ok"); }
     catch (err) { S.error = errText(err); S.mode = S.tasks.length ? "live" : "error"; setSync("err"); toast(S.error); }
     render();
