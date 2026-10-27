@@ -83,6 +83,12 @@ test("ページの文：文に分け、AI の選んだ箇所に重なる文に�
   assert.deepEqual(P.groupMarks(paras, marks), [{ key: "0:1", text: "空は青い！ 風が吹く。" }, { key: "1:1", text: "最後" }]);
 });
 
+test("貼り付けたページの文：印刷の行をつなぎ、字下げ・かぎかっこ・空行で段落を分ける。数字だけの行はページ番号", () => {
+  const raw = "　朝になると、彼は\n窓を開けた。\n「おはよう」\n42\nと声がした。\n\nHello\nworld.";
+  assert.deepEqual(P.pageFromText(raw), { paragraphs: ["　朝になると、彼は窓を開けた。".trim(), "「おはよう」と声がした。", "Hello world."], page: 42 });
+  assert.deepEqual(P.pageFromText(""), { paragraphs: [], page: null });
+});
+
 test("NotebookLM に渡す文", () => {
   const text = P.exportText(
     { title: "見本の本", author: "作家 一", publisher: "", finished: "2026-10-26", rating: "★★★★", review: "よかった" },

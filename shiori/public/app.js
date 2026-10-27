@@ -1,23 +1,33 @@
 // しおり：付箋のページの写真・Kindle のハイライトを読書メモ_DB の本に集め、読後は感想を読書メーターへ、ハイライトを NotebookLM へ渡す。
-// /api は mcp-api.js（アーティファクト版）が答える。写真の読み取り・感想の下書きは見ている人の Claude（sample）に頼む。
+// /api は Cloudflare Worker（src/worker.js）が Notion API で答える。開くには合言葉（APP_KEY）が要る。
 const P = window.ShioriParse;
 const STATUSES = ["読中", "未読", "読了"];
 const FILTERS = [["読中", "読んでいる"], ["未読", "これから"], ["読了", "読んだ"], ["", "すべて"]];
 const RATINGS = ["★", "★★", "★★★", "★★★★", "★★★★★"];
 const REVIEW_MAX = 255;
-const PHOTO_EDGE = 2000; // 送る写真の長い辺（文字が読める大きさに縮める）
-const KINDLE_AI_MAX = 30000;
+const SAVE_CHUNK = 40; // Worker が一度に足せるハイライトの数
+const KEY_STORAGE = "key";
 
 const $ = (s, el = document) => el.querySelector(s);
-const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), pages: [], kindle: null, done: {} };
-let samplePromise = null;
-let downloadsPromise = null;
+const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), page: null, kindle: null, done: {} };
 
 // ---------- 共通 ----------
+let memoryKey = "";
+
 async function api(method, path, body) {
-  const res = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(path, {
+    method,
+    headers: { Authorization: `Bearer ${memoryKey}`, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `エラー（${res.status}）`);
+  if (res.status === 401) {
+    memoryKey = "";
+    store.set(KEY_STORAGE, "");
+    showLogin();
+    throw new Error(data.error || "合言葉が違います");
+  }
+  if (!res.ok) throw new Error(data.error || `通信エラー（${res.status}）`);
   return data;
 }
 
@@ -55,25 +65,6 @@ const store = {
   get(k) { try { return localStorage.getItem(`shiori:${k}`) || ""; } catch { return ""; } },
   set(k, v) { try { localStorage.setItem(`shiori:${k}`, v); } catch { /* 保存できなくても動く */ } },
 };
-
-async function getSample() {
-  if (!samplePromise) samplePromise = window.claude?.use ? window.claude.use("sample").catch(() => null) : Promise.resolve(null);
-  return samplePromise;
-}
-async function getDownloads() {
-  if (!downloadsPromise) downloadsPromise = window.claude?.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
-  return downloadsPromise;
-}
-
-function sampleError(e) {
-  const code = e?.code;
-  if (code === "rate_limited") return "Claude の利用が混み合っています。少し待ってからもう一度";
-  if (code === "not_granted") return "Claude を使う許可がありません。ページの権限から許可してください";
-  if (code === "invalid_json") return "読み取りの答えを読めませんでした。もう一度試してください";
-  if (code === "image_rejected") return "この写真は読み込めませんでした（形式か大きさ）";
-  if (code === "images_unavailable") return "この画面では写真を Claude に送れません";
-  return e?.message || "Claude への問い合わせでエラーが起きました";
-}
 
 async function copyText(text, fallbackEl) {
   try {
@@ -169,7 +160,7 @@ function renderShelf() {
     return;
   }
   $("#books").replaceChildren(...books.map((b) => {
-    const n = b.highlightCount + b.legacyCount;
+    const n = `${b.highlightCount + b.legacyCount}${b.highlightMore ? "+" : ""}`;
     return el("li", { class: "book", tabindex: "0", role: "button", "aria-label": `${b.title}を開く`, onclick: () => openBook(b.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBook(b.id); } } },
       el("div", { class: "spine" }, b.cover ? el("img", { src: b.cover, alt: "", loading: "lazy" }) : b.title.slice(0, 6)),
       el("div", { class: "book-main" },
@@ -177,7 +168,7 @@ function renderShelf() {
         el("div", { class: "book-meta" }, [b.author, b.publisher].filter(Boolean).join(" ・ ") || "著者未登録")),
       el("div", { class: "book-side" },
         el("span", { class: `chip ${b.status === "読中" ? "reading" : b.status === "読了" ? "done" : ""}` }, b.status),
-        n ? el("span", { class: "count" }, `ハイライト ${n}`) : null,
+        n !== "0" ? el("span", { class: "count" }, `ハイライト ${n}`) : null,
         b.rating ? el("span", { class: "count" }, b.rating) : null));
   }));
 }
@@ -339,14 +330,21 @@ function notebookCard(b, data) {
   const tick = el("input", { type: "checkbox", checked: b.notebooklm, onchange: async (e) => {
     try { const { book } = await api("PATCH", `/api/books/${b.id}`, { notebooklm: e.target.checked }); replaceBook(book); Object.assign(b, book); } catch (err) { toast(err.message); e.target.checked = !e.target.checked; }
   } });
+  const fileName = `${b.title.replace(/[\\/:*?"<>|]/g, "")}_ハイライト.txt`;
   const fileBtn = el("button", { type: "button", class: "btn small", onclick: async () => {
-    const dl = await getDownloads();
-    if (!dl) { toast("この画面ではファイルを保存できません。コピーを使ってください"); return; }
-    try {
-      await dl.save({ filename: `${b.title.replace(/[\\/:*?"<>|]/g, "")}_ハイライト.txt`, data: text });
-      toast("ファイルを保存しました");
-      mark();
-    } catch (e) { if (e?.code !== "declined") toast("保存できませんでした"); }
+    const file = new File([text], fileName, { type: "text/plain" });
+    // iPhone では共有シートから「ファイルに保存」や NotebookLM のアプリへ渡せる
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: fileName }); mark(); } catch (e) { if (e?.name !== "AbortError") toast("共有できませんでした"); }
+      return;
+    }
+    const a = el("a", { href: URL.createObjectURL(file), download: fileName });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast("ファイルを保存しました");
+    mark();
   } }, "ファイルで保存");
   const copyBtn = el("button", { type: "button", class: "btn ghost small", onclick: async () => { if (await copyText(text, preview)) mark(); } }, "コピー");
   return el("section", { class: "card handoff" },
@@ -357,155 +355,82 @@ function notebookCard(b, data) {
     el("label", { class: "tick" }, tick, "NotebookLM に入れた"));
 }
 
-// ---------- 付箋を撮る ----------
-async function shrink(file) {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, PHOTO_EDGE / Math.max(bmp.width, bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * scale);
-  c.height = Math.round(bmp.height * scale);
-  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-  bmp.close?.();
-  return new Promise((r) => c.toBlob((b) => r(b || file), "image/jpeg", 0.85));
-}
-
-function ocrPrompt(book) {
-  return [
-    `これは本『${book.title}』${book.author ? `（${book.author}）` : ""}のページの写真です。付箋が貼ってあることがあります。`,
-    "1. 本文を読む順に正確に文字に起こしてください。縦書きは右の行から左へ。ルビ・柱（ページ上の書名や章名）・ページ番号は本文に入れません。行の折り返しで切れた語はつなぎ、段落ごとに分けます。見開きなら右ページ→左ページの順。",
-    "2. 印刷されたページ番号が読めれば page に数字で（見開きなら小さいほう）。読めなければ null。",
-    "3. 大事な箇所を highlights に、本文からそのまま抜き出した文字列で1〜3つ。付箋の先が指している行、線やマーカーが引かれた行があればそれを最優先にし、なければ内容の要になる文を選びます。",
-    "4. 付箋が写っていれば sticky を true に。",
-    'JSON だけで返してください：{"page": 123, "paragraphs": ["…"], "highlights": ["…"], "sticky": true}',
-  ].join("\n");
-}
-
+// ---------- 付箋のページ ----------
+// 写真の文字は端末のテキスト認識でコピーして貼る。文を押してハイライトにし、ページ番号とメモを付けて保存する
 function setupPhoto() {
   $("#photo-book").addEventListener("change", (e) => selectBook(e.target.value));
-  $("#photo-input").addEventListener("change", async (e) => {
-    const files = [...e.target.files];
+  $("#photo-input").addEventListener("change", (e) => {
+    const f = e.target.files[0];
     e.target.value = "";
-    if (!files.length) return;
-    const book = bookOf($("#photo-book").value);
-    if (!book) { toast("先に本を選んでください"); return; }
-    const sample = await getSample();
-    const caps = sample ? await sample.limits().catch(() => null) : null;
-    if (!caps?.images) { photoOff("この画面では写真を Claude に送れません。claude.ai でこのアーティファクトを開き、Claude の利用を許可してください"); return; }
-    for (const f of files) {
-      const page = { id: `p${Date.now()}${Math.random().toString(36).slice(2, 6)}`, bookId: book.id, file: f, thumb: URL.createObjectURL(f), status: "wait", data: null, marks: [], memo: {}, pageNo: "", saved: false };
-      state.pages.push(page);
-    }
-    renderPages();
-    runQueue(sample);
+    if (!f) return;
+    const img = $("#photo-preview");
+    if (img.src) URL.revokeObjectURL(img.src);
+    img.src = URL.createObjectURL(f);
+    img.hidden = false;
   });
-  $("#photo-save").addEventListener("click", savePages);
+  $("#photo-split").addEventListener("click", () => {
+    const { paragraphs, page } = P.pageFromText($("#photo-text").value);
+    if (!paragraphs.length) { toast("先にページの文を貼り付けてください"); return; }
+    state.page = { paragraphs, marks: paragraphs.map((p) => P.sentences(p).map(() => false)), pageNo: page != null ? String(page) : "", memo: {} };
+    renderPage();
+  });
+  $("#photo-clear").addEventListener("click", clearPage);
 }
 
-function photoOff(msg) {
-  const n = $("#photo-off");
-  n.textContent = msg;
-  n.hidden = false;
+function clearPage() {
+  state.page = null;
+  $("#photo-text").value = "";
+  const img = $("#photo-preview");
+  if (img.src) URL.revokeObjectURL(img.src);
+  img.removeAttribute("src");
+  img.hidden = true;
+  renderPage();
 }
 
-let queueRunning = false;
-async function runQueue(sample) {
-  if (queueRunning) return;
-  queueRunning = true;
-  try {
-    for (let page = state.pages.find((p) => p.status === "wait"); page; page = state.pages.find((p) => p.status === "wait")) {
-      page.status = "reading";
-      renderPages();
-      try {
-        const book = bookOf(page.bookId);
-        const blob = await shrink(page.file);
-        const res = await sample.json(ocrPrompt(book), { images: [blob], modelTier: "default" });
-        const paragraphs = (Array.isArray(res?.paragraphs) ? res.paragraphs : []).map((p) => String(p).trim()).filter(Boolean);
-        if (!paragraphs.length) throw new Error("文字を読み取れませんでした。明るい所でページ全体が写るように撮り直してください");
-        page.data = { paragraphs, sticky: !!res.sticky };
-        page.marks = P.markSentences(paragraphs, Array.isArray(res.highlights) ? res.highlights.map(String) : []);
-        page.pageNo = Number.isInteger(res.page) ? String(res.page) : "";
-        page.status = "ready";
-      } catch (e) {
-        page.status = "error";
-        page.error = e?.code ? sampleError(e) : e.message;
-        if (e?.code === "rate_limited" || e?.code === "not_granted") {
-          for (const p of state.pages) if (p.status === "wait") { p.status = "error"; p.error = page.error; }
-        }
-      }
-      renderPages();
-    }
-  } finally {
-    queueRunning = false;
-  }
-}
+const groupsOf = (p) => P.groupMarks(p.paragraphs, p.marks);
 
-function renderPages() {
-  $("#pages").replaceChildren(...state.pages.map(pageCard));
-  $("#photo-save-all").hidden = !state.pages.some((p) => p.status === "ready" && !p.saved && groupsOf(p).length);
-}
-
-const groupsOf = (p) => (p.data ? P.groupMarks(p.data.paragraphs, p.marks) : []);
-
-function pageCard(p) {
-  const book = bookOf(p.bookId);
-  const remove = el("button", { type: "button", class: "icon-btn", "aria-label": "このページを外す", onclick: () => { URL.revokeObjectURL(p.thumb); state.pages = state.pages.filter((x) => x !== p); renderPages(); } },
-    el("span", { "aria-hidden": "true" }, "×"));
-  const top = el("div", { class: "page-top" },
-    el("img", { class: "thumb", src: p.thumb, alt: "撮ったページ" }),
-    el("div", {},
-      el("div", { class: "book-title" }, book?.title || ""),
-      p.status === "ready" ? el("label", { class: "page-no" }, "p.", el("input", { inputmode: "numeric", value: p.pageNo, "aria-label": "ページ", oninput: (e) => { p.pageNo = e.target.value.trim(); } })) : null,
-      p.saved ? el("span", { class: "saved-flag" }, "✓ 保存しました") : null),
-    remove);
-  if (p.status === "wait") return el("article", { class: "card page-card" }, top, el("div", { class: "working" }, "順番を待っています"));
-  if (p.status === "reading") return el("article", { class: "card page-card" }, top, el("div", { class: "working" }, el("span", { class: "spinner" }), "文字に起こしています…"));
-  if (p.status === "error") {
-    return el("article", { class: "card page-card" }, top, el("p", { class: "status err" }, p.error),
-      el("div", { class: "actions" }, el("button", { type: "button", class: "btn ghost small", onclick: async () => { p.status = "wait"; renderPages(); runQueue(await getSample()); } }, "もう一度読む")));
-  }
-  const text = el("div", { class: "page-text", "data-page": p.id, "aria-label": "ページの文。文を押すとハイライトの付け外し" },
-    p.data.paragraphs.map((para, pi) => el("p", {}, P.sentences(para).map((s, si) => el("span", {
+function renderPage() {
+  const p = state.page;
+  if (!p) { $("#pages").replaceChildren(); return; }
+  const scroll = $("#pages .page-text")?.scrollTop;
+  const text = el("div", { class: "page-text", "aria-label": "ページの文。文を押すとハイライトの付け外し" },
+    p.paragraphs.map((para, pi) => el("p", {}, P.sentences(para).map((s, si) => el("span", {
       class: `sent${p.marks[pi]?.[si] ? " on" : ""}`, role: "button", tabindex: "0", "aria-pressed": String(!!p.marks[pi]?.[si]),
-      onclick: () => toggle(p, pi, si), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(p, pi, si); } },
+      onclick: () => toggle(pi, si), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(pi, si); } },
     }, s)))));
   const groups = groupsOf(p);
-  const picked = el("div", { class: "picked" },
-    el("h3", {}, groups.length ? `ハイライト ${groups.length}件（文を押して付け外し）` : "文を押すとハイライトになります"),
-    groups.map((g) => el("div", { class: "pick-item" },
-      el("div", { class: "book-title", style: "font-size:0.95rem" }, g.text),
-      el("input", { maxlength: "1000", placeholder: "メモ（なくてもよい）", value: p.memo[g.key] || "", "aria-label": "メモ", oninput: (e) => { p.memo[g.key] = e.target.value; } }))));
-  return el("article", { class: "card page-card" }, top, p.data.sticky ? el("p", { class: "note" }, "付箋の位置をもとに色を付けました") : null, text, picked,
-    el("div", { class: "actions" }, el("button", { type: "button", class: "btn small", disabled: p.saved || !groups.length, onclick: () => savePages([p]) }, p.saved ? "保存済み" : "このページを保存")));
+  const saveBtn = el("button", { type: "button", class: "btn", disabled: !groups.length, onclick: () => savePage(saveBtn) }, groups.length ? `${groups.length}件を保存` : "文を選んでください");
+  $("#pages").replaceChildren(el("article", { class: "card page-card" },
+    el("label", { class: "page-no" }, "p.", el("input", { id: "page-no", inputmode: "numeric", value: p.pageNo, "aria-label": "ページ", oninput: (e) => { p.pageNo = e.target.value.trim(); } })),
+    text,
+    el("div", { class: "picked" },
+      el("h3", {}, groups.length ? `ハイライト ${groups.length}件（文を押して付け外し）` : "大事な文を押すとハイライトになります"),
+      groups.map((g) => el("div", { class: "pick-item" },
+        el("div", { class: "book-title", style: "font-size:0.95rem" }, g.text),
+        el("input", { maxlength: "1000", placeholder: "メモ（なくてもよい）", value: p.memo[g.key] || "", "aria-label": "メモ", oninput: (e) => { p.memo[g.key] = e.target.value; } })))),
+    el("div", { class: "actions" }, saveBtn)));
+  if (scroll != null) $("#pages .page-text").scrollTop = scroll;
 }
 
-function toggle(p, pi, si) {
-  if (p.saved) return;
+function toggle(pi, si) {
+  const p = state.page;
   p.marks[pi][si] = !p.marks[pi][si];
-  const scroll = document.querySelector(`[data-page="${p.id}"]`)?.scrollTop;
-  renderPages();
-  if (scroll != null) document.querySelector(`[data-page="${p.id}"]`).scrollTop = scroll;
+  renderPage();
 }
 
-async function savePages(only) {
-  const targets = (Array.isArray(only) ? only : state.pages).filter((p) => p.status === "ready" && !p.saved && groupsOf(p).length);
-  const byBook = new Map();
-  for (const p of targets) {
-    const context = p.data.paragraphs.join("\n");
-    const items = groupsOf(p).map((g) => ({ text: g.text, page: p.pageNo, memo: p.memo[g.key] || "", source: "📷 付箋写真", context }));
-    byBook.set(p.bookId, [...(byBook.get(p.bookId) || []), { p, items }]);
-  }
-  const btn = $("#photo-save");
+async function savePage(btn) {
+  const p = state.page;
+  const book = bookOf($("#photo-book").value);
+  if (!book) { toast("先に本を選んでください"); return; }
+  const context = p.paragraphs.join("\n");
+  const items = groupsOf(p).map((g) => ({ text: g.text, page: p.pageNo, memo: p.memo[g.key] || "", source: "📷 付箋写真", context }));
   btn.disabled = true;
   try {
-    for (const [bookId, entries] of byBook) {
-      await saveHighlights(bookId, entries.flatMap((e) => e.items));
-      for (const e of entries) e.p.saved = true;
-    }
+    await saveHighlights(book.id, items);
+    clearPage();
   } catch (e) {
     toast(e.message);
-  } finally {
     btn.disabled = false;
-    renderPages();
   }
 }
 
@@ -514,43 +439,13 @@ function setupKindle() {
   $("#kindle-book").addEventListener("change", (e) => { selectBook(e.target.value); if (state.kindle) renderKindle(); });
   $("#kindle-parse").addEventListener("click", () => {
     const groups = P.parseKindle($("#kindle-text").value);
-    if (!groups.length) { toast("ハイライトが見つかりませんでした。「AIで読み取る」も試してください"); return; }
+    if (!groups.length) { toast("ハイライトが見つかりませんでした。見出しの行（○○のハイライト | 位置: …）ごとコピーしてください"); return; }
     state.kindle = { groups, group: 0 };
     // My Clippings.txt のように書名が付いていれば、本棚の本に合わせる
     const match = groups[0].title && P.matchBook(state.books, groups[0].title);
     if (match) selectBook(match.id);
     renderKindle();
   });
-  $("#kindle-ai").addEventListener("click", kindleByAi);
-}
-
-async function kindleByAi() {
-  const raw = $("#kindle-text").value.trim();
-  if (!raw) { toast("先に貼り付けてください"); return; }
-  const sample = await getSample();
-  if (!sample) { toast("この画面では Claude を使えません"); return; }
-  const btn = $("#kindle-ai");
-  btn.disabled = true;
-  $("#kindle-result").replaceChildren(el("div", { class: "working" }, el("span", { class: "spinner" }), "Claude が読み取っています…"));
-  try {
-    const res = await sample.json([
-      "次は Kindle のハイライトをコピーした文です。ハイライト1つずつに分けてください。本文は変えずにそのまま。",
-      "ページ番号は page（数字か null）、位置番号は loc（文字列、無ければ空）、ハイライトに付いた自分のメモは memo（無ければ空）。書名が分かれば title に。",
-      'JSON だけで返してください：{"title": "…", "items": [{"text": "…", "page": null, "loc": "123", "memo": ""}]}',
-      "",
-      raw.slice(0, KINDLE_AI_MAX),
-    ].join("\n"), { modelTier: "quick" });
-    const items = (Array.isArray(res?.items) ? res.items : []).map((i) => ({ text: String(i?.text || "").trim(), page: Number.isInteger(i?.page) ? i.page : null, loc: String(i?.loc || ""), memo: String(i?.memo || "") })).filter((i) => i.text);
-    if (!items.length) throw new Error("ハイライトを読み取れませんでした");
-    state.kindle = { groups: [{ title: String(res.title || ""), author: "", items }], group: 0 };
-    const match = res.title && P.matchBook(state.books, res.title);
-    if (match) selectBook(match.id);
-    renderKindle();
-  } catch (e) {
-    $("#kindle-result").replaceChildren(el("p", { class: "status err" }, e?.code ? sampleError(e) : e.message));
-  } finally {
-    btn.disabled = false;
-  }
 }
 
 async function renderKindle() {
@@ -576,7 +471,7 @@ async function renderKindle() {
     saveBtn.disabled = true;
     try {
       const items = g.items.filter((i) => i.on).map((i) => ({ text: i.text, page: i.page ?? "", loc: i.loc, memo: i.memo, source: "📱 Kindle" }));
-      for (let i = 0; i < items.length; i += 100) await saveHighlights(bookId, items.slice(i, i + 100));
+      for (let i = 0; i < items.length; i += SAVE_CHUNK) await saveHighlights(bookId, items.slice(i, i + SAVE_CHUNK));
       state.kindle = null;
       $("#kindle-text").value = "";
       box.replaceChildren(el("p", { class: "saved-flag" }, `✓ ${items.length}件を『${bookOf(bookId)?.title || ""}』に保存しました`));
@@ -617,35 +512,12 @@ async function renderDone() {
     onclick: () => { d.rating = d.rating === r ? "" : r; renderDone(); },
   }, "★")));
   const date = el("input", { type: "date", id: "done-date", value: d.finished, onchange: (e) => { d.finished = e.target.value; } });
-  const review = el("textarea", { id: "done-review", rows: "6", placeholder: "読書メーターに載せる感想（255文字まで）" });
+  const review = el("textarea", { id: "done-review", rows: "6", placeholder: "読書メーターに載せる感想（255文字まで）。ハイライトを見返しながら" });
   review.value = d.review || "";
   const counter = el("div", { class: "counter" });
   const updateCount = () => { const n = [...review.value].length; counter.textContent = `${n} / ${REVIEW_MAX}`; counter.classList.toggle("over", n > REVIEW_MAX); };
   review.addEventListener("input", () => { d.review = review.value; store.set(`review:${b.id}`, review.value); updateCount(); });
   updateCount();
-
-  const draftBtn = el("button", { type: "button", class: "btn ghost small", onclick: async () => {
-    const sample = await getSample();
-    if (!sample) { toast("この画面では Claude を使えません"); return; }
-    draftBtn.disabled = true;
-    const hls = [...data.highlights, ...data.legacy].slice(0, 40).map((h) => `- ${h.text.slice(0, 160)}${h.memo ? `（メモ：${h.memo.slice(0, 120)}）` : ""}`).join("\n");
-    const prompt = [
-      `本『${b.title}』${b.author ? `（${b.author}）` : ""}を読み終えた人の、読書メーター用の感想の下書きを書いてください。`,
-      d.rating ? `本人の評価：${d.rating}` : "",
-      review.value.trim() ? `本人が書きかけた感想（活かす）：${review.value.trim()}` : "",
-      "本人が引いたハイライトとメモ：",
-      hls || "（なし）",
-      "",
-      "条件：本人の一人称で、普段の言葉（です・ます調にしない）。200〜240文字。結末やトリックのネタバレは書かない。ハイライトの引用は短く1つまで。感想の文だけを返す。",
-    ].filter(Boolean).join("\n");
-    try {
-      const { text } = await sample(prompt, { modelTier: "default", onText: ({ text }) => { review.value = text; updateCount(); } });
-      review.value = text.trim();
-      d.review = review.value;
-      store.set(`review:${b.id}`, review.value);
-      updateCount();
-    } catch (e) { toast(sampleError(e)); } finally { draftBtn.disabled = false; }
-  } }, "ハイライトから下書き");
 
   const saveBtn = el("button", { type: "button", class: "btn", onclick: async () => {
     if ([...review.value].length > REVIEW_MAX) { toast("感想を255文字以内にしてください"); return; }
@@ -680,25 +552,53 @@ async function renderDone() {
       el("label", {}, "読了日", date),
       el("label", {}, "感想", review),
       counter,
-      el("div", { class: "actions" }, draftBtn, saveBtn)),
+      el("div", { class: "actions" }, saveBtn)),
     meterCard,
     notebookCard(b, data));
 }
 
 // ---------- はじめ ----------
+function showLogin() {
+  for (const v of ["shelf", "photo", "kindle", "done"]) $(`#view-${v}`).hidden = true;
+  $(".tabs").hidden = true;
+  $("#reload").hidden = true;
+  $("#login").hidden = false;
+  setStatus("");
+  $("#key").focus();
+}
+
+function start() {
+  $("#login").hidden = true;
+  $(".tabs").hidden = false;
+  $("#reload").hidden = false;
+  const v = store.get("view");
+  show(["shelf", "photo", "kindle", "done"].includes(v) ? v : "shelf");
+  loadBooks();
+}
+
 function setup() {
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
   $("#reload").addEventListener("click", () => { state.hl.clear(); loadBooks(); });
   $("#sheet-close").addEventListener("click", closeSheet);
   $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+  $("#login-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    memoryKey = $("#key").value.trim();
+    store.set(KEY_STORAGE, memoryKey);
+    $("#key").value = "";
+    start();
+  });
   setupAddBook();
   setupPhoto();
   setupKindle();
   setupDone();
-  const v = store.get("view");
-  show(["shelf", "photo", "kindle", "done"].includes(v) ? v : "shelf");
-  loadBooks();
+  memoryKey = store.get(KEY_STORAGE);
+  if (memoryKey) start(); else showLogin();
 }
 
 setup();
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => { /* なくても動く */ });
+}

@@ -4,7 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>しおり</title>
+  <meta name="theme-color" content="#1f4d52">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="しおり">
   <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -23,6 +30,16 @@
 
   <main>
     <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <!-- 合言葉 -->
+    <section id="login" class="view" hidden>
+      <form id="login-form" class="card form">
+        <h2 class="sec">合言葉を入れてください</h2>
+        <p class="note">Cloudflare の Worker に設定した APP_KEY（16文字以上）。この端末にだけ覚えておきます。</p>
+        <input id="key" type="password" autocomplete="current-password" required minlength="16" placeholder="合言葉" aria-label="合言葉">
+        <div class="actions"><button type="submit" class="btn">開く</button></div>
+      </form>
+    </section>
 
     <!-- 本棚 -->
     <section id="view-shelf" class="view">
@@ -46,20 +63,30 @@
       <ol id="books" class="books"></ol>
     </section>
 
-    <!-- 付箋を撮る -->
+    <!-- 付箋のページ -->
     <section id="view-photo" class="view" hidden>
       <label class="pick">本<select id="photo-book"></select></label>
-      <label id="photo-drop" class="drop">
-        <input id="photo-input" type="file" accept="image/*" multiple>
+      <details class="card guide" id="photo-guide">
+        <summary>iPhone で文字をコピーするには</summary>
+        <ol>
+          <li>カメラか写真アプリで付箋のページを写し、右下の <b>テキスト認識</b>（[ ] の中に線のマーク）を押す</li>
+          <li>文字を長押しして「すべてを選択」→「コピー」</li>
+          <li>下の欄に貼り付けて「文に分ける」</li>
+        </ol>
+      </details>
+      <label id="photo-drop" class="drop small-drop">
+        <input id="photo-input" type="file" accept="image/*">
         <span class="drop-icon" aria-hidden="true"></span>
-        <strong>付箋のページを撮る・選ぶ</strong>
-        <span>何枚でも。1枚ずつ文字に起こして、大事な所に色を付けます</span>
+        <strong>写真を横に出す（なくてもよい）</strong>
+        <span>見比べるためだけに使い、保存はしません</span>
       </label>
-      <p id="photo-off" class="note" hidden></p>
-      <div id="pages" class="pages"></div>
-      <div id="photo-save-all" class="sticky-actions" hidden>
-        <button type="button" id="photo-save" class="btn">選んだハイライトを保存</button>
+      <img id="photo-preview" class="preview" alt="付箋のページの写真" hidden>
+      <textarea id="photo-text" rows="6" placeholder="ここにページの文を貼り付け"></textarea>
+      <div class="actions">
+        <button type="button" id="photo-clear" class="btn ghost">消す</button>
+        <button type="button" id="photo-split" class="btn">文に分ける</button>
       </div>
+      <div id="pages" class="pages"></div>
     </section>
 
     <!-- Kindle -->
@@ -70,7 +97,6 @@
       <label class="pick">本<select id="kindle-book"></select></label>
       <textarea id="kindle-text" rows="7" placeholder="黄色のハイライト | 位置: 1,234&#10;ここにハイライトの文…&#10;メモ: 自分のメモ"></textarea>
       <div class="actions">
-        <button type="button" id="kindle-ai" class="btn ghost">AIで読み取る</button>
         <button type="button" id="kindle-parse" class="btn">読み取る</button>
       </div>
       <div id="kindle-result"></div>
@@ -85,7 +111,7 @@
 
   <nav class="tabs" aria-label="画面">
     <button type="button" data-view="shelf" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 5l3.5 1-3.5 14-3.4-1z"/></svg>本棚</button>
-    <button type="button" data-view="photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>付箋を撮る</button>
+    <button type="button" data-view="photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>付箋のページ</button>
     <button type="button" data-view="kindle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 7h6M9 10h6M9 13h4"/></svg>Kindle</button>
     <button type="button" data-view="done"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>読み終えた</button>
   </nav>

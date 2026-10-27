@@ -110,6 +110,30 @@
   }
 
   // ---------- ページの文 ----------
+  // iPhone のテキスト認識でコピーした文は、印刷の1行ごとに改行が入る。空行・字下げ・かぎかっこで段落を分け、ほかの改行はつなぐ。
+  // 数字だけの行はページ番号として取り出す
+  function pageFromText(raw) {
+    const lines = String(raw || "").replace(/\r\n?/g, "\n").split("\n");
+    const paragraphs = [];
+    let cur = "";
+    let page = null;
+    const flush = () => { if (cur.trim()) paragraphs.push(cur.trim()); cur = ""; };
+    for (const line of lines) {
+      const t = line.replace(/\s+$/, "");
+      if (!t.trim()) { flush(); continue; }
+      if (/^\s*[0-9０-９]{1,4}\s*$/.test(t)) {
+        if (page == null) page = Number(t.trim().replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)));
+        continue;
+      }
+      if (/^[\u3000「『（]/.test(t) || /^ {1,}\S/.test(t)) flush();
+      const piece = t.trim();
+      cur = cur && /[A-Za-z0-9]$/.test(cur) && /^[A-Za-z0-9]/.test(piece) ? `${cur} ${piece}` : cur + piece;
+    }
+    flush();
+    return { paragraphs, page };
+  }
+
+
   // 1段落を文に分ける。閉じかっこは前の文に付ける
   function sentences(p) {
     return String(p).match(/[^。！？!?]*(?:[。！？!?]+[」』）)]*|$)/g).filter((s) => s.trim());
@@ -171,5 +195,5 @@
     return `${lines.join("\n")}\n`;
   }
 
-  root.ShioriParse = { parseKindle, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
+  root.ShioriParse = { parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
 })(typeof window !== "undefined" ? window : globalThis);
