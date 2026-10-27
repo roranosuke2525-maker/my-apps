@@ -225,7 +225,7 @@ async function getHighlights(notion, env, bookId) {
   const book = await rowOf(notion, bookId, env.BOOK_DS_ID, "読書メモ_DB ");
   const [rows, legacy] = await Promise.all([
     queryAll(notion, env.HIGHLIGHT_DS_ID, { filter: { property: "本", relation: { contains: normalizeId(bookId) } } }),
-    getLegacy(notion, relIds(book.properties?.[LEGACY_REL]).slice(0, LEGACY_MAX)),
+    getLegacy(notion, bookId, relIds(book.properties?.[LEGACY_REL])),
   ]);
   const highlights = rows.map(highlightOf);
   // ページ順（ページの無いものは後ろへ、位置の順）
@@ -233,17 +233,24 @@ async function getHighlights(notion, env, bookId) {
   return { highlights, legacy };
 }
 
-// 前の形：本のページの下の子ページ（タイトル＝引用、本文＝写真とひとこと）。読むだけ
-async function getLegacy(notion, ids) {
-  const pages = await Promise.all(ids.map(async (id) => {
+// 前の形：本のページの下の子ページ（タイトル＝引用、本文＝写真とひとこと）。読むだけ。
+// 関連の列は API では空のことがあるので、本のページの中の子ページを直接探し、関連にしかないものも足す
+async function getLegacy(notion, bookId, relatedIds) {
+  const kids = await notion("GET", `/blocks/${normalizeId(bookId)}/children?page_size=100`);
+  const found = (kids.results || []).filter((b) => b.type === "child_page").map((b) => ({ id: normalizeId(b.id), title: b.child_page?.title || "" }));
+  for (const id of relatedIds) if (!found.some((f) => f.id === id)) found.push({ id, title: null });
+  const pages = await Promise.all(found.slice(0, LEGACY_MAX).map(async ({ id, title }) => {
     try {
-      const [page, kids] = await Promise.all([notion("GET", `/pages/${id}`), notion("GET", `/blocks/${id}/children?page_size=50`)]);
-      const title = Object.values(page.properties || {}).find((p) => p.type === "title");
-      const blocks = kids.results || [];
+      const [page, body] = await Promise.all([
+        title == null ? notion("GET", `/pages/${id}`) : null,
+        notion("GET", `/blocks/${id}/children?page_size=50`),
+      ]);
+      const t = title ?? plain(Object.values(page?.properties || {}).find((p) => p.type === "title")?.title);
+      const blocks = body.results || [];
       return {
         id,
-        url: page.url,
-        text: plain(title?.title) || "（無題）",
+        url: page?.url || `https://www.notion.so/${id}`,
+        text: t || "（無題）",
         memo: blocks.map((b) => plain(b[b.type]?.rich_text)).filter(Boolean).join("\n"),
         hasPhoto: blocks.some((b) => b.type === "image"),
       };

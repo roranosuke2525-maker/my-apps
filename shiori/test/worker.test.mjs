@@ -70,7 +70,10 @@ beforeEach(() => {
   const children = {
     [hex(31)]: [{ type: "image", image: {} }, { type: "paragraph", paragraph: { rich_text: rt("大事な一文") } }],
     [hex(32)]: [],
+    [B2]: [{ type: "child_page", id: hex(31), child_page: { title: "前の形の引用" } }, { type: "paragraph", paragraph: { rich_text: rt("本の感想") } }],
+    [hex(33)]: [{ type: "paragraph", paragraph: { rich_text: rt("関連にない子ページ") } }],
   };
+  children[B3] = [{ type: "child_page", id: hex(33), child_page: { title: "子ページだけ" } }];
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
     const path = u.pathname.replace(/^\/v1/, "");
@@ -147,6 +150,8 @@ test("ハイライト：その本の行をページ順に、前の形の子ペ�
   assert.equal(calls.find((c) => c.path.endsWith("/query")).body.filter.relation.contains, B1);
   const b = await api("GET", `/api/books/${B2}/highlights`);
   assert.deepEqual(b.data.legacy.map((l) => [l.text, l.memo, l.hasPhoto]), [["前の形の引用", "大事な一文", true], ["もう一つ", "", false]]);
+  const c = await api("GET", `/api/books/${B3}/highlights`);
+  assert.deepEqual(c.data.legacy.map((l) => [l.text, l.memo, l.url]), [["子ページだけ", "関連にない子ページ", `https://www.notion.so/${hex(33)}`]]);
   assert.equal((await api("GET", `/api/books/${hex(21)}/highlights`)).status, 403, "本でない行は開かない");
 });
 
