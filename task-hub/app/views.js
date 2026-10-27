@@ -215,7 +215,7 @@
     return { edited: t.edited, conc: conclusionOf(raw), qn: qa?.qs.length || 0, q1: qa?.qs[0]?.title || "", clarity: qa?.clarity || null };
   }
   async function fetchBody(id) {
-    if (S.mode === "demo") return DEMO_BODIES[id] || DEMO_BODY;
+    if (S.mode === "demo") return DEMO_BODIES[id] ?? DEMO_BODY;
     const res = await call("fetch", { id }, { read: true });
     const tx = String(res.text || ""); const a = tx.indexOf("<content>"), b = tx.lastIndexOf("</content>");
     return a >= 0 && b > a ? tx.slice(a + 9, b).replace(/^\n/, "").replace(/\n$/, "") : "";

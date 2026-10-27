@@ -133,6 +133,7 @@
       date: r["date:実行日:start"] ? String(r["date:実行日:start"]).slice(0, 10) : null, waku: r["枠"] || null, weight: r["重さ"] || null,
       tag: r["分類タグ"] || null, ai: r["AIアクション"] || null, edited: r["最終更新日時"] || null, created: r.createdTime || null,
       projects: (list(r["プロジェクト"]) || []).map(idOf).filter(Boolean), link: text(r["userDefined:URL"]),
+      refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
     };
     known.set(t.id, t);
     return t;
@@ -154,7 +155,29 @@
   const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
-  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals });
+  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone });
+
+  // 在庫（DB_Daily）の1行。切れる予定日は Notion の計算式が読めればそれ、読めなければ同じ考え方で計算する
+  const dateOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+  const PER_DAYS = { "毎日": 1, "毎週": 7, "毎月": 30 };
+  function toStock(r) {
+    const x = {
+      id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", cat: r["カテゴリ"] || "", memo: text(r["メモ"]), link: text(r["userDefined:URL"]),
+      use: Number(r["使う数"]) || 0, freq: r["使う頻度"] || "", size: Number(r["内容量"]) || 0,
+      bought: dateOf(r["date:購入日（手入力）:start"]), rollup: dateOf(r["最終補充日"]), formulaEnd: dateOf(r["切れる予定日"]),
+    };
+    return stockCalc(x);
+  }
+  function stockCalc(x) {
+    const base = [x.bought, x.rollup, S.refillDone[x.id]].filter(Boolean).sort().at(-1) || null;
+    const perDay = x.use && PER_DAYS[x.freq] ? x.use / PER_DAYS[x.freq] : 0;
+    const days = perDay && x.size ? Math.floor(x.size / perDay) : null;
+    x.base = base; x.days = days;
+    const fresher = S.refillDone[x.id] && (!x.rollup || S.refillDone[x.id] > x.rollup); // この画面で補充した直後など
+    x.end = x.formulaEnd && !fresher ? x.formulaEnd : base && days != null ? addDays(base, days) : null;
+    x.left = x.end ? diffDays(TODAY(), x.end) : null;
+    return x;
+  }
 
   async function loadLive() {
     const sortEdited = [{ property: "最終更新日時", direction: "descending" }];
@@ -174,11 +197,14 @@
       id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", status: r["ステータス"] || "", step: text(r["次の一歩"]), now: text(r["今の状態"]),
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
-    // 診断・運用ログ・目標は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals] = await Promise.allSettled([
+    // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
+    const [diag, logs, goals, stock, refills] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
+      rows(DS.daily, { limit: 100 }),
+      // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
+      rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
     ]);
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({
@@ -191,6 +217,14 @@
       url: r.url, id: idOf(r.url), name: text(r["名前"]) || "（無題）", status: text(r["ステータス"]), kind: text(r["種別"]), area: text(r["領域"]), due: r["date:期限:start"] || null,
       why: text(r["なぜ"]), goalBy: text(r["達成の目安"]), projects: (list(r["プロジェクト"]) || []).map(idOf),
     })); else S.extraErr.goal = errText(goals.reason);
+    if (refills.status === "fulfilled") {
+      S.refillDone = {};
+      for (const r of refills.value.results) {
+        const d = dateOf(r["完了日"]) || dateOf(r["date:実行日:start"]) || (r["最終更新日時"] ? jst(Date.parse(r["最終更新日時"])) : null);
+        for (const id of (list(r["補充対象"]) || []).map(idOf)) if (d && !(S.refillDone[id] >= d)) S.refillDone[id] = d;
+      }
+    }
+    if (stock.status === "fulfilled") S.stock = stock.value.results.map(toStock); else S.extraErr.stock = errText(stock.reason);
     S.loadedAt = Date.now();
     saveSnap();
   }

@@ -68,7 +68,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 main { min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 0 max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
-nav.tabs { display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
+nav.tabs { display: grid; grid-template-columns: repeat(6, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
 nav.tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; border-radius: 12px; font-size: 11px; color: var(--mute); position: relative; }
 nav.tabs button svg { width: 22px; height: 22px; }
 nav.tabs button[aria-pressed="true"] { color: var(--ink); background: var(--card); box-shadow: var(--shadow); font-weight: 700; }
@@ -317,6 +317,33 @@ input, textarea, select { font-size: 16px !important; }
 .ed { font-size: 16px; }
 @media (pointer: coarse) { .code .tx, .tblk table, .tx.cell, .cell { font-size: 16px; } }
 
+/* ===== 買う ===== */
+.shop { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 10px; }
+.shopadd { display: flex; gap: 6px; padding: 6px; flex: none; align-items: center; }
+.shopadd input { flex: 1; min-width: 0; height: 38px; background: var(--sunk); border: 0; border-radius: 10px; padding: 0 10px; color: var(--ink); }
+.shopadd select { max-width: 32%; height: 38px; background: var(--sunk); border: 0; border-radius: 10px; color: var(--ink); padding: 0 4px; }
+.slist { padding: 4px 12px 10px; border-bottom: 1px solid var(--line); }
+.slist:last-child { border-bottom: 0; }
+.slist.one { padding: 0; }
+.shead { display: flex; align-items: center; gap: 8px; padding: 6px 0 2px; }
+.shead .sname { flex: 1; min-width: 0; text-align: left; font-weight: 700; font-size: 15px; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shead .meta { font-size: 11.5px; color: var(--mute); white-space: nowrap; }
+.shead .meta.late { color: var(--late); font-weight: 700; }
+.buylink { font-size: 12px; color: var(--accent); white-space: nowrap; padding: 4px 6px; }
+.sprog { display: flex; align-items: center; gap: 8px; font-family: var(--f-num); font-size: 11px; color: var(--mute); padding: 2px 0 4px; }
+.sprog i { flex: 1; height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--ok) var(--p), var(--line) var(--p)); box-shadow: 0 0 6px -1px var(--ok); }
+.sgroup { font-size: 11px; color: var(--s-next); letter-spacing: .08em; padding: 10px 0 2px; font-weight: 700; }
+.sitem { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; text-align: left; padding: 4px 0 4px calc(var(--d, 0) * 24px); font-size: 16px; border-bottom: 1px dashed var(--line); }
+.sitem .check { --c: var(--s-today); }
+.sitem .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sitem.on .tx { text-decoration: line-through; color: var(--mute); }
+.sline { font-size: 12.5px; padding: 8px 0; }
+.sfoot { display: flex; gap: 8px; padding-top: 8px; flex-wrap: wrap; }
+.sfoot:empty { display: none; }
+.sfoot .btn { height: 34px; font-size: 12.5px; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 12px; flex: none; }
+.stockrow .meta { min-width: 56px; }
+
 /* ===== 宇宙の夜 ===== */
 #stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 #app { position: relative; z-index: 1; }
@@ -376,6 +403,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
     <button type="button" data-tab="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg>AI<span class="badge" id="aibadge" hidden></span></button>
     <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
+    <button type="button" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>買う<span class="badge" id="shopbadge" hidden></span></button>
     <button type="button" data-tab="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/></svg>記録</button>
     <button type="button" data-tab="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>DB</button>
   </nav>
@@ -394,6 +422,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
+    daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
   };
   const DB_PAGE = "3ed62844acbe81438bf3c88092856f8b"; // 🗄 データベース
   const PLAYER = "https://www.notion.so/3e962844acbe81b0843ff78fe19791fa"; // DB_プレイヤー（Satoshi）
@@ -443,6 +472,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
+    shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };
@@ -583,6 +613,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
       date: r["date:実行日:start"] ? String(r["date:実行日:start"]).slice(0, 10) : null, waku: r["枠"] || null, weight: r["重さ"] || null,
       tag: r["分類タグ"] || null, ai: r["AIアクション"] || null, edited: r["最終更新日時"] || null, created: r.createdTime || null,
       projects: (list(r["プロジェクト"]) || []).map(idOf).filter(Boolean), link: text(r["userDefined:URL"]),
+      refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
     };
     known.set(t.id, t);
     return t;
@@ -604,7 +635,29 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
   const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
-  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals });
+  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone });
+
+  // 在庫（DB_Daily）の1行。切れる予定日は Notion の計算式が読めればそれ、読めなければ同じ考え方で計算する
+  const dateOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+  const PER_DAYS = { "毎日": 1, "毎週": 7, "毎月": 30 };
+  function toStock(r) {
+    const x = {
+      id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", cat: r["カテゴリ"] || "", memo: text(r["メモ"]), link: text(r["userDefined:URL"]),
+      use: Number(r["使う数"]) || 0, freq: r["使う頻度"] || "", size: Number(r["内容量"]) || 0,
+      bought: dateOf(r["date:購入日（手入力）:start"]), rollup: dateOf(r["最終補充日"]), formulaEnd: dateOf(r["切れる予定日"]),
+    };
+    return stockCalc(x);
+  }
+  function stockCalc(x) {
+    const base = [x.bought, x.rollup, S.refillDone[x.id]].filter(Boolean).sort().at(-1) || null;
+    const perDay = x.use && PER_DAYS[x.freq] ? x.use / PER_DAYS[x.freq] : 0;
+    const days = perDay && x.size ? Math.floor(x.size / perDay) : null;
+    x.base = base; x.days = days;
+    const fresher = S.refillDone[x.id] && (!x.rollup || S.refillDone[x.id] > x.rollup); // この画面で補充した直後など
+    x.end = x.formulaEnd && !fresher ? x.formulaEnd : base && days != null ? addDays(base, days) : null;
+    x.left = x.end ? diffDays(TODAY(), x.end) : null;
+    return x;
+  }
 
   async function loadLive() {
     const sortEdited = [{ property: "最終更新日時", direction: "descending" }];
@@ -624,11 +677,14 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
       id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", status: r["ステータス"] || "", step: text(r["次の一歩"]), now: text(r["今の状態"]),
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
-    // 診断・運用ログ・目標は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals] = await Promise.allSettled([
+    // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
+    const [diag, logs, goals, stock, refills] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
+      rows(DS.daily, { limit: 100 }),
+      // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
+      rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
     ]);
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({
@@ -641,6 +697,14 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
       url: r.url, id: idOf(r.url), name: text(r["名前"]) || "（無題）", status: text(r["ステータス"]), kind: text(r["種別"]), area: text(r["領域"]), due: r["date:期限:start"] || null,
       why: text(r["なぜ"]), goalBy: text(r["達成の目安"]), projects: (list(r["プロジェクト"]) || []).map(idOf),
     })); else S.extraErr.goal = errText(goals.reason);
+    if (refills.status === "fulfilled") {
+      S.refillDone = {};
+      for (const r of refills.value.results) {
+        const d = dateOf(r["完了日"]) || dateOf(r["date:実行日:start"]) || (r["最終更新日時"] ? jst(Date.parse(r["最終更新日時"])) : null);
+        for (const id of (list(r["補充対象"]) || []).map(idOf)) if (d && !(S.refillDone[id] >= d)) S.refillDone[id] = d;
+      }
+    }
+    if (stock.status === "fulfilled") S.stock = stock.value.results.map(toStock); else S.extraErr.stock = errText(stock.reason);
     S.loadedAt = Date.now();
     saveSnap();
   }
@@ -1478,7 +1542,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     return { edited: t.edited, conc: conclusionOf(raw), qn: qa?.qs.length || 0, q1: qa?.qs[0]?.title || "", clarity: qa?.clarity || null };
   }
   async function fetchBody(id) {
-    if (S.mode === "demo") return DEMO_BODIES[id] || DEMO_BODY;
+    if (S.mode === "demo") return DEMO_BODIES[id] ?? DEMO_BODY;
     const res = await call("fetch", { id }, { read: true });
     const tx = String(res.text || ""); const a = tx.indexOf("<content>"), b = tx.lastIndexOf("</content>");
     return a >= 0 && b > a ? tx.slice(a + 9, b).replace(/^\n/, "").replace(/\n$/, "") : "";
@@ -1911,17 +1975,257 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     modal(`<h3>AIに預けるタスクを選ぶ（${reqMode}）</h3><div class="list" style="max-height:60vh;overflow:auto;padding:6px 0">${cands.map((t) => `<button type="button" class="row" data-aipick="${t.id}" style="height:52px"><span class="dot" style="--c:${STAGES[stageOf(t)].c}"></span><span class="main"><span class="nm">${esc(t.name)}</span><span class="sub">${STAGES[stageOf(t)].name}</span></span></button>`).join("") || `<div class="empty">候補がありません</div>`}</div><div class="form"><button type="button" class="btn" data-mclose="1">閉じる</button></div>`);
   }
 
+  // ================= 買う：買い物リスト（BUYタスクの本文のチェックリスト）と在庫（DB_Daily） =================
+  const SHOP_OPEN = [ST.next, ST.doing, ST.inbox, ST.wait];
+  const TODO_RE = /^(\s*)[-*+] \[( |x|X)\] ?(.*)$/;
+  const shopScroll = {}; // 描き直してもスクロール位置を保つ
+  document.addEventListener("scroll", (e) => { if (e.target.id === "shopbox" || e.target.id === "stockbox") shopScroll[e.target.id] = e.target.scrollTop; }, true);
+  const keepScroll = (box) => { box.scrollTop = shopScroll[box.id] || 0; };
+  const shopRaw = {}; // タスクid → { edited, raw }
+  const shopQ = {}; // タスクid → 書き込みの順番待ち
+  const shopLists = () => S.tasks.filter((t) => SHOP_OPEN.includes(t.status) && (t.tag === "BUY" || t.refill?.length))
+    .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999") || (b.edited || "").localeCompare(a.edited || ""));
+  const openRefills = (id) => S.tasks.filter((t) => t.refill?.includes(id) && t.status !== ST.done);
+  const stockSoon = () => S.stock.filter((x) => x.left != null && x.left <= 3 && !openRefills(x.id).length);
+  const leftTx = (x) => (x.left == null ? "" : x.left < 0 ? `切れて${-x.left}日` : x.left === 0 ? "今日切れる" : `あと${x.left}日`);
+  const leftColor = (x) => (x.left == null ? "var(--s-some)" : x.left <= 0 ? "var(--late)" : x.left <= 7 ? "var(--s-today)" : "var(--ok)");
+
+  function shopParse(raw) {
+    const lines = raw.split("\n"); const items = []; let group = "";
+    lines.forEach((l, i) => {
+      const h = l.match(/^#{1,4}\s+(.+)$/) || l.match(/^<h[1-4][^>]*>(.*)<\/h[1-4]>\s*$/);
+      if (h) { group = text(h[1]); return; }
+      const m = l.match(TODO_RE);
+      if (m) items.push({ li: i, depth: (m[1].match(/\t/g) || []).length + Math.floor(m[1].replace(/\t/g, "").length / 2), done: m[2] !== " ", text: text(m[3]) || "（空）", group });
+    });
+    return { lines, items };
+  }
+  // lines[i..j] を、本文の中で1か所だけになるまで前後に広げる
+  function uniqSpan(lines, i, j, raw) {
+    let a = i, b = j;
+    while (raw.split(lines.slice(a, b + 1).join("\n")).length - 1 > 1 && (a > 0 || b < lines.length - 1)) { if (a > 0) a--; else b++; }
+    return [a, b];
+  }
+  // 1つ前の書き込みが終わってから次を書く（同じページへの書き込みが追い越さないように）
+  function shopWrite(id, job) {
+    const p = (shopQ[id] || Promise.resolve()).then(job, job);
+    shopQ[id] = p.catch(() => {});
+    return p;
+  }
+  async function shopFail(t, err) {
+    toast(/No matches found/i.test(String(err?.message || "")) ? "Notion 側でリストが変わっていました。読み直します" : `書き込めませんでした：${errText(err)}`);
+    setSync("err");
+    try { shopRaw[t.id] = { edited: t.edited, raw: await fetchBody(t.id) }; } catch { delete shopRaw[t.id]; }
+    if (S.tab === "shop") render();
+  }
+  function touched(t) { t.edited = new Date().toISOString(); if (shopRaw[t.id]) shopRaw[t.id].edited = t.edited; }
+
+  let shopLoading = false;
+  async function loadShopBodies() {
+    if (shopLoading || S.mode === "loading" || S.mode === "error") return;
+    const todo = shopLists().filter((t) => shopRaw[t.id]?.edited !== t.edited).slice(0, 12);
+    if (!todo.length) return;
+    shopLoading = true;
+    const worker = async () => { for (let t; (t = todo.shift());) { try { shopRaw[t.id] = { edited: t.edited, raw: await fetchBody(t.id) }; } catch { shopRaw[t.id] = { edited: t.edited, raw: "", err: true }; } } };
+    await Promise.all([worker(), worker(), worker()]);
+    shopLoading = false;
+    if (S.tab === "shop" && S.shopSeg === "list" && $("#page").hidden && !document.activeElement?.matches("#shopin")) render();
+  }
+
+  function renderShop(view) {
+    const lists = shopLists(); const soon = stockSoon().length;
+    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["list", "買い物リスト", lists.length], ["stock", "在庫・補充", soon ? `${soon}!` : S.stock.length]].map(([k, n, x]) => `<button type="button" data-shopseg="${k}" aria-pressed="${S.shopSeg === k}">${n}<span class="n">${x}</span></button>`).join("")}</div>`);
+    if (S.shopSeg === "stock") return renderStock(view);
+    // 足す先：チェックリストのあるリスト（なければ新しく作る）
+    const targets = lists.filter((t) => shopRaw[t.id] ? shopParse(shopRaw[t.id].raw).items.length || !shopRaw[t.id].raw.trim() : /BUY|買い物/.test(t.name));
+    if (!targets.some((t) => t.id === S.shopTarget)) S.shopTarget = targets[0]?.id || "";
+    view.insertAdjacentHTML("beforeend", `<div class="card shopadd"><input id="shopin" type="text" maxlength="120" placeholder="買うものを足す（例：牛乳）" aria-label="買うもの" enterkeyhint="done">
+      <select id="shopto" aria-label="足す先">${targets.map((t) => `<option value="${t.id}" ${t.id === S.shopTarget ? "selected" : ""}>${esc(short(t.name, 12))}</option>`).join("")}<option value="" ${S.shopTarget ? "" : "selected"}>＋ 新しいリスト</option></select>
+      <button type="button" class="btn pri" data-shopadd="1">足す</button></div>
+      <div class="card panel"><div class="panel-head"><b>買うもの</b><span class="mute" style="font-size:12px">BUY のタスク ${lists.length}件</span><div class="seg"><button type="button" data-shophide="1" aria-pressed="${S.shopHide}">買えたものを隠す</button></div></div><div class="shop" id="shopbox"></div></div>`);
+    const box = $("#shopbox");
+    if (!lists.length) { box.innerHTML = `<div class="empty">買うものはありません。\n上の欄から足すか、在庫・補充から選べます</div>`; return; }
+    box.innerHTML = lists.map(shopCard).join(""); keepScroll(box);
+    loadShopBodies();
+  }
+  function shopCard(t) {
+    const m = metaOf(t); const got = shopRaw[t.id];
+    const link = t.link ? `<a class="buylink" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : "";
+    const head = `<div class="shead"><button type="button" class="sname" data-open="${t.id}">${esc(t.name)}</button>${link}<span class="meta${m.late ? " late" : ""}">${esc(t.date ? m.tx : STAGES[stageOf(t)].name)}</span></div>`;
+    if (!got) return `<section class="slist">${head}<div class="mute sline">読みこみ中…</div></section>`;
+    const { items } = shopParse(got.raw);
+    if (!items.length) {
+      // チェックリストのない買い物（1品だけ・ネット注文など）は、タスクごと済みにする
+      return `<section class="slist one" style="--c:var(--s-today)"><div class="row"><button type="button" class="check" data-done="${t.id}" aria-label="買えた">✓</button><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || (t.refill?.length ? "補充" : ""))}</span></button>${link}<span class="meta${m.late ? " late" : ""}">${esc(t.date ? m.tx : "")}</span></div></section>`;
+    }
+    const left = items.filter((x) => !x.done).length; let g = null;
+    const rowsHtml = items.filter((x) => !(S.shopHide && x.done)).map((x) => {
+      const gh = x.group !== g ? ((g = x.group) ? `<div class="sgroup">${esc(g)}</div>` : "") : "";
+      return `${gh}<button type="button" class="sitem${x.done ? " on" : ""}" data-shopitem="${t.id}:${x.li}" style="--d:${x.depth}" aria-pressed="${x.done}"><span class="check${x.done ? " on" : ""}" aria-hidden="true">✓</span><span class="tx">${esc(x.text)}</span></button>`;
+    }).join("");
+    const done = items.length - left;
+    return `<section class="slist">${head}<div class="sprog"><i style="--p:${Math.round((done / items.length) * 100)}%"></i><span>${done}/${items.length}</span></div>${rowsHtml || `<div class="mute sline">全部買えました</div>`}
+      <div class="sfoot">${done ? `<button type="button" class="btn" data-shopclear="${t.id}">買えた${done}品をリストから消す</button>` : ""}${!left ? `<button type="button" class="btn ok" data-shopdone="${t.id}">買い物を終える（済みにする）</button>` : ""}</div></section>`;
+  }
+
+  function toggleItem(id, li) {
+    const t = known.get(id); const got = shopRaw[id]; if (!t || !got) return;
+    const lines = got.raw.split("\n"); const line = lines[li]; const m = line?.match(TODO_RE); if (!m) return;
+    const nl = line.replace(/\[( |x|X)\]/, m[2] === " " ? "[x]" : "[ ]");
+    const [a, b] = uniqSpan(lines, li, li, got.raw);
+    const old = lines.slice(a, b + 1).join("\n"); lines[li] = nl; const nw = lines.slice(a, b + 1).join("\n");
+    got.raw = lines.join("\n"); touched(t); render();
+    if (S.mode === "demo") { DEMO_BODIES[id] = got.raw; return; }
+    setSync("busy");
+    shopWrite(id, async () => {
+      try { await call("update", { page_id: id, command: "update_content", content_updates: [{ old_str: old, new_str: nw }], allow_async: false }, { read: false }); setSync("ok"); }
+      catch (err) { await shopFail(t, err); }
+    });
+  }
+  async function addItem() {
+    const i = $("#shopin"); const name = i.value.trim(); if (!name) { i.focus(); return; }
+    const item = `- [ ] ${name.replace(/([\\*_`<>[\]~])/g, "\\$1")}`;
+    const t = known.get($("#shopto").value);
+    i.value = ""; i.focus();
+    if (!t) {
+      try { const nt = await createShopTask({ "名前": "買い物リスト", "枠": "🏠 家・外" }, item); shopRaw[nt.id] = { edited: nt.edited, raw: item }; S.shopTarget = nt.id; render(); toast("新しい買い物リストを作りました"); $("#shopin")?.focus(); }
+      catch (err) { i.value = name; toast(`作れませんでした：${errText(err)}`); }
+      return;
+    }
+    S.shopTarget = t.id;
+    const got = shopRaw[t.id] || { raw: "" }; const lines = got.raw.split("\n");
+    // 最後のチェック項目（とその下の入れ子）の後ろに足す。チェック項目がなければ本文の最後へ
+    let k = -1; lines.forEach((l, n) => { if (TODO_RE.test(l)) k = n; });
+    let job;
+    if (k >= 0) {
+      let j = k; const ind = lines[k].match(/^\s*/)[0].length; while (j + 1 < lines.length && lines[j + 1].trim() && lines[j + 1].match(/^\s*/)[0].length > ind) j++;
+      const [a, b] = uniqSpan(lines, k, j, got.raw);
+      const old = lines.slice(a, b + 1).join("\n"); const nwLines = lines.slice(a, b + 1); nwLines.splice(j - a + 1, 0, item);
+      const nw = nwLines.join("\n"); lines.splice(j + 1, 0, item);
+      job = () => call("update", { page_id: t.id, command: "update_content", content_updates: [{ old_str: old, new_str: nw }], allow_async: false }, { read: false });
+    } else {
+      if (got.raw.trim()) lines.push(""); lines.push(item);
+      job = () => call("update", { page_id: t.id, command: "insert_content", content: item, allow_async: false }, { read: false });
+    }
+    shopRaw[t.id] = { ...got, raw: lines.join("\n").replace(/^\n+/, "") }; touched(t); render(); $("#shopin")?.focus();
+    if (S.mode === "demo") { DEMO_BODIES[t.id] = shopRaw[t.id].raw; return; }
+    setSync("busy");
+    shopWrite(t.id, async () => { try { await job(); setSync("ok"); } catch (err) { await shopFail(t, err); } });
+  }
+  // 買えた項目（と、その下の入れ子）を本文から消す
+  function clearChecked(id) {
+    const t = known.get(id); const got = shopRaw[id]; if (!t || !got) return;
+    const lines = got.raw.split("\n"); const chunks = [];
+    for (let n = 0; n < lines.length; n++) {
+      const m = lines[n].match(TODO_RE); if (!m || m[2] === " ") continue;
+      let j = n; const ind = m[1].length; while (j + 1 < lines.length && lines[j + 1].trim() && lines[j + 1].match(/^\s*/)[0].length > ind) j++;
+      const last = chunks.at(-1); if (last && last[1] === n - 1) last[1] = j; else chunks.push([n, j]);
+      n = j;
+    }
+    if (!chunks.length) return;
+    const keep = lines.filter((_, n) => !chunks.some(([a, b]) => n >= a && n <= b));
+    const updates = chunks.map(([s, e]) => {
+      let a = s, b = e; // 前後の1行を含めて1か所に決める
+      if (a > 0) a--; else if (b < lines.length - 1) b++;
+      [a, b] = uniqSpan(lines, a, b, got.raw);
+      return { old_str: lines.slice(a, b + 1).join("\n"), new_str: lines.slice(a, b + 1).filter((_, k) => k + a < s || k + a > e).join("\n") };
+    });
+    const whole = !keep.some((l) => l.trim());
+    got.raw = keep.join("\n"); touched(t); render();
+    toast(`買えた ${chunks.reduce((n, [a, b]) => n + b - a + 1, 0)}行をリストから消しました`);
+    if (S.mode === "demo") { DEMO_BODIES[id] = got.raw; return; }
+    setSync("busy");
+    shopWrite(id, async () => {
+      try {
+        if (whole) await call("update", { page_id: id, command: "replace_content", new_str: "", allow_async: false }, { read: false });
+        else await call("update", { page_id: id, command: "update_content", content_updates: updates, allow_async: false }, { read: false });
+        setSync("ok");
+      } catch (err) { await shopFail(t, err); }
+    });
+  }
+
+  async function createShopTask(props, content) {
+    const now = new Date().toISOString();
+    const all = { "ステータス": ST.next, "分類タグ": "BUY", "重さ": "S", "プレイヤー": [PLAYER], ...props };
+    const local = (u) => toTask({ url: u, 名前: all["名前"], NEXT: all.NEXT || "", ステータス: all["ステータス"], 分類タグ: "BUY", 枠: all["枠"] || null, 重さ: "S", "userDefined:URL": all["userDefined:URL"] || "", 補充対象: JSON.stringify(all["補充対象"] || []), 最終更新日時: now, createdTime: now });
+    if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content || ""; return t; }
+    setSync("busy");
+    try {
+      const res = await call("create", { parent: { type: "data_source_id", data_source_id: DS.task }, pages: [{ properties: all, ...(content ? { content } : {}) }], allow_async: false }, { read: false });
+      const pg = (res.pages || [])[0] || {}; const t = local(pg.url || `https://www.notion.so/${String(pg.id || "").replace(/-/g, "")}`); S.tasks.push(t); saveSnap(); setSync("ok"); return t;
+    } catch (err) { setSync("err"); throw err; }
+  }
+
+  // ---------- 在庫・補充 ----------
+  function renderStock(view) {
+    if (S.extraErr.stock && !S.stock.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty">DB_Daily を読めませんでした。\n${esc(S.extraErr.stock)}\n${VIA === "api" ? "Notion のインテグレーションを DB_Daily にも接続してください" : ""}</div></div>`); return; }
+    const all = S.stock.map(stockCalc);
+    const cats = [...new Set(all.map((x) => x.cat).filter(Boolean))];
+    const out = all.filter((x) => x.left != null && x.left <= 0).length, week = all.filter((x) => x.left != null && x.left > 0 && x.left <= 7).length, listed = all.filter((x) => openRefills(x.id).length).length;
+    view.insertAdjacentHTML("beforeend", `<div class="aihead"><div class="card"><div class="k">切れている</div><div class="n" style="color:var(--late)">${out}</div><div class="s">予定日を過ぎた</div></div><div class="card"><div class="k">7日以内</div><div class="n" style="color:var(--s-today)">${week}</div><div class="s">そろそろ買う</div></div><div class="card"><div class="k">リスト済み</div><div class="n">${listed}</div><div class="s">補充タスクあり</div></div></div>
+      <div class="chips"><button type="button" class="chip" data-stockcat="" aria-pressed="${!S.stockCat}">すべて<span class="n">${all.length}</span></button>${cats.map((c) => `<button type="button" class="chip" data-stockcat="${esc(c)}" aria-pressed="${S.stockCat === c}">${esc(c)}<span class="n">${all.filter((x) => x.cat === c).length}</span></button>`).join("")}</div>
+      <div class="card panel"><div class="shop" id="stockbox"></div></div>`);
+    const items = all.filter((x) => !S.stockCat || x.cat === S.stockCat).sort((a, b) => (a.left ?? 1e9) - (b.left ?? 1e9) || a.name.localeCompare(b.name, "ja"));
+    const box = $("#stockbox");
+    if (!items.length) { box.innerHTML = `<div class="empty">${S.mode === "loading" ? "読みこみ中…" : "在庫の登録がありません"}</div>`; return; }
+    box.innerHTML = items.map((x) => {
+      const open = openRefills(x.id);
+      const sub = [x.cat, x.left == null ? (x.use ? "購入日が未入力" : "使う数が未入力") : `${md(x.end)}まで`].filter(Boolean).join("・");
+      return `<div class="row stockrow" style="--c:${leftColor(x)}"><span class="dot"></span><button type="button" class="main" data-stock="${x.id}"><span class="nm">${esc(x.name)}</span><span class="sub">${esc(sub)}</span></button><span class="meta${x.left != null && x.left <= 0 ? " late" : ""}">${esc(leftTx(x))}</span>
+        ${open.length ? `<button type="button" class="btn ok sm" data-stockdone="${x.id}">補充した</button>` : `<button type="button" class="btn sm" data-stockadd="${x.id}">🛒 リストへ</button>`}</div>`;
+    }).join(""); keepScroll(box);
+  }
+  // DB_Daily の「補充」ボタンと同じ形の補充タスクを作る（補充対象でつなぐと、済みにした日が最終補充日になる）
+  async function stockAdd(id, btn) {
+    const x = S.stock.find((s) => s.id === id); if (!x || openRefills(id).length) return;
+    btn.disabled = true;
+    try {
+      await createShopTask({ "名前": `補充:${x.name}`, NEXT: x.link ? "リンクから注文する" : "買う", "枠": x.link ? "☼ 朝" : "🏠 家・外", "補充対象": [x.url], ...(x.link ? { "userDefined:URL": x.link } : {}) });
+      render(); toast(`「${short(x.name)}」を買い物リストに入れました`);
+    } catch (err) { btn.disabled = false; toast(`入れられませんでした：${errText(err)}`); }
+  }
+  async function stockDone(id) {
+    const x = S.stock.find((s) => s.id === id); if (!x) return;
+    const prev = S.refillDone[id];
+    S.refillDone[id] = TODAY(); stockCalc(x);
+    const ok = await Promise.all(openRefills(id).map((t) => setProps(t, { "ステータス": ST.done }, `「${short(x.name)}」を補充しました（${leftTx(x) || "記録"}）`, { undo: false })));
+    if (ok.includes(false)) { if (prev) S.refillDone[id] = prev; else delete S.refillDone[id]; stockCalc(x); }
+    saveSnap(); render();
+  }
+  function openStock(id) {
+    const x = S.stock.find((s) => s.id === id); if (!x) return; stockCalc(x);
+    const per = x.use && x.freq ? `${x.freq} ${x.use}${x.size ? `（1個 ${x.size}）` : ""}` : "";
+    const fields = [["カテゴリ", x.cat], ["残り", leftTx(x)], ["切れる予定日", x.end ? `${md(x.end)}（${WD[dow(x.end)]}）` : ""], ["補充した日", x.base ? md(x.base) : ""], ["使い方", per], ["1個で", x.days != null ? `${x.days}日もつ` : ""], ["メモ", x.memo], ["URL", x.link], ["補充タスク", openRefills(id).map((t) => t.name).join("・")]];
+    openPage({ kind: "stock", id: x.id, url: x.url, title: x.name, titleProp: "名前", fields, crumb: "DB_Daily ／ 在庫" });
+  }
+
+  function onShopClick(d, el) {
+    if (d.shopseg) { S.shopSeg = d.shopseg; render(); return true; }
+    if (d.shophide) { S.shopHide = !S.shopHide; render(); return true; }
+    if (d.shopitem) { const k = d.shopitem.lastIndexOf(":"); toggleItem(d.shopitem.slice(0, k), +d.shopitem.slice(k + 1)); return true; }
+    if (d.shopadd) { addItem(); return true; }
+    if (d.shopclear) { clearChecked(d.shopclear); return true; }
+    if (d.shopdone) { const t = known.get(d.shopdone); if (t) move(t, "done"); return true; }
+    if (d.stockcat !== undefined && el.classList.contains("chip")) { S.stockCat = d.stockcat; render(); return true; }
+    if (d.stockadd) { stockAdd(d.stockadd, el); return true; }
+    if (d.stockdone) { stockDone(d.stockdone); return true; }
+    if (d.stock) { openStock(d.stock); return true; }
+    return false;
+  }
+  document.addEventListener("keydown", (e) => { if (e.target.id === "shopin" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); addItem(); } });
+  document.addEventListener("change", (e) => { if (e.target.id === "shopto") S.shopTarget = e.target.value; });
   // ================= 描画 =================
   const main = $("#main");
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
     const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     if (warped) stars.warp();
     const view = $(".view", main);
-    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, log: renderLog, db: renderDbHome })[S.tab](view);
     S.slide = null;
   }
   // 画面とページ（開いていれば）を描き直す
@@ -1970,6 +2274,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
+    if (onShopClick(d, el)) return;
     if (d.open) { openTask(d.open); }
   });
   document.addEventListener("change", (e) => { if (e.target.matches?.("[data-prop]")) onPropChange(e.target); });
@@ -2054,6 +2359,16 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
       mk("電動自転車を市場ごと比較", ST.ai, { ai: "🔬", tag: "BUY", age: 1 }),
       mk("在宅ワークの椅子を決める", ST.ai, { ai: "💬", tag: "HOME", age: 1 }),
     ];
+    const BUY = mk("買い物リスト", ST.next, { date: d, waku: "🏠 家・外", w: "S", tag: "BUY", next: "スーパーとドラッグストア" });
+    DEMO_BODIES[BUY.id] = "## スーパー\n\n- [x] （例）キャベツ\n- [ ] （例）なす\n- [ ] （例）バナナ\n- [ ] （例）ポン酢\n\t- [ ] （例）ゆず入り\n\n## ドラッグストア\n\n- [ ] （例）おしりふき\n- [ ] （例）ハンドソープ詰め替え";
+    S.tasks.push(BUY);
+    const ST1 = "5".repeat(31) + "1", ST2 = "5".repeat(31) + "2";
+    S.tasks.push(mk("補充:（例）A＆透明ポリ袋 45L", ST.next, { waku: "☼ 朝", w: "S", tag: "BUY", next: "リンクから注文する", url: "https://example.com" }));
+    S.tasks.at(-1).refill = [ST2]; DEMO_BODIES[S.tasks.at(-1).id] = "";
+    for (const t of S.tasks) if (t.tag === "BUY" && !(t.id in DEMO_BODIES)) DEMO_BODIES[t.id] = "";
+    S.refillDone = {};
+    S.stock = [["（例）おむつ Mサイズ", "育児", 6, "毎日", 58, -40], ["（例）ポリ袋 45L", "日用品", 3, "毎週", 10, -20], ["（例）ビタミンD", "サプリ", 1, "毎日", 60, -55], ["（例）食器用洗剤", "消耗品", 1, "毎月", 3, -60], ["（例）コーヒー豆", "食品", 20, "毎日", 200, -8], ["（例）洗顔フォーム", "美容", 0, "", 0, null]]
+      .map(([name, cat, use, freq, size, ago], i) => stockCalc({ id: [ST1, ST2][i] || `${"5".repeat(31)}${i + 3}`, url: `https://www.notion.so/${[ST1, ST2][i] || `${"5".repeat(31)}${i + 3}`}`, name, cat, memo: "", link: i === 1 ? "https://example.com" : "", use, freq, size, bought: ago == null ? null : addDays(d, ago), rollup: null, formulaEnd: null }));
     S.doneToday = [mk("牛乳を買う", ST.done, { w: "S", waku: "🏠 家・外" }), mk("病院の予約", ST.done, { w: "S", waku: "☼ 朝" })];
     S.refs = ["コーヒー豆の保存方法", "加湿器の掃除のしかた", "ふるさと納税の上限"].map((x, i) => mk(x, ST.ref, { ai: "🔍✅", tag: ["COFFEE", "HOME", "MONEY"][i], age: i + 2 }));
     S.projects = [
@@ -2078,11 +2393,11 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
   S.bodies = store.get("sums") || {};
   const snap = store.get("snap");
   if (snap?.tasks?.length) {
-    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], loadedAt: snap.at });
+    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, loadedAt: snap.at });
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "shop", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用

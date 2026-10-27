@@ -3,12 +3,13 @@
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
     const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     if (warped) stars.warp();
     const view = $(".view", main);
-    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, log: renderLog, db: renderDbHome })[S.tab](view);
     S.slide = null;
   }
   // 画面とページ（開いていれば）を描き直す
@@ -57,6 +58,7 @@
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
+    if (onShopClick(d, el)) return;
     if (d.open) { openTask(d.open); }
   });
   document.addEventListener("change", (e) => { if (e.target.matches?.("[data-prop]")) onPropChange(e.target); });
@@ -141,6 +143,16 @@
       mk("電動自転車を市場ごと比較", ST.ai, { ai: "🔬", tag: "BUY", age: 1 }),
       mk("在宅ワークの椅子を決める", ST.ai, { ai: "💬", tag: "HOME", age: 1 }),
     ];
+    const BUY = mk("買い物リスト", ST.next, { date: d, waku: "🏠 家・外", w: "S", tag: "BUY", next: "スーパーとドラッグストア" });
+    DEMO_BODIES[BUY.id] = "## スーパー\n\n- [x] （例）キャベツ\n- [ ] （例）なす\n- [ ] （例）バナナ\n- [ ] （例）ポン酢\n\t- [ ] （例）ゆず入り\n\n## ドラッグストア\n\n- [ ] （例）おしりふき\n- [ ] （例）ハンドソープ詰め替え";
+    S.tasks.push(BUY);
+    const ST1 = "5".repeat(31) + "1", ST2 = "5".repeat(31) + "2";
+    S.tasks.push(mk("補充:（例）A＆透明ポリ袋 45L", ST.next, { waku: "☼ 朝", w: "S", tag: "BUY", next: "リンクから注文する", url: "https://example.com" }));
+    S.tasks.at(-1).refill = [ST2]; DEMO_BODIES[S.tasks.at(-1).id] = "";
+    for (const t of S.tasks) if (t.tag === "BUY" && !(t.id in DEMO_BODIES)) DEMO_BODIES[t.id] = "";
+    S.refillDone = {};
+    S.stock = [["（例）おむつ Mサイズ", "育児", 6, "毎日", 58, -40], ["（例）ポリ袋 45L", "日用品", 3, "毎週", 10, -20], ["（例）ビタミンD", "サプリ", 1, "毎日", 60, -55], ["（例）食器用洗剤", "消耗品", 1, "毎月", 3, -60], ["（例）コーヒー豆", "食品", 20, "毎日", 200, -8], ["（例）洗顔フォーム", "美容", 0, "", 0, null]]
+      .map(([name, cat, use, freq, size, ago], i) => stockCalc({ id: [ST1, ST2][i] || `${"5".repeat(31)}${i + 3}`, url: `https://www.notion.so/${[ST1, ST2][i] || `${"5".repeat(31)}${i + 3}`}`, name, cat, memo: "", link: i === 1 ? "https://example.com" : "", use, freq, size, bought: ago == null ? null : addDays(d, ago), rollup: null, formulaEnd: null }));
     S.doneToday = [mk("牛乳を買う", ST.done, { w: "S", waku: "🏠 家・外" }), mk("病院の予約", ST.done, { w: "S", waku: "☼ 朝" })];
     S.refs = ["コーヒー豆の保存方法", "加湿器の掃除のしかた", "ふるさと納税の上限"].map((x, i) => mk(x, ST.ref, { ai: "🔍✅", tag: ["COFFEE", "HOME", "MONEY"][i], age: i + 2 }));
     S.projects = [
@@ -165,11 +177,11 @@
   S.bodies = store.get("sums") || {};
   const snap = store.get("snap");
   if (snap?.tasks?.length) {
-    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], loadedAt: snap.at });
+    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, loadedAt: snap.at });
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "shop", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用

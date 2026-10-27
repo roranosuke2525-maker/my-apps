@@ -6,6 +6,7 @@
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
+    daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
   };
   const DB_PAGE = "3ed62844acbe81438bf3c88092856f8b"; // 🗄 データベース
   const PLAYER = "https://www.notion.so/3e962844acbe81b0843ff78fe19791fa"; // DB_プレイヤー（Satoshi）
@@ -55,6 +56,7 @@
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
+    shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };

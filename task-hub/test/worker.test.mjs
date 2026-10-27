@@ -57,6 +57,11 @@ test("今日の済み：ステータス かつ（実行日が今日 または �
   assert.deepEqual(f.and[1].or[1], { timestamp: "last_edited_time", last_edited_time: { on_or_after: f.and[1].or[1].last_edited_time.on_or_after } });
 });
 
+test("済みにした補充タスク：補充対象が空でない（リレーションの is_not_empty）", () => {
+  const f = toFilter({ type: "group", operator: "and", filters: [{ type: "property", property: "ステータス", propertyType: "status", operator: "status_is", value: { type: "is_option", value: "✅ DONE" } }, { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }] });
+  assert.deepEqual(f.and[1], { property: "補充対象", relation: { is_not_empty: true } });
+});
+
 test("本文は Notion-flavored Markdown（v2）で読み、変わった所だけ置き換える", async () => {
   const s = setup();
   try {
