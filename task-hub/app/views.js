@@ -93,7 +93,7 @@
   }
   function rowHtml(t, i, { check = true } = {}) {
     const st = stageOf(t); const m = metaOf(t);
-    const sub = t.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
+    const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
     return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : `<span class="dot"></span>`}
       <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button><span class="meta${m.late ? " late" : ""}">${esc(m.tx)}</span></div>`;
   }
@@ -254,7 +254,7 @@
   // ================= 仕分け =================
   const PILES = {
     inbox: { name: "収集", c: "var(--s-inbox)", items: () => inStage("inbox").sort((a, b) => (a.created || a.edited || "").localeCompare(b.created || b.edited || "")), dirs: { r: "next", l: "some", u: "ai", d: "ref" } },
-    judge: { name: "判定待ち", c: "var(--s-ai)", items: () => S.tasks.filter((t) => t.ai === "🔍✅").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dirs: { r: "next", l: "some", u: "ai", d: "ref" } },
+    judge: { name: "判定待ち", c: "var(--s-ai)", items: () => S.tasks.filter((t) => t.status === ST.ai && t.ai === "🔍✅").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dirs: { r: "next", l: "some", u: "ai", d: "ref" } },
     next: { name: "次にやる", c: "var(--s-next)", items: () => stageItems("next"), dirs: { r: "today", l: "some", u: "ai", d: "wait" } },
     wait: { name: "待ち", c: "var(--s-wait)", items: () => stageItems("wait"), dirs: { r: "next", l: "some", u: "today", d: "done" } },
     some: { name: "いつか", c: "var(--s-some)", items: () => inStage("some").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dirs: { r: "next", l: "skip", u: "ai", d: "ref" } },
@@ -273,7 +273,7 @@
     items.slice(0, 3).reverse().forEach((t, ri, arr) => {
       const i = arr.length - 1 - ri; const sm = summaryOf(t); const m = metaOf(t);
       pile.insertAdjacentHTML("beforeend", `<div class="tcard ${i === 1 ? "b1" : i === 2 ? "b2" : "top"}" data-card="${t.id}" style="--c:${P.c}">
-        <div style="display:flex;gap:6px;align-items:center">${t.tag ? `<span class="tag">${esc(t.tag)}</span>` : ""}${t.ai ? `<span class="tag">${t.ai} ${AI_LABEL[t.ai]}</span>` : ""}<span class="mute" style="margin-left:auto;font-size:11.5px">${items.length}枚中 1枚目</span></div>
+        <div style="display:flex;gap:6px;align-items:center">${t.tag ? `<span class="tag">${esc(t.tag)}</span>` : ""}${t.ai && t.status === ST.ai ? `<span class="tag">${t.ai} ${AI_LABEL[t.ai]}</span>` : ""}<span class="mute" style="margin-left:auto;font-size:11.5px">${items.length}枚中 1枚目</span></div>
         <h3>${esc(t.name)}</h3>${t.next ? `<div class="nx">次の一歩：<b>${esc(t.next)}</b></div>` : ""}
         ${S.pileKey === "judge" ? `<div class="pv">${sm ? (sm.conc ? `⭐ ${esc(sm.conc)}` : "（結論の要約なし。開いて確認）") : "結論を読みこみ中…"}</div>` : ""}
         <div class="meta"><span class="${m.late ? "late" : ""}">${t.date ? m.tx : `${ageOf(t)}日前から`}</span>${t.weight ? `<span>重さ ${t.weight}</span>` : ""}${t.waku ? `<span>${esc(t.waku)}</span>` : ""}${t.link ? `<span>🔗 URLあり</span>` : ""}</div>

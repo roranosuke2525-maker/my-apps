@@ -1,63 +1,53 @@
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>今どこ</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今どこ">
-<meta name="theme-color" content="#f4f5f7">
+<meta name="theme-color" content="#03050b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Orbitron:wght@500;700;900&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* 道具としての画面。上：日付と同期、中：流れ・AI・仕分け・記録・DB、下：タブ。段（GTDの各ステージ）ごとに色を固定し、どの画面でも同じ色で「今どこ」を示す */
+/* 宇宙の夜（スターウォーズ風）。星空の上にホログラムの青い枠、段ごとにライトセーバーの色。見出しの英字と数字は Orbitron、黄色はオープニングの字幕の色 */
 :root {
-  --bg: #f4f5f7;
-  --card: #ffffff;
-  --sunk: #eceef2;
-  --ink: #1f2329;
-  --mute: #6b7380;
-  --line: #dfe3e8;
-  --accent: #6a4fd6;
-  --late: #d9443b;
-  --ok: #1e9a62;
-  /* 段の色 */
-  --s-inbox: #6f7f96;
-  --s-ai: #6a4fd6;
-  --s-next: #2f6fdb;
-  --s-plan: #0e8f8a;
-  --s-today: #e0731c;
-  --s-wait: #c48a00;
-  --s-some: #8b8fa0;
-  --s-ref: #8a6a4a;
-  --s-done: #1e9a62;
-  /* Notion の色 */
-  --n-gray: #787774; --n-brown: #9f6b53; --n-orange: #d9730d; --n-yellow: #cb912f; --n-green: #448361; --n-blue: #337ea9; --n-purple: #9065b0; --n-pink: #c14c8a; --n-red: #d44c47;
-  --nb-gray: #f1f1ef; --nb-brown: #f4eeee; --nb-orange: #fbecdd; --nb-yellow: #fbf3db; --nb-green: #edf3ec; --nb-blue: #e7f3f8; --nb-purple: #f4f0f7; --nb-pink: #f9eef3; --nb-red: #fdebec; --nb-default: #f1f1ef;
-  --shadow: 0 1px 2px rgba(20, 25, 35, .06), 0 4px 14px rgba(20, 25, 35, .05);
-  --f: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-  --f-num: "IBM Plex Mono", ui-monospace, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121418; --card: #1b1e24; --sunk: #23272e; --ink: #e8eaee; --mute: #9aa2ae; --line: #2e333b; --accent: #9b84ff; --late: #ff6b60; --ok: #3cc985;
-    --s-inbox: #94a3b8; --s-ai: #9b84ff; --s-next: #6ea0ff; --s-plan: #35c2bb; --s-today: #ff9a4a; --s-wait: #e6b22a; --s-some: #a3a7b6; --s-ref: #c49a74; --s-done: #3cc985;
-    --n-gray: #9b9a97; --n-brown: #ba856f; --n-orange: #c77d48; --n-yellow: #ca9849; --n-green: #529e72; --n-blue: #5e87c9; --n-purple: #9d68d3; --n-pink: #d15796; --n-red: #df5452;
-    --nb-gray: #2f2f2f; --nb-brown: #3a2e2a; --nb-orange: #3d2d20; --nb-yellow: #3b3420; --nb-green: #23332a; --nb-blue: #1f2f3d; --nb-purple: #2f2639; --nb-pink: #3a2430; --nb-red: #3d2423; --nb-default: #2f2f2f;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25); color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #121418; --card: #1b1e24; --sunk: #23272e; --ink: #e8eaee; --mute: #9aa2ae; --line: #2e333b; --accent: #9b84ff; --late: #ff6b60; --ok: #3cc985;
-  --s-inbox: #94a3b8; --s-ai: #9b84ff; --s-next: #6ea0ff; --s-plan: #35c2bb; --s-today: #ff9a4a; --s-wait: #e6b22a; --s-some: #a3a7b6; --s-ref: #c49a74; --s-done: #3cc985;
+  --bg: #03050b;
+  --card: rgba(10, 20, 36, .84);
+  --sunk: rgba(40, 70, 105, .32);
+  --ink: #e4efff;
+  --mute: #8aa2bd;
+  --line: rgba(110, 190, 255, .22);
+  --accent: #a685ff;
+  --hi: #ffe81f;
+  --late: #ff4d4d;
+  --ok: #34f08a;
+  /* 段の色（ライトセーバー） */
+  --s-inbox: #8fa6c2;
+  --s-ai: #b18cff;
+  --s-next: #4fc3ff;
+  --s-plan: #3de0d0;
+  --s-today: #ffb02e;
+  --s-wait: #ffe81f;
+  --s-some: #7d8aa0;
+  --s-ref: #d0a77c;
+  --s-done: #34f08a;
+  /* Notion の色（夜） */
   --n-gray: #9b9a97; --n-brown: #ba856f; --n-orange: #c77d48; --n-yellow: #ca9849; --n-green: #529e72; --n-blue: #5e87c9; --n-purple: #9d68d3; --n-pink: #d15796; --n-red: #df5452;
-  --nb-gray: #2f2f2f; --nb-brown: #3a2e2a; --nb-orange: #3d2d20; --nb-yellow: #3b3420; --nb-green: #23332a; --nb-blue: #1f2f3d; --nb-purple: #2f2639; --nb-pink: #3a2430; --nb-red: #3d2423; --nb-default: #2f2f2f;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25); color-scheme: dark;
+  --nb-gray: #23272e; --nb-brown: #33281f; --nb-orange: #3a2a1c; --nb-yellow: #352f17; --nb-green: #17301f; --nb-blue: #172a3d; --nb-purple: #2a2140; --nb-pink: #36202c; --nb-red: #3a1f1f; --nb-default: #1b222c;
+  --shadow: 0 0 0 1px var(--line), 0 0 18px rgba(80, 180, 255, .07);
+  --f: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --f-num: "Orbitron", "IBM Plex Mono", ui-monospace, monospace;
+  --f-code: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f); font-size: 14px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { touch-action: manipulation; }
+body { margin: 0; background: radial-gradient(120% 80% at 50% 0%, #0b1530 0%, var(--bg) 60%); color: var(--ink); font-family: var(--f); font-size: 14px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 input, textarea, select { font: inherit; color: var(--ink); }
 button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -321,10 +311,66 @@ table.grid tr.click:hover td { background: var(--sunk); }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 #modal h3 { margin: 0; padding: 14px 14px 0; font-size: 16px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* iPhone は16px未満の入力欄を押すと画面を拡大するので、入力欄は16px以上にする */
+input, textarea, select { font-size: 16px !important; }
+.ed { font-size: 16px; }
+@media (pointer: coarse) { .code .tx, .tblk table, .tx.cell, .cell { font-size: 16px; } }
+
+/* ===== 宇宙の夜 ===== */
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+#app { position: relative; z-index: 1; }
+.top h1 { font-size: 18px; display: flex; flex-direction: column; line-height: 1.05; white-space: nowrap; }
+.top .date, .sync { white-space: nowrap; }
+.top h1 small { font-family: var(--f-num); font-size: 8px; letter-spacing: .38em; color: var(--hi); font-weight: 700; text-shadow: 0 0 8px rgba(255, 232, 31, .45); }
+.top .date { font-family: var(--f); }
+.iconbtn { background: var(--card); color: var(--hi); }
+.card, .node, .chip, .bcard, .dirs button, .tcard, .iconbtn, nav.tabs button[aria-pressed="true"] {
+  background-image: repeating-linear-gradient(0deg, rgba(120, 200, 255, .035) 0 1px, transparent 1px 3px);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.node { border-top: 2px solid var(--c); box-shadow: var(--shadow), 0 -3px 12px -4px var(--c); }
+.node[aria-pressed="true"] { outline: none; box-shadow: 0 0 0 1.5px var(--c), 0 0 18px -2px var(--c), inset 0 0 22px -12px var(--c); }
+.node .n { color: var(--ink); text-shadow: 0 0 10px color-mix(in srgb, var(--c) 55%, transparent); }
+.node .flag { color: #0b0b12; box-shadow: 0 0 10px var(--c); }
+.flow .edge { stroke: var(--s-next); stroke-opacity: .28; }
+.flow .pt { filter: drop-shadow(0 0 3px var(--c)); }
+.dot { box-shadow: 0 0 6px var(--c); }
+.check { box-shadow: 0 0 6px -1px var(--c); }
+.check.on { color: #04110a; box-shadow: 0 0 10px var(--ok); }
+nav.tabs { border-top: 1px solid var(--line); background: linear-gradient(rgba(3, 5, 11, 0), rgba(3, 5, 11, .9) 30%); }
+nav.tabs button[aria-pressed="true"] { color: var(--hi); text-shadow: 0 0 8px rgba(255, 232, 31, .35); }
+nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
+.seg { background: rgba(10, 20, 36, .7); box-shadow: inset 0 0 0 1px var(--line); }
+.seg button[aria-pressed="true"] { background: rgba(79, 195, 255, .14); color: var(--hi); box-shadow: inset 0 0 0 1px rgba(79, 195, 255, .45); }
+.chip[aria-pressed="true"] { background: rgba(255, 232, 31, .14); color: var(--hi); box-shadow: inset 0 0 0 1px rgba(255, 232, 31, .55); }
+.btn.pri { background: var(--accent); color: #0b0b12; box-shadow: 0 0 14px -2px var(--accent); }
+.btn.ok { color: #04110a; box-shadow: 0 0 14px -2px var(--ok); }
+.aicard .what { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.aihead .mine { border-left: 3px solid var(--accent); box-shadow: var(--shadow), -4px 0 14px -6px var(--accent); }
+.aihead .n, .stat .n { color: var(--hi); }
+.tcard { box-shadow: 0 0 0 1px var(--line), 0 10px 30px rgba(0, 0, 0, .5), 0 -3px 14px -6px var(--c); }
+.tcard h3 { text-shadow: 0 0 12px rgba(120, 200, 255, .18); }
+.stamp { background: rgba(3, 5, 11, .85); box-shadow: 0 0 12px currentColor; }
+#page { background: rgba(3, 6, 14, .97); }
+.pbar a { color: var(--s-next); }
+.aibar { background: rgba(28, 20, 56, .7); border-color: rgba(177, 140, 255, .45); box-shadow: 0 0 22px -10px var(--accent); }
+.aibar .h b { color: var(--hi); }
+.ptitle { text-shadow: 0 0 14px rgba(120, 200, 255, .15); }
+.code .tx, .nb.code, .tx code { font-family: var(--f-code); }
+.legend, .chart text { font-family: var(--f-num); }
+#toast { background: rgba(10, 20, 36, .96); color: var(--ink); box-shadow: 0 0 0 1px rgba(79, 195, 255, .45), 0 0 22px -6px rgba(79, 195, 255, .6); }
+#toast button { color: var(--hi); }
+#modal .sheet { background: rgba(8, 14, 28, .98); box-shadow: 0 0 0 1px var(--line), 0 -10px 40px rgba(0, 0, 0, .6); }
+.menu { background: #0b1424; box-shadow: 0 0 0 1px var(--line), 0 10px 30px rgba(0, 0, 0, .6); }
+.fmt { background: #e4efff; color: #0b1424; }
+.view.warp { animation: warpin .45s cubic-bezier(.2, .9, .3, 1); }
+@keyframes warpin { from { opacity: 0; transform: scale(.94); filter: blur(3px); } }
 </style>
 
+<canvas id="stars" aria-hidden="true"></canvas>
 <div id="app">
-  <header class="top"><h1>今どこ</h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
+  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>

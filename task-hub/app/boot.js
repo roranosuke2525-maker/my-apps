@@ -4,7 +4,9 @@
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
     $("#date").textContent = TODAY_TXT();
-    main.innerHTML = `<div class="view"></div>`;
+    const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
+    main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
+    if (warped) stars.warp();
     const view = $(".view", main);
     ({ flow: renderFlow, ai: renderAi, triage: renderTriage, log: renderLog, db: renderDbHome })[S.tab](view);
     S.slide = null;
@@ -71,6 +73,27 @@
   });
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (!document.activeElement?.matches("input, textarea")) render(); }, 150); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.mode === "live" && Date.now() - (S.loadedAt || 0) > 10 * 60e3 && $("#page").hidden) load(); });
+
+  // ================= 星空（タブを変えるとワープ） =================
+  const stars = (() => {
+    const cv = $("#stars"); const c = cv.getContext("2d"); let W = 0, H = 0, pts = [], warpUntil = 0, raf = 0;
+    const size = () => { const dpr = Math.min(2, devicePixelRatio || 1); W = cv.width = innerWidth * dpr; H = cv.height = innerHeight * dpr; pts = Array.from({ length: Math.round((innerWidth * innerHeight) / 2600) }, () => ({ x: Math.random() * W, y: Math.random() * H, z: Math.random(), t: Math.random() * 6 })); };
+    function frame(now) {
+      raf = 0; const w = now < warpUntil; const k = w ? (warpUntil - now) / 450 : 0;
+      c.clearRect(0, 0, W, H);
+      for (const p of pts) {
+        const tw = .55 + .45 * Math.sin(now / 900 + p.t);
+        if (w) { const dx = p.x - W / 2, dy = p.y - H / 2; const len = (1 - k) * 0.25 + 0.04; c.strokeStyle = `rgba(190,225,255,${.35 + p.z * .5})`; c.lineWidth = 1 + p.z; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x + dx * len, p.y + dy * len); c.stroke(); }
+        else { c.fillStyle = `rgba(${200 + p.z * 55},${215 + p.z * 40},255,${(.25 + p.z * .6) * tw})`; c.fillRect(p.x, p.y, 1 + p.z * 1.4, 1 + p.z * 1.4); }
+        p.y += (.02 + p.z * .06) * (w ? 0 : 1); if (p.y > H) p.y = 0;
+      }
+      if (!reduce && !document.hidden) raf = requestAnimationFrame(frame);
+    }
+    size(); addEventListener("resize", size);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && !raf) raf = requestAnimationFrame(frame); });
+    raf = requestAnimationFrame(frame);
+    return { warp() { if (reduce) return; warpUntil = performance.now() + 450; if (!raf) raf = requestAnimationFrame(frame); } };
+  })();
 
   // ================= 起動 =================
   async function load() {

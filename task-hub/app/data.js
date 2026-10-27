@@ -150,8 +150,8 @@
   }
   const inStage = (k) => k === "done" ? S.doneToday : k === "ref" ? S.refs : S.tasks.filter((t) => stageOf(t) === k);
   const lateOf = () => { const d = TODAY(); return inStage("today").filter((t) => t.date < d); };
-  // AIアクションの付いた行（状態は問わない・DONE以外）
-  const aiItems = () => S.tasks.filter((t) => t.ai && AI_TURN[t.ai]);
+  // AIリサーチ中の行：ステータスが 🤖 AI で AIアクションの付いたもの（NEXT・REFERENCE などに移した行は AI リサーチから外れたので出さない）
+  const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
   const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals });
