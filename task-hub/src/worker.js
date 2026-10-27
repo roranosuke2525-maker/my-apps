@@ -99,7 +99,7 @@ async function fetchTool(notion, { id }) {
 async function queryTool(notion, { data }) {
   if (!data || data.mode !== "rows") throw httpError(400, "rows モードだけ使えます", "bad_request");
   const body = { page_size: Math.min(100, Math.max(1, data.limit || 50)) };
-  if (data.filter) body.filter = toFilter(data.filter);
+  if (data.filter) { body.filter = toFilter(data.filter); if (depth(body.filter) > 3) throw httpError(400, "絞り込みの入れ子が深すぎます（Notion API は2段まで）", "bad_request"); }
   if (data.sort?.length) body.sorts = data.sort.map((s) => (s.property === "最終更新日時" ? { timestamp: "last_edited_time", direction: s.direction } : { property: s.property, direction: s.direction }));
   const res = await notion("POST", `/data_sources/${normalizeId(data.data_source_url)}/query`, body);
   return { results: (res.results || []).filter((p) => p.object === "page").map(flatPage), has_more: !!res.has_more };
@@ -107,6 +107,7 @@ async function queryTool(notion, { data }) {
 export function jstToday(now = Date.now()) { return new Date(now + 9 * 3600e3).toISOString().slice(0, 10); }
 const addDay = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 function relDate(v) { const t = jstToday(); return { today: t, tomorrow: addDay(t, 1), yesterday: addDay(t, -1), one_week_ago: addDay(t, -7), one_week_from_now: addDay(t, 7) }[v] || t; }
+const depth = (f) => (f.and || f.or ? 1 + Math.max(0, ...(f.and || f.or).map(depth)) : 1);
 export function toFilter(f) {
   if (f.type === "group") return { [f.operator === "or" ? "or" : "and"]: f.filters.map(toFilter) };
   const { property, propertyType: t, operator: op } = f; const v = f.value?.value;
@@ -124,6 +125,8 @@ export function toFilter(f) {
     const from = `${d}T00:00:00+09:00`, to = `${addDay(d, 1)}T00:00:00+09:00`;
     const cond = k === "equals" ? null : k === "before" ? { before: from } : k === "after" ? { on_or_after: to } : k === "on_or_before" ? { before: to } : { on_or_after: from };
     if (cond) return { timestamp: t, [t]: cond };
+    // 今日なら「今日の0時以降」の1条件にする（Notion API の絞り込みの入れ子は2段まで）
+    if (d >= jstToday()) return { timestamp: t, [t]: { on_or_after: from } };
     return { and: [{ timestamp: t, [t]: { on_or_after: from } }, { timestamp: t, [t]: { before: to } }] };
   }
   throw httpError(400, `この絞り込みは使えません（${t}）`, "bad_request");

@@ -50,6 +50,13 @@ test("今日の絞り込みは日本時間の1日で比べる", () => {
   assert.deepEqual(f.or[1], { and: [{ timestamp: "last_edited_time", last_edited_time: { on_or_after: "2026-10-27T00:00:00+09:00" } }, { timestamp: "last_edited_time", last_edited_time: { before: "2026-10-28T00:00:00+09:00" } }] });
 });
 
+test("今日の済み：ステータス かつ（実行日が今日 または 今日更新）は2段の入れ子に収まる", () => {
+  const f = toFilter({ type: "group", operator: "and", filters: [{ type: "property", property: "ステータス", propertyType: "status", operator: "status_is", value: { type: "is_option", value: "✅ DONE" } }, { type: "group", operator: "or", filters: [{ type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: { type: "relative", value: "today" } }, { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is", value: { type: "relative", value: "today" } }] }] });
+  const depth = (x) => (x.and || x.or ? 1 + Math.max(...(x.and || x.or).map(depth)) : 1);
+  assert.ok(depth(f) <= 3, JSON.stringify(f));
+  assert.deepEqual(f.and[1].or[1], { timestamp: "last_edited_time", last_edited_time: { on_or_after: f.and[1].or[1].last_edited_time.on_or_after } });
+});
+
 test("本文は Notion-flavored Markdown（v2）で読み、変わった所だけ置き換える", async () => {
   const s = setup();
   try {
