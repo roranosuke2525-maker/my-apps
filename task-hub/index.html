@@ -773,9 +773,9 @@ table.grid tr.click:hover td { background: var(--sunk); }
       const inner = htmlToMd(n);
       if (!inner) continue;
       const wrap = (a, b2, tagName) => (/^\s|\s$/.test(inner) ? `<${tagName}>${inner}</${tagName}>` : `${a}${inner}${b2}`);
-      if (tag === "b" || tag === "strong") out += wrap("**", "**", "b");
-      else if (tag === "i" || tag === "em") out += wrap("*", "*", "i");
-      else if (tag === "s" || tag === "strike" || tag === "del") out += wrap("~~", "~~", "s");
+      if (tag === "b" || tag === "strong") out += `<b>${inner}</b>`;
+      else if (tag === "i" || tag === "em") out += `<i>${inner}</i>`;
+      else if (tag === "s" || tag === "strike" || tag === "del") out += `<s>${inner}</s>`;
       else if (tag === "u") out += `<u>${inner}</u>`;
       else if (tag === "code") { const raw = n.textContent; const f = "`".repeat(Math.max(0, ...(raw.match(/`+/g) || [""]).map((y) => y.length)) + 1); out += `${f}${raw}${f}`; }
       else if (tag === "a") out += `[${inner}](${n.getAttribute("href") || ""})`;
@@ -1128,7 +1128,9 @@ table.grid tr.click:hover td { background: var(--sunk); }
         const res = await call("update", { page_id: E.pageId, command: "update_content", content_updates: [{ old_str: u.old, new_str: u.nw }], allow_async: false }, { read: false });
         if (res?.warnings?.length) throw Object.assign(new Error("conflict"), { code: "conflict" });
       }
-      newRaw = u.append != null ? (E.raw ? `${E.raw}\n\n${u.append}` : u.append) : u.replace != null ? u.replace : E.raw.slice(0, u.s) + u.nw + E.raw.slice(u.e);
+      // Notion は書いた文を整えて保存する（**太字** → <b>太字</b> など）ので、保存後の本文を読み直して位置を合わせる
+      newRaw = S.mode === "demo" ? null : await fetchBody(E.pageId).catch(() => null);
+      if (newRaw == null) newRaw = u.append != null ? (E.raw ? `${E.raw}\n\n${u.append}` : u.append) : u.replace != null ? u.replace : E.raw.slice(0, u.s) + u.nw + E.raw.slice(u.e);
       E.raw = newRaw;
       // 書いた内容を読み直して、各ブロックの元の文字列と位置を付け直す
       const { blocks } = parseMd(newRaw);
@@ -1142,12 +1144,28 @@ table.grid tr.click:hover td { background: var(--sunk); }
       E.onSaved?.(newRaw);
     } catch (err) {
       E.dirty = true;
-      setSaveState(err?.code === "conflict" ? "Notion側が変わっていました" : "保存できませんでした", true);
-      toast(err?.code === "conflict" ? "Notion 側で本文が更新されていたため保存できませんでした。ページを開き直してください" : errText(err));
+      const conflict = err?.code === "conflict" || /No matches found/i.test(String(err?.message || ""));
+      setSaveState(conflict ? "Notion側が変わっていました" : "保存できませんでした", true);
+      if (conflict && E === ED) showConflict(E); else toast(errText(err));
     } finally {
       E.saving = false;
       if (E.again) { E.again = false; saveEditor(); }
     }
+  }
+  // 保存しようとした所が Notion 側で先に変わっていたとき：最新を読み込むか、自分の内容で上書きするかを選ぶ
+  function showConflict(E) {
+    const bar = document.getElementById("conflict") || Object.assign(document.createElement("div"), { id: "conflict", className: "aibar" });
+    bar.style.borderColor = "var(--late)";
+    bar.innerHTML = `<div class="h"><b style="color:var(--late)">Notion 側で本文が先に変わっていました</b></div><div class="mute" style="font-size:12.5px">定時処理のAIなどが同じ所を書き換えた可能性があります。どちらにしますか？</div>
+      <div class="acts"><button type="button" class="btn pri" id="cf-load">Notion の最新を読み込む（この画面の変更は捨てる）</button><button type="button" class="btn" id="cf-over">この画面の内容で上書きする</button></div>`;
+    E.box.before(bar);
+    bar.querySelector("#cf-load").onclick = async () => { bar.remove(); ED.dirty = false; clearTimeout(ED.timer); await reloadBody(); setSaveState("最新を読み込みました"); };
+    bar.querySelector("#cf-over").onclick = async () => {
+      bar.remove(); const U = E.unit; const all = E.tops.map((b, k) => (k ? sepOf(E.tops[k - 1], b) : "") + ser(b, U)).join("");
+      setSaveState("上書き中…");
+      try { await call("update", { page_id: E.pageId, command: "replace_content", new_str: all, allow_async: false }, { read: false }); E.dirty = false; await reloadBody(); setSaveState("上書きしました"); }
+      catch (e2) { setSaveState("上書きできませんでした", true); toast(/delet|削除/i.test(String(e2?.message || "")) ? "上書きすると子ページなどが消えるため止めました。Notion で直してください" : errText(e2)); }
+    };
   }
   function setSaveState(t, err = false) { const el = document.getElementById("savestate"); if (el) { el.textContent = t; el.classList.toggle("err", err); } }
   document.addEventListener("input", (e) => { if (ED && ED.box.contains(e.target)) onEdInput(e); });
@@ -1712,7 +1730,7 @@ table.grid tr.click:hover td { background: var(--sunk); }
       else toast("回答を保存しました");
       if (S.mode === "demo") { mountEditor($("#edbox"), P.raw, { pageId: P.id }); drawAiBar(); } else await reloadBody();
       $("#pprops").innerHTML = propsHtml();
-    } catch (err) { toast(err?.code === "conflict" ? "Notion 側で質問票が更新されていました。開き直してください" : `保存できませんでした：${errText(err)}`); btns.forEach((b) => { b.disabled = false; }); }
+    } catch (err) { toast(err?.code === "conflict" || /No matches found/i.test(String(err?.message || "")) ? "Notion 側で質問票が更新されていました。開き直してください" : `保存できませんでした：${errText(err)}`); btns.forEach((b) => { b.disabled = false; }); }
   }
   // 本文の最後にメモを足す（再調査の指示・いつかの理由）
   async function appendToPage(P, content) {
