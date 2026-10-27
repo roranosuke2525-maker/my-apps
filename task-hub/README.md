@@ -107,6 +107,8 @@ iPhone・PC（ブラウザ／ホーム画面） ──合言葉──▶ Cloudfl
    - `APP_KEY`：合言葉（16文字以上。パスワードマネージャーで作ると楽）
 5. `https://imadoko.<あなたのサブドメイン>.workers.dev` を開き、合言葉を入れて表示されたら完了
 
+> 10/27：Worker `imadoko` は Claude の作業環境から `npx wrangler deploy` で公開済み（https://imadoko.roranosuke2525.workers.dev）。残りは手順4のシークレット2つだけ。GitHub との連携（push で自動デプロイ）はまだつないでいないので、更新は Claude に「デプロイして」と頼むか、手順2-2〜3でつなぐ。
+
 以後、このフォルダを GitHub で更新すると自動で再デプロイされる。
 
 ### 3. iPhone：ホーム画面に追加
