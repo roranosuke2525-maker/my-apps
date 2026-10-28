@@ -128,6 +128,13 @@ beforeEach(() => {
     calls.push({ method: init.method, path, body, headers: init.headers });
     const ok = (d) => new Response(JSON.stringify(d), { status: 200 });
     if (init.method === "GET" && path === `/data_sources/${DS}`) return ok({ properties: schema });
+    // プレイヤーで絞る検索（きろくのEXPの合計）
+    const mineOf = (f) => JSON.stringify(f || {}).match(/"プレイヤー","relation":\{"contains":"([^"]+)"/)?.[1];
+    const qm = path.match(/^\/data_sources\/(.+)\/query$/);
+    if (init.method === "POST" && qm && mineOf(body.filter)) {
+      const who = mineOf(body.filter);
+      return ok({ results: pages.filter((p) => p.parent.data_source_id === qm[1] && (p.properties.プレイヤー?.relation || []).some((r) => r.id === who)) });
+    }
     if (init.method === "POST" && path === `/data_sources/${DS}/query`) {
       const conds = body.filter.and ? body.filter.and.map((f) => f.created_time) : [body.filter.created_time];
       const from = Date.parse(conds.find((c) => c.on_or_after).on_or_after);
@@ -312,7 +319,8 @@ test("きろく：EXPは全件の合計を取り直し、Lv・次のLvまで・�
   Object.assign(player.properties, { 習慣EXP: roll("h%3C", 100), タスクEXP: roll("t", 10), ギルドEXP: roll("g", 50) });
   // タスクは2ページに分かれ、最後のページが全件の合計（ページの値 10 は先頭25件だけの合計）
   propertyItems = { "h<": [900], t: [10, 2260], g: [650] };
-  const lvEnv = { ...env };
+  const lvEnv = { ...env, PLAYER_PAGE_ID: "player1" };
+  // プレイヤーの付いた行が検索で見つからないときは、rollup を全件めくる
   const res = await worker.fetch(new Request("https://app.test/api/player", { headers: { Authorization: `Bearer ${KEY}` } }), lvEnv);
   const { player: p } = await res.json();
   assert.deepEqual([p.habitExp, p.taskExp, p.guildExp, p.totalExp], [900, 2260, 650, 3810]);
@@ -614,4 +622,21 @@ test("そうび：装備は部位ごとに1つ。装備中の効果がボスへ�
   const data = await (await req("GET", "/api/battle")).json();
   assert.equal(data.equip.しっかり, eff);
   assert.equal(data.boss.damage, Math.round(5 * 1.5 * (1 + eff / 100)));
+});
+
+test("きろく：EXPはプレイヤーの付いた行を検索してまとめて足す（rollup をめくるより速い）", async () => {
+  const mine = { type: "relation", relation: [{ id: "player1" }] };
+  pages.find((p) => p.id === "day20").properties.プレイヤー = mine;
+  pages.find((p) => p.id === "day20").properties.EXP = formula(300);
+  pages.find((p) => p.id === "day21").properties.プレイヤー = mine;
+  pages.find((p) => p.id === "day21").properties.EXP = formula(200);
+  const t = task("t1", "BOOK", 40, "2026-10-21");
+  t.properties.プレイヤー = mine;
+  pages.push(t);
+  pages.find((p) => p.id === QID).properties.プレイヤー = mine;
+  pages.find((p) => p.id === QID).properties.累計EXP = formula(60);
+  const res = await worker.fetch(new Request("https://app.test/api/player", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, PLAYER_PAGE_ID: "player1" });
+  const { player: p } = await res.json();
+  assert.deepEqual([p.habitExp, p.taskExp, p.guildExp, p.totalExp], [500, 40, 60, 600]);
+  assert.equal(calls.filter((c) => c.path.includes("/properties/")).length, 0);
 });

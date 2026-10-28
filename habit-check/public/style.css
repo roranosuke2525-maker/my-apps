@@ -393,3 +393,30 @@ textarea { resize: none; }
 .item-row .item-text b { font-size: 14px; }
 .item-row.drop .item-icon { animation: pet-jump 0.6s ease-out 2; }
 .primary.small { padding: 0 12px; min-height: 34px; font-size: 13px; flex: none; }
+
+/* 日画面を1画面に収める：タイル1行の高さが足りないときは説明を隠し、さらに足りなければ名前を1行に */
+.habits.compact .slot-line { min-height: calc(var(--rows) * 30px + (var(--rows) - 1) * 4px); }
+.habits.compact .habit .hint { display: none; }
+.habits.compact .habit { padding: 2px 5px; gap: 5px; }
+.habits.compact .habit .name { font-size: 12px; line-height: 1.15; }
+.habits.tight .slot-line { min-height: calc(var(--rows) * 26px + (var(--rows) - 1) * 4px); }
+.habits.tight .habit .name { -webkit-line-clamp: 1; font-size: 11.5px; }
+.habits.tight .habit .box { width: 15px; height: 15px; }
+
+/* 背の低い画面（iPhone のブラウザ表示・ホーム画面アプリのセーフエリア）では、上下の帯を細くする */
+@media (max-height: 760px) {
+  .top { padding-top: calc(env(safe-area-inset-top) + 6px); }
+  .top h1 { font-size: 18px; }
+  .tabs { margin-top: 2px; }
+  .tabs button { height: 36px; font-size: 14px; }
+  main { padding: 6px 12px 6px; }
+  .view { gap: 6px; }
+  #status { padding: 4px 10px; }
+  .nav-row .icon-btn { width: 36px; height: 36px; }
+  .nav-title { font-size: 15px; }
+  .note-row input, .note-row .primary { min-height: 38px; }
+  .bottom button { height: 50px; }
+  .bottom button svg { width: 20px; height: 20px; }
+}
+.habits.compact .slot-label .slot-name { display: none; }
+.habits.compact .slot-label .slot-icon { font-size: 14px; }

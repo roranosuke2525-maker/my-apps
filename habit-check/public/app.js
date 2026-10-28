@@ -165,8 +165,18 @@ async function loadData(name, path, { force = false } = {}) {
   return state.data[name];
 }
 
+// Lv・EXP は読みこみに数秒かかるので、前回の値をこの端末に覚えておき、先に出しておく
+const PLAYER_MEMO = "habit-check:player";
+try {
+  const memo = JSON.parse(localStorage.getItem(PLAYER_MEMO) || "null");
+  if (memo?.player) { state.data.player = memo; state.loadedAt.player = 0; }
+} catch { /* 覚えていなければ「—」から */ }
+
 async function loadPlayer(opts) {
   await loadData("player", "/api/player", opts);
+  if (state.data.player?.player && !state.errors.player) {
+    try { localStorage.setItem(PLAYER_MEMO, JSON.stringify(state.data.player)); } catch { /* 保存できなくても動く */ }
+  }
   renderHeader();
 }
 
@@ -293,7 +303,25 @@ function renderDay() {
     h("div", { class: "habits scroll fill" }, groups),
     canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
   ], `day:${state.date}`);
+  fitHabits();
 }
+
+// 1画面に収めるため、タイル1行に使える高さで詰め方を変える：ふつう → compact（説明を隠す）→ tight（名前1行）
+const FIT_FULL = 44;
+const FIT_COMPACT = 32;
+function fitHabits() {
+  const box = document.querySelector("#day-body .habits");
+  if (!box) return;
+  box.classList.remove("compact", "tight");
+  const lines = [...box.querySelectorAll(".slot-line")];
+  const rows = lines.reduce((a, l) => a + Number(l.style.getPropertyValue("--rows") || 1), 0);
+  if (!rows) return;
+  const gaps = (lines.length - 1) * 6 + lines.reduce((a, l) => a + (Number(l.style.getPropertyValue("--rows") || 1) - 1) * 4, 0);
+  const per = (box.clientHeight - gaps) / rows;
+  if (per < FIT_COMPACT) box.classList.add("compact", "tight");
+  else if (per < FIT_FULL) box.classList.add("compact");
+}
+window.addEventListener("resize", () => { if (state.view === "habit" && state.tab === "day") fitHabits(); });
 
 function statusCard(row) {
   const scored = state.habits.filter((x) => counts(x, state.date));

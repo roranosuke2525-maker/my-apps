@@ -372,6 +372,27 @@ async function fullRollup(notion, pageId, prop) {
   }
 }
 
+// rollup の元の行を、データソースの検索でまとめて読んで足す（プロパティAPIを25件ずつめくるより速い）。
+// 読めなければ null（fullRollup に任せる）
+const EXP_SOURCES = {
+  habitExp: { ds: "DATA_SOURCE_ID", prop: "EXP" },
+  taskExp: { ds: "TASK_DS_ID", prop: "討伐EXP", only: { property: "討伐EXP", formula: { number: { greater_than: 0 } } } },
+  guildExp: { ds: "GUILD_DS_ID", prop: "累計EXP" },
+};
+
+async function sumByQuery(notion, env, key) {
+  const src = EXP_SOURCES[key];
+  if (!src || !env[src.ds]) return null;
+  try {
+    const mine = { property: "プレイヤー", relation: { contains: env.PLAYER_PAGE_ID } };
+    const rows = await queryAll(notion, env[src.ds], { filter: src.only ? { and: [mine, src.only] } : mine }, MAX_PROPERTY_PAGES);
+    if (!rows.length) return null; // 1行もなければ rollup のほうを信じる（接続や関連の付け方が違うとき）
+    return rows.reduce((a, p) => a + (Number(propValue(p.properties?.[src.prop])) || 0), 0);
+  } catch {
+    return null;
+  }
+}
+
 async function pagedRollup(notion, pageId, propId) {
   let cursor;
   let last = null;
@@ -392,7 +413,7 @@ async function loadPlayer(notion, env) {
   const page = await notion("GET", `/pages/${env.PLAYER_PAGE_ID}`);
   const player = pick(page, PLAYER_FIELDS);
   const entries = await Promise.all(
-    Object.entries(EXP_ROLLUPS).map(async ([key, name]) => [key, await fullRollup(notion, page.id, page.properties?.[name])]),
+    Object.entries(EXP_ROLLUPS).map(async ([key, name]) => [key, (await sumByQuery(notion, env, key)) ?? (await fullRollup(notion, page.id, page.properties?.[name]))]),
   );
   const exp = Object.fromEntries(entries);
   // 習慣EXPも読めないときは計算し直さない（接続が足りない。Notion の値のまま出す）
