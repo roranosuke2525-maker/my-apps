@@ -1002,7 +1002,11 @@ async function getBattle(notion, env) {
   const current = ep2.find((c) => c.read && c.boss && typeof c.hp === "number" && !c.defeated);
   let boss = null;
   if (current) {
-    const start = current.bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
+    // 1日のダメージは1体のボスにだけ入る：前のボスを倒した日に読んだ話は、翌日から戦う（同じ日のEXPを使い回さない）
+    const prev = ep2[ep2.indexOf(current) - 1];
+    const read = current.bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
+    const after = prev?.defeated ? addDays(prev.defeated.slice(0, 10), 1) : read;
+    const start = read > after ? read : after;
     boss = fight(current, all, start, petType, stats, equip);
     if (boss.defeatedOn) {
       await notion("PATCH", `/pages/${current.id}`, { properties: { 撃破日: { date: { start: boss.defeatedOn } } } });

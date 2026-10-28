@@ -695,7 +695,9 @@ function bossCard(data) {
     ),
     won
       ? h("p", { class: "win", text: `${b.name}を たおした！ つぎの話が 開きました` })
-      : h("p", { class: "sub", style: "margin:0", text: `きょうのダメージ ${fmt(b.today)}（${b.start.slice(5).replace("-", "/")}から たたかっている）` }),
+      : b.start > todayJst()
+        ? h("p", { class: "sub", style: "margin:0", text: `${b.start.slice(5).replace("-", "/")}（あした）から たたかう。きょうのEXPは前のボスに使ったので、あしたから ダメージが入ります` })
+        : h("p", { class: "sub", style: "margin:0", text: `きょうのダメージ ${fmt(b.today)}（${b.start.slice(5).replace("-", "/")}から たたかっている）` }),
     won && data.next ? h("button", { type: "button", class: "primary", onclick: () => { state.view = "story"; show(); } }, "つぎの話を読む") : null,
     b.log.length ? h("div", { class: "battle-log" }, b.log.map((x) => h("div", { class: "log-row" },
       x.kind === "task" ? renderMonster(x.shape, x.colors, { size: 28 }) : h("span", { class: "log-icon", text: "✓" }),

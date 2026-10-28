@@ -640,3 +640,18 @@ test("きろく：EXPはプレイヤーの付いた行を検索してまとめ�
   assert.deepEqual([p.habitExp, p.taskExp, p.guildExp, p.totalExp], [500, 40, 60, 600]);
   assert.equal(calls.filter((c) => c.path.includes("/properties/")).length, 0);
 });
+
+test("ぼうけん：前のボスを倒した日のEXPは、次のボスに使い回さない（翌日から戦う）", async () => {
+  pages.push(
+    ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } }, 撃破日: { type: "date", date: { start: "2026-10-20" } } }),
+    ep2(E2, 2, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } } }),
+  );
+  const d20 = pages.find((p) => p.id === "day20");
+  d20.properties["◇☼ 新聞"].checkbox = true;
+  d20.properties.EXP = formula(500); // 10/20 の 500 は第1話のボスで使った
+  const data = await (await req("GET", "/api/battle")).json();
+  assert.equal(data.boss.name, "ボス2");
+  assert.equal(data.boss.start, "2026-10-21");
+  assert.equal(data.boss.damage, 0);
+  assert.equal(data.boss.defeatedOn, null);
+});
