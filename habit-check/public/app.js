@@ -1,5 +1,6 @@
 // 習慣チェック（画面側）。Notion へは必ず Worker の /api を経由する。
-// 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）を1画面ずつで見せる。
+// 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）と、あいぼうを1画面ずつで見せる。
+import { renderPet, petLine, petName, evolveStory, SLEEP_LINES, TYPE_COLORS } from "./aibou.js";
 
 const KEY_STORAGE = "habit-check:key";
 const MAX_BACK_DAYS = 6;
@@ -14,7 +15,7 @@ const SLOTS = [
 ];
 const WEEK = "月火水木金土日";
 const CATEGORY_COLORS = { 家事: "orange", 育児: "pink", 家: "brown", お金: "green", からだ: "red", 学び: "blue", 趣味: "purple" };
-const VIEW_TITLES = { habit: "習慣チェック", party: "パーティー", guild: "ギルド", story: "ものがたり", me: "きろく" };
+const VIEW_TITLES = { habit: "習慣チェック", aibou: "あいぼう", party: "パーティー", guild: "ギルド", story: "ものがたり", me: "きろく" };
 const GRAPH_DAYS = 30;
 const BAR_DAYS = 14;
 
@@ -183,13 +184,13 @@ function show() {
   $("login").hidden = true;
   $("bottom-nav").hidden = false;
   const viewId = state.view === "habit" ? state.tab : state.view;
-  for (const id of ["day", "week", "cal", "graph", "party", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
+  for (const id of ["day", "week", "cal", "graph", "aibou", "party", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
   for (const b of document.querySelectorAll("#bottom-nav button")) {
     b.setAttribute("aria-current", b.dataset.view === state.view ? "page" : "false");
   }
   for (const b of document.querySelectorAll("#habit-tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
   renderHeader();
-  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, party: renderParty, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
+  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, aibou: renderAibou, party: renderParty, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
 }
 
 function renderHeader() {
@@ -351,6 +352,8 @@ function toggleCheck(row, date, habit, next, done) {
       const { row: updated } = await api("PATCH", `/api/pages/${row.id}`, { name: habit.name, value: next });
       if (state.row?.id === updated.id) state.row.stats = updated.stats;
       toast(next ? `✓ ${habit.label}` : `${habit.label} を外しました`);
+      if (next) aibouPop(habit);
+      if (state.loadedAt.aibou) state.loadedAt.aibou = 0; // あいぼうのEXPが変わったので次に開いたとき読み直す
       scheduleRefresh();
     } catch (err) {
       setCheck(row.id, habit.name, !next);
@@ -872,6 +875,177 @@ async function renderMe() {
     textCard("じゅもん", p.spell),
     p.url ? h("a", { class: "link", href: p.url, target: "_blank", rel: "noopener", style: "text-align:center" }, "Notionで開く") : null,
   )], "me");
+}
+
+// ================= あいぼう（DB_あいぼう） =================
+// 最後に見た段階・型をこの端末に覚えておき、変わっていたら進化の演出を出す（習慣チェック時の小さな表示にも使う）
+const AIBOU_MEMO = "habit-check:aibou";
+function aibouMemo() {
+  try { return JSON.parse(localStorage.getItem(AIBOU_MEMO) || "null"); } catch { return null; }
+}
+function setAibouMemo(v) {
+  try { localStorage.setItem(AIBOU_MEMO, JSON.stringify(v)); } catch { /* 保存できない端末では演出を出さないだけ */ }
+}
+
+function stageLabel(pet) {
+  return pet.type ? `${pet.stage}・${pet.type}` : pet.stage;
+}
+
+// たまごのひび：次の段階までの進み具合で 0〜2
+function crackOf(data) {
+  if (data.pet.stage !== "たまご" || !data.next) return 0;
+  const p = (data.exp - data.from) / (data.next.at - data.from);
+  return p >= 0.85 ? 2 : p >= 0.5 ? 1 : 0;
+}
+
+async function renderAibou() {
+  const body = $("aibou-body");
+  if (!state.data.aibou) body.replaceChildren(loadingEl());
+  const data = await loadData("aibou", "/api/aibou");
+  if (state.view !== "aibou") return;
+  if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.aibou || "読み込めませんでした" }));
+  if (!data.pet) return swap(body, [eggOffer()], "aibou:none");
+
+  const pet = data.pet;
+  const memo = aibouMemo();
+  setAibouMemo({ stage: pet.stage, type: pet.type });
+  const evolving = memo && memo.stage !== pet.stage;
+  const sleeping = pet.stage !== "たまご" && !data.today;
+  const motion = sleeping ? "sleep" : "idle";
+  const bubble = h("p", { class: "bubble", text: sleeping ? pick1(SLEEP_LINES) : petLine(pet.stage, pet.type) });
+  const box = h("div", { class: "pet-box" });
+  const story = h("p", { class: "evolve-story", hidden: true });
+
+  const showPet = (m) => {
+    const el = renderPet(pet.stage, pet.type, m, { crack: crackOf(data) });
+    el.addEventListener("click", () => {
+      el.play("happy");
+      bubble.textContent = pet.stage === "たまご" ? petLine("たまご") : petLine(pet.stage, pet.type);
+      if (navigator.vibrate) navigator.vibrate(8);
+    });
+    box.replaceChildren(el);
+  };
+  if (evolving) {
+    // 前のすがたが光に包まれて、新しいすがたに入れ替わる
+    const old = renderPet(memo.stage, memo.type, memo.stage === "たまご" ? "hatch" : "evolve", { crack: 2 });
+    box.replaceChildren(old);
+    box.classList.add("flash");
+    bubble.textContent = memo.stage === "たまご" ? "……ぴしっ！？" : "……！？";
+    setTimeout(() => {
+      showPet("happy");
+      story.textContent = evolveStory(pet.stage, pet.type, pet.name);
+      story.hidden = false;
+      bubble.textContent = petLine(pet.stage, pet.type);
+      if (pet.stage !== "たまご" && !pet.name) setTimeout(askPetName, 1400);
+    }, 1500);
+  } else {
+    showPet(motion);
+    if (pet.stage !== "たまご" && !pet.name) setTimeout(askPetName, 600);
+  }
+
+  const next = data.next;
+  const gauge = next ? Math.max(0, Math.min(1, (data.exp - data.from) / (next.at - data.from))) : 1;
+  const points = pet.stage === "成体" ? data.points : data.period;
+  const max = Math.max(1, ...Object.values(points));
+  const periodTitle = { たまご: "たまごの あいだの傾向", 幼体: "いまの傾向（成長期の すがたが きまる）", 成長期: "いまの傾向（成体の すがたが きまる）", 成体: "これまでの傾向" }[pet.stage];
+
+  swap(body, [h("div", { class: "scroll fill stack" },
+    h("div", { class: "card pet-card" },
+      h("div", { class: "pet-head" },
+        h("b", { class: "pet-name", text: pet.stage === "たまご" ? "たまご" : pet.name || petName(pet.stage, pet.type) }),
+        h("span", { class: "pet-stage", style: pet.type && TYPE_COLORS[pet.type] ? `--chip:${TYPE_COLORS[pet.type]}` : null, text: stageLabel(pet) }),
+        pet.stage !== "たまご" ? h("button", { type: "button", class: "chip-btn", onclick: askPetName }, "なまえ") : null,
+      ),
+      box,
+      story,
+      bubble,
+    ),
+    h("div", { class: "card stack", style: "gap:6px" },
+      h("div", { class: "kv" },
+        h("span", { text: next ? `${next.stage === "幼体" ? "孵化" : next.stage}まで` : "さいごの すがた" }),
+        h("b", { text: next ? `あと ${fmt(Math.max(0, next.at - data.exp))} EXP` : `総EXP ${fmt(data.exp)}` })),
+      h("div", { class: "bar", style: "flex:none" }, h("span", { style: `width:${gauge * 100}%` })),
+    ),
+    h("div", { class: "card stack", style: "gap:6px" },
+      h("h3", { text: periodTitle }),
+      Object.entries(points).map(([t, v]) => h("div", { class: "rank-row" },
+        h("span", { class: "label", text: t }),
+        h("div", { class: "bar", style: `--fill:${TYPE_COLORS[t]}` }, h("span", { style: `width:${(v / max) * 100}%` })),
+        h("b", { text: fmt(v) }))),
+    ),
+    h("div", { class: "card stack", style: "gap:4px" },
+      h("div", { class: "kv" }, h("span", { text: "たんじょうび" }), h("b", { text: pet.birthday || "—" })),
+      h("div", { class: "kv" }, h("span", { text: "これまでのEXP" }), h("b", { text: fmt(data.exp) })),
+      h("div", { class: "kv" }, h("span", { text: "きょうのEXP" }), h("b", { text: fmt(data.today) })),
+      pet.history ? h("p", { class: "sub", style: "margin:4px 0 0", text: pet.history }) : null,
+    ),
+  )], `aibou:${pet.stage}:${pet.type}`);
+}
+
+function pick1(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function eggOffer() {
+  const btn = h("button", { type: "button", class: "primary" }, "たまごを うけとる");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      state.data.aibou = await api("POST", "/api/aibou");
+      state.loadedAt.aibou = Date.now();
+      setAibouMemo({ stage: "たまご", type: null });
+      renderAibou();
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+  return h("div", { class: "card pet-card" },
+    h("h2", { text: "ふしぎな たまごを みつけた" }),
+    h("div", { class: "pet-box" }, renderPet("たまご", null, "idle")),
+    h("p", { class: "sub", text: "習慣のチェックとタスクのDONEで育ちます。やったことの傾向で、すがたが かわります。おなかが すいたり、弱ったりは しません。" }),
+    btn,
+  );
+}
+
+function askPetName() {
+  const pet = state.data.aibou?.pet;
+  if (!pet || !$("sheet").hidden) return;
+  const input = h("input", { type: "text", maxlength: "20", placeholder: petName(pet.stage, pet.type), "aria-label": "なまえ" });
+  input.value = pet.name || "";
+  const save = h("button", { type: "button", class: "primary" }, "これにする");
+  save.addEventListener("click", async () => {
+    const name = input.value.trim() || petName(pet.stage, pet.type);
+    save.disabled = true;
+    try {
+      const res = await api("PATCH", "/api/aibou", { name });
+      pet.name = res.pet.name;
+      closeSheet();
+      toast(`${pet.name} に なりました`);
+      if (state.view === "aibou") renderAibou();
+    } catch (err) {
+      toast(err.message, true);
+      save.disabled = false;
+    }
+  });
+  openSheet(pet.name ? "なまえを かえる" : "なまえを つけよう", [
+    h("p", { class: "sub", text: "あいぼうの なまえを きめてください（20字まで）。" }),
+    input,
+  ], [save]);
+  input.focus();
+}
+
+// 習慣をチェックしたとき、あいぼうが小さく出てきて喜ぶ
+function aibouPop(habit) {
+  const memo = aibouMemo();
+  if (!memo || !habit.aibou) return;
+  const { exp, type } = habit.aibou;
+  const pop = h("div", { class: "aibou-pop", "aria-hidden": "true" },
+    renderPet(memo.stage, memo.type, "happy", { size: 44 }),
+    h("span", { class: "pop-text", style: type ? `--chip:${TYPE_COLORS[type]}` : null, text: `あいぼう ＋${exp}${type ? ` ${type}` : ""}` }));
+  document.querySelector(".aibou-pop")?.remove();
+  document.body.append(pop);
+  setTimeout(() => pop.remove(), 1900);
 }
 
 // ---------- シート ----------

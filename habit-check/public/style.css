@@ -78,8 +78,8 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .exp-chip b { color: #fff; font-variant-numeric: tabular-nums; }
 
 /* ---------- 下のメニュー ---------- */
-.bottom { flex: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 6px rgba(40, 22, 10, 0.25); background-position: center bottom; }
-.bottom button { height: 60px; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10.5px; color: #ead8c1; cursor: pointer; text-shadow: inherit; }
+.bottom { flex: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 6px rgba(40, 22, 10, 0.25); background-position: center bottom; }
+.bottom button { height: 60px; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; white-space: nowrap; color: #ead8c1; cursor: pointer; text-shadow: inherit; }
 .bottom button svg { width: 22px; height: 22px; }
 .bottom button[aria-current="page"] { color: var(--honey); font-weight: 700; }
 
@@ -105,7 +105,7 @@ main { flex: 1; min-height: 0; padding: 10px 16px 10px; display: flex; flex-dire
 .chip-btn { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); font-size: 12px; color: var(--sub); cursor: pointer; }
 
 .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
-.bar > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s; }
+.bar > span { display: block; height: 100%; border-radius: 4px; background: var(--fill, var(--accent)); transition: width 0.3s; }
 .progress { display: flex; align-items: center; gap: 12px; font-size: 14px; }
 .progress b { font-variant-numeric: tabular-nums; }
 .must { font-size: 12px; color: var(--must); margin-top: 4px; }
@@ -312,3 +312,47 @@ textarea { resize: none; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--danger); color: #fff; }
+
+/* あいぼう：ドット絵は public/aibou-sprites.js（32×32）を拡大して描く */
+.pet { position: relative; width: var(--pet-size, 160px); height: var(--pet-size, 160px); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pet svg { width: 100%; height: 100%; display: block; stroke: none; image-rendering: pixelated; }
+.pet .f-blink { display: none; }
+.pet.blink .f-blink { display: inline; }
+.pet.blink .f-idle { display: none; }
+.pet-body { width: 100%; height: 100%; transform-origin: 50% 90%; }
+.pet[data-motion="idle"] .pet-body { animation: pet-bob 1s steps(2, jump-none) infinite; }
+.pet[data-kind="egg"][data-motion="idle"] .pet-body { animation: egg-wobble 2.4s ease-in-out infinite; }
+.pet[data-motion="happy"] .pet-body { animation: pet-jump 0.5s ease-out 2; }
+.pet[data-motion="sleep"] .pet-body { animation: pet-breathe 3s ease-in-out infinite; }
+.pet[data-motion="hatch"] .pet-body { animation: egg-shake 0.12s linear infinite; }
+.pet[data-motion="evolve"] .pet-body { animation: pet-glow 1.5s ease-in forwards; }
+@keyframes pet-bob { from { transform: translateY(0); } to { transform: translateY(-4%); } }
+@keyframes pet-jump { 0% { transform: translateY(0) scale(1.06, 0.92); } 40% { transform: translateY(-22%) scale(0.95, 1.06); } 100% { transform: translateY(0); } }
+@keyframes pet-breathe { 50% { transform: scale(1.03, 0.97); } }
+@keyframes egg-wobble { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-7deg); } 80% { transform: rotate(6deg); } 90% { transform: rotate(-3deg); } }
+@keyframes egg-shake { 0% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } 100% { transform: rotate(-5deg); } }
+@keyframes pet-glow { to { filter: brightness(3) saturate(0); transform: scale(1.08); } }
+.pet-fx { position: absolute; inset: 0; pointer-events: none; }
+.pet-fx .heart { position: absolute; top: 10%; color: #ff6b8f; font-size: calc(var(--pet-size, 160px) * 0.14); animation: heart-up 0.9s ease-out forwards; opacity: 0; }
+@keyframes heart-up { 0% { opacity: 0; transform: translateY(20%); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-120%); } }
+.pet-fx .zzz { position: absolute; right: 4%; top: 0; font-weight: 800; color: var(--sub); font-size: calc(var(--pet-size, 160px) * 0.12); animation: zzz 2.4s ease-in-out infinite; }
+@keyframes zzz { 0% { opacity: 0; transform: translate(0, 30%); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(20%, -40%); } }
+
+#aibou-body .card { flex: none; }
+.pet-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.pet-head { align-self: stretch; display: flex; align-items: center; gap: 8px; }
+.pet-name { font-size: 18px; flex: 1; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pet-stage { flex: none; font-size: 12px; font-weight: 700; color: #fff; background: var(--chip, var(--accent)); border-radius: 10px; padding: 2px 10px; }
+.pet-box { position: relative; display: grid; place-items: center; width: 100%; padding: 6px 0; border-radius: 12px; background: radial-gradient(circle at 50% 60%, var(--accent-soft), transparent 70%); }
+.pet-box.flash::after { content: ""; position: absolute; inset: 0; border-radius: 12px; background: #fff; opacity: 0; pointer-events: none; animation: flash 1.9s ease-in-out forwards; }
+@keyframes flash { 0%, 55% { opacity: 0; } 80% { opacity: 1; } 100% { opacity: 0; } }
+.bubble { position: relative; margin: 2px 0 0; padding: 8px 14px; border-radius: 14px; background: var(--accent-soft); font-size: 14px; max-width: 100%; }
+.bubble::before { content: ""; position: absolute; left: 50%; top: -6px; margin-left: -6px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--accent-soft); }
+.evolve-story { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text); background: var(--card); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; }
+
+.aibou-pop { position: fixed; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 120px); z-index: 21; display: flex; align-items: center; gap: 4px; pointer-events: none; animation: pop-in 1.9s ease forwards; }
+.aibou-pop .pop-text { font-size: 12px; font-weight: 700; color: #fff; background: var(--chip, var(--accent)); border-radius: 10px; padding: 3px 8px; box-shadow: var(--shadow); }
+@keyframes pop-in { 0% { opacity: 0; transform: translateY(12px); } 12%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .pet .pet-body, .pet-fx > *, .aibou-pop { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; }
+}

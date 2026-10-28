@@ -1,6 +1,8 @@
 // 習慣チェック入力アプリ：画面の配信と Notion API の中継（Cloudflare Worker）
 // Notion のトークンはこの Worker の secret にだけ置き、ブラウザには渡さない。
 
+import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWeight, tagType } from "./aibou-config.js";
+
 const NOTION_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 const NOTE_PROPERTY = "ひとこと";
@@ -77,6 +79,16 @@ export default {
       if (storyMatch && request.method === "PATCH") {
         const body = await readJson(request);
         return json(await markStory(notion, env, storyMatch[1], body));
+      }
+      if (url.pathname === "/api/aibou" && request.method === "GET") {
+        return json(await getAibou(notion, env));
+      }
+      if (url.pathname === "/api/aibou" && request.method === "POST") {
+        return json(await createAibou(notion, env));
+      }
+      if (url.pathname === "/api/aibou" && request.method === "PATCH") {
+        const body = await readJson(request);
+        return json(await renameAibou(notion, env, body));
       }
       return json({ error: "not found" }, 404);
     } catch (err) {
@@ -189,7 +201,7 @@ async function loadSchema(notion, env) {
   const hidden = new Set((env.HIDDEN_HABITS || "").split(",").map((s) => s.trim()).filter(Boolean));
   const habits = Object.values(props)
     .filter((p) => p.type === "checkbox" && !hidden.has(p.name))
-    .map(parseHabit);
+    .map((p) => ({ ...parseHabit(p), aibou: { type: habitType(p.name), exp: habitWeight(p.name) } }));
   return { props, habits, habitNames: new Set(habits.map((h) => h.name)) };
 }
 
@@ -572,13 +584,201 @@ async function readText(notion, blockId, depth) {
   return out;
 }
 
+// ---------- あいぼう（DB_あいぼう） ----------
+// EXP・傾向ポイントは保存せず、誕生日からの DB_習慣チェック と DB_タスク管理（DONE）で毎回計算する。
+// 進化した段階・型・日付だけを DB_あいぼう に書き、あとでチェックを外しても戻さない。
+const PET_FIELDS = { name: "名前", birthday: "誕生日", stage: "段階", childType: "成長期の型", adultType: "成体の型", history: "進化履歴" };
+const PET_NAME_MAX = 20;
+const TASK_DONE = "✅ DONE";
+const AIBOU_QUERY_PAGES = 30;
+const HISTORY_WORD = { 幼体: "孵化", 成長期: "成長期", 成体: "成体" };
+
+async function petPage(notion, env) {
+  const res = await notion("POST", `/data_sources/${dsId(env, "AIBOU_DS_ID")}/query`, {
+    sorts: [{ timestamp: "created_time", direction: "ascending" }],
+    page_size: 1,
+  });
+  return res.results?.[0] || null;
+}
+
+function summarizePet(page) {
+  const p = pick(page, PET_FIELDS);
+  return { ...p, name: p.name || "", stage: STAGES.includes(p.stage) ? p.stage : "たまご", history: p.history || "" };
+}
+
+async function getAibou(notion, env) {
+  const page = await petPage(notion, env);
+  if (!page) return { pet: null };
+  let pet = summarizePet(page);
+  const birthday = pet.birthday?.slice(0, 10) || jstDate(page.created_time);
+  const days = await aibouDays(notion, env, birthday);
+  const g = grow(pet, days);
+  if (g.events.length) pet = await saveEvolution(notion, page.id, g);
+  const idx = STAGES.indexOf(g.stage);
+  const next = STAGES[idx + 1] || null;
+  return {
+    pet: { ...pet, birthday, stage: g.stage, childType: g.childType, adultType: g.adultType, type: g.stage === "成長期" ? g.childType : g.stage === "成体" ? g.adultType : null },
+    exp: g.exp,
+    today: Math.round(days[jstDate(new Date().toISOString())]?.exp || 0),
+    points: g.points,
+    period: g.period,
+    from: idx > 0 ? THRESHOLDS[g.stage] : 0,
+    next: next ? { stage: next, at: THRESHOLDS[next] } : null,
+    evolved: g.events,
+  };
+}
+
+async function createAibou(notion, env) {
+  if (await petPage(notion, env)) return getAibou(notion, env);
+  await notion("POST", "/pages", {
+    parent: { type: "data_source_id", data_source_id: dsId(env, "AIBOU_DS_ID") },
+    properties: {
+      名前: { title: [] },
+      誕生日: { date: { start: jstDate(new Date().toISOString()) } },
+      段階: { select: { name: "たまご" } },
+    },
+  });
+  return getAibou(notion, env);
+}
+
+async function renameAibou(notion, env, body) {
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  if (!name || [...name].length > PET_NAME_MAX) throw httpError(400, `名前を${PET_NAME_MAX}字以内で入れてください`);
+  const page = await petPage(notion, env);
+  if (!page) throw httpError(404, "あいぼうがまだいません");
+  const updated = await notion("PATCH", `/pages/${page.id}`, { properties: { 名前: { title: [{ type: "text", text: { content: name } }] } } });
+  return { pet: summarizePet(updated) };
+}
+
+// 日ごとの EXP と、4つの型への振り分け
+async function aibouDays(notion, env, from) {
+  const [rows, tasks] = await Promise.all([
+    queryAll(notion, env.DATA_SOURCE_ID, {
+      filter: { timestamp: "created_time", created_time: { on_or_after: `${from}T00:00:00+09:00` } },
+      sorts: [{ timestamp: "created_time", direction: "ascending" }],
+    }, AIBOU_QUERY_PAGES),
+    queryAll(notion, dsId(env, "TASK_DS_ID"), {
+      filter: { and: [{ property: "ステータス", status: { equals: TASK_DONE } }, { property: "完了日", formula: { date: { on_or_after: from } } }] },
+    }, AIBOU_QUERY_PAGES),
+  ]);
+  const days = {};
+  const day = (d) => (days[d] ||= { exp: 0, points: zeroPoints() });
+  const seen = new Set();
+  for (const page of rows) {
+    const date = jstDate(page.created_time);
+    if (seen.has(date)) continue; // 同じ日に2行あれば最初の行だけ（画面と同じ）
+    seen.add(date);
+    const parts = habitParts(page);
+    const sum = parts.reduce((a, x) => a + x.exp, 0);
+    const formulaExp = propValue(page.properties?.EXP);
+    const total = typeof formulaExp === "number" ? formulaExp : sum;
+    const d = day(date);
+    d.exp += total;
+    if (sum > 0) for (const x of parts) addPoints(d.points, x.type, (x.exp / sum) * total);
+    else addPoints(d.points, null, total);
+  }
+  for (const page of tasks) {
+    const exp = propValue(page.properties?.["討伐EXP"]);
+    const date = propValue(page.properties?.["完了日"])?.slice(0, 10);
+    if (typeof exp !== "number" || !exp || !date || date < from) continue;
+    const d = day(date);
+    d.exp += exp;
+    addPoints(d.points, tagType(propValue(page.properties?.["分類タグ"])), exp);
+  }
+  return days;
+}
+
+function habitParts(page) {
+  const out = [];
+  for (const [name, prop] of Object.entries(page.properties || {})) {
+    if (prop.type === "checkbox" && prop.checkbox) out.push({ type: habitType(name), exp: habitWeight(name) });
+  }
+  if (propValue(page.properties?.[NOTE_PROPERTY])) out.push({ type: null, exp: NOTE_EXP });
+  return out;
+}
+
+function zeroPoints() {
+  return Object.fromEntries(TYPES.map((t) => [t, 0]));
+}
+
+// 型が null なら4つに均等割り
+function addPoints(points, type, v) {
+  if (type) points[type] += v;
+  else for (const t of TYPES) points[t] += v / TYPES.length;
+}
+
+function topType(points) {
+  return TYPES.reduce((best, t) => (points[t] > points[best] ? t : best), TYPES[0]);
+}
+
+function adultTypeOf(points) {
+  const vals = TYPES.map((t) => points[t]);
+  const sum = vals.reduce((a, b) => a + b, 0);
+  if (sum > 0 && Math.max(...vals) - Math.min(...vals) <= sum * BALANCE_RATIO) return "バランス";
+  return topType(points);
+}
+
+// 進化履歴「2026-11-01 孵化／2026-11-15 成長期（ちから）」から、段階ごとの日付を読む
+function historyDates(text) {
+  const out = {};
+  for (const m of String(text).matchAll(/(\d{4}-\d{2}-\d{2})\s*(孵化|成長期|成体)/g)) out[m[2] === "孵化" ? "幼体" : m[2]] = m[1];
+  return out;
+}
+
+// 日付順に EXP を積み、しきい値を越えた日に進化させる。その日のぶんは前の段階の期間に数える。
+// すでに Notion に保存された進化は、保存された日付・型のまま（下がらない）
+function grow(pet, days) {
+  const stored = STAGES.indexOf(pet.stage);
+  const dates = historyDates(pet.history);
+  const periods = STAGES.map(zeroPoints);
+  const points = zeroPoints();
+  const events = [];
+  let { childType, adultType } = pet;
+  let idx = 0;
+  let exp = 0;
+  for (const date of Object.keys(days).sort()) {
+    const d = days[date];
+    exp += d.exp;
+    for (const t of TYPES) { points[t] += d.points[t]; periods[idx][t] += d.points[t]; }
+    while (idx < STAGES.length - 1) {
+      const next = STAGES[idx + 1];
+      const saved = idx + 1 <= stored;
+      if (saved && dates[next] ? date < dates[next] : exp < THRESHOLDS[next]) break;
+      idx++;
+      if (next === "成長期" && (!saved || !childType)) childType = topType(periods[1]);
+      if (next === "成体" && (!saved || !adultType)) adultType = adultTypeOf(periods[2]);
+      if (!saved) events.push({ stage: next, date, type: next === "成長期" ? childType : next === "成体" ? adultType : null });
+    }
+  }
+  // 保存済みの段階より下には戻らない（チェックを外して EXP が減ったとき）
+  if (idx < stored) idx = stored;
+  const round = (p) => Object.fromEntries(TYPES.map((t) => [t, Math.round(p[t])]));
+  return { stage: STAGES[idx], childType: childType || null, adultType: adultType || null, exp: Math.round(exp), points: round(points), period: round(periods[idx]), events };
+}
+
+async function saveEvolution(notion, pageId, g) {
+  // 別の端末が先に書いていたら書かない（履歴が二重にならないように）
+  const current = summarizePet(await notion("GET", `/pages/${pageId}`));
+  const fresh = g.events.filter((e) => STAGES.indexOf(e.stage) > STAGES.indexOf(current.stage));
+  if (!fresh.length) return current;
+  const lines = fresh.map((e) => `${e.date} ${HISTORY_WORD[e.stage]}${e.type ? `（${e.type}）` : ""}`);
+  const history = [current.history, ...lines].filter(Boolean).join("／");
+  const properties = {
+    段階: { select: { name: g.stage } },
+    進化履歴: { rich_text: [{ type: "text", text: { content: history } }] },
+  };
+  if (g.childType) properties["成長期の型"] = { select: { name: g.childType } };
+  if (g.adultType) properties["成体の型"] = { select: { name: g.adultType } };
+  return summarizePet(await notion("PATCH", `/pages/${pageId}`, { properties }));
+}
+
 // ---------- 共通 ----------
 const MAX_QUERY_PAGES = 5;
 
-async function queryAll(notion, dataSourceId, body) {
+async function queryAll(notion, dataSourceId, body, maxPages = MAX_QUERY_PAGES) {
   const out = [];
   let cursor;
-  for (let i = 0; i < MAX_QUERY_PAGES; i++) {
+  for (let i = 0; i < maxPages; i++) {
     const res = await notion("POST", `/data_sources/${dataSourceId}/query`, {
       ...body,
       page_size: 100,

@@ -19,6 +19,9 @@ PARTY_DS_ID = "7ab3aa8b-2f1e-44cb-b2f8-592202bab226"   # DB_すがた
 GUILD_DS_ID = "86ea2c0d-a66a-49e4-9a6b-b287f4f32bbd"   # DB_ギルド依頼
 REPORT_DS_ID = "0ea02603-b2dd-4064-bc84-bf02f0e60aca"  # DB_ギルド達成記録
 STORY_DS_ID = "f673bc1a-91b2-467d-bcd3-b2a70bd1bcbd"   # DB_ものがたり
+# あいぼう（たまごから育つペット）。育ち方の設定は src/aibou-config.js
+AIBOU_DS_ID = "4dbe5d76-ff64-4141-ba01-b6e0b612d970"   # DB_あいぼう（データベースID 2baedfb417b44b3fbac59a6d53e3e353）
+TASK_DS_ID = "21762844-acbe-8075-bbe6-000bcaf22801"    # DB_タスク管理（DONE のタスクEXPで育つ。読むだけ）
 
 # 秘密の値は wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）

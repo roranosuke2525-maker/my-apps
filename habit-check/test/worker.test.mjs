@@ -8,6 +8,8 @@ const PARTY = "party-ds";
 const GUILD = "guild-ds";
 const REPORT = "report-ds";
 const STORY = "story-ds";
+const AIBOU = "aibou-ds";
+const TASKS = "task-ds";
 const KEY = "test-key-0123456789";
 const env = {
   NOTION_TOKEN: "ntn_fake",
@@ -18,6 +20,8 @@ const env = {
   GUILD_DS_ID: GUILD,
   REPORT_DS_ID: REPORT,
   STORY_DS_ID: STORY,
+  AIBOU_DS_ID: AIBOU,
+  TASK_DS_ID: TASKS,
   NOTION_API_BASE: "https://notion.test/v1",
   ASSETS: { fetch: async () => new Response("asset") },
 };
@@ -135,7 +139,7 @@ beforeEach(() => {
     if (init.method === "GET" && bl) return ok({ results: blocks[bl[1]] || [], has_more: false });
     if (init.method === "POST" && path === "/pages") {
       const ds = body.parent.data_source_id;
-      const p = ds === DS ? page("new1", "2026-10-22T03:00:00.000Z") : other("new-report", ds, {
+      const p = ds === DS ? page("new1", "2026-10-22T03:00:00.000Z") : ds === AIBOU ? other("pet-new", ds, fakeProps(body.properties)) : other("new-report", ds, {
         ひとこと: { type: "title", title: text(body.properties.ひとこと.title[0].text.content) },
         依頼: { type: "relation", relation: body.properties.依頼.relation },
       });
@@ -156,6 +160,10 @@ beforeEach(() => {
     if (!p) return new Response(JSON.stringify({ code: "object_not_found" }), { status: 404 });
     if (init.method === "GET") return ok(p);
     if (init.method === "PATCH") {
+      if (p.parent.data_source_id === AIBOU) {
+        Object.assign(p.properties, fakeProps(body.properties));
+        return ok(p);
+      }
       for (const [k, v] of Object.entries(body.properties)) {
         p.properties[k] = v.checkbox !== undefined
           ? { type: "checkbox", checkbox: v.checkbox }
@@ -166,6 +174,18 @@ beforeEach(() => {
     throw new Error(`unexpected ${init.method} ${path}`);
   };
 });
+
+// 書き込みの形（title / rich_text / select / date）を、読み出しの形にする
+function fakeProps(props) {
+  const out = {};
+  for (const [k, v] of Object.entries(props)) {
+    if (v.title) out[k] = { type: "title", title: v.title.map((t) => ({ plain_text: t.text.content })) };
+    else if (v.rich_text) out[k] = { type: "rich_text", rich_text: v.rich_text.map((t) => ({ plain_text: t.text.content })) };
+    else if (v.select) out[k] = { type: "select", select: { name: v.select.name } };
+    else if (v.date) out[k] = { type: "date", date: v.date };
+  }
+  return out;
+}
 
 function req(method, path, body, key = KEY) {
   return worker.fetch(
@@ -196,7 +216,8 @@ test("習慣の一覧を列名から読み取り、日本時間のその日の�
   assert.equal(data.row.id, "day21");
   assert.equal(data.row.stats["いまのLv"], 7);
   const byName = Object.fromEntries(data.habits.map((h) => [h.name, h]));
-  assert.deepEqual(byName["◆☼ 起床"], { name: "◆☼ 起床", label: "起床", must: true, bonus: false, slot: "morning", days: null, hint: "" });
+  assert.deepEqual(byName["◆☼ 起床"], { name: "◆☼ 起床", label: "起床", must: true, bonus: false, slot: "morning", days: null, hint: "", aibou: { type: "しっかり", exp: 5 } });
+  assert.deepEqual(byName["◇☼ 新聞"].aibou, { type: "かしこさ", exp: 10 });
   assert.equal(byName["◇☀︎ プロテイン"].slot, "noon");
   assert.equal(byName["◇☀︎ プロテイン"].label, "プロテイン");
   assert.equal(byName["◇☾プロテインの準備"].slot, "night");
@@ -390,4 +411,95 @@ test("★はボーナス、◐は夕方、（火金）は曜日指定として�
   assert.deepEqual(b.days, [2, 5]); assert.equal(b.label, "燃やせるごみ（火金）");
   assert.equal(parseHabit({ name: "◇☾ ヤクルト（22時）" }).days, null);
   assert.equal(parseHabit({ name: "◇◷ プロテイン（15時）" }).slot, "noon");
+});
+
+// ---------- あいぼう ----------
+function pet(props = {}) {
+  return other("pet1", AIBOU, {
+    名前: { type: "title", title: [] },
+    誕生日: { type: "date", date: { start: "2026-10-19" } },
+    段階: { type: "select", select: { name: "たまご" } },
+    成長期の型: { type: "select", select: null },
+    成体の型: { type: "select", select: null },
+    進化履歴: { type: "rich_text", rich_text: [] },
+    ...props,
+  }, "2026-10-19T00:00:00.000Z");
+}
+
+function task(id, tag, exp, done) {
+  return other(id, TASKS, {
+    分類タグ: { type: "select", select: tag ? { name: tag } : null },
+    討伐EXP: formula(exp),
+    完了日: { type: "formula", formula: { type: "date", date: { start: done } } },
+  });
+}
+
+const patches = (id) => calls.filter((c) => c.method === "PATCH" && c.path === `/pages/${id}`);
+
+test("あいぼう：まだいなければ pet: null。たまごを受け取ると1体だけ作る", async () => {
+  assert.deepEqual(await (await req("GET", "/api/aibou")).json(), { pet: null });
+  const data = await (await req("POST", "/api/aibou")).json();
+  assert.equal(data.pet.stage, "たまご");
+  assert.match(data.pet.birthday, /^\d{4}-\d{2}-\d{2}$/);
+  await req("POST", "/api/aibou");
+  assert.equal(pages.filter((p) => p.parent.data_source_id === AIBOU).length, 1);
+});
+
+test("あいぼう：しきい値を越えた日に進化し、型と日付を Notion に保存する", async () => {
+  pages.push(pet());
+  // 10/20（日本時間）の行：新聞だけ・EXP 400 → 孵化。10/21 に HEALTH のタスク 4000 → 成長期（幼体の間は ちから が最多）
+  const d20 = pages.find((p) => p.id === "day20");
+  d20.properties["◇☼ 新聞"].checkbox = true;
+  d20.properties.EXP = formula(400);
+  pages.push(task("t1", "HEALTH", 4000, "2026-10-21"), task("t-old", "BOOK", 9999, "2026-10-01"));
+  const data = await (await req("GET", "/api/aibou")).json();
+  assert.equal(data.exp, 4400);
+  assert.equal(data.pet.stage, "成長期");
+  assert.equal(data.pet.type, "ちから");
+  assert.deepEqual(data.points, { ちから: 4000, かしこさ: 400, やさしさ: 0, しっかり: 0 });
+  assert.deepEqual(data.next, { stage: "成体", at: 18000 });
+  assert.deepEqual(data.evolved.map((e) => e.stage), ["幼体", "成長期"]);
+  const [patch] = patches("pet1");
+  assert.equal(patch.body.properties.段階.select.name, "成長期");
+  assert.equal(patch.body.properties.成長期の型.select.name, "ちから");
+  assert.equal(patch.body.properties.進化履歴.rich_text[0].text.content, "2026-10-20 孵化／2026-10-21 成長期（ちから）");
+  // 2回目は書かない
+  await req("GET", "/api/aibou");
+  assert.equal(patches("pet1").length, 1);
+});
+
+test("あいぼう：タグのないタスク・どの型でもない習慣は4つに均等割り", async () => {
+  pages.push(pet(), task("t1", null, 40, "2026-10-21"));
+  pages.find((p) => p.id === "day21").properties.ひとこと = { type: "rich_text", rich_text: text("散歩") };
+  const data = await (await req("GET", "/api/aibou")).json();
+  assert.equal(data.exp, 45);
+  assert.deepEqual(data.points, { ちから: 11, かしこさ: 11, やさしさ: 11, しっかり: 11 });
+});
+
+test("あいぼう：保存済みの段階は、EXP が減っても下がらない", async () => {
+  pages.push(pet({ 段階: { type: "select", select: { name: "成長期" } }, 成長期の型: { type: "select", select: { name: "やさしさ" } }, 進化履歴: { type: "rich_text", rich_text: text("2026-10-19 孵化／2026-10-20 成長期（やさしさ）") } }));
+  const data = await (await req("GET", "/api/aibou")).json();
+  assert.equal(data.pet.stage, "成長期");
+  assert.equal(data.pet.type, "やさしさ");
+  assert.equal(patches("pet1").length, 0);
+});
+
+test("あいぼう：成長期の間の4つの型の差が10%以内なら、成体はバランス型", async () => {
+  pages.push(pet({ 段階: { type: "select", select: { name: "成長期" } }, 成長期の型: { type: "select", select: { name: "ちから" } }, 進化履歴: { type: "rich_text", rich_text: text("2026-10-19 孵化／2026-10-19 成長期（ちから）") } }));
+  ["HEALTH", "BOOK", "HOME", "MONEY"].forEach((tag, i) => pages.push(task(`a${i}`, tag, 4600, "2026-10-21")));
+  const data = await (await req("GET", "/api/aibou")).json();
+  assert.equal(data.pet.stage, "成体");
+  assert.equal(data.pet.type, "バランス");
+  assert.equal(patches("pet1")[0].body.properties.成体の型.select.name, "バランス");
+  assert.equal(data.next, null);
+});
+
+test("あいぼう：名前は1〜20字だけ。DB_あいぼう の行にだけ書く", async () => {
+  assert.equal((await req("PATCH", "/api/aibou", { name: "x" })).status, 404);
+  pages.push(pet());
+  assert.equal((await req("PATCH", "/api/aibou", { name: " " })).status, 400);
+  assert.equal((await req("PATCH", "/api/aibou", { name: "あ".repeat(21) })).status, 400);
+  const res = await req("PATCH", "/api/aibou", { name: " ぷっちー " });
+  assert.equal((await res.json()).pet.name, "ぷっちー");
+  assert.deepEqual(patches("pet1").map((c) => Object.keys(c.body.properties)), [["名前"]]);
 });

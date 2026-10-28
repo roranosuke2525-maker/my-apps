@@ -4,6 +4,7 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { inlinePage, root } from "./inline-page.mjs";
+import { habitType, habitWeight } from "../src/aibou-config.js";
 
 const out = process.argv[2] || join(root, "dist", "demo.html");
 
@@ -25,13 +26,14 @@ const mock = `
 // ---- デモ用：Worker の代わりに画面の中で返事をする（Notion には何も送らない） ----
 (() => {
   const HABITS = ${JSON.stringify(habits)};
+  const AIBOU = ${JSON.stringify(Object.fromEntries(habits.map(([n]) => [n, { type: habitType(n), exp: habitWeight(n) }])))};
   const EXP_PER_CHECK = 5, EXP_PER_LV = 150;
   const habitList = HABITS.map(([name, hint]) => {
     const m = name.match(/^([◆◇★])\\s*([☼☀◷◐☾↻])[\\uFE0E\\uFE0F]?\\s*(.+)$/u);
     const slot = { "☼": "morning", "☀": "noon", "◷": "noon", "◐": "evening", "☾": "night", "↻": "anytime" }[m[2]];
     const label = m[3].trim();
     const d = label.match(/[（(]([日月火水木金土]+)[）)]\\s*$/u);
-    return { name, label, must: m[1] === "◆", bonus: m[1] === "★", slot, days: d ? [...d[1]].map((c) => "日月火水木金土".indexOf(c)) : null, hint };
+    return { name, label, must: m[1] === "◆", bonus: m[1] === "★", slot, days: d ? [...d[1]].map((c) => "日月火水木金土".indexOf(c)) : null, hint, aibou: AIBOU[name] };
   });
   const jst = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
   const addDays = (d, n) => { const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -80,6 +82,14 @@ const mock = `
   const player = () => ({ id: "player", url: "", name: "デモのプレイヤー", level: level(), toNext: EXP_PER_LV - (total() % EXP_PER_LV),
     totalExp: total(), habitExp: habitExp(), taskExp, guildExp,
     status: "ちから 12 ／ まもり 9 ／ かしこさ 14", party: "モリ（きこり）・ノア（ものしり）", spell: "ととのえ（Lv3）\\nはやおき（Lv5）" });
+  // あいぼう：成長期（ちから）の途中。今日のチェックのぶんだけ増える
+  const pet = { id: "pet", url: "", name: "", birthday: addDays(today, -20), stage: "成長期", childType: "ちから", adultType: null, type: "ちから",
+    history: addDays(today, -19) + " 孵化／" + addDays(today, -6) + " 成長期（ちから）" };
+  const aibouData = () => {
+    const t = Object.entries(rows[today].checks).filter(([, v]) => v).reduce((s, [n]) => s + AIBOU[n].exp, 0);
+    return { pet, exp: 5200 + t, today: t, from: 4000, next: { stage: "成体", at: 18000 }, evolved: [],
+      points: { ちから: 2100, かしこさ: 1500, やさしさ: 1300, しっかり: 1600 + t }, period: { ちから: 620, かしこさ: 310, やさしさ: 280, しっかり: 400 + t } };
+  };
   const reply = (data, status = 200) => new Promise((ok) =>
     setTimeout(() => ok(new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } })), 200));
   const realFetch = window.fetch.bind(window);
@@ -113,6 +123,8 @@ const mock = `
       reports.unshift(r);
       return reply({ report: r });
     }
+    if (p === "/api/aibou" && method === "PATCH") { pet.name = body.name; return reply({ pet }); }
+    if (p === "/api/aibou") return reply(aibouData());
     if (p === "/api/story") return reply({ chapters: chapters.map(withLv) });
     if (p.startsWith("/api/story/")) {
       const c = chapters.find((x) => x.id === p.split("/").pop());

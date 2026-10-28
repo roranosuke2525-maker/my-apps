@@ -209,6 +209,84 @@ const PETS = {
       return outline(g);
     },
   },
+  adult_wisdom: {
+    name: "アストラ",
+    palette: { o: "#1c1f4a", b: "#4a56b8", s: "#343e8e", l: "#9fa9f0", c: "#e8ebff", a: "#ffd75e", g: "#fff7c4", e: "#12142e", w: "#ffffff", k: "#ff9fc0" },
+    draw(g, { blink }) {
+      // 星座の翼（左右）
+      fill(g, poly([[11, 14], [1, 6], [2, 16], [6, 22], [11, 21]]), "s", { edge: true });
+      fill(g, poly([[21, 14], [31, 6], [30, 16], [26, 22], [21, 21]]), "s", { edge: true });
+      for (const [x, y] of [[3, 9], [5, 13], [4, 17], [8, 18], [29, 9], [27, 13], [28, 17], [24, 18]]) px(g, [[x, y]], "a");
+      line(g, 3, 9, 5, 13, "l"); line(g, 5, 13, 8, 18, "l"); line(g, 29, 9, 27, 13, "l"); line(g, 27, 13, 24, 18, "l");
+      fill(g, poly([[21, 25], [29, 22], [30, 27], [22, 29]]), "c", { edge: true }); // しっぽ（先が白い）
+      fill(g, poly([[21, 25], [26, 23], [26, 28], [22, 29]]), "b");
+      fill(g, ellipse(16, 21.5, 6.5, 8), "b", { shade: "s", edge: true });
+      fill(g, ellipse(16, 23, 3.5, 5), "c");
+      fill(g, poly([[9, 8], [10, 1], [14, 6]]), "b", { edge: true }); fill(g, poly([[18, 6], [22, 1], [23, 8]]), "b", { edge: true }); // 耳
+      fill(g, ellipse(16, 10.5, 7, 5.5), "b", { shade: "s", light: "l", edge: true });
+      fill(g, ellipse(16, 13, 3.5, 2.2), "c");
+      eyes(g, [[12, 9], [18, 9]], { w: 2, h: 2, closed: blink });
+      px(g, [[16, 5], [15, 6], [16, 6], [17, 6], [16, 7]], "a"); // 額の星
+      px(g, [[15, 13], [16, 13]], "o"); px(g, [[10, 12], [22, 12]], "k");
+      fill(g, rect(12, 28, 3, 2), "s", { edge: true }); fill(g, rect(17, 28, 3, 2), "s", { edge: true });
+      return outline(g);
+    },
+  },
+  adult_kind: {
+    name: "フローラム",
+    palette: { o: "#3e3a24", b: "#bfe89a", s: "#92c96c", l: "#f2ffe4", c: "#fff4e0", a: "#ff8fb8", d: "#ffd1e2", y: "#ffe066", e: "#2d2a1c", w: "#ffffff", k: "#ff9fb3" },
+    draw(g, { blink }) {
+      // 背中の花（大きな花びら＋小さな花）
+      for (const [x, y] of [[16, 3], [11, 6], [21, 6], [13, 9], [19, 9]]) fill(g, circle(x, y, 3), "a", { edge: true });
+      fill(g, circle(16, 6.5, 2.5), "y", { edge: true });
+      fill(g, circle(6, 12, 2), "d", { edge: true }); fill(g, circle(26, 12, 2), "d", { edge: true });
+      fill(g, ellipse(16, 20, 11, 9.5), "b", { shade: "s", light: "l", edge: true });
+      fill(g, ellipse(16, 22.5, 6.5, 5), "c");
+      fill(g, poly([[5, 15], [2, 10], [8, 13]]), "b", { edge: true }); fill(g, poly([[27, 15], [30, 10], [24, 13]]), "b", { edge: true }); // 葉っぱの耳
+      eyes(g, [[11, 17], [19, 17]], { closed: blink });
+      px(g, [[8, 20], [9, 20], [22, 20], [23, 20]], "k");
+      px(g, [[15, 21], [16, 21]], "o"); px(g, [[14, 20], [17, 20]], "o");
+      for (const x of [8, 13, 18, 23]) fill(g, rect(x, 27, 3, 3), "s", { edge: true });
+      return outline(g);
+    },
+  },
+  adult_steady: {
+    name: "ギアノクス",
+    palette: { o: "#232a33", b: "#aeb8c4", s: "#7d8896", l: "#eef3f8", c: "#d9b45a", d: "#a8842f", a: "#5ad1ff", e: "#141a22", w: "#ffffff" },
+    draw(g, { blink }) {
+      fill(g, poly([[20, 24], [29, 26], [28, 29], [20, 28]]), "s", { edge: true }); // しっぽ
+      fill(g, ellipse(17, 21, 7.5, 8), "b", { shade: "s", edge: true });
+      fill(g, ellipse(17, 10, 6.5, 6), "b", { shade: "s", light: "l", edge: true }); // かぶと
+      fill(g, poly([[11, 7], [9, 1], [14, 5]]), "s", { edge: true }); fill(g, poly([[23, 7], [25, 1], [20, 5]]), "s", { edge: true });
+      fill(g, rect(12, 9, 10, 3), "e"); // かぶとのすき間
+      if (blink) line(g, 13, 10, 21, 10, "s"); else px(g, [[14, 10], [15, 10], [19, 10], [20, 10]], "a");
+      // 歯車の盾（左手）
+      const gear = (x, y) => circle(10, 20, 6.5)(x, y) || (circle(10, 20, 8)(x, y) && ((x + y) % 3 === 0 || Math.abs(x - 9.5) < 1.2 || Math.abs(y - 19.5) < 1.2));
+      fill(g, gear, "c", { shade: "d", edge: true });
+      fill(g, circle(10, 20, 2.5), "d", { edge: true }); px(g, [[9, 19], [10, 19], [9, 20], [10, 20]], "c");
+      fill(g, rect(13, 27, 4, 3), "s", { edge: true }); fill(g, rect(19, 27, 4, 3), "s", { edge: true });
+      return outline(g);
+    },
+  },
+  adult_balance: {
+    name: "アウロラ",
+    palette: { o: "#4a4060", b: "#fbf7ff", s: "#ddd3ee", l: "#ffffff", c: "#ffe9a8", r: "#ff7a5c", u: "#5aa8ff", p: "#ff9fd0", g: "#6fdc8c", e: "#2a2440", w: "#ffffff", k: "#ffb3d0" },
+    draw(g, { blink }) {
+      // 4属性の玉（ちから・かしこさ・やさしさ・しっかり）
+      fill(g, circle(4, 9, 3), "r", { edge: true }); fill(g, circle(28, 9, 3), "u", { edge: true });
+      fill(g, circle(3.5, 21, 3), "p", { edge: true }); fill(g, circle(28.5, 21, 3), "g", { edge: true });
+      fill(g, poly([[22, 22], [30, 27], [28, 30], [21, 27]]), "b", { shade: "s", edge: true }); // しっぽ
+      fill(g, ellipse(16, 21, 8, 8), "b", { shade: "s", edge: true });
+      fill(g, ellipse(16, 22.5, 4.5, 5), "c");
+      fill(g, poly([[10, 8], [9, 1], [14, 5]]), "b", { edge: true }); fill(g, poly([[22, 8], [23, 1], [18, 5]]), "b", { edge: true });
+      fill(g, ellipse(16, 10.5, 7, 6), "b", { shade: "s", light: "l", edge: true });
+      fill(g, poly([[16, 1], [14, 5], [18, 5]]), "c", { edge: true }); // 額の角
+      eyes(g, [[12, 9], [18, 9]], { w: 2, h: 3, closed: blink });
+      px(g, [[10, 13], [22, 13]], "k"); px(g, [[15, 14], [16, 14]], "o");
+      fill(g, rect(11, 27, 4, 3), "s", { edge: true }); fill(g, rect(17, 27, 4, 3), "s", { edge: true });
+      return outline(g);
+    },
+  },
 };
 
 const out = {};
