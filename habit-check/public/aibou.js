@@ -124,6 +124,28 @@ export function renderMonster(shape, colors, { size = 56, motion = "idle" } = {}
   return el;
 }
 
+// ---------- そうび（アイテムのアイコン） ----------
+const ITEM_KEYS = { 武器: "item_weapon", かぶと: "item_helm", たて: "item_shield", よろい: "item_armor", アクセサリー: "item_ring" };
+// レア度の色（★1 灰 ★2 緑 ★3 青 ★4 紫 ★5 金）
+export const RARITY_COLORS = {
+  1: ["#c9c3b6", "#8f887c", "#f4f0e8"],
+  2: ["#8fd18b", "#5ea95a", "#d6f5d3"],
+  3: ["#7fb2f0", "#4f84c9", "#d4e6fc"],
+  4: ["#c39be8", "#8a62bd", "#eedcff"],
+  5: ["#f6cf55", "#c9962a", "#fff3c4"],
+};
+
+export function renderItem(slot, rarity, { size = 40 } = {}) {
+  const sp = SPRITES[ITEM_KEYS[slot]] || SPRITES.item_ring;
+  const c = RARITY_COLORS[rarity] || RARITY_COLORS[1];
+  const palette = { ...sp.palette, b: c[0], s: c[1], l: c[2] };
+  const el = document.createElement("span");
+  el.className = "item-icon";
+  el.style.setProperty("--pet-size", `${size}px`);
+  el.innerHTML = `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">${frameSvg(palette, sp.frames.idle)}</svg>`;
+  return el;
+}
+
 // ---------- ものがたりの本文の置き換え ----------
 // {あいぼう}＝名前、{すがた}＝いまの姿の名前、{型:ちから=…;かしこさ=…;やさしさ=…;しっかり=…;バランス=…;ほか=…}＝型で変わる一文
 export function fillStory(text, pet) {

@@ -2,6 +2,7 @@
 // Notion のトークンはこの Worker の secret にだけ置き、ブラウザには渡さない。
 
 import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWeight, tagType } from "./aibou-config.js";
+import { SLOT_ORDER, slotOf, itemName, rarityOf, isCrit, RARITY_EFFECT } from "./item-config.js";
 import { RANKS, WEAK_BONUS, BALANCE_BONUS, PET_BONUS, STAR_BONUS, STAT_EXP, STAT_RATE, STAT_MAX, familyOf, starsOf } from "./battle-config.js";
 
 const NOTION_BASE = "https://api.notion.com/v1";
@@ -80,6 +81,14 @@ export default {
       if (storyMatch && request.method === "PATCH") {
         const body = await readJson(request);
         return json(await markStory(notion, env, storyMatch[1], body));
+      }
+      if (url.pathname === "/api/items" && request.method === "GET") {
+        return json(await getItems(notion, env));
+      }
+      const itemMatch = url.pathname.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
+      if (itemMatch && request.method === "PATCH") {
+        const body = await readJson(request);
+        return json(await equipItem(notion, env, itemMatch[1], body));
       }
       if (url.pathname === "/api/battle" && request.method === "GET") {
         return json(await getBattle(notion, env));
@@ -492,7 +501,12 @@ async function createReport(notion, env, body) {
       依頼: { relation: questIds.map((id) => ({ id })) },
     },
   });
-  return { report: summarizeReport(page) };
+  // そうびのドロップ（DB_そうび に接続していなければ、ほうこくだけで終わる）
+  let drops = [];
+  if (env.ITEM_DS_ID) {
+    try { drops = await syncDrops(notion, env, [page]); } catch { /* 未接続など */ }
+  }
+  return { report: summarizeReport(page), drops };
 }
 
 // questIds（配列・最大 REPORT_QUEST_MAX 件）か、以前の questId（1件）を受け付ける
@@ -843,6 +857,108 @@ async function saveEvolution(notion, pageId, g) {
   return summarizePet(await notion("PATCH", `/pages/${pageId}`, { properties }));
 }
 
+// ---------- そうび（DB_そうび） ----------
+// ギルドの「ほうこく」1件につき、依頼ごとに1つ落ちる。Notion で直接ほうこくを足した分も、次に読んだときに落とす
+const ITEM_FIELDS = { name: "名前", slot: "部位", type: "型", rarity: "レア", effect: "効果", crit: "会心", equipped: "装備中", date: "入手日", questIds: "依頼", reportIds: "ほうこく" };
+const syncing = new WeakMap(); // env ごと：同時に読んでも二重に落とさない
+
+function summarizeItem(page) {
+  return pick(page, ITEM_FIELDS);
+}
+
+// fresh：いま作ったばかりのほうこく（検索にまだ出てこないことがあるので、足して数える）
+async function syncDrops(notion, env, fresh = []) {
+  if (syncing.get(env)) return syncing.get(env);
+  const run = (async () => {
+    const [reports, quests, items] = await Promise.all([
+      queryAll(notion, dsId(env, "REPORT_DS_ID"), { sorts: [{ timestamp: "created_time", direction: "ascending" }] }),
+      queryAll(notion, dsId(env, "GUILD_DS_ID"), {}),
+      queryAll(notion, dsId(env, "ITEM_DS_ID"), {}),
+    ]);
+    for (const f of fresh) if (!reports.some((r) => normalizeId(r.id) === normalizeId(f.id))) reports.push(f);
+    const questById = new Map(quests.map((q) => [normalizeId(q.id), pick(q, { title: "依頼", category: "カテゴリ", rank: "ランク" })]));
+    const have = new Set();
+    for (const it of items.map(summarizeItem)) {
+      for (const r of it.reportIds || []) for (const q of it.questIds || []) have.add(`${normalizeId(r)}|${normalizeId(q)}`);
+    }
+    const stageOf = new Map();
+    const created = [];
+    for (const r of reports) {
+      const report = summarizeReport(r);
+      for (const qid of (report.questIds || []).map(normalizeId)) {
+        const stage = stageOf.get(qid) || 0;
+        stageOf.set(qid, stage + 1);
+        const quest = questById.get(qid);
+        if (!quest || have.has(`${normalizeId(r.id)}|${qid}`)) continue;
+        const { slot, type } = slotOf(quest.category);
+        const crit = isCrit(r.id);
+        const rarity = rarityOf(quest.rank, stage, crit);
+        const page = await notion("POST", "/pages", {
+          parent: { type: "data_source_id", data_source_id: dsId(env, "ITEM_DS_ID") },
+          properties: {
+            名前: { title: [{ type: "text", text: { content: itemName(quest.title, stage, slot, rarity) } }] },
+            部位: { select: { name: slot } },
+            型: { select: { name: type } },
+            レア: { number: rarity },
+            効果: { number: RARITY_EFFECT[rarity] },
+            会心: { checkbox: crit },
+            入手日: { date: { start: jstDate(r.created_time) } },
+            依頼: { relation: [{ id: qid }] },
+            ほうこく: { relation: [{ id: r.id }] },
+          },
+        });
+        created.push({ ...summarizeItem(page), quest: quest.title });
+      }
+    }
+    return created;
+  })();
+  syncing.set(env, run);
+  try {
+    return await run;
+  } finally {
+    syncing.delete(env);
+  }
+}
+
+async function getItems(notion, env) {
+  const drops = await syncDrops(notion, env);
+  const items = (await queryAll(notion, dsId(env, "ITEM_DS_ID"), { sorts: [{ timestamp: "created_time", direction: "ascending" }] })).map(summarizeItem);
+  return { items, drops, slots: SLOT_ORDER };
+}
+
+// 装備する／外す。同じ部位は1つだけ（装備したら、同じ部位のほかのものは外す）
+async function equipItem(notion, env, id, body) {
+  if (typeof body?.equipped !== "boolean") throw httpError(400, "変更できない項目です");
+  const page = await notion("GET", `/pages/${id}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(dsId(env, "ITEM_DS_ID"))) throw httpError(403, "DB_そうび のアイテムではありません");
+  const item = summarizeItem(page);
+  if (body.equipped) {
+    const others = await queryAll(notion, dsId(env, "ITEM_DS_ID"), {
+      filter: { and: [{ property: "部位", select: { equals: item.slot } }, { property: "装備中", checkbox: { equals: true } }] },
+    });
+    for (const o of others) if (normalizeId(o.id) !== normalizeId(id)) await notion("PATCH", `/pages/${o.id}`, { properties: { 装備中: { checkbox: false } } });
+  }
+  await notion("PATCH", `/pages/${id}`, { properties: { 装備中: { checkbox: body.equipped } } });
+  return getItems(notion, env);
+}
+
+// 装備中のそうびの、型ごとのダメージ＋%（ぜんぶ は4つに半分ずつ）。DB_そうび が読めなければ何も足さない
+async function equipBonus(notion, env) {
+  if (!env.ITEM_DS_ID) return {};
+  try {
+    const rows = await queryAll(notion, env.ITEM_DS_ID, { filter: { property: "装備中", checkbox: { equals: true } } });
+    const bonus = {};
+    for (const it of rows.map(summarizeItem)) {
+      const add = (t, v) => { bonus[t] = (bonus[t] || 0) + v; };
+      if (it.type === "ぜんぶ") for (const t of TYPES) add(t, (it.effect || 0) / 2);
+      else if (TYPES.includes(it.type)) add(it.type, it.effect || 0);
+    }
+    return bonus;
+  } catch {
+    return {};
+  }
+}
+
 // ---------- ぼうけん（章ボス・モンスター・能力値） ----------
 // ボスへのダメージは、その話を「よんだ」日からの習慣・DONEタスクのEXPに、弱点・凶暴化・あいぼう・能力値のボーナスを掛けたもの。
 // HP を削りきった日を DB_ものがたり の「撃破日」に書くと、次の話が開く（あとでチェックを外しても戻らない）
@@ -851,11 +967,12 @@ const OPEN_MONSTERS = 100;
 const BATTLE_LOG = 12;
 
 async function getBattle(notion, env) {
-  const [stories, all, petRow, open] = await Promise.all([
+  const [stories, all, petRow, open, equip] = await Promise.all([
     loadStories(notion, env),
     loadEvents(notion, env, STATS_FROM),
     env.AIBOU_DS_ID ? petPage(notion, env) : null,
     openMonsters(notion, env),
+    equipBonus(notion, env),
   ]);
   const pet = petRow ? summarizePet(petRow) : null;
   const petType = pet?.stage === "成長期" ? pet.childType : pet?.stage === "成体" ? pet.adultType : null;
@@ -865,7 +982,7 @@ async function getBattle(notion, env) {
   let boss = null;
   if (current) {
     const start = current.bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
-    boss = fight(current, all, start, petType, stats);
+    boss = fight(current, all, start, petType, stats, equip);
     if (boss.defeatedOn) {
       await notion("PATCH", `/pages/${current.id}`, { properties: { 撃破日: { date: { start: boss.defeatedOn } } } });
       current.defeated = boss.defeatedOn;
@@ -877,6 +994,7 @@ async function getBattle(notion, env) {
     next: next && { id: next.id, title: next.title },
     cleared: ep2.length > 0 && ep2.every((c) => c.read && (c.defeated || !c.boss)),
     stats,
+    equip,
     pet: pet && { name: pet.name, stage: pet.stage, type: petType },
     monsters: open.monsters,
     moreMonsters: open.more,
@@ -896,26 +1014,28 @@ function weakMult(weak, type) {
   return type === weak ? WEAK_BONUS : 1;
 }
 
-// EXP（型 null は4つに均等）に弱点の倍率を掛ける
-function weakened(weak, type, exp) {
-  if (type) return exp * weakMult(weak, type);
-  return TYPES.reduce((a, t) => a + (exp / TYPES.length) * weakMult(weak, t), 0);
+// EXP（型 null は4つに均等）に型ごとの倍率 m(型) を掛ける
+function weakened(m, type, exp) {
+  if (type) return exp * m(type);
+  return TYPES.reduce((a, t) => a + (exp / TYPES.length) * m(t), 0);
 }
 
-function fight(chapter, { habitDays, tasks }, start, petType, stats) {
+// equip：装備中のそうびの、型ごとのダメージ＋%
+function fight(chapter, { habitDays, tasks }, start, petType, stats, equip = {}) {
   const weak = chapter.weak;
   const petHit = !!petType && petType === weak;
   const statVal = weak === "バランス" ? Math.min(...TYPES.map((t) => stats[t])) : stats[weak] || 0;
   const mult = (petHit ? PET_BONUS : 1) * (1 + Math.min(STAT_MAX, statVal * STAT_RATE));
+  const m = (t) => weakMult(weak, t) * (1 + (equip[t] || 0) / 100);
   const days = {};
   const day = (d) => (days[d] ||= { habit: 0, tasks: [] });
   for (const [date, d] of Object.entries(habitDays)) {
     if (date < start) continue;
-    day(date).habit = TYPES.reduce((a, t) => a + d.points[t] * weakMult(weak, t), 0) * mult;
+    day(date).habit = TYPES.reduce((a, t) => a + d.points[t] * m(t), 0) * mult;
   }
   for (const t of tasks) {
     if (t.date < start) continue;
-    day(t.date).tasks.push({ ...t, damage: weakened(weak, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult });
+    day(t.date).tasks.push({ ...t, damage: weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult });
   }
   let damage = 0;
   let defeatedOn = null;

@@ -1,6 +1,6 @@
 // 習慣チェック（画面側）。Notion へは必ず Worker の /api を経由する。
 // 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）と、あいぼうを1画面ずつで見せる。
-import { renderPet, renderMonster, fillStory, petLine, petName, evolveStory, SLEEP_LINES, TYPE_COLORS } from "./aibou.js";
+import { renderPet, renderMonster, renderItem, fillStory, petLine, petName, evolveStory, SLEEP_LINES, TYPE_COLORS } from "./aibou.js";
 
 const KEY_STORAGE = "habit-check:key";
 const MAX_BACK_DAYS = 6;
@@ -601,13 +601,14 @@ const WEAK_LABEL = { ちから: "ちから", かしこさ: "かしこさ", や�
 async function renderBattle() {
   const body = $("battle-body");
   if (!state.data.battle) body.replaceChildren(loadingEl());
-  const data = await loadData("battle", "/api/battle");
+  const [data] = await Promise.all([loadData("battle", "/api/battle"), loadData("items", "/api/items")]);
   if (state.view !== "battle") return;
   if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.battle || "読み込めませんでした" }));
   // ボスを倒したら、ものがたりの一覧も読み直す（次の話が開く）
   if (data.boss?.defeatedOn) state.loadedAt.story = 0;
   swap(body, [h("div", { class: "scroll fill stack" },
     bossCard(data),
+    equipCard(data),
     h("div", { class: "card stack", style: "gap:8px" },
       h("div", { class: "kv" }, h("h3", { text: "モンスター（まだ終わっていないタスク）" }), h("b", { text: `${data.monsters.length}${data.moreMonsters ? "+" : ""}体` })),
       h("p", { class: "sub", style: "margin:0", text: "古いほど凶暴（★）。たおすと ★1つにつき ボスへのダメージ＋20%" }),
@@ -651,6 +652,73 @@ function bossCard(data) {
       h("span", { class: "log-text", text: x.kind === "task" ? `${x.name}${"★".repeat(x.stars)}（${x.title}）を たおした` : `${x.date.slice(5).replace("-", "/")} 習慣` }),
       h("b", { text: `${fmt(x.damage)}` })))) : null,
   );
+}
+
+// ---------- そうび（DB_そうび） ----------
+const SLOT_NAMES = ["武器", "かぶと", "たて", "よろい", "アクセサリー"];
+const stars = (n) => "★".repeat(n || 0);
+
+function equipCard(battle) {
+  const data = state.data.items;
+  if (!data) {
+    return h("div", { class: "card stack", style: "gap:4px" }, h("h3", { text: "そうび" }),
+      h("p", { class: "sub", style: "margin:0", text: state.errors.items || "読み込み中…" }));
+  }
+  const bonus = Object.entries(battle?.equip || {}).filter(([, v]) => v).map(([t, v]) => `${t}＋${Math.round(v * 10) / 10}%`).join("　");
+  return h("div", { class: "card stack", style: "gap:6px" },
+    h("div", { class: "kv" }, h("h3", { text: "そうび" }), h("span", { class: "sub", text: `もちもの ${data.items.length}こ` })),
+    h("p", { class: "sub", style: "margin:0", text: bonus ? `ボスへのダメージ：${bonus}` : "ギルドで ほうこくすると、そうびが落ちます" }),
+    SLOT_NAMES.map((slot) => {
+      const it = data.items.find((x) => x.slot === slot && x.equipped);
+      const have = data.items.filter((x) => x.slot === slot).length;
+      return h("button", { type: "button", class: "equip-row", onclick: () => openSlot(slot) },
+        it ? renderItem(slot, it.rarity, { size: 32 }) : h("span", { class: "item-icon empty" }),
+        h("span", { class: "equip-slot", text: slot }),
+        h("span", { class: "equip-name", text: it ? `${it.name} ${stars(it.rarity)}` : have ? "なし（タップで そうび）" : "なし" }),
+        it ? h("b", { text: `${it.type}＋${it.type === "ぜんぶ" ? it.effect / 2 : it.effect}%` }) : null,
+      );
+    }),
+  );
+}
+
+function openSlot(slot) {
+  const render = () => {
+    const list = (state.data.items?.items || []).filter((x) => x.slot === slot)
+      .sort((a, b) => (b.rarity || 0) - (a.rarity || 0) || String(b.date).localeCompare(String(a.date)));
+    if (!list.length) return [h("p", { class: "sub", text: "この部位のそうびは、まだありません。" })];
+    return list.map((it) => h("div", { class: `item-row${it.equipped ? " on" : ""}` },
+      renderItem(slot, it.rarity, { size: 40 }),
+      h("span", { class: "item-text" },
+        h("b", { text: it.name }),
+        h("span", { class: "sub", text: `${stars(it.rarity)}${it.crit ? " かいしん" : ""}　${it.type}＋${it.type === "ぜんぶ" ? `${it.effect / 2}%（4つすべて）` : `${it.effect}%`}　${(it.date || "").slice(5).replace("-", "/")}` })),
+      h("button", { type: "button", class: it.equipped ? "chip-btn" : "primary small", onclick: (e) => equip(it, !it.equipped, e.currentTarget) }, it.equipped ? "はずす" : "そうびする"),
+    ));
+  };
+  const equip = async (it, on, btn) => {
+    btn.disabled = true;
+    try {
+      state.data.items = await api("PATCH", `/api/items/${it.id}`, { equipped: on });
+      state.loadedAt.items = Date.now();
+      state.loadedAt.battle = 0;
+      $("sheet-body").replaceChildren(...render());
+      toast(on ? `${it.name} を そうびした` : `${it.name} を はずした`);
+      if (state.view === "battle") renderBattle();
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+    }
+  };
+  openSheet(`そうび：${slot}`, render());
+}
+
+function showDrops(drops) {
+  openSheet("アイテムを てにいれた！", drops.map((it) => h("div", { class: "item-row drop" },
+    renderItem(it.slot, it.rarity, { size: 56 }),
+    h("span", { class: "item-text" },
+      h("b", { text: `${it.name} ${stars(it.rarity)}` }),
+      h("span", { class: "sub", text: `${it.crit ? "かいしんドロップ！　" : ""}${it.slot}・${it.type}＋${it.type === "ぜんぶ" ? `${it.effect / 2}%（4つすべて）` : `${it.effect}%`}` }),
+      h("span", { class: "sub", text: `「${it.quest}」から` })),
+  )), [h("button", { type: "button", class: "primary", onclick: () => { closeSheet(); state.view = "battle"; show(); } }, "そうびを みる")]);
 }
 
 const BOSS_COLORS = {
@@ -762,8 +830,12 @@ function openQuest(q) {
 async function submitReport(selected, note, send) {
   send.disabled = true;
   try {
-    await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
+    const { drops = [] } = await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
     toast(`ほうこくしました：${selected.map((q) => q.title).join("、")}`);
+    if (drops.length) {
+      state.loadedAt.items = 0;
+      setTimeout(() => showDrops(drops), 1700);
+    }
     closeSheet();
     state.loadedAt.guild = 0;
     if (state.view === "guild") renderGuild();

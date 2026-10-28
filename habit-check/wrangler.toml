@@ -22,6 +22,8 @@ STORY_DS_ID = "f673bc1a-91b2-467d-bcd3-b2a70bd1bcbd"   # DB_ものがたり
 # あいぼう（たまごから育つペット）。育ち方の設定は src/aibou-config.js
 AIBOU_DS_ID = "4dbe5d76-ff64-4141-ba01-b6e0b612d970"   # DB_あいぼう（データベースID 2baedfb417b44b3fbac59a6d53e3e353）
 TASK_DS_ID = "21762844-acbe-8075-bbe6-000bcaf22801"    # DB_タスク管理（DONE のタスクEXPで育つ。読むだけ）
+# そうび（ギルドのほうこくで落ちる武器・防具）。名前やレア度の設定は src/item-config.js
+ITEM_DS_ID = "a27e4a84-1dfa-4708-956e-3f57e4e2312e"    # DB_そうび
 
 # 秘密の値は wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）

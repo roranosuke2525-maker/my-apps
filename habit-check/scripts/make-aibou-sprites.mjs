@@ -360,7 +360,51 @@ function drawDragon(g, { blink }) {
   fill(g, rect(10, 27, 4, 3), "s", { edge: true }); fill(g, rect(17, 27, 4, 3), "s", { edge: true });
 }
 
+// ---------- そうび（アイテムのアイコン）：b/s/l はレア度の色で置き換える ----------
+const ITEM_PALETTE = { o: "#2a2230", b: "#c9c3b6", s: "#8f887c", l: "#f4f0e8", y: "#ffd447", r: "#e0503c", w: "#ffffff", k: "#8a5a36" };
+const ITEMS = {
+  item_weapon: (g) => {
+    fill(g, poly([[22, 3], [28, 3], [28, 9], [12, 25], [8, 21]]), "b", { shade: "s", light: "l", edge: true }); // 刃
+    line(g, 25, 6, 11, 20, "l");
+    fill(g, poly([[5, 18], [9, 16], [16, 23], [14, 27]]), "y", { edge: true }); // つば
+    fill(g, poly([[7, 23], [9, 25], [5, 29], [3, 27]]), "k", { edge: true }); // 柄
+    fill(g, circle(3.5, 28.5, 1.8), "y", { edge: true });
+    return outline(g);
+  },
+  item_helm: (g) => {
+    fill(g, and(ellipse(16, 18, 11, 11), rect(0, 0, 32, 23)), "b", { shade: "s", light: "l", edge: true });
+    fill(g, rect(5, 21, 22, 4), "s", { edge: true });
+    fill(g, rect(15, 7, 2, 14), "y", { edge: true }); // 飾り
+    fill(g, poly([[16, 2], [12, 8], [20, 8]]), "r", { edge: true });
+    fill(g, rect(10, 16, 4, 3), "o"); fill(g, rect(18, 16, 4, 3), "o");
+    return outline(g);
+  },
+  item_shield: (g) => {
+    fill(g, poly([[5, 4], [27, 4], [27, 16], [16, 29], [5, 16]]), "b", { shade: "s", light: "l", edge: true });
+    fill(g, poly([[9, 8], [23, 8], [23, 15], [16, 24], [9, 15]]), "s", { edge: true });
+    fill(g, circle(16, 14, 3.5), "y", { edge: true }); px(g, [[15, 13]], "w");
+    return outline(g);
+  },
+  item_armor: (g) => {
+    fill(g, poly([[6, 6], [12, 4], [16, 7], [20, 4], [26, 6], [29, 13], [24, 14], [24, 28], [8, 28], [8, 14], [3, 13]]), "b", { shade: "s", light: "l", edge: true });
+    line(g, 16, 8, 16, 27, "s");
+    fill(g, rect(9, 20, 14, 2), "y", { edge: true });
+    fill(g, circle(16, 14, 2.5), "r", { edge: true });
+    return outline(g);
+  },
+  item_ring: (g) => {
+    fill(g, and(circle(16, 19, 10), not(circle(16, 19, 6.5))), "y", { shade: "k", edge: true });
+    fill(g, poly([[16, 3], [22, 9], [16, 14], [10, 9]]), "b", { shade: "s", light: "l", edge: true }); // 宝石
+    px(g, [[14, 7], [15, 6]], "w");
+    return outline(g);
+  },
+};
+
 const out = {};
+for (const [key, draw] of Object.entries(ITEMS)) {
+  const f = rows(draw(canvas()));
+  out[key] = { name: key, palette: ITEM_PALETTE, frames: { idle: f, blink: f } };
+}
 for (const [key, mon] of Object.entries(MONSTERS)) {
   const frame = (opts) => rows(mon.draw(canvas(), opts));
   out[key] = { name: mon.name, palette: MON_PALETTE, frames: { idle: frame({}), blink: frame({ blink: true }) } };

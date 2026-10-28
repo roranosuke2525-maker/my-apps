@@ -10,6 +10,7 @@ const REPORT = "report-ds";
 const STORY = "story-ds";
 const AIBOU = "aibou-ds";
 const TASKS = "task-ds";
+const ITEMS = "item-ds";
 const KEY = "test-key-0123456789";
 const env = {
   NOTION_TOKEN: "ntn_fake",
@@ -22,6 +23,7 @@ const env = {
   STORY_DS_ID: STORY,
   AIBOU_DS_ID: AIBOU,
   TASK_DS_ID: TASKS,
+  ITEM_DS_ID: ITEMS,
   NOTION_API_BASE: "https://notion.test/v1",
   ASSETS: { fetch: async () => new Response("asset") },
 };
@@ -142,7 +144,7 @@ beforeEach(() => {
     if (init.method === "GET" && bl) return ok({ results: blocks[bl[1]] || [], has_more: false });
     if (init.method === "POST" && path === "/pages") {
       const ds = body.parent.data_source_id;
-      const p = ds === DS ? page("new1", "2026-10-22T03:00:00.000Z") : ds === AIBOU ? other("pet-new", ds, fakeProps(body.properties)) : other("new-report", ds, {
+      const p = ds === DS ? page("new1", "2026-10-22T03:00:00.000Z") : ds === AIBOU || ds === ITEMS ? other(String(pages.length).padStart(32, "a"), ds, fakeProps(body.properties)) : other("new-report", ds, {
         ひとこと: { type: "title", title: text(body.properties.ひとこと.title[0].text.content) },
         依頼: { type: "relation", relation: body.properties.依頼.relation },
       });
@@ -163,7 +165,7 @@ beforeEach(() => {
     if (!p) return new Response(JSON.stringify({ code: "object_not_found" }), { status: 404 });
     if (init.method === "GET") return ok(p);
     if (init.method === "PATCH") {
-      if (p.parent.data_source_id === AIBOU) {
+      if (p.parent.data_source_id === AIBOU || p.parent.data_source_id === ITEMS) {
         Object.assign(p.properties, fakeProps(body.properties));
         return ok(p);
       }
@@ -186,6 +188,9 @@ function fakeProps(props) {
     else if (v.rich_text) out[k] = { type: "rich_text", rich_text: v.rich_text.map((t) => ({ plain_text: t.text.content })) };
     else if (v.select) out[k] = { type: "select", select: { name: v.select.name } };
     else if (v.date) out[k] = { type: "date", date: v.date };
+    else if (v.relation) out[k] = { type: "relation", relation: v.relation };
+    else if ("number" in v) out[k] = { type: "number", number: v.number };
+    else if ("checkbox" in v) out[k] = { type: "checkbox", checkbox: v.checkbox };
   }
   return out;
 }
@@ -573,4 +578,40 @@ test("ぼうけん：あいぼうの型が弱点と同じなら、こうかば�
   assert.equal(data.boss.petHit, true);
   assert.equal(data.boss.damage, 18); // 10 × 1.5 × 1.2
   assert.equal(data.boss.defeatedOn, null);
+});
+
+// ---------- そうび ----------
+test("そうび：ほうこく1件につき依頼ごとに1つ落ちる。段階でレアが上がり、二重には落ちない", async () => {
+  // r1（固定費のみなおし・Cランク・お金）の1回目 → よろい・しっかり・★2（会心なら★3）
+  const res = await (await req("GET", "/api/items")).json();
+  assert.equal(res.drops.length, 1);
+  const it = res.drops[0];
+  assert.equal(it.slot, "よろい");
+  assert.equal(it.type, "しっかり");
+  assert.ok(it.name === "鎖断ちの革よろい");
+  assert.ok(it.rarity === 2 || it.rarity === 3);
+  assert.equal(it.effect, it.rarity === 2 ? 5 : 8);
+  // もう一度読んでも増えない
+  const again = await (await req("GET", "/api/items")).json();
+  assert.equal(again.drops.length, 0);
+  assert.equal(again.items.length, 1);
+  // 2回目のほうこく → 段階が1つ進んだ名前
+  const rep = await (await req("POST", "/api/guild/reports", { note: "通信費を見た", questId: QID })).json();
+  assert.equal(rep.drops.length, 1);
+  assert.equal(rep.drops[0].name, "解約のくさりかたびら");
+});
+
+test("そうび：装備は部位ごとに1つ。装備中の効果がボスへのダメージに乗る", async () => {
+  await req("GET", "/api/items");
+  const item = pages.find((p) => p.parent.data_source_id === ITEMS);
+  const res = await (await req("PATCH", `/api/items/${item.id}`, { equipped: true })).json();
+  assert.equal(res.items[0].equipped, true);
+  assert.equal((await req("PATCH", `/api/items/${QID}`, { equipped: true })).status, 403);
+  // 弱点しっかりのボス：起床（しっかり・◆5）× 1.5 × (1 + 効果%)
+  pages.push(ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, 弱点: { type: "select", select: { name: "しっかり" } }, ボス開始日: { type: "date", date: { start: "2026-10-20" } } }));
+  pages.find((p) => p.id === "day20").properties["◆☼ 起床"].checkbox = true;
+  const eff = item.properties.効果.number;
+  const data = await (await req("GET", "/api/battle")).json();
+  assert.equal(data.equip.しっかり, eff);
+  assert.equal(data.boss.damage, Math.round(5 * 1.5 * (1 + eff / 100)));
 });

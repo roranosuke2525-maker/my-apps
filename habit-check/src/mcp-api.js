@@ -444,6 +444,7 @@
     if (p === "/api/party" && method === "GET") return getParty();
     if (p === "/api/guild" && method === "GET") return getGuild();
     if (p === "/api/guild/reports" && method === "POST") return createReport(body);
+    if (p.startsWith("/api/items")) throw apiError(501, "そうびは Cloudflare版だけで使えます");
     if (p === "/api/battle") throw apiError(501, "ぼうけんは Cloudflare版だけで使えます（Notion の MCP では計算式の値が読めないため）");
     if (p === "/api/aibou") throw apiError(501, "あいぼうは Cloudflare版だけで使えます（Notion の MCP では計算式の値が読めないため）");
     if (p === "/api/story" && method === "GET") return getStories();
