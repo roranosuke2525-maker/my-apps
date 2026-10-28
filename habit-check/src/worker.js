@@ -498,7 +498,9 @@ async function getGuild(notion, env) {
     quests: quests.map((p) => {
       const q = pick(p, QUEST_FIELDS);
       const { stagesText, ...rest } = q;
-      return { ...rest, ...(lv !== null ? { playerLv: lv } : {}), stages: splitStages(stagesText) };
+      const stages = splitStages(stagesText);
+      const playerLv = lv !== null ? lv : q.playerLv;
+      return { ...rest, playerLv, stages, ...questBoard(q, stages, playerLv) };
     }),
     reports: (reports.results || []).map(summarizeReport),
   };
@@ -541,6 +543,22 @@ function reportQuestIds(body) {
 function summarizeReport(page) {
   const r = pick(page, { note: "ひとこと", questIds: "依頼" });
   return { ...r, date: page.created_time };
+}
+
+// けいじばん（DB_ギルド依頼「けいじばん」の式と同じ）。Notion API では いまのLv が先頭25件で計算されるので、正しいLvで作り直す。
+// 段階は達成回数で進み、必要Lv＝受注Lv＋3×段階。最後の段階を終えたら「マスター」で、報酬は打ち止め
+const STAGE_LV = 3;
+function questBoard(q, stages, playerLv) {
+  const n = q.count ?? 0;
+  const L = Math.max(1, stages.length);
+  const i = Math.min(n, L - 1);
+  const need = (q.lv ?? 1) + STAGE_LV * i;
+  const reward = Math.round((q.exp ?? 0) * (1 + 0.5 * Math.min(n, L - 1)));
+  const master = stages.length > 0 && n >= L;
+  const open = typeof playerLv !== "number" || playerLv >= need;
+  const board = `【${q.rank ?? "?"}ランク】 ${master ? "🏆 マスター（くりかえし）" : `${n + 1}かいめ`}\n` +
+    `▶ ${stages[i] ?? ""}\nほうしゅう ${reward} EXP\n${open ? "✅ うけられる" : `🔒 Lv${need} から`}\nたっせい ${n} かい`;
+  return { need, reward, master, board };
 }
 
 function splitStages(text) {

@@ -835,7 +835,8 @@ async function renderGuild() {
 }
 
 function questLocked(q) {
-  return typeof q.lv === "number" && typeof q.playerLv === "number" && q.playerLv < q.lv;
+  const need = q.need ?? q.lv; // 段階が進むと必要Lvが上がる（Worker が計算）
+  return typeof need === "number" && typeof q.playerLv === "number" && q.playerLv < need;
 }
 
 function questCard(q) {
@@ -846,7 +847,7 @@ function questCard(q) {
       h("span", { class: "qtitle", text: q.title }),
       h("span", { class: "qmeta" },
         q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
-        h("span", { text: locked ? `Lv${q.lv}で受注` : `受注Lv${q.lv ?? "—"}` }),
+        h("span", { text: locked ? `Lv${q.need ?? q.lv}で受注` : `受注Lv${q.need ?? q.lv ?? "—"}` }),
         h("span", { text: `基本${q.exp ?? "—"}EXP` }),
         h("span", { text: `達成${q.count ?? 0}回` }),
       ),
@@ -987,7 +988,8 @@ function openNewReport() {
   let timer = null;
   note.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(draw, 150); update(); });
   send.addEventListener("click", () => submitReport([...selected.values()], note.value, send));
-  openSheet("ほうこく", [note, picked, hint, list], [send]);
+  const rule = h("p", { class: "sub", style: "margin:0", text: "※ 習慣でチェックしたことは、ほうこくしない（習慣より一歩先のことだけ）" });
+  openSheet("ほうこく", [note, rule, picked, hint, list], [send]);
   draw();
   note.focus();
 }

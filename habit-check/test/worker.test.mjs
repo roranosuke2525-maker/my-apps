@@ -346,7 +346,11 @@ test("ギルド：依頼の段階を分けて返し、ほうこくも新しい�
   assert.equal(data.quests.length, 1);
   assert.deepEqual(data.quests[0].stages, ["サブスクを1つ確認する", "通信費を見直す", "保険を見直す"]);
   assert.equal(data.quests[0].count, 1);
-  assert.equal(data.quests[0].board, "★☆☆");
+  // けいじばんは正しいLv（13ではなくテストのLv）で Worker が作る：2回目は 受注Lv3＋3 = Lv6、報酬は 60×1.5
+  assert.equal(data.quests[0].need, 6);
+  assert.equal(data.quests[0].reward, 90);
+  assert.equal(data.quests[0].master, false);
+  assert.match(data.quests[0].board, /^【Cランク】 2かいめ\n▶ 通信費を見直す\nほうしゅう 90 EXP\n/);
   assert.equal(data.reports[0].note, "全館空調掃除");
   assert.deepEqual(data.reports[0].questIds, [QID]);
 });
@@ -654,4 +658,14 @@ test("ぼうけん：前のボスを倒した日のEXPは、次のボスに使�
   assert.equal(data.boss.start, "2026-10-21");
   assert.equal(data.boss.damage, 0);
   assert.equal(data.boss.defeatedOn, null);
+});
+
+test("ギルド：最後の段階を終えたらマスター。報酬は打ち止め", async () => {
+  const q = pages.find((p) => p.id === QID);
+  q.properties.達成回数 = formula(5);
+  const { quests } = await (await req("GET", "/api/guild")).json();
+  assert.equal(quests[0].master, true);
+  assert.equal(quests[0].reward, 120); // 60 × (1 + 0.5 × 2)
+  assert.equal(quests[0].need, 3 + 3 * 2);
+  assert.match(quests[0].board, /🏆 マスター/);
 });
