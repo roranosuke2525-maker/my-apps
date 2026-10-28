@@ -2,6 +2,7 @@
 // Notion のトークンはこの Worker の secret にだけ置き、ブラウザには渡さない。
 
 import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWeight, tagType } from "./aibou-config.js";
+import { RANKS, WEAK_BONUS, BALANCE_BONUS, PET_BONUS, STAR_BONUS, STAT_EXP, STAT_RATE, STAT_MAX, familyOf, starsOf } from "./battle-config.js";
 
 const NOTION_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
@@ -79,6 +80,9 @@ export default {
       if (storyMatch && request.method === "PATCH") {
         const body = await readJson(request);
         return json(await markStory(notion, env, storyMatch[1], body));
+      }
+      if (url.pathname === "/api/battle" && request.method === "GET") {
+        return json(await getBattle(notion, env));
       }
       if (url.pathname === "/api/aibou" && request.method === "GET") {
         return json(await getAibou(notion, env));
@@ -261,6 +265,8 @@ function propValue(prop) {
       return prop.checkbox;
     case "select":
       return prop.select?.name ?? null;
+    case "status":
+      return prop.status?.name ?? null;
     case "relation":
       return (prop.relation || []).map((r) => r.id);
     case "created_time":
@@ -394,6 +400,7 @@ async function loadPlayer(notion, env) {
 // 書き込んだらEXPが変わるので読み直させる
 function forgetPlayer(env) {
   playerCache.delete(env);
+  eventsCache.delete(env);
 }
 
 async function playerLevel(notion, env) {
@@ -506,6 +513,8 @@ function splitStages(text) {
 }
 
 // ---------- ものがたり（DB_ものがたり） ----------
+// エピソード1（ほんぺん）は Lv で、エピソード2 は「前の話のボスを倒したか」で開く。よりみちは Notion の判定のまま
+const EP2 = "エピソード2";
 const STORY_FIELDS = {
   title: "しょう",
   kind: "しゅるい",
@@ -514,11 +523,21 @@ const STORY_FIELDS = {
   state: "じょうたい",
   read: "よんだ",
   playerLv: "いまのLv",
+  boss: "ボス",
+  hp: "ボスHP",
+  weak: "弱点",
+  bossStart: "ボス開始日",
+  defeated: "撃破日",
 };
 
-// lv：正しいレベル（分からなければ null で Notion の「いまのLv」のまま）
-function summarizeStory(page, lv = null) {
+// lv：正しいレベル（分からなければ null で Notion の「いまのLv」のまま）。prev：ひとつ前のエピソード2の話
+function summarizeStory(page, lv = null, prev = undefined) {
   const s = pick(page, STORY_FIELDS);
+  if (s.kind === EP2) {
+    const locked = !!prev && !prev.defeated;
+    const state = s.read ? (s.defeated ? "✅ ボスを たおした" : s.boss ? "⚔️ ボスと たたかっている" : "✅ 読んだ") : locked ? "🔒 前の話のボスを倒すと開く" : "📖 NEW！ 読める";
+    return { ...s, playerLv: lv ?? s.playerLv, locked, state };
+  }
   const notionLocked = typeof s.unlockLv === "number" && typeof s.playerLv === "number" && s.playerLv < s.unlockLv;
   if (lv !== null) s.playerLv = lv;
   const locked = typeof s.unlockLv === "number" && typeof s.playerLv === "number" && s.playerLv < s.unlockLv;
@@ -527,35 +546,47 @@ function summarizeStory(page, lv = null) {
   return { ...s, locked };
 }
 
-async function getStories(notion, env) {
+async function loadStories(notion, env) {
   const [rows, lv] = await Promise.all([
     queryAll(notion, dsId(env, "STORY_DS_ID"), { sorts: [{ property: "じゅんばん", direction: "ascending" }] }),
     playerLevel(notion, env),
   ]);
-  return { chapters: rows.map((p) => summarizeStory(p, lv)) };
+  const out = [];
+  let prev;
+  for (const p of rows) {
+    const c = summarizeStory(p, lv, prev);
+    if (c.kind === EP2) prev = c;
+    out.push(c);
+  }
+  return out;
 }
 
-async function storyPage(notion, env, id) {
-  const page = await notion("GET", `/pages/${id}`);
-  if (normalizeId(page.parent?.data_source_id) !== normalizeId(dsId(env, "STORY_DS_ID"))) {
-    throw httpError(403, "DB_ものがたり のページではありません");
-  }
-  return page;
+async function getStories(notion, env) {
+  return { chapters: await loadStories(notion, env) };
+}
+
+async function openStory(notion, env, id) {
+  const chapter = (await loadStories(notion, env)).find((c) => normalizeId(c.id) === normalizeId(id));
+  if (!chapter) throw httpError(403, "DB_ものがたり のページではありません");
+  if (chapter.locked) throw httpError(403, chapter.kind === EP2 ? "前の話のボスを倒すと読めます" : `Lv${chapter.unlockLv}になると読めます`);
+  return chapter;
 }
 
 async function getStory(notion, env, id) {
-  const chapter = summarizeStory(await storyPage(notion, env, id), await playerLevel(notion, env));
-  if (chapter.locked) throw httpError(403, `Lv${chapter.unlockLv}になると読めます`);
+  const chapter = await openStory(notion, env, id);
   return { chapter, blocks: await readText(notion, id, 0) };
 }
 
+// エピソード2 の話を初めて「よんだ」にした日から、その話のボスとの戦いが始まる
 async function markStory(notion, env, id, body) {
   if (typeof body?.read !== "boolean") throw httpError(400, "変更できない項目です");
-  const lv = await playerLevel(notion, env);
-  const chapter = summarizeStory(await storyPage(notion, env, id), lv);
-  if (chapter.locked) throw httpError(403, `Lv${chapter.unlockLv}になると読めます`);
-  const page = await notion("PATCH", `/pages/${id}`, { properties: { よんだ: { checkbox: body.read } } });
-  return { chapter: summarizeStory(page, lv) };
+  const chapter = await openStory(notion, env, id);
+  const properties = { よんだ: { checkbox: body.read } };
+  if (body.read && chapter.kind === EP2 && chapter.boss && !chapter.bossStart) {
+    properties["ボス開始日"] = { date: { start: jstDate(new Date().toISOString()) } };
+  }
+  await notion("PATCH", `/pages/${id}`, { properties });
+  return { chapter: (await loadStories(notion, env)).find((c) => normalizeId(c.id) === normalizeId(id)) };
 }
 
 // 本文を「段落」と「引用（SYSTEM など）」の並びにする。トグル（▶ 読む）の中も読む
@@ -650,9 +681,29 @@ async function renameAibou(notion, env, body) {
   return { pet: summarizePet(updated) };
 }
 
-// 日ごとの EXP と、4つの型への振り分け
+// 日ごとの EXP と、4つの型への振り分け（あいぼう用：習慣とタスクを日ごとに合わせる）
 async function aibouDays(notion, env, from) {
-  const [rows, tasks] = await Promise.all([
+  const { habitDays, tasks } = await loadEvents(notion, env, from);
+  const days = {};
+  for (const [date, d] of Object.entries(habitDays)) days[date] = { exp: d.exp, points: { ...d.points } };
+  for (const t of tasks) {
+    const d = (days[t.date] ||= { exp: 0, points: zeroPoints() });
+    d.exp += t.exp;
+    addPoints(d.points, t.type, t.exp);
+  }
+  return days;
+}
+
+// from 以降の習慣（日ごと）と DONE タスク（1件ずつ）。全期間（能力値）でも使うので、書き込みまで1分だけ使い回す
+const eventsCache = new WeakMap();
+const EVENTS_TTL = 60e3;
+
+async function loadEvents(notion, env, from) {
+  const cache = eventsCache.get(env) || new Map();
+  eventsCache.set(env, cache);
+  const hit = cache.get(from);
+  if (hit && Date.now() - hit.at < EVENTS_TTL) return hit.value;
+  const [rows, done] = await Promise.all([
     queryAll(notion, env.DATA_SOURCE_ID, {
       filter: { timestamp: "created_time", created_time: { on_or_after: `${from}T00:00:00+09:00` } },
       sorts: [{ timestamp: "created_time", direction: "ascending" }],
@@ -661,31 +712,51 @@ async function aibouDays(notion, env, from) {
       filter: { and: [{ property: "ステータス", status: { equals: TASK_DONE } }, { property: "完了日", formula: { date: { on_or_after: from } } }] },
     }, AIBOU_QUERY_PAGES),
   ]);
-  const days = {};
-  const day = (d) => (days[d] ||= { exp: 0, points: zeroPoints() });
-  const seen = new Set();
+  const habitDays = {};
   for (const page of rows) {
     const date = jstDate(page.created_time);
-    if (seen.has(date)) continue; // 同じ日に2行あれば最初の行だけ（画面と同じ）
-    seen.add(date);
+    if (habitDays[date]) continue; // 同じ日に2行あれば最初の行だけ（画面と同じ）
     const parts = habitParts(page);
     const sum = parts.reduce((a, x) => a + x.exp, 0);
     const formulaExp = propValue(page.properties?.EXP);
     const total = typeof formulaExp === "number" ? formulaExp : sum;
-    const d = day(date);
-    d.exp += total;
+    const d = (habitDays[date] = { exp: total, points: zeroPoints() });
     if (sum > 0) for (const x of parts) addPoints(d.points, x.type, (x.exp / sum) * total);
     else addPoints(d.points, null, total);
   }
-  for (const page of tasks) {
+  const tasks = [];
+  for (const page of done) {
     const exp = propValue(page.properties?.["討伐EXP"]);
     const date = propValue(page.properties?.["完了日"])?.slice(0, 10);
     if (typeof exp !== "number" || !exp || !date || date < from) continue;
-    const d = day(date);
-    d.exp += exp;
-    addPoints(d.points, tagType(propValue(page.properties?.["分類タグ"])), exp);
+    tasks.push({ ...monsterOf(page, date), exp, date });
   }
-  return days;
+  const value = { habitDays, tasks };
+  cache.set(from, { at: Date.now(), value });
+  return value;
+}
+
+// タスク1件をモンスターとして見る（種族＝分類タグ、格＝重さ、★＝作ってから until までの日数）
+function monsterOf(page, until = jstDate(new Date().toISOString())) {
+  const tag = propValue(page.properties?.["分類タグ"]);
+  const weight = propValue(page.properties?.["重さ"]) || "M";
+  const family = familyOf(tag);
+  const rank = RANKS[weight] || RANKS.M;
+  const ageDays = Math.max(0, Math.round((Date.parse(until) - Date.parse(jstDate(page.created_time))) / 86400e3));
+  return {
+    id: page.id,
+    url: page.url,
+    title: propValue(page.properties?.["名前"]) || "",
+    status: propValue(page.properties?.["ステータス"]),
+    type: tagType(tag),
+    weight,
+    family: family.name,
+    colors: family.color,
+    shape: rank.shape,
+    name: family.name + rank.name,
+    stars: starsOf(ageDays),
+    ageDays,
+  };
 }
 
 function habitParts(page) {
@@ -770,6 +841,120 @@ async function saveEvolution(notion, pageId, g) {
   if (g.childType) properties["成長期の型"] = { select: { name: g.childType } };
   if (g.adultType) properties["成体の型"] = { select: { name: g.adultType } };
   return summarizePet(await notion("PATCH", `/pages/${pageId}`, { properties }));
+}
+
+// ---------- ぼうけん（章ボス・モンスター・能力値） ----------
+// ボスへのダメージは、その話を「よんだ」日からの習慣・DONEタスクのEXPに、弱点・凶暴化・あいぼう・能力値のボーナスを掛けたもの。
+// HP を削りきった日を DB_ものがたり の「撃破日」に書くと、次の話が開く（あとでチェックを外しても戻らない）
+const STATS_FROM = "2000-01-01";
+const OPEN_MONSTERS = 100;
+const BATTLE_LOG = 12;
+
+async function getBattle(notion, env) {
+  const [stories, all, petRow, open] = await Promise.all([
+    loadStories(notion, env),
+    loadEvents(notion, env, STATS_FROM),
+    env.AIBOU_DS_ID ? petPage(notion, env) : null,
+    openMonsters(notion, env),
+  ]);
+  const pet = petRow ? summarizePet(petRow) : null;
+  const petType = pet?.stage === "成長期" ? pet.childType : pet?.stage === "成体" ? pet.adultType : null;
+  const stats = statsOf(all);
+  const ep2 = stories.filter((c) => c.kind === EP2);
+  const current = ep2.find((c) => c.read && c.boss && typeof c.hp === "number" && !c.defeated);
+  let boss = null;
+  if (current) {
+    const start = current.bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
+    boss = fight(current, all, start, petType, stats);
+    if (boss.defeatedOn) {
+      await notion("PATCH", `/pages/${current.id}`, { properties: { 撃破日: { date: { start: boss.defeatedOn } } } });
+      current.defeated = boss.defeatedOn;
+    }
+  }
+  const next = ep2.find((c) => !c.read && !c.locked) || null;
+  return {
+    boss,
+    next: next && { id: next.id, title: next.title },
+    cleared: ep2.length > 0 && ep2.every((c) => c.read && (c.defeated || !c.boss)),
+    stats,
+    pet: pet && { name: pet.name, stage: pet.stage, type: petType },
+    monsters: open.monsters,
+    moreMonsters: open.more,
+  };
+}
+
+function statsOf({ habitDays, tasks }) {
+  const points = zeroPoints();
+  for (const d of Object.values(habitDays)) for (const t of TYPES) points[t] += d.points[t];
+  for (const t of tasks) addPoints(points, t.type, t.exp);
+  return Object.fromEntries(TYPES.map((t) => [t, Math.floor(points[t] / STAT_EXP)]));
+}
+
+// 型ごとの倍率（弱点なら1.5倍、弱点がバランスなら全部1.2倍）
+function weakMult(weak, type) {
+  if (weak === "バランス") return BALANCE_BONUS;
+  return type === weak ? WEAK_BONUS : 1;
+}
+
+// EXP（型 null は4つに均等）に弱点の倍率を掛ける
+function weakened(weak, type, exp) {
+  if (type) return exp * weakMult(weak, type);
+  return TYPES.reduce((a, t) => a + (exp / TYPES.length) * weakMult(weak, t), 0);
+}
+
+function fight(chapter, { habitDays, tasks }, start, petType, stats) {
+  const weak = chapter.weak;
+  const petHit = !!petType && petType === weak;
+  const statVal = weak === "バランス" ? Math.min(...TYPES.map((t) => stats[t])) : stats[weak] || 0;
+  const mult = (petHit ? PET_BONUS : 1) * (1 + Math.min(STAT_MAX, statVal * STAT_RATE));
+  const days = {};
+  const day = (d) => (days[d] ||= { habit: 0, tasks: [] });
+  for (const [date, d] of Object.entries(habitDays)) {
+    if (date < start) continue;
+    day(date).habit = TYPES.reduce((a, t) => a + d.points[t] * weakMult(weak, t), 0) * mult;
+  }
+  for (const t of tasks) {
+    if (t.date < start) continue;
+    day(t.date).tasks.push({ ...t, damage: weakened(weak, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult });
+  }
+  let damage = 0;
+  let defeatedOn = null;
+  const log = [];
+  const today = jstDate(new Date().toISOString());
+  let todayDamage = 0;
+  for (const date of Object.keys(days).sort()) {
+    const d = days[date];
+    const total = d.habit + d.tasks.reduce((a, t) => a + t.damage, 0);
+    damage += total;
+    if (date === today) todayDamage = total;
+    if (d.habit) log.push({ date, kind: "habit", damage: Math.round(d.habit) });
+    for (const t of d.tasks) log.push({ date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
+    if (!defeatedOn && damage >= chapter.hp) defeatedOn = date;
+  }
+  return {
+    chapterId: chapter.id,
+    chapter: chapter.title,
+    name: chapter.boss,
+    hp: chapter.hp,
+    weak,
+    start,
+    damage: Math.min(chapter.hp, Math.round(damage)),
+    today: Math.round(todayDamage),
+    petHit,
+    mult: Math.round(mult * 100) / 100,
+    defeatedOn,
+    log: log.slice(-BATTLE_LOG).reverse(),
+  };
+}
+
+// まだ終わっていないタスク＝モンスター（古い順に OPEN_MONSTERS 件）
+async function openMonsters(notion, env) {
+  const res = await notion("POST", `/data_sources/${dsId(env, "TASK_DS_ID")}/query`, {
+    filter: { and: ["✅ DONE", "📚 REFERENCE", "🤖 AI"].map((s) => ({ property: "ステータス", status: { does_not_equal: s } })) },
+    sorts: [{ timestamp: "created_time", direction: "ascending" }],
+    page_size: OPEN_MONSTERS,
+  });
+  return { monsters: (res.results || []).map((p) => monsterOf(p)), more: !!res.has_more };
 }
 
 // ---------- 共通 ----------

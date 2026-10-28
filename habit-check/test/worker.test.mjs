@@ -108,7 +108,10 @@ function page(id, created, extra = {}) {
 
 let propertyItems = {};
 
+let testEnv;
+
 beforeEach(() => {
+  testEnv = { ...env }; // Worker の1分キャッシュ（env ごと）をテストごとに分ける
   calls = [];
   propertyItems = {};
   pages = [
@@ -167,7 +170,7 @@ beforeEach(() => {
       for (const [k, v] of Object.entries(body.properties)) {
         p.properties[k] = v.checkbox !== undefined
           ? { type: "checkbox", checkbox: v.checkbox }
-          : { type: "rich_text", rich_text: v.rich_text.map((t) => ({ plain_text: t.text.content })) };
+          : v.rich_text ? { type: "rich_text", rich_text: v.rich_text.map((t) => ({ plain_text: t.text.content })) } : fakeProps({ [k]: v })[k];
       }
       return ok(p);
     }
@@ -194,7 +197,7 @@ function req(method, path, body, key = KEY) {
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
     }),
-    env,
+    testEnv,
   );
 }
 
@@ -502,4 +505,72 @@ test("あいぼう：名前は1〜20字だけ。DB_あいぼう の行にだけ�
   const res = await req("PATCH", "/api/aibou", { name: " ぷっちー " });
   assert.equal((await res.json()).pet.name, "ぷっちー");
   assert.deepEqual(patches("pet1").map((c) => Object.keys(c.body.properties)), [["名前"]]);
+});
+
+// ---------- ぼうけん・エピソード2 ----------
+function ep2(id, order, extra = {}) {
+  return other(id, STORY, {
+    しょう: { type: "title", title: text(`第${order}話`) },
+    しゅるい: { type: "select", select: { name: "エピソード2" } },
+    じゅんばん: { type: "number", number: 200 + order },
+    かいほうLv: { type: "number", number: 1 },
+    よんだ: { type: "checkbox", checkbox: false },
+    いまのLv: rollupNum(8),
+    ボス: { type: "rich_text", rich_text: text(`ボス${order}`) },
+    ボスHP: { type: "number", number: 100 },
+    弱点: { type: "select", select: { name: "かしこさ" } },
+    ボス開始日: { type: "date", date: null },
+    撃破日: { type: "date", date: null },
+    ...extra,
+  });
+}
+const E1 = "e".repeat(31) + "1";
+const E2 = "e".repeat(31) + "2";
+
+test("エピソード2：前の話のボスを倒すまで次の話は読めない。読んだ日にボス戦が始まる", async () => {
+  pages.push(ep2(E1, 1), ep2(E2, 2));
+  const { chapters } = await (await req("GET", "/api/story")).json();
+  const byId = Object.fromEntries(chapters.map((c) => [c.id, c]));
+  assert.equal(byId[E1].locked, false);
+  assert.equal(byId[E2].locked, true);
+  assert.equal(byId[E2].state, "🔒 前の話のボスを倒すと開く");
+  assert.equal((await req("GET", `/api/story/${E2}`)).status, 403);
+  const res = await (await req("PATCH", `/api/story/${E1}`, { read: true })).json();
+  assert.equal(res.chapter.read, true);
+  assert.match(res.chapter.bossStart, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("ぼうけん：弱点・凶暴化のボーナスでHPを削り、削りきった日を撃破日に書く", async () => {
+  pages.push(ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } } }), ep2(E2, 2));
+  // 10/20：新聞（かしこさ・弱点）10EXP → 15。10/21：BOOK のタスク 40EXP、9/1 作成で ★3 → 40×1.5×1.6 = 96
+  const d20 = pages.find((p) => p.id === "day20");
+  d20.properties["◇☼ 新聞"].checkbox = true;
+  const t = task("t1", "BOOK", 40, "2026-10-21");
+  t.created_time = "2026-09-01T00:00:00.000Z";
+  t.properties.名前 = { type: "title", title: text("本を読む") };
+  t.properties.重さ = { type: "select", select: { name: "L" } };
+  pages.push(t);
+  const data = await (await req("GET", "/api/battle")).json();
+  assert.equal(data.boss.name, "ボス1");
+  assert.equal(data.boss.damage, 100);
+  assert.equal(data.boss.defeatedOn, "2026-10-21");
+  assert.deepEqual(data.boss.log.map((x) => [x.kind, x.damage]), [["task", 96], ["habit", 15]]);
+  assert.equal(data.boss.log[0].name, "モジゴーレム");
+  assert.equal(data.boss.log[0].stars, 3);
+  const patch = calls.find((c) => c.method === "PATCH" && c.path === `/pages/${E1}`);
+  assert.deepEqual(patch.body.properties.撃破日, { date: { start: "2026-10-21" } });
+  assert.equal(data.stats.かしこさ, 1); // (10+40)/50
+  // 倒したので次の話が開く
+  const { chapters } = await (await req("GET", "/api/story")).json();
+  assert.equal(chapters.find((c) => c.id === E2).locked, false);
+});
+
+test("ぼうけん：あいぼうの型が弱点と同じなら、こうかばつぐん（1.2倍）", async () => {
+  pages.push(pet({ 段階: { type: "select", select: { name: "成長期" } }, 成長期の型: { type: "select", select: { name: "かしこさ" } }, 進化履歴: { type: "rich_text", rich_text: text("2026-10-19 孵化／2026-10-19 成長期（かしこさ）") } }));
+  pages.push(ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } } }));
+  pages.find((p) => p.id === "day20").properties["◇☼ 新聞"].checkbox = true;
+  const data = await (await req("GET", "/api/battle")).json();
+  assert.equal(data.boss.petHit, true);
+  assert.equal(data.boss.damage, 18); // 10 × 1.5 × 1.2
+  assert.equal(data.boss.defeatedOn, null);
 });

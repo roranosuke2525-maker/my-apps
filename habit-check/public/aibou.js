@@ -23,14 +23,14 @@ export function petName(stage, type) {
 }
 
 // ドット絵1コマを SVG の <g> にする（横に続く同じ色はまとめて1つの四角）
-function frameSvg(sp, rows) {
+function frameSvg(palette, rows) {
   let out = "";
   rows.forEach((row, y) => {
     for (let x = 0; x < row.length;) {
       const c = row[x];
       let w = 1;
       while (row[x + w] === c) w++;
-      if (c !== ".") out += `<rect x="${x}" y="${y}" width="${w}" height="1" fill="${sp.palette[c]}"/>`;
+      if (c !== ".") out += `<rect x="${x}" y="${y}" width="${w}" height="1" fill="${palette[c]}"/>`;
       x += w;
     }
   });
@@ -62,7 +62,7 @@ export function renderPet(stage, type, motion = "idle", { crack = 0, size = 160 
     ? { idle: sp.frames[["idle", "crack1", "crack2"][crack] || "idle"], blink: sp.frames.crack2 }
     : sp.frames;
   el.innerHTML = `<div class="pet-body"><svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
-    `<g class="f-idle">${frameSvg(sp, frames.idle)}</g><g class="f-blink">${frameSvg(sp, frames.blink)}</g></svg></div>` +
+    `<g class="f-idle">${frameSvg(sp.palette, frames.idle)}</g><g class="f-blink">${frameSvg(sp.palette, frames.blink)}</g></svg></div>` +
     `<div class="pet-fx" aria-hidden="true"></div>`;
   el.dataset.kind = key === "egg" ? "egg" : "pet";
 
@@ -108,6 +108,36 @@ export function renderPet(stage, type, motion = "idle", { crack = 0, size = 160 
     import("./aibou-3d.js").then((m) => m.mount(el, url, el.dataset.motion)).catch(() => {});
   });
   return el;
+}
+
+// ---------- モンスター（ぼうけん） ----------
+// shape：slime / goblin / golem / dragon / boss、colors：[ふつう, かげ, ひかり]（src/battle-config.js の種族の色）
+export function renderMonster(shape, colors, { size = 56, motion = "idle" } = {}) {
+  const sp = SPRITES[`mon_${shape}`] || SPRITES.mon_slime;
+  const palette = { ...sp.palette, b: colors?.[0] || sp.palette.b, s: colors?.[1] || sp.palette.s, l: colors?.[2] || sp.palette.l };
+  const el = document.createElement("div");
+  el.className = "pet monster";
+  el.style.setProperty("--pet-size", `${size}px`);
+  el.dataset.motion = motion;
+  el.innerHTML = `<div class="pet-body"><svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
+    `<g class="f-idle">${frameSvg(palette, sp.frames.idle)}</g><g class="f-blink">${frameSvg(palette, sp.frames.blink)}</g></svg></div>`;
+  return el;
+}
+
+// ---------- ものがたりの本文の置き換え ----------
+// {あいぼう}＝名前、{すがた}＝いまの姿の名前、{型:ちから=…;かしこさ=…;やさしさ=…;しっかり=…;バランス=…;ほか=…}＝型で変わる一文
+export function fillStory(text, pet) {
+  const stage = pet?.stage || "たまご";
+  const type = stage === "成長期" || stage === "成体" ? pet?.type : null;
+  const form = stage === "たまご" ? "たまご" : petName(stage, type);
+  const name = pet?.name || form || "あいぼう";
+  return String(text)
+    .replaceAll("{あいぼう}", name)
+    .replaceAll("{すがた}", form || "たまご")
+    .replace(/\{型:([^}]*)\}/g, (_, body) => {
+      const opts = Object.fromEntries(body.split(";").map((kv) => kv.split("=")).filter((kv) => kv.length === 2).map(([k, v]) => [k.trim(), v.trim()]));
+      return (type && opts[type]) || opts.ほか || "";
+    });
 }
 
 // ---------- セリフ（段階×型ごと。数パターンからランダム） ----------

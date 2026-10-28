@@ -72,13 +72,30 @@ const mock = `
     { id: "s".repeat(31) + "2", title: "第2章　きこりのモリ", kind: "ほんぺん", order: 2, unlockLv: 3, state: "よめる", read: false },
     { id: "s".repeat(31) + "3", title: "第3章　霧の湖", kind: "ほんぺん", order: 3, unlockLv: 15, state: "", read: false },
     { id: "s".repeat(31) + "4", title: "寄り道　台所の小人", kind: "よりみち", order: 101, unlockLv: 3, state: "依頼「台所の砦」を1回たっせいで よめる", read: false },
+    { id: "s".repeat(31) + "5", title: "第1話　たまごと灰", kind: "エピソード2", order: 201, unlockLv: 1, state: "⚔️ ボスと たたかっている", read: true, boss: "灰のスライム", hp: 300, weak: "しっかり" },
+    { id: "s".repeat(31) + "6", title: "第2話　ぴしっ、ぱりん", kind: "エピソード2", order: 202, unlockLv: 1, state: "🔒 前の話のボスを倒すと開く", read: false, locked: true },
   ];
   const storyText = [
     { type: "p", text: "（デモ用の文章です）木の香りのする部屋で、ひかるは目をさました。" },
     { type: "p", text: "窓の外では、朝の霧がゆっくりと晴れていく。" },
     { type: "quote", text: "【SYSTEM】デモの章を読みました" },
   ];
-  const withLv = (c) => ({ ...c, playerLv: level(), locked: level() < c.unlockLv });
+  const withLv = (c) => ({ ...c, playerLv: level(), locked: c.locked || level() < c.unlockLv });
+  // ぼうけん：第1話のボスと、タスクのモンスター（作りもの）
+  const fam = { ホコリ: ["#9aa0a6", "#6f757b", "#d7dadd"], コイン: ["#f2c14e", "#c9962a", "#fff0b8"], モジ: ["#7fb2f0", "#4f84c9", "#d4e6fc"], ヨナキ: ["#f4a3b8", "#d97c95", "#ffd9e3"] };
+  const mon = (i, family, rank, shape, title, stars, status, weight) => ({ id: "t" + i, url: "", title, status, weight, family, colors: fam[family], shape, name: family + rank, stars, ageDays: stars * 14 + 3 });
+  const monsters = [
+    mon(1, "ホコリ", "ドラゴン", "dragon", "物置を空にする", 5, "🕰 SOMEDAY", "XL"), mon(2, "コイン", "ゴーレム", "golem", "保険を見直す", 3, "📥 INBOX", "L"),
+    mon(3, "モジ", "ゴブリン", "goblin", "本を1冊読みきる", 1, "⏭ NEXT", "M"), mon(4, "ヨナキ", "スライム", "slime", "保育園の書類", 0, "▶️ DOING", "S"),
+    mon(5, "ホコリ", "スライム", "slime", "玄関のマット", 0, "⏭ NEXT", "S"),
+  ];
+  const battle = () => {
+    const t = Object.entries(rows[today].checks).filter(([, v]) => v).reduce((s, [n]) => s + AIBOU[n].exp, 0);
+    return { boss: { chapterId: "s".repeat(31) + "5", chapter: "第1話　たまごと灰", name: "灰のスライム", hp: 300, weak: "しっかり", start: addDays(today, -1),
+      damage: Math.min(300, 140 + t), today: t, petHit: false, mult: 1.02, defeatedOn: null,
+      log: [{ date: today, kind: "habit", damage: t }, { date: addDays(today, -1), kind: "task", name: "コインゴーレム", title: "保険を見直す", stars: 3, family: "コイン", shape: "golem", colors: fam.コイン, damage: 84 }, { date: addDays(today, -1), kind: "habit", damage: 56 }] },
+      next: null, cleared: false, stats: { ちから: 31, かしこさ: 52, やさしさ: 40, しっかり: 63 }, pet: { name: "", stage: "成長期", type: "ちから" }, monsters, moreMonsters: false };
+  };
   const player = () => ({ id: "player", url: "", name: "デモのプレイヤー", level: level(), toNext: EXP_PER_LV - (total() % EXP_PER_LV),
     totalExp: total(), habitExp: habitExp(), taskExp, guildExp,
     status: "ちから 12 ／ まもり 9 ／ かしこさ 14", party: "モリ（きこり）・ノア（ものしり）", spell: "ととのえ（Lv3）\\nはやおき（Lv5）" });
@@ -123,6 +140,7 @@ const mock = `
       reports.unshift(r);
       return reply({ report: r });
     }
+    if (p === "/api/battle") return reply(battle());
     if (p === "/api/aibou" && method === "PATCH") { pet.name = body.name; return reply({ pet }); }
     if (p === "/api/aibou") return reply(aibouData());
     if (p === "/api/story") return reply({ chapters: chapters.map(withLv) });

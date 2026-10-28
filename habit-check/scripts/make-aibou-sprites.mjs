@@ -289,7 +289,82 @@ const PETS = {
   },
 };
 
+// ---------- モンスター（ぼうけん）：b/s/l は種族の色で置き換える ----------
+const MON_PALETTE = { o: "#2a2230", b: "#9aa0a6", s: "#6f757b", l: "#d7dadd", e: "#1d1820", w: "#ffffff", r: "#d2463c", y: "#ffd447", k: "#c9c3b6" };
+const MONSTERS = {
+  mon_slime: {
+    name: "スライム",
+    draw(g, { blink }) {
+      fill(g, and(or(ellipse(16, 23, 11, 8), ellipse(16, 17, 6, 7)), rect(0, 0, 32, 30)), "b", { shade: "s", light: "l" });
+      px(g, [[16, 9], [16, 10]], "b");
+      if (blink) { line(g, 11, 21, 13, 21, "o"); line(g, 19, 21, 21, 21, "o"); }
+      else { fill(g, rect(11, 19, 2, 3), "e"); fill(g, rect(19, 19, 2, 3), "e"); px(g, [[11, 19], [19, 19]], "w"); }
+      line(g, 10, 18, 13, 19, "o"); line(g, 22, 18, 19, 19, "o"); // つり目
+      px(g, [[14, 25], [15, 24], [16, 24], [17, 25]], "o");
+      return outline(g);
+    },
+  },
+  mon_goblin: {
+    name: "ゴブリン",
+    draw(g, { blink }) {
+      fill(g, rect(22, 12, 3, 14), "k", { edge: true }); fill(g, ellipse(23.5, 11, 3, 3.5), "k", { edge: true }); // こん棒
+      fill(g, ellipse(15, 23, 7, 6), "s", { edge: true });
+      fill(g, poly([[5, 9], [1, 6], [8, 13]]), "b", { edge: true }); fill(g, poly([[25, 9], [29, 6], [22, 13]]), "b", { edge: true }); // とがった耳
+      fill(g, ellipse(15, 13, 8, 7), "b", { shade: "s", light: "l", edge: true });
+      if (blink) { line(g, 10, 13, 12, 13, "o"); line(g, 17, 13, 19, 13, "o"); }
+      else { fill(g, rect(10, 11, 3, 3), "y"); fill(g, rect(17, 11, 3, 3), "y"); px(g, [[11, 12], [18, 12]], "e"); }
+      line(g, 11, 17, 18, 17, "o"); px(g, [[12, 18], [17, 18]], "w"); // きば
+      fill(g, rect(10, 28, 3, 2), "s", { edge: true }); fill(g, rect(17, 28, 3, 2), "s", { edge: true });
+      return outline(g);
+    },
+  },
+  mon_golem: {
+    name: "ゴーレム",
+    draw(g, { blink }) {
+      fill(g, rect(3, 13, 6, 12), "s", { edge: true }); fill(g, rect(23, 13, 6, 12), "s", { edge: true }); // うで
+      fill(g, rect(8, 11, 16, 15), "b", { shade: "s", light: "l", edge: true });
+      fill(g, rect(11, 3, 10, 9), "b", { shade: "s", edge: true }); // あたま
+      if (blink) line(g, 13, 7, 18, 7, "o"); else { fill(g, rect(13, 6, 2, 2), "r"); fill(g, rect(17, 6, 2, 2), "r"); }
+      for (const [x, y] of [[11, 15], [18, 19], [14, 22], [20, 14]]) px(g, [[x, y], [x + 1, y]], "s");
+      fill(g, rect(9, 26, 5, 4), "s", { edge: true }); fill(g, rect(18, 26, 5, 4), "s", { edge: true });
+      return outline(g);
+    },
+  },
+  mon_dragon: {
+    name: "ドラゴン",
+    draw(g, opts) {
+      drawDragon(g, opts);
+      return outline(g);
+    },
+  },
+  mon_boss: {
+    name: "ボス",
+    draw(g, opts) {
+      drawDragon(g, opts);
+      fill(g, poly([[9, 4], [10, 0], [12, 3], [14, 0], [16, 3], [18, 0], [19, 4]]), "y", { edge: true }); // かんむり
+      px(g, [[14, 2]], "r");
+      return outline(g);
+    },
+  },
+};
+
+function drawDragon(g, { blink }) {
+  fill(g, poly([[18, 12], [31, 4], [29, 16], [22, 19]]), "s", { edge: true }); // つばさ
+  fill(g, poly([[20, 22], [31, 26], [30, 29], [19, 27]]), "b", { edge: true }); // しっぽ
+  fill(g, ellipse(16, 21, 8, 7.5), "b", { shade: "s", edge: true });
+  fill(g, ellipse(15, 22.5, 4.5, 4.5), "l");
+  fill(g, ellipse(12, 10.5, 7.5, 5.5), "b", { shade: "s", light: "l", edge: true }); // あたま
+  fill(g, poly([[8, 6], [6, 1], [10, 5]]), "y", { edge: true }); fill(g, poly([[15, 6], [17, 1], [13, 5]]), "y", { edge: true });
+  if (blink) line(g, 8, 10, 10, 10, "o"); else { fill(g, rect(8, 9, 2, 2), "y"); px(g, [[9, 10]], "e"); }
+  line(g, 5, 13, 11, 13, "o"); px(g, [[6, 14], [9, 14]], "w"); px(g, [[4, 11], [4, 12]], "r"); // 口とほのお
+  fill(g, rect(10, 27, 4, 3), "s", { edge: true }); fill(g, rect(17, 27, 4, 3), "s", { edge: true });
+}
+
 const out = {};
+for (const [key, mon] of Object.entries(MONSTERS)) {
+  const frame = (opts) => rows(mon.draw(canvas(), opts));
+  out[key] = { name: mon.name, palette: MON_PALETTE, frames: { idle: frame({}), blink: frame({ blink: true }) } };
+}
 for (const [key, pet] of Object.entries(PETS)) {
   const frame = (opts) => rows(pet.draw(canvas(), opts));
   out[key] = {
@@ -302,7 +377,7 @@ for (const [key, pet] of Object.entries(PETS)) {
 }
 
 const target = new URL("../public/aibou-sprites.js", import.meta.url);
-writeFileSync(target, `// あいぼうのドット絵（32×32）。scripts/make-aibou-sprites.mjs が作る（手で直してもよい）
+writeFileSync(target, `// あいぼうとモンスターのドット絵（32×32）。scripts/make-aibou-sprites.mjs が作る（手で直してもよい）
 // 1文字＝1ピクセル。. は透明、それ以外は palette の色
 export const SPRITES = ${JSON.stringify(out, null, 1).replace(/\n\s*/g, (m) => (m.length > 3 ? "\n  " : "\n"))};
 `);
