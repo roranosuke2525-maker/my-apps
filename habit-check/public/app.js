@@ -236,6 +236,7 @@ async function loadDay({ quiet = false } = {}) {
     state.row = data.row;
     state.savedNote = data.row?.note || "";
     state.dayError = "";
+    updateBadge();
   } catch (err) {
     state.dayError = err.message;
     if (quiet) toast(err.message, true);
@@ -402,7 +403,28 @@ function setCheck(rowId, name, value) {
 }
 
 function rerenderHabit() {
+  updateBadge();
   if (state.view === "habit") show();
+}
+
+// ホーム画面のアイコンの赤い数字＝今日のまだチェックしていない習慣の数（★ボーナスとお休みの曜日は数えない）。
+// 開いたとき・チェックしたときに更新する（閉じているあいだは変わらない）。iPhone は通知の許可が要る
+function updateBadge() {
+  if (!state.row || state.date !== todayJst() || !("setAppBadge" in navigator)) return;
+  const left = state.habits.filter((x) => counts(x, state.date) && !state.row.checks[x.name]).length;
+  (left ? navigator.setAppBadge(left) : navigator.clearAppBadge()).catch(() => {});
+}
+
+function setupBadgeButton() {
+  const btn = $("badge-btn");
+  const can = "setAppBadge" in navigator && "Notification" in window;
+  btn.hidden = !can || Notification.permission !== "default";
+  btn.onclick = async () => {
+    const res = await Notification.requestPermission().catch(() => "denied");
+    btn.hidden = true;
+    if (res === "granted") { updateBadge(); toast("アイコンに のこりの数を出します"); }
+    else toast("通知が許可されなかったので、数は出せません", true);
+  };
 }
 
 function saveNote(row, input, save) {
@@ -1349,6 +1371,7 @@ if ("serviceWorker" in navigator) {
 }
 
 function start() {
+  setupBadgeButton();
   show();
   if (!memoryKey) return;
   loadDay();
