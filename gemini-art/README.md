@@ -14,6 +14,7 @@ Cloudflare ダッシュボード → Workers → gemini-art → 設定 → 変�
 | --- | --- |
 | `GEMINI_API_KEY` | Google AI Studio の API キー |
 | `MCP_PATH_TOKEN` | コネクタ URL の合言葉（英数字30文字以上。パスワード生成で作る） |
+| `SCRIPT_TOKEN` | Claude Code のスクリプト（habit-check/scripts/gen-party-gemini.mjs）用の合言葉。任意 |
 
 コネクタの URL は `https://gemini-art.roranosuke2525.workers.dev/mcp/<MCP_PATH_TOKEN>`。
 URL を知っている人は誰でもキーで絵を描けるので、人に見せない。漏れたら `MCP_PATH_TOKEN` を入れ替えて、コネクタを登録し直す。

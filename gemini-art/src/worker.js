@@ -2,6 +2,7 @@
 //   POST /mcp/<MCP_PATH_TOKEN>  … MCP（JSON-RPC。Streamable HTTP の JSON 応答だけを使う）
 //   GET  /i/<id>.png            … 描いた絵（30日で消える。id は推測できない長さ）
 // キーは Worker の secret にだけ置く：GEMINI_API_KEY（Google AI Studio のキー）、MCP_PATH_TOKEN（URLの合言葉）
+// SCRIPT_TOKEN（任意）：Claude Code のスクリプト用の合言葉。コネクタとは別にしておけば、片方だけ入れ替えられる
 
 const SERVER = { name: "gemini-art", version: "1.0.0" };
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -41,7 +42,8 @@ export default {
     if (img && request.method === "GET") return serveImage(env, img[1]);
 
     const m = url.pathname.match(/^\/mcp\/([^/]+)\/?$/);
-    if (!m || !env.MCP_PATH_TOKEN || !safeEqual(m[1], env.MCP_PATH_TOKEN)) {
+    const tokens = [env.MCP_PATH_TOKEN, env.SCRIPT_TOKEN].filter(Boolean);
+    if (!m || !tokens.some((t) => safeEqual(m[1], t))) {
       return new Response("not found", { status: 404 });
     }
     if (request.method !== "POST") return new Response("method not allowed", { status: 405, headers: { Allow: "POST" } });
