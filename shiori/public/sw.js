@@ -1,5 +1,5 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク）
-const CACHE = "shiori-v2";
+const CACHE = "shiori-v3";
 const SHELL = ["./", "index.html", "app.js", "parse.js", "style.css", "manifest.webmanifest", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

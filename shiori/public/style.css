@@ -211,3 +211,4 @@ details.guide ol { margin: 10px 0 0; padding-left: 1.3em; font-size: 0.86rem; co
 .term-foot .spacer { flex: 1; }
 .hidden-note { font-size: 0.8rem; color: var(--ink-2); text-align: center; }
 .linkish.danger { color: var(--warn); }
+.chip.by-claude { background: color-mix(in srgb, var(--cloth) 14%, transparent); color: var(--cloth); }

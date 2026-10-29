@@ -352,6 +352,7 @@ function termOf(page) {
     desc: propText(p["説明"]),
     memo: propText(p["メモ"]),
     date: propDate(p["記録日"]),
+    by: propText(p["書いた人"]),
   };
 }
 
@@ -399,6 +400,7 @@ async function addTerm(notion, env, body) {
   await rowOf(notion, bookId, env.BOOK_DS_ID, "読書メモ_DB ");
   properties["本"] = { relation: [{ id: bookId }] };
   properties["記録日"] = { date: { start: jstDate(new Date().toISOString()) } };
+  properties["書いた人"] = { select: { name: "✍️ 自分" } };
   const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: termDs(env) }, properties });
   return { term: termOf(page) };
 }

@@ -192,7 +192,7 @@ function setupAddBook() {
       selectBook(book.id);
       state.filter = "読中";
       renderAll();
-      toast(`『${book.title}』を足しました`);
+      toast(`『${book.title}』を足しました。辞典は次の 7:08 か 21:08 に Claude が用意します`);
     } catch (err) {
       toast(err.message);
     } finally {
@@ -228,7 +228,12 @@ function closeSheet() {
 function renderSheet(b, data) {
   const go = (view) => { closeSheet(); selectBook(b.id); show(view); };
   const statusSel = el("select", { id: "sheet-status", "aria-label": "ステータス", onchange: async (e) => {
-    try { const { book } = await api("PATCH", `/api/books/${b.id}`, { status: e.target.value }); replaceBook(book); renderAll(); toast(`${book.status}にしました`); } catch (err) { toast(err.message); }
+    try {
+      const { book } = await api("PATCH", `/api/books/${b.id}`, { status: e.target.value });
+      replaceBook(book);
+      renderAll();
+      toast(book.status === "読中" && !b.termCount ? "読中にしました。辞典は次の 7:08 か 21:08 に Claude が用意します" : `${book.status}にしました`);
+    } catch (err) { toast(err.message); }
   } }, STATUSES.map((s) => el("option", { value: s, selected: s === b.status }, s)));
 
   const list = data.highlights.length
@@ -619,6 +624,7 @@ async function renderDict() {
         el("div", { class: "term-head" },
           el("strong", {}, t.term),
           el("span", { class: "chip" }, t.kind || "✦ その他"),
+          t.by === "🤖 Claude" ? el("span", { class: "chip by-claude", title: "読み始めの下準備で Claude が書いた語" }, "🤖 下準備") : null,
           t.page != null ? el("span", { class: "count" }, `p.${t.page}`) : null),
         t.desc ? el("p", { class: "term-desc" }, t.desc) : el("p", { class: "term-desc none" }, "説明はまだありません"),
         t.memo ? el("div", { class: "term-memo" }, t.memo) : null,

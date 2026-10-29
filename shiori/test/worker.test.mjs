@@ -67,7 +67,7 @@ beforeEach(() => {
     [hex(22), hl(hex(22), B1, "前のページ", 3, { loc: "40", source: "📱 Kindle" })],
     [hex(31), { object: "page", id: hex(31), url: "https://www.notion.so/legacy31", parent: { type: "page_id", page_id: B2 }, properties: { title: { type: "title", title: rt("前の形の引用") } } }],
     [hex(32), { object: "page", id: hex(32), url: "https://www.notion.so/legacy32", parent: { type: "page_id", page_id: B2 }, properties: { title: { type: "title", title: rt("もう一つ") } } }],
-    [hex(41), row(hex(41), TERM_DS, { 語: { type: "title", title: rt("ドクダミ") }, 本: { type: "relation", relation: [{ id: B1 }] }, 種別: { type: "select", select: { name: "🌿 植物" } }, ページ: { type: "number", number: 30 }, 説明: { type: "rich_text", rich_text: rt("白い花の野草") }, メモ: { type: "rich_text", rich_text: [] }, 記録日: { type: "date", date: { start: "2026-10-28" } } })],
+    [hex(41), row(hex(41), TERM_DS, { 語: { type: "title", title: rt("ドクダミ") }, 本: { type: "relation", relation: [{ id: B1 }] }, 種別: { type: "select", select: { name: "🌿 植物" } }, 書いた人: { type: "select", select: { name: "🤖 Claude" } }, ページ: { type: "number", number: 30 }, 説明: { type: "rich_text", rich_text: rt("白い花の野草") }, メモ: { type: "rich_text", rich_text: [] }, 記録日: { type: "date", date: { start: "2026-10-28" } } })],
     [hex(42), row(hex(42), TERM_DS, { 語: { type: "title", title: rt("鎌倉") }, 本: { type: "relation", relation: [{ id: B1 }] }, 種別: { type: "select", select: { name: "📍 舞台" } }, ページ: { type: "number", number: 5 }, 説明: { type: "rich_text", rich_text: [] }, メモ: { type: "rich_text", rich_text: [] } })],
     [hex(9), row(hex(9), "other-ds", { 名前: { type: "title", title: rt("ほかのDB") } })],
   ]);
@@ -242,7 +242,7 @@ test("インテグレーション未接続は分かる言葉で返す", async ()
 test("読書辞典：本ごとに出てきた順で読む", async () => {
   const { status, data } = await api("GET", `/api/books/${B1}/terms`);
   assert.equal(status, 200);
-  assert.deepEqual(data.terms.map((t) => [t.term, t.kind, t.page, t.desc]), [["鎌倉", "📍 舞台", 5, ""], ["ドクダミ", "🌿 植物", 30, "白い花の野草"]]);
+  assert.deepEqual(data.terms.map((t) => [t.term, t.kind, t.page, t.desc, t.by]), [["鎌倉", "📍 舞台", 5, "", ""], ["ドクダミ", "🌿 植物", 30, "白い花の野草", "🤖 Claude"]]);
   assert.equal(calls.find((c) => c.path === `/data_sources/${TERM_DS}/query`).body.filter.relation.contains, B1);
   assert.deepEqual((await api("GET", `/api/books/${B2}/terms`)).data.terms, []);
   assert.equal((await api("GET", `/api/books/${hex(41)}/terms`)).status, 403);
@@ -259,6 +259,7 @@ test("読書辞典：足す・直す・消す。種別とページを確かめ�
   assert.deepEqual(c.body.properties["ページ"], { number: 12 });
   assert.ok(!("説明" in c.body.properties), "送られていない項目は書かない");
   assert.match(c.body.properties["記録日"].date.start, /^\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual(c.body.properties["書いた人"], { select: { name: "✍️ 自分" } });
   assert.equal(add.data.term.term, "叔母 さん");
 
   const noKind = await api("POST", "/api/terms", { bookId: B3, term: "なにか" });
