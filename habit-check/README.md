@@ -50,6 +50,18 @@ Notion の「🌅 習慣」ページの5つのタブ（習慣チェック・パ�
   - 本文の `{あいぼう}`（名前）・`{すがた}`（いまの姿）・`{型:ちから=…;かしこさ=…;…;ほか=…}`（あいぼうの型で変わる一文）は画面で置き換わる
 - アーティファクト版（MCP）では使えない（エピソード2の話のロックだけは撃破日で判定する）
 
+## ものがたりの劇と絵
+
+- ものがたりは「劇」で読む（`public/theater.js`）。背景が横に流れ、立ち絵の上に吹き出し、地の文は下の帯。
+  【SYSTEM】は青い窓、【WARNING】は赤い点滅と揺れ、効果音の語（ぱりん・べちゃ…）は大きな文字で出る。オート・ログ・もどる・とばす あり。
+- 台本は本文から作る（`public/theater-script.js`）。せりふの話し手は `public/theater-speakers.js`（本文を見て付けたもの）。
+  **本文（story/episode2/*.md や Notion）の段落を足し引きしたら、その話の話し手も直す**（`npm test` が数の食い違いを知らせる。合わない話は自動の推しはかりで動く）。
+- 背景は `public/theater-stage.js`（話ごとの背景と、場面が変わる合図の語）。
+- 絵はすべて Google Gemini で描いた（`gemini-art` の Worker 経由。キーは Cloudflare にだけある）。
+  - 一覧：`scripts/art-manifest.mjs`（あいぼう・モンスター32種・章ボス49体・登場人物・背景28枚）
+  - 描く：`GEMINI_ART_URL=<コネクタのURL> STYLE_REF_URL=<絵柄の見本> node scripts/gen-art.mjs <保存先>`
+  - 仕上げ：`python3 scripts/finish-art.py <保存先>`（背景を抜いて public/img/*.webp）→ `node scripts/make-art-index.mjs`
+
 ## 2つの動かし方
 
 | | アーティファクト版（MCP） | Cloudflare版 |

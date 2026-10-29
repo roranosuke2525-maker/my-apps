@@ -1,6 +1,7 @@
 // 習慣チェック（画面側）。Notion へは必ず Worker の /api を経由する。
 // 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）と、あいぼうを1画面ずつで見せる。
 import { renderPet, renderMonster, renderItem, fillStory, petLine, petName, evolveStory, SLEEP_LINES, TYPE_COLORS } from "./aibou.js";
+import { openTheater } from "./theater.js";
 
 const KEY_STORAGE = "habit-check:key";
 const MAX_BACK_DAYS = 6;
@@ -681,7 +682,7 @@ function bossCard(data) {
   const left = Math.max(0, b.hp - b.damage);
   const pet = data.pet;
   const won = !!b.defeatedOn;
-  const sprite = renderMonster("boss", BOSS_COLORS[b.weak] || BOSS_COLORS.バランス, { size: 120, motion: won ? "defeated" : "idle" });
+  const sprite = renderMonster("boss", BOSS_COLORS[b.weak] || BOSS_COLORS.バランス, { size: 140, motion: won ? "defeated" : "idle", boss: b.name });
   return h("div", { class: `card boss-card${won ? " won" : ""}` },
     h("span", { class: "sub", text: b.chapter }),
     h("h2", { class: "boss-name", text: b.name }),
@@ -1023,38 +1024,35 @@ function chapterRow(c) {
 }
 
 async function openChapter(c) {
-  const toggleBtn = h("button", { type: "button", class: "primary" }, c.read ? "「よんだ」を外す" : "よんだ");
-  openSheet(c.title, [loadingEl()], [toggleBtn]);
-  toggleBtn.addEventListener("click", async () => {
-    toggleBtn.disabled = true;
-    try {
-      const { chapter } = await api("PATCH", `/api/story/${c.id}`, { read: !c.read });
-      Object.assign(c, chapter);
-      toast(chapter.read ? "よんだ を付けました" : "よんだ を外しました");
-      closeSheet();
-      state.loadedAt.battle = 0;
-      // エピソード2 の話を読んだら、ボス戦へ
-      if (chapter.read && chapter.kind === "エピソード2" && chapter.boss && !chapter.defeated) {
-        state.view = "battle";
-        show();
-        return;
-      }
-      renderStory();
-    } catch (err) {
-      toast(err.message, true);
-      toggleBtn.disabled = false;
-    }
-  });
+  // 劇で見せる（文字だけで読みたいときは、劇の「ログ」）
+  const wait = h("div", { class: "theater-loading" }, h("span", { class: "spinner" }), h("span", { text: "舞台を じゅんび中…" }));
+  document.body.append(wait);
   try {
-    const [{ blocks }, pet] = await Promise.all([api("GET", `/api/story/${c.id}`), storyPet()]);
-    if ($("sheet").hidden || $("sheet-title").textContent !== c.title) return;
-    const t = (s) => fillStory(s, pet);
-    $("sheet-body").replaceChildren(h("div", { class: "reader" }, blocks.length
-      ? blocks.map((b) => (b.type === "quote" ? h("blockquote", { text: t(b.text) }) : b.type === "heading" ? h("h3", { text: t(b.text) }) : h("p", { text: t(b.text) })))
-      : h("p", { class: "sub", text: "本文がありません" })));
-    $("sheet-body").scrollTop = 0;
+    const [{ blocks }, pet, party] = await Promise.all([api("GET", `/api/story/${c.id}`), storyPet(), loadData("party", "/api/party")]);
+    const hero = party?.members?.find((m) => m.kind === "しゅじんこう")?.name || "";
+    openTheater({ chapter: c, blocks, pet, hero, onRead: () => markRead(c, true), onUnread: () => markRead(c, false) });
   } catch (err) {
-    $("sheet-body").replaceChildren(h("p", { class: "err", text: err.message }));
+    toast(err.message, true);
+  } finally {
+    wait.remove();
+  }
+}
+
+async function markRead(c, read) {
+  try {
+    const { chapter } = await api("PATCH", `/api/story/${c.id}`, { read });
+    Object.assign(c, chapter);
+    toast(chapter.read ? "よんだ を付けました" : "よんだ を外しました");
+    state.loadedAt.battle = 0;
+    // エピソード2 の話を読んだら、ボス戦へ
+    if (chapter.read && chapter.kind === "エピソード2" && chapter.boss && !chapter.defeated) {
+      state.view = "battle";
+      show();
+      return;
+    }
+    renderStory();
+  } catch (err) {
+    toast(err.message, true);
   }
 }
 

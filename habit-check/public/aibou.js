@@ -1,6 +1,12 @@
 // あいぼう（画面側）：キャラの描画・セリフ・進化のひとこと。
 // 描画は renderPet(段階, 型, 動き) だけを呼ぶ。assets/aibou/ に GLB があれば 3D 表示（aibou-3d.js）に、無ければドット絵。
 import { SPRITES } from "./aibou-sprites.js";
+import { BOSS_IMAGES, FAMILY_BY_COLOR } from "./art-index.js";
+
+// Gemini で描いた絵（img/<名前>.webp）。読めなければドット絵のまま
+function artImg(name, alt) {
+  return `<img class="art" src="img/${name}.webp" alt="${alt}" draggable="false" onerror="this.closest('.art-host')?.classList.remove('has-art');this.remove()">`;
+}
 
 export const TYPE_COLORS = { ちから: "#e0603a", かしこさ: "#4a7fd6", やさしさ: "#e2789e", しっかり: "#4f9a6a" };
 const TYPE_KEYS = { ちから: "power", かしこさ: "wisdom", やさしさ: "kind", しっかり: "steady", バランス: "balance" };
@@ -61,7 +67,9 @@ export function renderPet(stage, type, motion = "idle", { crack = 0, size = 160 
   const frames = key === "egg"
     ? { idle: sp.frames[["idle", "crack1", "crack2"][crack] || "idle"], blink: sp.frames.crack2 }
     : sp.frames;
-  el.innerHTML = `<div class="pet-body"><svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
+  const art = key === "egg" ? ["egg", "egg_crack1", "egg_crack2"][crack] || "egg" : key;
+  el.classList.add("art-host", "has-art");
+  el.innerHTML = `<div class="pet-body">${artImg(`pet/${art}`, "")}<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
     `<g class="f-idle">${frameSvg(sp.palette, frames.idle)}</g><g class="f-blink">${frameSvg(sp.palette, frames.blink)}</g></svg></div>` +
     `<div class="pet-fx" aria-hidden="true"></div>`;
   el.dataset.kind = key === "egg" ? "egg" : "pet";
@@ -112,14 +120,18 @@ export function renderPet(stage, type, motion = "idle", { crack = 0, size = 160 
 
 // ---------- モンスター（ぼうけん） ----------
 // shape：slime / goblin / golem / dragon / boss、colors：[ふつう, かげ, ひかり]（src/battle-config.js の種族の色）
-export function renderMonster(shape, colors, { size = 56, motion = "idle" } = {}) {
+// boss：章ボスの名前（あれば、そのボスの絵）
+export function renderMonster(shape, colors, { size = 56, motion = "idle", boss = null } = {}) {
   const sp = SPRITES[`mon_${shape}`] || SPRITES.mon_slime;
   const palette = { ...sp.palette, b: colors?.[0] || sp.palette.b, s: colors?.[1] || sp.palette.s, l: colors?.[2] || sp.palette.l };
   const el = document.createElement("div");
   el.className = "pet monster";
   el.style.setProperty("--pet-size", `${size}px`);
   el.dataset.motion = motion;
-  el.innerHTML = `<div class="pet-body"><svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
+  const fam = FAMILY_BY_COLOR[colors?.[0]];
+  const art = shape === "boss" ? BOSS_IMAGES[boss] : fam && shape !== "boss" ? `mon/${fam}_${shape}` : null;
+  if (art) el.classList.add("art-host", "has-art");
+  el.innerHTML = `<div class="pet-body">${art ? artImg(art, "") : ""}<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
     `<g class="f-idle">${frameSvg(palette, sp.frames.idle)}</g><g class="f-blink">${frameSvg(palette, sp.frames.blink)}</g></svg></div>`;
   return el;
 }

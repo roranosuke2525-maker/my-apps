@@ -420,3 +420,153 @@ textarea { resize: none; }
 }
 .habits.compact .slot-label .slot-name { display: none; }
 .habits.compact .slot-label .slot-icon { font-size: 14px; }
+
+/* ================= ものがたりの劇（theater.js） ================= */
+body.theater-open { overflow: hidden; }
+.theater { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: #0d0b12; color: #fff; user-select: none; -webkit-user-select: none; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); animation: th-in 0.35s ease-out; }
+.theater.closing { animation: th-out 0.25s ease-in forwards; }
+@keyframes th-in { from { opacity: 0; transform: scale(1.02); } }
+@keyframes th-out { to { opacity: 0; } }
+.th-top { flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 12px; color: #d9cfe6; }
+.th-title { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.th-progress { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.th-progress-bar { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f6cf55, #ff9a5c); transition: width 0.4s; }
+
+.th-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: pointer; background: #1a1622; }
+.th-bgwrap { position: absolute; inset: 0; overflow: hidden; }
+/* 背景は高さに合わせ、はみ出した横幅を --pan（0〜1）で左から右へ流す */
+.th-bg { position: absolute; top: 0; left: 0; height: 100%; width: auto; min-width: 100%; object-fit: cover; opacity: 0;
+  --shift: calc((100cqw - 100%) * var(--pan, 0)); transform: translateX(var(--shift)); transition: transform 1.6s cubic-bezier(.4, .1, .3, 1), opacity 0.8s; }
+.th-bgwrap { container-type: inline-size; }
+.th-bg.show { opacity: 1; }
+.th-bg.in { transform: translateX(40%); opacity: 0; transition: none; }
+.th-bg.out { transform: translateX(calc(var(--shift) - 40%)); opacity: 0; transition: transform 0.9s ease-in, opacity 0.9s; }
+.th-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(0, 0, 0, 0.55)); }
+.theater[data-kind="pause"] .th-vignette { background: rgba(0, 0, 0, 0.6); transition: background 0.5s; }
+.th-stage.shake { animation: th-shake 0.45s; }
+@keyframes th-shake { 0%, 100% { transform: none; } 15% { transform: translate(-6px, 3px); } 30% { transform: translate(6px, -4px); } 45% { transform: translate(-5px, -2px); } 60% { transform: translate(4px, 4px); } 80% { transform: translate(-2px, 1px); } }
+
+/* 天気（灰・霧・葉・火の粉・光） */
+.th-weather { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.th-weather[data-kind="night"] { background: radial-gradient(circle at 20% 70%, rgba(255, 190, 90, 0.25), transparent 40%), rgba(10, 12, 40, 0.35); }
+.wp { position: absolute; left: var(--x); top: -8%; animation: var(--d) linear var(--delay) infinite; }
+.wp.ash { width: calc(5px * var(--s)); height: calc(5px * var(--s)); border-radius: 50%; background: rgba(240, 236, 228, 0.85); box-shadow: 0 0 4px rgba(255, 255, 255, 0.6); animation-name: wp-fall; }
+.wp.dust { width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 240, 200, 0.6); top: var(--y); animation-name: wp-drift; }
+.wp.leaves { width: calc(10px * var(--s)); height: calc(6px * var(--s)); border-radius: 60% 0; background: #8fd18b; animation-name: wp-leaf; }
+.wp.embers { width: 4px; height: 4px; border-radius: 50%; background: #7fd0ff; box-shadow: 0 0 8px #5ab8ff; top: auto; bottom: -5%; animation-name: wp-rise; }
+.wp.fog { top: calc(var(--y) * 0.6); left: -60%; width: 160%; height: 40%; border-radius: 50%; background: radial-gradient(ellipse, rgba(255, 255, 255, 0.35), transparent 70%); animation-name: wp-fog; }
+.wp.sun { top: -20%; left: calc(var(--x) - 10%); width: 18%; height: 140%; background: linear-gradient(rgba(255, 236, 170, 0.35), transparent); transform: rotate(18deg); animation-name: wp-ray; }
+@keyframes wp-fall { to { transform: translate(calc(30px * var(--s)), 115vh) rotate(360deg); } }
+@keyframes wp-drift { 50% { transform: translate(14px, -12px); opacity: 0.2; } }
+@keyframes wp-leaf { 0% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(-40px, 55vh) rotate(200deg); } 100% { transform: translate(30px, 115vh) rotate(400deg); } }
+@keyframes wp-rise { to { transform: translate(20px, -110vh); opacity: 0; } }
+@keyframes wp-fog { to { transform: translateX(60%); } }
+@keyframes wp-ray { 50% { opacity: 0.35; } 0%, 100% { opacity: 1; } }
+
+/* 立ち絵 */
+.th-actors { position: absolute; inset: 0; pointer-events: none; container-type: size; }
+/* 立ち絵の大きさ：舞台の高さに対する割合。ただし横幅の --wmax を超えない。はみ出さないよう左右の位置を詰める */
+.actor { --w: min(calc(var(--h) * 100cqh), var(--wmax, 58cqw)); position: absolute; bottom: 2%; width: var(--w); height: var(--w);
+  left: clamp(calc(var(--w) / 2 - 8cqw), var(--x), calc(100cqw - var(--w) / 2 + 8cqw)); transform: translateX(-50%); transition: left 0.6s, filter 0.3s, transform 0.5s, opacity 0.5s; filter: brightness(0.62) saturate(0.8); opacity: 0; }
+.actor img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)); }
+.actor.enter-left { transform: translateX(-160%); }
+.actor.enter-right { transform: translateX(60%); }
+.actor.on { opacity: 1; transform: translateX(-50%); }
+.actor.leave { opacity: 0; transform: translateX(-50%) translateY(10%); }
+.actor.speaking { filter: none; transform: translateX(-50%) scale(1.05); z-index: 2; }
+.actor.boss { --wmax: 74cqw; }
+.actor.float { bottom: 34%; animation: th-float 2.6s ease-in-out infinite; }
+.actor.boss.on { animation: th-boss-in 0.7s ease-out; }
+.actor.hop img { animation: th-hop 0.45s ease-out 2; }
+.actor.noimg { display: none; }
+@keyframes th-float { 50% { translate: 0 -6%; } }
+@keyframes th-boss-in { 0% { transform: translateX(-50%) scale(1.6); filter: brightness(3); opacity: 0; } 100% { transform: translateX(-50%) scale(1); } }
+@keyframes th-hop { 40% { transform: translateY(-8%); } }
+
+/* 吹き出し */
+.th-bubbles { position: absolute; inset: 0; pointer-events: none; }
+.th-bubble { position: absolute; top: 5%; left: 8px; width: max-content; max-width: min(78%, 520px); padding: 10px 14px 12px; border-radius: 18px; background: #fffdf6; color: #2b2118; border: 3px solid #2b2118; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); animation: th-pop 0.22s ease-out; font-size: 15px; line-height: 1.6; }
+.th-bubble::after { content: ""; position: absolute; bottom: -12px; left: var(--tail, 50%); width: 18px; height: 18px; background: #fffdf6; border-right: 3px solid #2b2118; border-bottom: 3px solid #2b2118; transform: translateX(-50%) rotate(45deg) skew(8deg, 8deg); }
+.th-bubble.voice { border-style: dashed; background: #f3eefc; }
+.th-bubble.voice::after { display: none; }
+.th-bubble.loud { border-width: 4px; font-weight: 700; animation: th-pop-loud 0.3s ease-out; }
+.th-bubble.soft { border-color: #8a7f74; color: #4d443b; }
+.th-bubble-name { position: absolute; top: -12px; left: 12px; padding: 1px 10px; border-radius: 10px; background: #2b2118; color: #ffe9b0; font-size: 11px; font-weight: 800; }
+.th-bubble-text { display: block; white-space: pre-wrap; }
+@keyframes th-pop { from { transform: scale(0.7); opacity: 0; } }
+@keyframes th-pop-loud { 0% { transform: scale(0.6) rotate(-3deg); opacity: 0; } 60% { transform: scale(1.06) rotate(1deg); } }
+
+/* 【SYSTEM】の窓 */
+.th-system { position: absolute; top: 4%; left: 50%; transform: translateX(-50%); width: min(88%, 480px); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.th-window { padding: 8px 12px; border: 1px solid #6fe7ff; border-radius: 6px; background: rgba(8, 30, 48, 0.82); color: #c9f6ff; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; box-shadow: 0 0 14px rgba(80, 220, 255, 0.45), inset 0 0 12px rgba(80, 220, 255, 0.2); animation: th-win 0.3s ease-out; position: relative; overflow: hidden; }
+.th-window::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(transparent 0 3px, rgba(120, 230, 255, 0.07) 3px 4px); pointer-events: none; }
+.th-window.warn { border-color: #ff5d5d; background: rgba(60, 6, 10, 0.85); color: #ffd0d0; box-shadow: 0 0 18px rgba(255, 60, 60, 0.6); animation: th-win 0.3s ease-out, th-blink 0.5s steps(2) 3; }
+@keyframes th-win { from { transform: translateY(-14px) scaleY(0.2); opacity: 0; } }
+@keyframes th-blink { 50% { opacity: 0.4; } }
+
+/* 画面効果 */
+.th-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.th-burst { position: absolute; inset: 0; }
+.th-burst.flash { background: #fff; animation: th-flash 0.7s ease-out forwards; }
+.th-burst.alarm { background: radial-gradient(ellipse, transparent 40%, rgba(255, 30, 30, 0.6)); animation: th-alarm 1.1s ease-out forwards; }
+.th-burst.tear { background: radial-gradient(ellipse, transparent 45%, rgba(60, 110, 200, 0.45)); animation: th-flash 1.2s ease-out forwards; }
+.th-burst.black { background: #000; animation: th-flash 0.8s ease-in-out forwards; }
+@keyframes th-flash { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+@keyframes th-alarm { 0%, 40% { opacity: 1; } 20%, 60% { opacity: 0.2; } 100% { opacity: 0; } }
+.th-ono { position: absolute; left: var(--x); top: var(--y); font-size: 44px; font-weight: 900; color: #fff; -webkit-text-stroke: 3px #2b2118; paint-order: stroke; transform: rotate(var(--r)); animation: th-ono 1.1s ease-out forwards; text-shadow: 0 4px 0 #f6a23c; }
+@keyframes th-ono { 0% { transform: rotate(var(--r)) scale(0.2); opacity: 0; } 20% { transform: rotate(var(--r)) scale(1.25); opacity: 1; } 70% { transform: rotate(var(--r)) scale(1); opacity: 1; } 100% { transform: rotate(var(--r)) translateY(-20px); opacity: 0; } }
+.th-spark { position: absolute; left: var(--x); bottom: 10%; width: 5px; height: 5px; border-radius: 50%; background: #ffcf5a; box-shadow: 0 0 8px #ff8a3c; animation: th-spark 1.5s ease-out var(--delay) forwards; opacity: 0; }
+@keyframes th-spark { 0% { opacity: 1; } 100% { transform: translate(var(--dx), -220px); opacity: 0; } }
+
+/* 地の文（下の帯） */
+.th-caption { position: relative; flex: none; min-height: 25%; max-height: 38%; overflow-y: auto; margin: 0 8px; padding: 12px 16px 22px; border-radius: 12px 12px 0 0; background: linear-gradient(#2a2131, #1d1724); border: 1px solid rgba(255, 233, 176, 0.25); border-bottom: 0; cursor: pointer; }
+.th-caption.hidden .th-cap-text { opacity: 0.35; }
+.th-cap-name { display: block; font-size: 12px; color: #ffd98a; font-weight: 700; min-height: 0; }
+.th-cap-text { margin: 0; font-size: 15px; line-height: 1.85; color: #f4ecff; transition: opacity 0.3s; white-space: pre-wrap; }
+.th-next { position: absolute; right: 14px; bottom: 6px; font-size: 11px; color: #ffd98a; animation: th-next 1s ease-in-out infinite; }
+@keyframes th-next { 50% { transform: translateY(3px); opacity: 0.5; } }
+
+.th-controls { flex: none; display: flex; gap: 6px; padding: 8px; justify-content: center; background: #15111b; }
+.th-btn { flex: none; border: 1px solid rgba(255, 233, 176, 0.35); background: rgba(255, 255, 255, 0.06); color: #f4ecff; border-radius: 16px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+.th-btn.on { background: #f6cf55; color: #2b2118; }
+.th-btn.close { padding: 6px 11px; }
+.th-btn.big { padding: 10px 18px; font-size: 15px; }
+.th-btn.primary { background: linear-gradient(#ffb35c, #e2733a); border-color: #ffd59a; color: #fff; }
+
+/* はじまりの幕・おわりの幕 */
+.th-opening, .th-end { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; background: linear-gradient(transparent 0 14%, rgba(5, 3, 10, 0.72) 14% 86%, transparent 86%), rgba(0, 0, 0, 0.35); }
+.th-opening h2, .th-end h2 { margin: 0; font-size: 26px; letter-spacing: 0.06em; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8); animation: th-title 1.2s ease-out; }
+.th-open-kicker, .th-end-kicker { margin: 0; font-size: 12px; letter-spacing: 0.3em; color: #ffd98a; }
+.th-open-tap { margin: 18px 0 0; font-size: 12px; color: #d9cfe6; animation: th-next 1.4s ease-in-out infinite; }
+.th-end.boss .th-end-kicker { font-size: 22px; font-weight: 900; color: #ff6b6b; letter-spacing: 0.5em; animation: th-blink 0.6s steps(2) 4; }
+.th-end-boss { width: min(60%, 260px); filter: drop-shadow(0 0 18px rgba(255, 80, 80, 0.6)); animation: th-boss-in 0.9s ease-out; }
+.th-end-sub { margin: 0; color: #f4ecff; font-size: 13px; }
+.th-end-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+@keyframes th-title { from { opacity: 0; letter-spacing: 0.5em; filter: blur(4px); } }
+
+/* ログ */
+.th-log { position: absolute; inset: 8% 4% 4%; z-index: 6; display: flex; flex-direction: column; background: rgba(20, 15, 28, 0.96); border: 1px solid rgba(255, 233, 176, 0.3); border-radius: 12px; }
+.th-log-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
+.th-log-list { flex: 1; overflow-y: auto; padding: 0 16px 16px; font-size: 14px; line-height: 1.8; }
+.th-log-list p { margin: 0 0 8px; }
+.th-log-list b { color: #ffd98a; }
+.th-log-list .narr { color: #cfc4dd; }
+.th-log-list .sys { color: #8fe6ff; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+
+@media (min-width: 700px) {
+  .th-stage, .th-caption { width: min(100%, 980px); align-self: center; }
+  .th-bubble { font-size: 17px; }
+  .th-cap-text { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theater *, .theater { animation: none !important; transition: none !important; }
+}
+.theater-loading { position: fixed; inset: 0; z-index: 29; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(13, 11, 18, 0.85); color: #f4ecff; font-size: 14px; }
+.theater-loading .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255, 233, 176, 0.25); border-top-color: #f6cf55; animation: th-spin 0.8s linear infinite; }
+@keyframes th-spin { to { transform: rotate(360deg); } }
+/* Gemini の絵があるときは、ドット絵を隠す */
+.art-host .art { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.25)); }
+.art-host.has-art svg { display: none; }
+.art-host.has-art:not([data-kind="egg"])[data-motion="idle"] .pet-body { animation-timing-function: ease-in-out; animation-name: pet-float; animation-duration: 2.2s; }
+@keyframes pet-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4%); } }
+.art-host.has-art.blink .pet-body { filter: brightness(1.04); }
