@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>かいもの</title>
+  <meta name="theme-color" content="#2f6b4f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="かいもの">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true">🧺</span><h1>かいもの</h1></div>
+    <span id="sync" class="sync" aria-live="polite"></span>
+    <button type="button" id="reload" class="icon-btn" aria-label="Notion から読み直す">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+    </button>
+  </header>
+
+  <main id="main">
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <section id="login" class="view" hidden>
+      <form id="login-form" class="card form">
+        <h2>合言葉を入れてください</h2>
+        <p class="note">Cloudflare の Worker に設定した APP_KEY（16文字以上）。この端末にだけ覚えておきます。</p>
+        <input id="key" type="password" autocomplete="current-password" required minlength="16" placeholder="合言葉" aria-label="合言葉">
+        <button type="submit" class="btn pri">開く</button>
+      </form>
+    </section>
+    <section id="view" class="view"></section>
+  </main>
+
+  <nav class="tabs" aria-label="画面">
+    <button type="button" data-tab="list"><span class="ti" aria-hidden="true">📝</span>リスト<span class="badge" id="b-list" hidden></span></button>
+    <button type="button" data-tab="stock"><span class="ti" aria-hidden="true">📦</span>補充<span class="badge warn" id="b-stock" hidden></span></button>
+    <button type="button" data-tab="alert"><span class="ti" aria-hidden="true">🔔</span>通知</button>
+  </nav>
+  <div id="toast" class="toast" role="status" hidden></div>
+</div>
+<script src="aisle.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
