@@ -102,6 +102,30 @@
       <div id="kindle-result"></div>
     </section>
 
+    <!-- 辞典 -->
+    <section id="view-dict" class="view" hidden>
+      <label class="pick">本<select id="dict-book"></select></label>
+      <form id="dict-form" class="card form">
+        <div class="row2">
+          <label>語<input id="dict-term" required maxlength="100" autocomplete="off" placeholder="例：鎌倉、ドクダミ、叔母"></label>
+          <label>ページ<input id="dict-page" inputmode="numeric" placeholder="初めて出た所"></label>
+        </div>
+        <div id="dict-kinds" class="kinds" role="radiogroup" aria-label="種別"></div>
+        <label>説明（なくてもよい）<textarea id="dict-desc" rows="2" maxlength="1000" placeholder="どんなものか・意味。空なら後で Claude に埋めてもらえます"></textarea></label>
+        <label>メモ<input id="dict-memo" maxlength="1000" autocomplete="off" placeholder="気づいたこと（なくてもよい）"></label>
+        <div class="actions">
+          <button type="button" id="dict-cancel" class="btn ghost" hidden>やめる</button>
+          <button type="submit" id="dict-submit" class="btn">辞典に足す</button>
+        </div>
+      </form>
+      <div class="dict-tools">
+        <input id="dict-q" type="search" placeholder="さがす" aria-label="辞典をさがす" autocomplete="off">
+        <label class="upto">p.<input id="dict-upto" inputmode="numeric" placeholder="—" aria-label="このページまでだけ見る">まで</label>
+      </div>
+      <div id="dict-filter" class="chips" aria-label="種別で絞る"></div>
+      <div id="dict-list"></div>
+    </section>
+
     <!-- 読み終えた -->
     <section id="view-done" class="view" hidden>
       <label class="pick">本<select id="done-book"></select></label>
@@ -113,6 +137,7 @@
     <button type="button" data-view="shelf" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 5l3.5 1-3.5 14-3.4-1z"/></svg>本棚</button>
     <button type="button" data-view="photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>付箋のページ</button>
     <button type="button" data-view="kindle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 7h6M9 10h6M9 13h4"/></svg>Kindle</button>
+    <button type="button" data-view="dict"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>辞典</button>
     <button type="button" data-view="done"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>読み終えた</button>
   </nav>
 </div>

@@ -5,12 +5,14 @@ import worker from "../src/worker.js";
 
 const BOOK_DS = "23362844-acbe-80b5-a2b4-000b59e31cdf";
 const HL_DS = "1f6f7d77-b234-4b5b-8e15-4afcf2097567";
+const TERM_DS = "3e91760e-bd33-497a-8db0-4a08b618331b";
 const KEY = "test-key-0123456789";
 const env = {
   NOTION_TOKEN: "ntn_fake",
   APP_KEY: KEY,
   BOOK_DS_ID: BOOK_DS,
   HIGHLIGHT_DS_ID: HL_DS,
+  TERM_DS_ID: TERM_DS,
   NOTION_API_BASE: "https://notion.test/v1",
   ASSETS: { fetch: async () => new Response("asset") },
 };
@@ -65,6 +67,8 @@ beforeEach(() => {
     [hex(22), hl(hex(22), B1, "前のページ", 3, { loc: "40", source: "📱 Kindle" })],
     [hex(31), { object: "page", id: hex(31), url: "https://www.notion.so/legacy31", parent: { type: "page_id", page_id: B2 }, properties: { title: { type: "title", title: rt("前の形の引用") } } }],
     [hex(32), { object: "page", id: hex(32), url: "https://www.notion.so/legacy32", parent: { type: "page_id", page_id: B2 }, properties: { title: { type: "title", title: rt("もう一つ") } } }],
+    [hex(41), row(hex(41), TERM_DS, { 語: { type: "title", title: rt("ドクダミ") }, 本: { type: "relation", relation: [{ id: B1 }] }, 種別: { type: "select", select: { name: "🌿 植物" } }, ページ: { type: "number", number: 30 }, 説明: { type: "rich_text", rich_text: rt("白い花の野草") }, メモ: { type: "rich_text", rich_text: [] }, 記録日: { type: "date", date: { start: "2026-10-28" } } })],
+    [hex(42), row(hex(42), TERM_DS, { 語: { type: "title", title: rt("鎌倉") }, 本: { type: "relation", relation: [{ id: B1 }] }, 種別: { type: "select", select: { name: "📍 舞台" } }, ページ: { type: "number", number: 5 }, 説明: { type: "rich_text", rich_text: [] }, メモ: { type: "rich_text", rich_text: [] } })],
     [hex(9), row(hex(9), "other-ds", { 名前: { type: "title", title: rt("ほかのDB") } })],
   ]);
   const children = {
@@ -95,7 +99,8 @@ beforeEach(() => {
       const p = pages.get(m[1]);
       if (!p) return new Response(JSON.stringify({ code: "object_not_found" }), { status: 404 });
       if (init.method === "PATCH") {
-        for (const [k, v] of Object.entries(body.properties)) p.properties[k] = { ...p.properties[k], ...v };
+        for (const [k, v] of Object.entries(body.properties || {})) p.properties[k] = { ...p.properties[k], ...v };
+        if (body.in_trash) p.in_trash = true;
       }
       return ok(p);
     }
@@ -136,7 +141,7 @@ test("本の一覧：読書メモ_DB の行と著者・出版社の選択肢", a
   const by = Object.fromEntries(data.books.map((b) => [b.title, b]));
   assert.deepEqual(by["見本の本"], {
     id: B1, url: `https://www.notion.so/${B1}`, title: "見本の本", author: "作家　一", publisher: "", status: "読中", finished: null, rating: "", review: "",
-    meter: false, notebooklm: false, cover: "https://example.test/c.jpg", highlightCount: 1, highlightMore: false, legacyCount: 0,
+    meter: false, notebooklm: false, cover: "https://example.test/c.jpg", highlightCount: 1, highlightMore: false, legacyCount: 0, termCount: 0, termMore: false,
   });
   assert.equal(by["読んだ本"].finished, "2026-09-01");
   assert.equal(by["読んだ本"].meter, true);
@@ -232,4 +237,50 @@ test("インテグレーション未接続は分かる言葉で返す", async ()
   const r = await api("PATCH", `/api/highlights/${hex(77)}`, { memo: "x" });
   assert.equal(r.status, 502);
   assert.match(r.data.error, /インテグレーションが接続されていません/);
+});
+
+test("読書辞典：本ごとに出てきた順で読む", async () => {
+  const { status, data } = await api("GET", `/api/books/${B1}/terms`);
+  assert.equal(status, 200);
+  assert.deepEqual(data.terms.map((t) => [t.term, t.kind, t.page, t.desc]), [["鎌倉", "📍 舞台", 5, ""], ["ドクダミ", "🌿 植物", 30, "白い花の野草"]]);
+  assert.equal(calls.find((c) => c.path === `/data_sources/${TERM_DS}/query`).body.filter.relation.contains, B1);
+  assert.deepEqual((await api("GET", `/api/books/${B2}/terms`)).data.terms, []);
+  assert.equal((await api("GET", `/api/books/${hex(41)}/terms`)).status, 403);
+});
+
+test("読書辞典：足す・直す・消す。種別とページを確かめ、辞典の行だけ書き換える", async () => {
+  const add = await api("POST", "/api/terms", { bookId: B3, term: " 叔母  さん ", kind: "👥 人物・距離感", page: "12", memo: "少し距離がある" });
+  assert.equal(add.status, 200);
+  const [c] = writes();
+  assert.equal(c.body.parent.data_source_id, TERM_DS);
+  assert.deepEqual(c.body.properties["語"], { title: [{ type: "text", text: { content: "叔母 さん" } }] });
+  assert.deepEqual(c.body.properties["本"], { relation: [{ id: B3 }] });
+  assert.deepEqual(c.body.properties["種別"], { select: { name: "👥 人物・距離感" } });
+  assert.deepEqual(c.body.properties["ページ"], { number: 12 });
+  assert.ok(!("説明" in c.body.properties), "送られていない項目は書かない");
+  assert.match(c.body.properties["記録日"].date.start, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(add.data.term.term, "叔母 さん");
+
+  const noKind = await api("POST", "/api/terms", { bookId: B3, term: "なにか" });
+  assert.equal(writes()[1].body.properties["種別"].select.name, "✦ その他");
+  assert.equal(noKind.status, 200);
+
+  const fix = await api("PATCH", `/api/terms/${hex(42)}`, { desc: "海に近い古い町", page: "" });
+  assert.equal(fix.status, 200);
+  assert.deepEqual(writes()[2].body.properties, { ページ: { number: null }, 説明: { rich_text: [{ type: "text", text: { content: "海に近い古い町" } }] } });
+  assert.equal(fix.data.term.desc, "海に近い古い町");
+
+  const del = await api("DELETE", `/api/terms/${hex(41)}`);
+  assert.deepEqual(del.data, { id: hex(41), removed: true });
+  assert.deepEqual(writes()[3].body, { in_trash: true });
+
+  const before = writes().length;
+  assert.equal((await api("POST", "/api/terms", { bookId: B3, term: "  " })).status, 400);
+  assert.equal((await api("POST", "/api/terms", { bookId: B3, term: "a", page: "三" })).status, 400);
+  assert.equal((await api("POST", "/api/terms", { bookId: hex(9), term: "a" })).status, 403);
+  assert.equal((await api("PATCH", `/api/terms/${hex(42)}`, { kind: "動物" })).status, 400);
+  assert.equal((await api("PATCH", `/api/terms/${hex(42)}`, {})).status, 400);
+  assert.equal((await api("PATCH", `/api/terms/${hex(21)}`, { memo: "x" })).status, 403, "ハイライトの行は辞典として書き換えない");
+  assert.equal((await api("DELETE", `/api/terms/${B1}`)).status, 403, "本は消さない");
+  assert.equal(writes().length, before);
 });

@@ -102,3 +102,13 @@ test("NotebookLM に渡す文", () => {
     "", "> 前の形", "（付箋写真・前の形）", "",
   ].join("\n"));
 });
+
+test("読書辞典の調べるリンク：種別ごと。人物・距離感はネタバレよけで出さない", () => {
+  assert.deepEqual(P.lookupLinks("鎌倉", "📍 舞台").map((l) => l.label), ["地図", "画像", "Wikipedia"]);
+  assert.equal(P.lookupLinks("鎌倉", "📍 舞台")[0].url, "https://www.google.com/maps/search/?api=1&query=%E9%8E%8C%E5%80%89");
+  assert.deepEqual(P.lookupLinks("ドクダミ", "🌿 植物").map((l) => l.label), ["画像", "Wikipedia"]);
+  assert.deepEqual(P.lookupLinks("叔母", "👥 人物・距離感"), []);
+  assert.deepEqual(P.lookupLinks("矜持", "📖 言葉").map((l) => l.label), ["辞書", "検索"]);
+  assert.deepEqual(P.lookupLinks("なにか", "").map((l) => l.label), ["辞書", "検索"]);
+  assert.deepEqual(P.lookupLinks("  ", "📖 言葉"), []);
+});

@@ -3,13 +3,15 @@
 const P = window.ShioriParse;
 const STATUSES = ["読中", "未読", "読了"];
 const FILTERS = [["読中", "読んでいる"], ["未読", "これから"], ["読了", "読んだ"], ["", "すべて"]];
+const VIEWS = ["shelf", "photo", "kindle", "dict", "done"];
+const KINDS = ["📍 舞台", "🌿 植物", "👥 人物・距離感", "🍽 食・道具", "📖 言葉", "✦ その他"];
 const RATINGS = ["★", "★★", "★★★", "★★★★", "★★★★★"];
 const REVIEW_MAX = 255;
 const SAVE_CHUNK = 40; // Worker が一度に足せるハイライトの数
 const KEY_STORAGE = "key";
 
 const $ = (s, el = document) => el.querySelector(s);
-const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), page: null, kindle: null, done: {} };
+const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), terms: new Map(), dict: { kind: "", q: "", upto: "", editing: null, newKind: "✦ その他", confirm: "" }, page: null, kindle: null, done: {} };
 
 // ---------- 共通 ----------
 let memoryKey = "";
@@ -108,10 +110,11 @@ function replaceBook(book) {
 // ---------- 画面の切り替え ----------
 function show(view) {
   state.view = view;
-  for (const v of ["shelf", "photo", "kindle", "done"]) $(`#view-${v}`).hidden = v !== view;
+  for (const v of VIEWS) $(`#view-${v}`).hidden = v !== view;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   store.set("view", view);
   if (view === "done") renderDone();
+  if (view === "dict") renderDict();
   window.scrollTo(0, 0);
 }
 
@@ -138,13 +141,13 @@ function bookOptionEls(selected, { finishing = false } = {}) {
 }
 
 function renderBookSelects() {
-  for (const id of ["#photo-book", "#kindle-book", "#done-book"]) $(id).replaceChildren(...bookOptionEls(state.bookId, { finishing: id === "#done-book" }));
+  for (const id of ["#photo-book", "#kindle-book", "#dict-book", "#done-book"]) $(id).replaceChildren(...bookOptionEls(state.bookId, { finishing: id === "#done-book" }));
 }
 
 function selectBook(id) {
   state.bookId = id;
   store.set("book", id);
-  for (const s of ["#photo-book", "#kindle-book", "#done-book"]) $(s).value = id;
+  for (const s of ["#photo-book", "#kindle-book", "#dict-book", "#done-book"]) $(s).value = id;
 }
 
 // ---------- 本棚 ----------
@@ -245,6 +248,7 @@ function renderSheet(b, data) {
     el("div", { class: "quick" },
       el("button", { type: "button", class: "btn flag", onclick: () => go("photo") }, "付箋を撮る"),
       el("button", { type: "button", class: "btn ghost", onclick: () => go("kindle") }, "Kindle から"),
+      el("button", { type: "button", class: "btn ghost", onclick: () => go("dict") }, `辞典${b.termCount ? ` ${b.termCount}${b.termMore ? "+" : ""}語` : ""}`),
       el("button", { type: "button", class: "btn ghost", onclick: () => go("done") }, "読み終えた")),
     el("label", { class: "pick" }, "ステータス", statusSel),
     el("h3", { class: "sec" }, `ハイライト ${data.highlights.length}件`),
@@ -492,6 +496,145 @@ async function renderKindle() {
       el("div", { class: "sticky-actions" }, saveBtn)));
 }
 
+// ---------- 読書辞典 ----------
+// 読みながら出てきた語（舞台・植物・人物の距離感・言葉…）を本ごとにためる。説明は自分で書くか、後で Claude に埋めてもらう
+async function loadTerms(bookId, force = false) {
+  if (!force && state.terms.has(bookId)) return state.terms.get(bookId);
+  const data = await api("GET", `/api/books/${bookId}/terms`);
+  state.terms.set(bookId, data.terms);
+  return data.terms;
+}
+
+function setupDict() {
+  $("#dict-book").addEventListener("change", (e) => { selectBook(e.target.value); resetDictForm(); renderDict(); });
+  $("#dict-q").addEventListener("input", (e) => { state.dict.q = e.target.value; renderDict(); });
+  $("#dict-upto").addEventListener("input", (e) => { state.dict.upto = e.target.value.trim(); renderDict(); });
+  $("#dict-cancel").addEventListener("click", resetDictForm);
+  $("#dict-form").addEventListener("submit", saveTerm);
+  renderKinds();
+}
+
+function renderKinds() {
+  $("#dict-kinds").replaceChildren(...KINDS.map((k) => el("button", {
+    type: "button", role: "radio", "aria-checked": String(state.dict.newKind === k), class: state.dict.newKind === k ? "on" : "",
+    onclick: () => { state.dict.newKind = k; renderKinds(); },
+  }, k)));
+}
+
+function resetDictForm() {
+  state.dict.editing = null;
+  $("#dict-form").reset();
+  $("#dict-cancel").hidden = true;
+  $("#dict-submit").textContent = "辞典に足す";
+  renderKinds();
+}
+
+function editTerm(t) {
+  state.dict.editing = t.id;
+  state.dict.newKind = t.kind || "✦ その他";
+  $("#dict-term").value = t.term;
+  $("#dict-page").value = t.page ?? "";
+  $("#dict-desc").value = t.desc;
+  $("#dict-memo").value = t.memo;
+  $("#dict-cancel").hidden = false;
+  $("#dict-submit").textContent = "直す";
+  renderKinds();
+  $("#dict-form").scrollIntoView({ block: "start", behavior: "smooth" });
+  $("#dict-term").focus({ preventScroll: true });
+}
+
+async function saveTerm(e) {
+  e.preventDefault();
+  const bookId = $("#dict-book").value;
+  if (!bookId) { toast("先に本を選んでください"); return; }
+  const body = { term: $("#dict-term").value, kind: state.dict.newKind, page: $("#dict-page").value.trim(), desc: $("#dict-desc").value, memo: $("#dict-memo").value };
+  const list = state.terms.get(bookId) || [];
+  if (!state.dict.editing && list.some((t) => P.norm(t.term) === P.norm(body.term))) { toast(`「${body.term.trim()}」はもう辞典にあります`); return; }
+  const btn = $("#dict-submit");
+  btn.disabled = true;
+  try {
+    if (state.dict.editing) {
+      const { term } = await api("PATCH", `/api/terms/${state.dict.editing}`, body);
+      state.terms.set(bookId, list.map((t) => (t.id === term.id ? term : t)));
+      toast(`「${term.term}」を直しました`);
+    } else {
+      const { term } = await api("POST", "/api/terms", { bookId, ...body });
+      state.terms.set(bookId, [...list, term]);
+      const b = bookOf(bookId);
+      if (b) b.termCount += 1;
+      toast(`「${term.term}」を足しました`);
+    }
+    const keepKind = state.dict.newKind;
+    resetDictForm();
+    state.dict.newKind = keepKind; // 続けて同じ種別を足しやすく
+    renderKinds();
+    renderDict();
+    $("#dict-term").focus();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function removeTerm(t) {
+  const bookId = $("#dict-book").value;
+  try {
+    await api("DELETE", `/api/terms/${t.id}`);
+    state.terms.set(bookId, (state.terms.get(bookId) || []).filter((x) => x.id !== t.id));
+    const b = bookOf(bookId);
+    if (b && b.termCount > 0) b.termCount -= 1;
+    state.dict.confirm = "";
+    toast(`「${t.term}」を消しました（Notion のゴミ箱から戻せます）`);
+    renderDict();
+  } catch (e) { toast(e.message); }
+}
+
+async function renderDict() {
+  const box = $("#dict-list");
+  const bookId = $("#dict-book").value;
+  if (!bookId) { $("#dict-filter").replaceChildren(); box.replaceChildren(el("p", { class: "empty" }, "本を選ぶと、その本の辞典が出ます。読みながら気になった舞台・植物・人物の関係・言葉を足していきます。")); return; }
+  let terms;
+  if (state.terms.has(bookId)) terms = state.terms.get(bookId);
+  else {
+    box.replaceChildren(el("div", { class: "working" }, el("span", { class: "spinner" }), "辞典を読み込み中…"));
+    try { terms = await loadTerms(bookId); } catch (e) { box.replaceChildren(el("p", { class: "status err" }, e.message)); return; }
+    if ($("#dict-book").value !== bookId) return;
+  }
+  const d = state.dict;
+  const counts = Object.fromEntries(KINDS.map((k) => [k, terms.filter((t) => t.kind === k).length]));
+  $("#dict-filter").replaceChildren(...[["", `すべて ${terms.length}`], ...KINDS.filter((k) => counts[k]).map((k) => [k, `${k} ${counts[k]}`])].map(([k, label]) =>
+    el("button", { type: "button", class: d.kind === k ? "on" : "", "aria-pressed": String(d.kind === k), onclick: () => { d.kind = k; renderDict(); } }, label)));
+  // ネタバレよけ：「p.○まで」を入れると、それより後のページの語は隠す（ページの無い語は出す）
+  const upto = /^\d+$/.test(d.upto) ? Number(d.upto) : null;
+  const q = P.norm(d.q);
+  const shown = terms.filter((t) => (!d.kind || t.kind === d.kind) && (!q || P.norm(`${t.term}${t.desc}${t.memo}`).includes(q)) && (upto == null || t.page == null || t.page <= upto));
+  const hidden = upto == null ? 0 : terms.filter((t) => t.page != null && t.page > upto).length;
+  if (!terms.length) { box.replaceChildren(el("p", { class: "empty" }, "まだ語がありません。上の欄から1つ目を足してください。")); return; }
+  box.replaceChildren(...[
+    el("ol", { class: "terms" }, shown.map((t) => {
+      const links = P.lookupLinks(t.term, t.kind);
+      const confirming = d.confirm === t.id;
+      return el("li", { class: "term" },
+        el("div", { class: "term-head" },
+          el("strong", {}, t.term),
+          el("span", { class: "chip" }, t.kind || "✦ その他"),
+          t.page != null ? el("span", { class: "count" }, `p.${t.page}`) : null),
+        t.desc ? el("p", { class: "term-desc" }, t.desc) : el("p", { class: "term-desc none" }, "説明はまだありません"),
+        t.memo ? el("div", { class: "term-memo" }, t.memo) : null,
+        el("div", { class: "term-foot" },
+          links.map((l) => el("a", { href: l.url, target: "_blank", rel: "noopener" }, l.label)),
+          el("span", { class: "spacer" }),
+          el("button", { type: "button", class: "linkish", onclick: () => editTerm(t) }, "直す"),
+          confirming
+            ? el("button", { type: "button", class: "linkish danger", onclick: () => removeTerm(t) }, "本当に消す")
+            : el("button", { type: "button", class: "linkish", onclick: () => { d.confirm = t.id; renderDict(); } }, "消す")));
+    })),
+    shown.length ? null : el("p", { class: "empty" }, "この条件に合う語はありません"),
+    hidden ? el("p", { class: "hidden-note" }, `p.${upto} より後の語を ${hidden} 件隠しています`) : null,
+  ].filter(Boolean));
+}
+
 // ---------- 読み終えた ----------
 function setupDone() {
   $("#done-book").addEventListener("change", (e) => { selectBook(e.target.value); renderDone(); });
@@ -559,7 +702,7 @@ async function renderDone() {
 
 // ---------- はじめ ----------
 function showLogin() {
-  for (const v of ["shelf", "photo", "kindle", "done"]) $(`#view-${v}`).hidden = true;
+  for (const v of VIEWS) $(`#view-${v}`).hidden = true;
   $(".tabs").hidden = true;
   $("#reload").hidden = true;
   $("#login").hidden = false;
@@ -572,13 +715,13 @@ function start() {
   $(".tabs").hidden = false;
   $("#reload").hidden = false;
   const v = store.get("view");
-  show(["shelf", "photo", "kindle", "done"].includes(v) ? v : "shelf");
+  show(VIEWS.includes(v) ? v : "shelf");
   loadBooks();
 }
 
 function setup() {
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
-  $("#reload").addEventListener("click", () => { state.hl.clear(); loadBooks(); });
+  $("#reload").addEventListener("click", () => { state.hl.clear(); state.terms.clear(); loadBooks(); if (state.view === "dict") renderDict(); });
   $("#sheet-close").addEventListener("click", closeSheet);
   $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
@@ -592,6 +735,7 @@ function setup() {
   setupAddBook();
   setupPhoto();
   setupKindle();
+  setupDict();
   setupDone();
   memoryKey = store.get(KEY_STORAGE);
   if (memoryKey) start(); else showLogin();

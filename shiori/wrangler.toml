@@ -11,6 +11,7 @@ run_worker_first = ["/api/*"]
 # データソースID（IDだけでは読み書きできない。権限はインテグレーションの接続で決まる）
 BOOK_DS_ID = "23362844-acbe-80b5-a2b4-000b59e31cdf"       # 読書メモ_DB（1行＝1冊）
 HIGHLIGHT_DS_ID = "1f6f7d77-b234-4b5b-8e15-4afcf2097567"  # DB_読書ハイライト（1行＝1つのハイライト）
+TERM_DS_ID = "3e91760e-bd33-497a-8db0-4a08b618331b"       # DB_読書辞典（1行＝1語）
 
 # 秘密の値は Cloudflare の「変数とシークレット」か wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）

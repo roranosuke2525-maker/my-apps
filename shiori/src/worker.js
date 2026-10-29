@@ -7,6 +7,9 @@ const NOTION_VERSION = "2025-09-03";
 const BOOK_STATUSES = ["未読", "読中", "読了"];
 const RATINGS = ["★★★★★", "★★★★", "★★★", "★★", "★"];
 const SOURCES = ["📷 付箋写真", "📱 Kindle", "✍️ 手入力"];
+const KINDS = ["📍 舞台", "🌿 植物", "👥 人物・距離感", "🍽 食・道具", "📖 言葉", "✦ その他"];
+const TERM_MAX = 100;
+const DESC_MAX = 1000;
 const TITLE_MAX = 200;
 const QUOTE_MAX = 1900; // Notion のタイトルは 2000 文字まで
 const MEMO_MAX = 1000;
@@ -31,6 +34,8 @@ export default {
       const m = request.method;
       const book = p.match(/^\/api\/books\/([0-9a-f-]{32,36})(\/highlights)?$/i);
       const hl = p.match(/^\/api\/highlights\/([0-9a-f-]{32,36})$/i);
+      const terms = p.match(/^\/api\/books\/([0-9a-f-]{32,36})\/terms$/i);
+      const term = p.match(/^\/api\/terms\/([0-9a-f-]{32,36})$/i);
 
       if (p === "/api/books" && m === "GET") return json(await getBooks(notion, env));
       if (p === "/api/books" && m === "POST") return json(await addBook(notion, env, await readJson(request)));
@@ -38,6 +43,10 @@ export default {
       if (book && !book[2] && m === "PATCH") return json(await updateBook(notion, env, book[1], await readJson(request)));
       if (p === "/api/highlights" && m === "POST") return json(await addHighlights(notion, env, await readJson(request)));
       if (hl && m === "PATCH") return json(await updateHighlight(notion, env, hl[1], await readJson(request)));
+      if (terms && m === "GET") return json(await getTerms(notion, env, terms[1]));
+      if (p === "/api/terms" && m === "POST") return json(await addTerm(notion, env, await readJson(request)));
+      if (term && m === "PATCH") return json(await updateTerm(notion, env, term[1], await readJson(request)));
+      if (term && m === "DELETE") return json(await removeTerm(notion, env, term[1]));
       return json({ error: "not found" }, 404);
     } catch (err) {
       return json({ error: err.publicMessage || "サーバーでエラーが起きました" }, err.status || 500);
@@ -82,7 +91,7 @@ function notionClient(env) {
     if (!res.ok) {
       const hint =
         data.code === "object_not_found"
-          ? "Notion で 読書メモ_DB と DB_読書ハイライト にインテグレーションが接続されていません（README の手順1）"
+          ? "Notion で 読書メモ_DB・DB_読書ハイライト・DB_読書辞典 のどれかにインテグレーションが接続されていません（README の手順1）"
           : data.code === "unauthorized"
             ? "Notion のトークンが正しくありません"
             : data.code === "rate_limited"
@@ -138,6 +147,8 @@ function bookOf(page) {
     highlightCount: relIds(p["ハイライト"]).length,
     highlightMore: !!p["ハイライト"]?.has_more,
     legacyCount: relIds(p[LEGACY_REL]).length,
+    termCount: relIds(p["読書辞典"]).length,
+    termMore: !!p["読書辞典"]?.has_more,
   };
 }
 
@@ -326,6 +337,85 @@ async function updateHighlight(notion, env, id, body) {
   const memo = clean(body?.memo, MEMO_MAX, "メモ");
   await notion("PATCH", `/pages/${normalizeId(id)}`, { properties: { メモ: { rich_text: rich(memo) } } });
   return { id: normalizeId(id), memo };
+}
+
+// ---------- 読書辞典（DB_読書辞典） ----------
+// 読みながら出てきた語を本ごとにためる。説明は自分で書くか、チャットで Claude に頼んで Notion に書き足してもらう
+function termOf(page) {
+  const p = page.properties || {};
+  return {
+    id: normalizeId(page.id),
+    url: page.url,
+    term: propText(p["語"]),
+    kind: propText(p["種別"]),
+    page: propNum(p["ページ"]),
+    desc: propText(p["説明"]),
+    memo: propText(p["メモ"]),
+    date: propDate(p["記録日"]),
+  };
+}
+
+const termDs = (env) => {
+  if (!env.TERM_DS_ID) throw httpError(500, "TERM_DS_ID が設定されていません（wrangler.toml）");
+  return env.TERM_DS_ID;
+};
+
+async function getTerms(notion, env, bookId) {
+  await rowOf(notion, bookId, env.BOOK_DS_ID, "読書メモ_DB ");
+  const rows = await queryAll(notion, termDs(env), { filter: { property: "本", relation: { contains: normalizeId(bookId) } } });
+  const terms = rows.map(termOf);
+  // 出てきた順（ページの無いものは後ろ）、同じページなら五十音
+  terms.sort((a, b) => (a.page ?? 1e9) - (b.page ?? 1e9) || a.term.localeCompare(b.term, "ja"));
+  return { terms };
+}
+
+// 送られてきた項目だけを Notion の形にする（無い項目は変えない）
+function termProps(body, { creating }) {
+  const properties = {};
+  if (creating || "term" in body) {
+    const t = clean(body?.term, TERM_MAX, "語").replace(/\s+/g, " ");
+    if (!t) throw httpError(400, "語を入れてください");
+    properties["語"] = { title: rich(t) };
+  }
+  if (creating || "kind" in body) {
+    const k = KINDS.includes(body?.kind) ? body.kind : creating ? "✦ その他" : null;
+    if (!k) throw httpError(400, "選べない種別です");
+    properties["種別"] = { select: { name: k } };
+  }
+  if ("page" in body) {
+    const n = body.page === "" || body.page == null ? null : Number(body.page);
+    if (n != null && (!Number.isInteger(n) || n < 0 || n > 99999)) throw httpError(400, "ページは数字で入れてください");
+    if (n != null || !creating) properties["ページ"] = { number: n };
+  }
+  if ("desc" in body) properties["説明"] = { rich_text: rich(clean(body.desc, DESC_MAX, "説明")) };
+  if ("memo" in body) properties["メモ"] = { rich_text: rich(clean(body.memo, MEMO_MAX, "メモ")) };
+  return properties;
+}
+
+async function addTerm(notion, env, body) {
+  const bookId = normalizeId(String(body?.bookId || ""));
+  if (!/^[0-9a-f]{32}$/.test(bookId)) throw httpError(400, "本を選んでください");
+  const properties = termProps(body || {}, { creating: true });
+  await rowOf(notion, bookId, env.BOOK_DS_ID, "読書メモ_DB ");
+  properties["本"] = { relation: [{ id: bookId }] };
+  properties["記録日"] = { date: { start: jstDate(new Date().toISOString()) } };
+  const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: termDs(env) }, properties });
+  return { term: termOf(page) };
+}
+
+async function updateTerm(notion, env, id, body) {
+  const properties = termProps(body || {}, { creating: false });
+  if (!Object.keys(properties).length) throw httpError(400, "変更する項目がありません");
+  await rowOf(notion, id, termDs(env), "DB_読書辞典 ");
+  const page = await notion("PATCH", `/pages/${normalizeId(id)}`, { properties });
+  return { term: termOf(page) };
+}
+
+// 消すときはゴミ箱へ（Notion のゴミ箱から戻せる）
+async function removeTerm(notion, env, id) {
+  await rowOf(notion, id, termDs(env), "DB_読書辞典 ");
+  await notion("PATCH", `/pages/${normalizeId(id)}`, { in_trash: true });
+  return { id: normalizeId(id), removed: true };
 }
 
 // ---------- 共通 ----------

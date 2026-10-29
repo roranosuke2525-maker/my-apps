@@ -195,5 +195,24 @@
     return `${lines.join("\n")}\n`;
   }
 
-  root.ShioriParse = { parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
+  // ---------- 読書辞典：種別ごとに調べるリンク ----------
+  // 人物・距離感は検索するとネタバレになりやすいので出さない
+  function lookupLinks(term, kind) {
+    const q = encodeURIComponent(String(term || "").trim());
+    if (!q) return [];
+    const maps = { label: "地図", url: `https://www.google.com/maps/search/?api=1&query=${q}` };
+    const image = { label: "画像", url: `https://www.google.com/search?tbm=isch&q=${q}` };
+    const dict = { label: "辞書", url: `https://kotobank.jp/search?q=${q}` };
+    const web = { label: "検索", url: `https://www.google.com/search?q=${q}` };
+    const wiki = { label: "Wikipedia", url: `https://ja.wikipedia.org/w/index.php?search=${q}` };
+    return {
+      "📍 舞台": [maps, image, wiki],
+      "🌿 植物": [image, wiki],
+      "👥 人物・距離感": [],
+      "🍽 食・道具": [image, dict],
+      "📖 言葉": [dict, web],
+    }[kind] || [dict, web];
+  }
+
+  root.ShioriParse = { lookupLinks, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
 })(typeof window !== "undefined" ? window : globalThis);
