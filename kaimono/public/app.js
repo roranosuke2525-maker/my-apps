@@ -1,12 +1,14 @@
-// かいもの：買い物リスト（DB_タスク管理の BUY タスクの本文の ToDo）・在庫と補充（DB_Daily）・切れそうな在庫の通知。
+// かいもの：買い物リスト（DB_タスク管理の BUY タスクの本文の ToDo）・在庫と補充（DB_Daily）・切れそうな在庫と買い物の時刻の通知。
+// リストは3つに分ける：🛒 いつもの（DB_買い物テンプレートから数を決めて作る）／⚡ ちょい買い（突発の品を足す1枚）／📦 そのほか（ネット注文などの BUY タスクと補充）。
 // /api は Cloudflare Worker（src/worker.js）が Notion API で答える。開くには合言葉（APP_KEY）が要る。
 // 品目の書き込みは端末に順番待ちで貯め、電波が戻ったら順に送る（お店の中で圏外になっても使える）。
 const A = window.KaimonoAisle;
-const PRESETS = ["スーパー", "ドラッグストア", "ネット注文", "100均", "コンビニ"];
 const CATS = ["日用品", "消耗品", "食品", "育児", "サプリ", "美容"];
 const FREQS = ["毎日", "毎週", "毎月"];
 const SOON_DAYS = 7; // 補充の画面で「そろそろ」に数える日数
 const KEY_STORAGE = "key";
+const QUICK = "⚡ ちょい買い";
+const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -18,7 +20,9 @@ const store = {
 
 const S = {
   tab: "list", lists: [], stock: [], today: "", loadedAt: "", cur: store.get("cur"), sort: store.get("sort", "aisle"),
-  showBasket: false, edit: "", newList: false, stockCat: "", stockForm: false, alertDays: 3, push: null, loading: false,
+  showBasket: false, edit: "", stockCat: "", stockForm: false, alertDays: 3, push: null, loading: false,
+  seg: store.get("seg", "usual"), templates: [], templateErr: "", planning: false, whenFor: "", openOther: "", wantList: "",
+  plan: { counts: {}, extra: [], at: "", store: "", ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
 };
 let memoryKey = store.get(KEY_STORAGE);
 let Q = store.json("queue", []); // 送る前の書き込み
@@ -63,19 +67,39 @@ function setStatus(msg, err = false) {
   s.classList.toggle("err", !!err);
 }
 
-const saveSnap = () => store.set("snap", JSON.stringify({ lists: S.lists, stock: S.stock, today: S.today, loadedAt: S.loadedAt }));
+const saveSnap = () => store.set("snap", JSON.stringify({ lists: S.lists, stock: S.stock, today: S.today, loadedAt: S.loadedAt, templates: S.templates, templateErr: S.templateErr }));
+const savePlan = () => store.set("plan", JSON.stringify(S.plan));
 const saveQueue = () => store.set("queue", JSON.stringify(Q));
 const saveHist = () => store.set("hist", JSON.stringify(hist));
 
 // ---------- データ ----------
 const shopLists = () => S.lists.filter((t) => !t.refill.length);
-const refillTasks = () => S.lists.filter((t) => t.refill.length);
+const storeNames = () => [...new Set(S.templates.map((x) => x.store))].filter((x) => x && x !== "その他");
+// リストの種類はタスク名の頭の印で分ける（DB_タスク管理に列は足さない）
+function kindOf(t) {
+  if (t.refill.length) return "other";
+  if (/^⚡/.test(t.name)) return "quick";
+  if (/^🛒/.test(t.name) || /^(買い物|買い物リスト|スーパー)$/.test(t.name) || storeNames().some((n) => t.name.includes(n))) return "usual";
+  return "other";
+}
+const byAt = (a, b) => (a.at || a.date || "9999").localeCompare(b.at || b.date || "9999");
+const usualLists = () => S.lists.filter((t) => kindOf(t) === "usual").sort(byAt);
+const quickList = () => S.lists.find((t) => kindOf(t) === "quick");
+const otherTasks = () => S.lists.filter((t) => kindOf(t) === "other").sort(byAt);
 const listOf = (id) => S.lists.find((t) => t.id === id);
 const leftOf = (t) => (t.items || []).filter((i) => !i.checked).length;
 const soonStock = (days = S.alertDays) => S.stock.filter((x) => x.left != null && x.left <= days && !x.open?.length);
 const leftTx = (n) => (n == null ? "" : n < 0 ? `切れて${-n}日` : n === 0 ? "今日切れる" : `あと${n}日`);
 const leftColor = (x) => (x.left == null ? "var(--mute)" : x.left <= 0 ? "var(--bad)" : x.left <= 3 ? "var(--warn)" : x.left <= SOON_DAYS ? "var(--soon)" : "var(--ok)");
 const md = (d) => (d ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : "");
+const jstDay = (ms = Date.now()) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
+const dow = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
+function fmtAt(at) {
+  if (!at) return "";
+  const d = at.slice(0, 10); const today = jstDay();
+  const day = d === today ? "今日" : d === addDays(today, 1) ? "明日" : `${md(d)}(${WD[dow(d)]})`;
+  return `${day} ${at.slice(11, 16)}`;
+}
 const kana = (s) => String(s || "").normalize("NFKC").toLowerCase().replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 
 async function load({ quiet = false } = {}) {
@@ -85,8 +109,9 @@ async function load({ quiet = false } = {}) {
   if (!quiet) setStatus("Notion から読みこみ中…");
   try {
     const st = await api("GET", "/api/state");
-    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt });
-    for (const t of shopLists()) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
+    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "" });
+    if (S.wantList) { const t = listOf(S.wantList); if (t) { S.seg = kindOf(t); S.cur = t.id; S.tab = "list"; } S.wantList = ""; }
+    for (const t of S.lists.filter((x) => kindOf(x) !== "other")) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
     saveSnap(); saveHist();
     setStatus("");
   } catch (err) {
@@ -163,22 +188,23 @@ let tmpN = 0;
 async function addTexts(texts) {
   texts = texts.map((s) => s.trim()).filter(Boolean);
   if (!texts.length) return;
-  let t = listOf(S.cur);
-  if (!t || t.refill.length) t = shopLists()[0];
+  let t = S.seg === "quick" ? quickList() : listOf(S.cur);
+  if (t && kindOf(t) !== S.seg) t = null;
   if (!t) {
-    // リストがまだなければ、入れた品目ごと新しく作る
+    // リストがまだなければ、入れた品目ごと新しく作る（ちょい買いは1枚だけ）
+    const name = S.seg === "quick" ? QUICK : `🛒 買い物 ${md(jstDay())}`;
     try {
       setSync("busy");
-      const res = await api("POST", "/api/lists", { name: "買い物リスト", items: texts });
+      const res = await api("POST", "/api/lists", { name, items: texts });
       S.lists.unshift(res.list);
-      S.cur = res.list.id; store.set("cur", S.cur);
+      if (S.seg !== "quick") { S.cur = res.list.id; store.set("cur", S.cur); }
       texts.forEach((s) => remember(A.splitQty(s).name));
       saveHist(); saveSnap(); setSync("ok"); render();
-      toast(`買い物リストを作って ${texts.length}品 入れました`);
+      toast(`「${name}」を作って ${texts.length}品 入れました`);
     } catch (err) { setSync("err"); toast(`作れませんでした：${err.message}`); }
     return;
   }
-  S.cur = t.id;
+  if (S.seg !== "quick") S.cur = t.id;
   const temps = texts.map(() => `tmp${Date.now()}${tmpN++}`);
   t.items = t.items || [];
   texts.forEach((s, n) => t.items.push({ id: temps[n], text: s, checked: false, group: "" }));
@@ -246,10 +272,87 @@ async function createList(name) {
     setSync("busy");
     const res = await api("POST", "/api/lists", { name });
     S.lists.unshift(res.list);
-    S.cur = res.list.id; store.set("cur", S.cur); S.newList = false;
+    S.cur = res.list.id; store.set("cur", S.cur); S.planning = false;
     saveSnap(); setSync("ok"); render();
     $("#addin")?.focus();
   } catch (err) { setSync("err"); toast(`作れませんでした：${err.message}`); }
+}
+
+// ---------- 買い物の時刻 ----------
+// ボタン1つで決める候補（過ぎた時刻は出さない）
+function whenOptions() {
+  const today = jstDay(); const tmr = addDays(today, 1);
+  let sat = addDays(today, (6 - dow(today) + 7) % 7 || 7);
+  const opts = [["今日 17時", today, 17], ["今日 19時", today, 19], ["明日 10時", tmr, 10], ["明日 17時", tmr, 17], [`土曜 10時（${md(sat)}）`, sat, 10]];
+  return opts.map(([label, d, h]) => [label, `${d}T${String(h).padStart(2, "0")}:00:00+09:00`]).filter(([, at]) => Date.parse(at) > Date.now() + 5 * 60e3)
+    .filter(([, at], k, a) => a.findIndex(([, b]) => b === at) === k);
+}
+function whenChips(target, cur) {
+  return `<div class="whens">${whenOptions().map(([label, at]) => `<button type="button" class="chip${cur === at ? " on" : ""}" data-when="${target}|${at}">${esc(label)}</button>`).join("")}
+    <label class="chip pick">日時を選ぶ<input type="datetime-local" step="900" data-whenpick="${target}" value="${cur ? cur.slice(0, 16) : ""}"></label>
+    ${cur ? `<button type="button" class="chip" data-when="${target}|">時刻なし</button>` : ""}</div>`;
+}
+async function setWhen(target, at) {
+  if (target === "plan") { S.plan.at = at; savePlan(); render(); return; }
+  const t = listOf(target); if (!t) return;
+  const prev = t.at;
+  t.at = at || null; S.whenFor = ""; render();
+  try {
+    setSync("busy");
+    await api("PATCH", `/api/lists/${t.id}/when`, { at: at || null });
+    saveSnap(); setSync("ok");
+    toast(at ? `${fmtAt(at)} に知らせます（30分前と時刻ちょうど）` : "時刻を外しました");
+  } catch (err) { t.at = prev; setSync("err"); render(); toast(`時刻を入れられませんでした：${err.message}`); }
+}
+
+// ---------- いつもの買い物の準備（テンプレートから数を決める） ----------
+const AISLE_ORDER = Object.fromEntries(A.AISLES.map((a) => [a.name, a.order]));
+const aisleOfTpl = (x) => (x.aisle && x.aisle in AISLE_ORDER ? A.AISLES[AISLE_ORDER[x.aisle]] : A.aisleOf(x.name));
+const tplText = (x, n) => (x.unit ? `${x.name} ${n}${x.unit}` : n > 1 ? `${x.name} ${n}` : x.name);
+function planPicked() {
+  return S.templates.filter((x) => S.plan.counts[x.id] > 0)
+    .sort((a, b) => aisleOfTpl(a).order - aisleOfTpl(b).order || a.order - b.order)
+    .map((x) => tplText(x, S.plan.counts[x.id]));
+}
+function planStep(id, d) {
+  const x = S.templates.find((t) => t.id === id); if (!x) return;
+  const n = Math.max(0, Math.min(99, (S.plan.counts[id] || 0) + d));
+  if (n) S.plan.counts[id] = n; else delete S.plan.counts[id];
+  savePlan(); render();
+}
+function planToggle(id) {
+  const x = S.templates.find((t) => t.id === id); if (!x) return;
+  if (S.plan.counts[id]) delete S.plan.counts[id]; else S.plan.counts[id] = x.qty || 1;
+  savePlan(); render();
+}
+async function createPlan(btn) {
+  const texts = [...planPicked(), ...S.plan.extra];
+  if (!texts.length) { toast("買うものを選んでください"); return; }
+  if (texts.length > 50) { toast("一度に作れるのは50品までです"); return; }
+  const day = S.plan.at ? S.plan.at.slice(0, 10) : jstDay();
+  const name = `🛒 ${S.plan.store || "買い物"} ${md(day)}`;
+  btn.disabled = true;
+  try {
+    setSync("busy");
+    const res = await api("POST", "/api/lists", { name, items: texts, at: S.plan.at || null });
+    S.lists.unshift(res.list);
+    S.cur = res.list.id; store.set("cur", S.cur); S.planning = false;
+    texts.forEach((t) => remember(A.splitQty(t).name));
+    S.plan = { counts: {}, extra: [], at: "", store: S.plan.store }; savePlan(); saveHist(); saveSnap(); setSync("ok"); render();
+    toast(`「${name}」を作りました（${texts.length}品${res.list.at ? `・${fmtAt(res.list.at)}に知らせます` : ""}）`);
+  } catch (err) { btn.disabled = false; setSync("err"); toast(`作れませんでした：${err.message}`); }
+}
+async function addToTemplate(k, btn) {
+  const text = S.plan.extra[k]; if (!text) return;
+  const q = A.splitQty(text); const a = A.aisleOf(q.name);
+  btn.disabled = true;
+  try {
+    const res = await api("POST", "/api/templates", { name: q.name, store: S.plan.store || "その他", aisle: a.order < A.AISLES.length - 1 ? a.name : "", qty: parseFloat(q.qty) || 1, unit: q.qty.replace(/^[\d.]+/, "") });
+    S.templates.push(res.template);
+    S.plan.extra.splice(k, 1); S.plan.counts[res.template.id] = res.template.qty;
+    savePlan(); saveSnap(); render();
+    toast(`「${q.name}」をテンプレートに足しました`);
+  } catch (err) { btn.disabled = false; toast(`足せませんでした：${err.message}`); }
 }
 
 // ---------- 在庫・補充：操作 ----------
@@ -300,7 +403,7 @@ async function addStock(form) {
 function render() {
   if (!memoryKey) return;
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab)));
-  const left = shopLists().reduce((n, t) => n + leftOf(t), 0) + refillTasks().length;
+  const left = usualLists().reduce((n, t) => n + leftOf(t), 0) + (quickList() ? leftOf(quickList()) : 0);
   const soon = soonStock().length;
   badge("#b-list", left); badge("#b-stock", soon);
   appBadge(soon);
@@ -319,30 +422,85 @@ function appBadge(n) {
 }
 
 function renderList() {
-  const lists = shopLists(); const refills = refillTasks();
-  if (S.cur !== "refill" && !listOf(S.cur)) S.cur = lists[0]?.id || (refills.length ? "refill" : "");
   const soon = soonStock();
   const banner = soon.length ? `<button type="button" class="banner" data-go="stock"><span class="bi">⚠️</span><span><b>切れそうな在庫が${soon.length}品</b><small>${esc(soon.slice(0, 3).map((x) => `${x.name}（${leftTx(x.left)}）`).join("・"))}</small></span><span class="go">補充へ ›</span></button>` : "";
-  const chips = lists.map((t) => `<button type="button" class="lchip" data-cur="${t.id}" aria-pressed="${S.cur === t.id}">${esc(t.name)}<span class="n">${leftOf(t)}</span></button>`).join("")
-    + (refills.length ? `<button type="button" class="lchip refill" data-cur="refill" aria-pressed="${S.cur === "refill"}">📦 補充<span class="n">${refills.length}</span></button>` : "")
-    + `<button type="button" class="lchip add" data-newlist="1" aria-label="新しいリスト">＋</button>`;
-  const newList = S.newList ? `<form class="card newlist" id="newlist"><input id="newname" maxlength="100" placeholder="リストの名前（例：スーパー）" aria-label="リストの名前" autocomplete="off" enterkeyhint="done">
-    <div class="presets">${PRESETS.map((p) => `<button type="button" class="chip" data-preset="${esc(p)}">${esc(p)}</button>`).join("")}</div>
-    <div class="row-end"><button type="button" class="btn ghost" data-newlist="0">やめる</button><button type="submit" class="btn pri">作る</button></div></form>` : "";
-  const head = `${banner}<div class="lchips" role="tablist" aria-label="リスト">${chips}</div>${newList}`;
-  if (S.cur === "refill") return head + renderRefills(refills);
+  const q = quickList();
+  const segs = [["usual", "🛒 いつもの", usualLists().reduce((n, t) => n + leftOf(t), 0)], ["quick", "⚡ ちょい買い", q ? leftOf(q) : 0], ["other", "📦 そのほか", otherTasks().length]];
+  const head = `${banner}<div class="kinds" role="tablist">${segs.map(([k, n, c]) => `<button type="button" data-seg="${k}" aria-pressed="${S.seg === k}">${n}${c ? `<span class="n">${c}</span>` : ""}</button>`).join("")}</div>`;
+  if (S.seg === "quick") return head + renderQuick();
+  if (S.seg === "other") return head + renderOther();
+  return head + renderUsual();
+}
+const addBox = (ph) => `<form class="addbox" id="addform"><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="done" placeholder="${esc(ph)}" aria-label="買うもの"><button type="submit" class="btn pri">入れる</button></form><div class="suggest" id="suggest"></div>`;
+
+function renderUsual() {
+  const lists = usualLists();
+  if (S.planning || !lists.length) return renderPlan(lists.length > 0);
+  if (!lists.some((t) => t.id === S.cur)) S.cur = lists[0].id;
   const t = listOf(S.cur);
-  const add = `<form class="addbox" id="addform"><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="done" placeholder="${t ? `「${esc(t.name)}」に入れる` : "買うものを入れる"}（牛乳、卵、パン）" aria-label="買うもの"><button type="submit" class="btn pri">入れる</button></form><div class="suggest" id="suggest"></div>`;
-  if (!t) return head + add + `<div class="empty">まだリストがありません。<br>上の欄に入れると「買い物リスト」を作ります。</div>`;
+  const chips = lists.map((x) => `<button type="button" class="lchip" data-cur="${x.id}" aria-pressed="${S.cur === x.id}">${esc(x.name.replace(/^🛒\s*/, ""))}<span class="n">${leftOf(x)}</span></button>`).join("")
+    + `<button type="button" class="lchip add" data-plan="1">＋ 準備する</button>`;
+  return `<div class="lchips">${chips}</div>${listView(t, "その場で足す（牛乳、卵）")}`;
+}
+function renderQuick() {
+  const t = quickList();
+  const note = `<p class="note pad">思いついた品をサッと足す1枚。ついでの買い物でまとめて買えます。</p>`;
+  return note + (t ? listView(t, "思いついたら入れる（電池、洗剤）") : `${addBox("思いついたら入れる（電池、洗剤）")}<div class="empty small">まだ何もありません</div>`);
+}
+
+function listView(t, ph) {
   const items = t.items || [];
   const todo = items.filter((i) => !i.checked); const basket = items.filter((i) => i.checked);
+  const when = `<div class="when"><span>⏰ ${t.at ? `<b>${esc(fmtAt(t.at))}</b>` : `<span class="mute">時刻なし</span>`}</span><button type="button" class="btn ghost sm" data-whenopen="${t.id}">${t.at ? "変える" : "時刻を決める"}</button></div>${S.whenFor === t.id ? whenChips(t.id, t.at) : ""}`;
   const tools = `<div class="ltools"><div class="seg"><button type="button" data-sort="aisle" aria-pressed="${S.sort === "aisle"}">売り場順</button><button type="button" data-sort="added" aria-pressed="${S.sort === "added"}">入れた順</button></div>
     <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
   const prog = items.length ? `<div class="prog"><i style="width:${Math.round((basket.length / items.length) * 100)}%"></i></div>` : "";
-  const body = todo.length ? groups(todo) : `<div class="empty small">${items.length ? "🎉 ぜんぶかごに入りました" : "上の欄から入れてください。<br>「、」で区切ると一度にたくさん入れられます"}</div>`;
+  const body = todo.length ? groups(todo) : `<div class="empty small">${items.length ? "🎉 ぜんぶかごに入りました" : "上の欄から入れてください。「、」で区切るとまとめて入ります"}</div>`;
   const bk = basket.length ? `<div class="basket"><button type="button" class="bhead" data-basket="1" aria-expanded="${S.showBasket}">🧺 かごの中 ${basket.length}品 <span>${S.showBasket ? "▲" : "▼"}</span></button>${S.showBasket ? basket.map(itemRow).join("") : ""}</div>` : "";
   const foot = `<div class="lfoot">${basket.length ? `<button type="button" class="btn" data-clear="${t.id}">かごの${basket.length}品をリストから消す</button>` : ""}${items.length && !todo.length ? `<button type="button" class="btn ok" data-finish="${t.id}">買い物おわり（済みにする）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
-  return head + add + `<div class="card list">${tools}${prog}${body}${bk}</div>` + foot;
+  return `${when}${addBox(ph)}<div class="card list">${tools}${prog}${body}${bk}</div>${foot}`;
+}
+
+function renderPlan(canBack) {
+  if (!S.templates.length) {
+    return `<div class="card"><h2>🛒 いつもの買い物</h2><p class="note">${S.templateErr ? `テンプレートを読めませんでした（${esc(S.templateErr)}）。Notion の DB_買い物テンプレート を開き、「•••」→「接続」→「かいもの」を追加してください。` : "DB_買い物テンプレート に品がありません。Notion で足してください。"}</p></div>
+      <div class="row-end"><button type="button" class="btn" data-plannew="1">テンプレートなしで空のリストを作る</button></div>`;
+  }
+  const stores = [...new Set(S.templates.map((x) => x.store))];
+  if (!stores.includes(S.plan.store)) S.plan.store = stores[0];
+  const xs = S.templates.filter((x) => x.store === S.plan.store).sort((a, b) => aisleOfTpl(a).order - aisleOfTpl(b).order || a.order - b.order || a.name.localeCompare(b.name, "ja"));
+  let g = null;
+  const rows = xs.map((x) => {
+    const a = aisleOfTpl(x); const n = S.plan.counts[x.id] || 0;
+    const h = a.name !== g ? `<div class="ghead"><span>${a.icon}</span>${esc((g = a.name))}</div>` : "";
+    return `${h}<div class="prow${n ? " on" : ""}"><button type="button" class="pname" data-ptoggle="${x.id}"><span class="box" aria-hidden="true"></span><span class="tx">${esc(x.name)}</span><small>いつも ${x.qty}${esc(x.unit)}</small></button>
+      <div class="step"><button type="button" data-pstep="${x.id}|-1" aria-label="${esc(x.name)}を1つ減らす">−</button><b>${n}${n && x.unit ? `<small>${esc(x.unit)}</small>` : ""}</b><button type="button" data-pstep="${x.id}|1" aria-label="${esc(x.name)}を1つ増やす">＋</button></div></div>`;
+  }).join("");
+  const extra = S.plan.extra.map((e, k) => `<div class="prow on"><span class="pname"><span class="tx">${esc(e)}</span><small>今回だけ</small></span><button type="button" class="btn ghost sm" data-tpladd="${k}">＋テンプレへ</button><button type="button" class="more" data-pextradel="${k}" aria-label="外す">×</button></div>`).join("");
+  const picked = planPicked().length + S.plan.extra.length;
+  return `<div class="card plan"><div class="phead"><h2>🛒 準備：今回なにを何個？</h2>${canBack ? `<button type="button" class="btn ghost sm" data-plan="0">やめる</button>` : ""}</div>
+    <p class="note">名前をタップでいつもの数、−／＋で数を決めます。品は Notion の DB_買い物テンプレート で整えられます。</p>
+    ${stores.length > 1 ? `<div class="chips">${stores.map((n) => `<button type="button" class="chip" data-pstore="${esc(n)}" aria-pressed="${n === S.plan.store}">${esc(n)}</button>`).join("")}</div>` : ""}
+    <div class="list">${rows}</div>
+    ${extra ? `<div class="ghead"><span>✍️</span>今回だけ</div>${extra}` : ""}
+    <form class="addbox" id="planextra"><input id="pextra" type="text" maxlength="200" autocomplete="off" enterkeyhint="done" placeholder="テンプレにない品（例：ケーキ）" aria-label="テンプレにない品"><button type="submit" class="btn">足す</button></form></div>
+    <div class="card pfoot"><div class="when"><span>⏰ いつ買う？ ${S.plan.at ? `<b>${esc(fmtAt(S.plan.at))}</b>` : `<span class="mute">時刻なし</span>`}</span></div>${whenChips("plan", S.plan.at)}
+    <div class="row-end">${picked ? `<button type="button" class="btn ghost" data-planclear="1">選び直す</button>` : ""}<button type="button" class="btn pri" data-plancreate="1" ${picked ? "" : "disabled"}>${picked}品でリストを作る</button></div></div>`;
+}
+
+function renderOther() {
+  const ts = otherTasks(); const refills = ts.filter((t) => t.refill.length); const rest = ts.filter((t) => !t.refill.length);
+  if (!ts.length) return `<div class="empty">ネット注文などの買い物タスクはありません</div>`;
+  const card = (t) => {
+    const items = t.items || []; const done = items.filter((i) => i.checked).length; const open = S.openOther === t.id;
+    const meta = t.at ? fmtAt(t.at) : t.date ? md(t.date) : "";
+    return `<div class="card ocard"><div class="ohead"><button type="button" class="oname" data-oopen="${t.id}">${esc(t.name)}</button>${meta ? `<span class="meta">${esc(meta)}</span>` : ""}</div>
+      ${t.next ? `<div class="osub">次：${esc(t.next)}</div>` : ""}
+      ${items.length ? `<button type="button" class="oprog" data-oopen="${t.id}"><span class="prog"><i style="width:${Math.round((done / items.length) * 100)}%"></i></span><small>${done}/${items.length} ${open ? "▲" : "▼"}</small></button>` : ""}
+      ${open && items.length ? `<div class="list">${items.map(itemRow).join("")}</div>` : ""}
+      <div class="oacts">${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener">Notion ↗</a><button type="button" class="btn ok sm" data-finish="${t.id}">✓ 済み</button></div></div>`;
+  };
+  return rest.map(card).join("") + (refills.length ? `<h3 class="sec">📦 補充（在庫から）</h3>${renderRefills(refills)}` : "");
 }
 function groups(items) {
   if (S.sort === "added") {
@@ -361,8 +519,7 @@ function itemRow(i) {
   return `<div class="item${i.checked ? " on" : ""}${i.id.startsWith("tmp") ? " pending" : ""}"><button type="button" class="tick" data-toggle="${i.id}" aria-pressed="${i.checked}"><span class="box" aria-hidden="true"></span><span class="tx">${esc(q.name)}</span>${q.qty ? `<span class="qty">${esc(q.qty)}</span>` : ""}</button><button type="button" class="more" data-edit="${i.id}" aria-label="「${esc(q.name)}」を直す">⋯</button></div>`;
 }
 function renderRefills(ts) {
-  if (!ts.length) return `<div class="empty">補充のタスクはありません</div>`;
-  return `<p class="note pad">在庫（DB_Daily）から作った補充タスク。買えたら ✓ で済みにすると、最終補充日が今日になります。</p><div class="card list">${ts.map((t) => {
+  return `<p class="note pad">買えたら ✓ で済みにすると、DB_Daily の最終補充日が今日になります。</p><div class="card list">${ts.map((t) => {
     const x = S.stock.find((s) => t.refill.includes(s.id));
     return `<div class="item"><button type="button" class="tick" data-finish="${t.id}" aria-label="「${esc(t.name)}」を買えた"><span class="box" aria-hidden="true"></span><span class="tx">${esc(t.name.replace(/^補充:/, ""))}</span>${x ? `<span class="qty" style="color:${leftColor(x)}">${esc(leftTx(x.left))}</span>` : ""}</button>${t.link ? `<a class="more" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="注文ページを開く">🛒</a>` : ""}</div>`;
   }).join("")}</div>`;
@@ -372,7 +529,7 @@ function renderRefills(ts) {
 function renderSuggest() {
   const box = $("#suggest"); if (!box) return;
   const raw = $("#addin").value; const parts = A.splitInput(raw); const q = /[、,，;\n]\s*$/.test(raw) ? "" : parts.at(-1) || "";
-  const t = listOf(S.cur);
+  const t = S.seg === "quick" ? quickList() : listOf(S.cur);
   const onList = new Set((t?.items || []).filter((i) => !i.checked).map((i) => A.splitQty(i.text).name));
   const names = new Map();
   const put = (n, score) => { if (n && !onList.has(n) && !parts.slice(0, -1).includes(n)) names.set(n, Math.max(names.get(n) || 0, score)); };
@@ -386,6 +543,7 @@ function renderSuggest() {
     box.innerHTML = out.length ? out.map(([n]) => `<button type="button" class="chip" data-sug="${esc(n)}">＋ ${esc(n)}</button>`).join("") : "";
     return;
   }
+  if (S.seg !== "quick") { box.innerHTML = ""; return; } // いつものリストでは、打ちかけたときだけ候補を出す
   const soon = soonStock(SOON_DAYS).filter((x) => !onList.has(x.name)).slice(0, 4);
   for (const x of soon) names.delete(x.name);
   out = [...names].filter(([n]) => hist[n]?.n >= 1).sort((a, b) => b[1] - a[1]).slice(0, 10);
@@ -442,7 +600,8 @@ function pushForm() {
   const hour = p.hour ?? 8; const days = p.days ?? 3;
   return `<label>知らせる時刻<select name="hour">${Array.from({ length: 18 }, (_, k) => k + 5).map((h) => `<option value="${h}" ${h === hour ? "selected" : ""}>${h}:00</option>`).join("")}</select></label>
     <label>切れる何日前から<select name="days">${[[0, "切れた日から"], [1, "1日前"], [2, "2日前"], [3, "3日前"], [5, "5日前"], [7, "7日前"]].map(([d, n]) => `<option value="${d}" ${d === days ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-    <label class="check"><input type="checkbox" name="list" ${p.list ? "checked" : ""}> 買い物リストに残っている品目も知らせる</label>`;
+    <label class="check"><input type="checkbox" name="list" ${p.list ? "checked" : ""}> 在庫と一緒に、リストに残っている品目も知らせる</label>
+    <label class="check"><input type="checkbox" name="remind" ${p.remind !== false ? "checked" : ""}> 買い物の時刻を知らせる（30分前と時刻ちょうど）</label>`;
 }
 function renderAlert() {
   const p = S.push;
@@ -450,17 +609,17 @@ function renderAlert() {
   if (!p) body = `<p class="note">確かめています…</p>`;
   else if (p.unsupported) body = `<p class="note">${/iphone|ipad/i.test(navigator.userAgent) && !standalone() ? "iPhone は Safari の共有ボタン →「ホーム画面に追加」で入れたアプリから開くと通知を使えます（iOS 16.4 以上）。" : "このブラウザは通知に対応していません。"}</p>`;
   else if (Notification.permission === "denied") body = `<p class="note">通知が拒否されています。設定アプリ →「通知」→「かいもの」で許可してから開き直してください。</p>`;
-  else if (p.subscribed) body = `<p class="ok-line">✅ この端末に毎日 ${p.hour}:00 に知らせます</p><form id="pushform" class="form">${pushForm()}<div class="row-end"><button type="button" class="btn ghost" data-push="off">オフにする</button><button type="button" class="btn" data-push="test">いま試す</button><button type="submit" class="btn pri">保存</button></div></form>`;
+  else if (p.subscribed) body = `<p class="ok-line">✅ この端末に通知します（在庫は毎日 ${p.hour}:00${p.remind !== false ? "・買い物の時刻" : ""}）</p><form id="pushform" class="form">${pushForm()}<div class="row-end"><button type="button" class="btn ghost" data-push="off">オフにする</button><button type="button" class="btn" data-push="test">いま試す</button><button type="submit" class="btn pri">保存</button></div></form>`;
   else body = `<form id="pushform" class="form">${pushForm()}<div class="row-end"><button type="submit" class="btn pri">通知をオンにする</button></div></form>${p.err ? `<p class="note err">${esc(p.err)}</p>` : ""}`;
   const soon = soonStock();
-  return `<div class="card form"><h2>🔔 在庫アラート</h2><p class="note">DB_Daily の切れる予定日が近づいた品（まだ補充タスクがないもの）を、決めた時刻に通知します。アイコンのバッジにも件数が出ます。</p>${body}</div>
+  return `<div class="card form"><h2>🔔 通知</h2><p class="note">・在庫：DB_Daily の切れる予定日が近い品（補充タスクがまだないもの）を毎日決めた時刻に。アイコンのバッジにも件数が出ます<br>・買い物の時刻：リストに決めた時刻の30分前と、時刻ちょうどに</p>${body}</div>
     <div class="card"><h2>いま知らせる内容</h2>${soon.length ? `<ul class="plain">${soon.map((x) => `<li><span style="color:${leftColor(x)}">●</span> ${esc(x.name)}<small>${esc(leftTx(x.left))}</small></li>`).join("")}</ul>` : `<p class="note">切れそうな在庫はありません（${S.alertDays}日前まで）</p>`}</div>
     <div class="card"><h2>この端末</h2><p class="note">合言葉はこの端末にだけ保存しています。</p><div class="row-end"><button type="button" class="btn ghost" data-logout="1">合言葉を消す</button></div></div>`;
 }
 function urlB64(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4)); return Uint8Array.from(b, (c) => c.charCodeAt(0)); }
 async function pushSave(form) {
   const f = new FormData(form);
-  const opts = { hour: +f.get("hour"), days: +f.get("days"), list: f.get("list") === "on" };
+  const opts = { hour: +f.get("hour"), days: +f.get("days"), list: f.get("list") === "on", remind: f.get("remind") === "on" };
   try {
     let sub = await pushSub();
     if (!sub) {
@@ -472,7 +631,7 @@ async function pushSave(form) {
     }
     S.push = { ...(await api("PUT", "/api/push", { subscription: sub.toJSON(), ...opts })), endpoint: sub.endpoint };
     S.alertDays = S.push.days;
-    toast(`毎日 ${S.push.hour}:00 に知らせます`); render();
+    toast("通知の設定を保存しました"); render();
   } catch (err) { toast(`通知をオンにできませんでした：${err.message}`); }
 }
 async function pushAction(kind) {
@@ -491,9 +650,20 @@ document.addEventListener("click", (e) => {
   const d = el.dataset;
   if (d.tab) { S.tab = d.tab; S.edit = ""; render(); if (d.tab === "alert") loadPush(); window.scrollTo(0, 0); return; }
   if (d.go) { S.tab = d.go; render(); window.scrollTo(0, 0); return; }
-  if (d.cur) { S.cur = d.cur; store.set("cur", d.cur); S.edit = ""; S.newList = false; render(); return; }
-  if (d.newlist) { S.newList = d.newlist === "1"; render(); if (S.newList) $("#newname")?.focus(); return; }
-  if (d.preset) { createList(d.preset); return; }
+  if (d.cur) { S.cur = d.cur; store.set("cur", d.cur); S.edit = ""; S.whenFor = ""; render(); return; }
+  if (d.seg) { S.seg = d.seg; store.set("seg", d.seg); S.edit = ""; S.whenFor = ""; render(); return; }
+  if (d.plan) { S.planning = d.plan === "1"; render(); window.scrollTo(0, 0); return; }
+  if (d.plannew) { createList(`🛒 買い物 ${md(jstDay())}`); return; }
+  if (d.pstore) { S.plan.store = d.pstore; savePlan(); render(); return; }
+  if (d.ptoggle) { planToggle(d.ptoggle); return; }
+  if (d.pstep) { const [id, n] = d.pstep.split("|"); planStep(id, +n); return; }
+  if (d.pextradel) { S.plan.extra.splice(+d.pextradel, 1); savePlan(); render(); return; }
+  if (d.tpladd) { addToTemplate(+d.tpladd, el); return; }
+  if (d.planclear) { S.plan.counts = {}; S.plan.extra = []; savePlan(); render(); return; }
+  if (d.plancreate) { createPlan(el); return; }
+  if (d.whenopen) { S.whenFor = S.whenFor === d.whenopen ? "" : d.whenopen; render(); return; }
+  if (d.when !== undefined && d.when.includes("|")) { const [target, at] = d.when.split("|"); setWhen(target, at); return; }
+  if (d.oopen) { S.openOther = S.openOther === d.oopen ? "" : d.oopen; render(); return; }
   if (d.sort) { S.sort = d.sort; store.set("sort", d.sort); render(); return; }
   if (d.toggle) { toggle(d.toggle); return; }
   if (d.edit) { S.edit = d.edit; render(); return; }
@@ -519,7 +689,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("submit", (e) => {
   const f = e.target; e.preventDefault();
   if (f.id === "addform") { const i = $("#addin"); const texts = A.splitInput(i.value); i.value = ""; addTexts(texts); i.focus(); return; }
-  if (f.id === "newlist") { createList($("#newname").value); return; }
+  if (f.id === "planextra") { const v = $("#pextra").value; const add = A.splitInput(v); if (add.length) { S.plan.extra.push(...add); savePlan(); render(); $("#pextra")?.focus(); } return; }
   if (f.dataset.editform) { renameItem(f.dataset.editform, $("#editin").value); return; }
   if (f.id === "stockform") { addStock(f); return; }
   if (f.id === "pushform") { pushSave(f); return; }
@@ -531,6 +701,10 @@ document.addEventListener("submit", (e) => {
   }
 });
 document.addEventListener("input", (e) => { if (e.target.id === "addin") renderSuggest(); });
+document.addEventListener("change", (e) => {
+  const t = e.target.dataset?.whenpick; if (t === undefined || !e.target.value) return;
+  setWhen(t, `${e.target.value.slice(0, 16)}:00+09:00`);
+});
 document.addEventListener("keydown", (e) => { if (e.target.id === "editin" && e.key === "Escape") { S.edit = ""; render(); } });
 $("#reload").addEventListener("click", () => load());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && memoryKey && Date.now() - Date.parse(S.loadedAt || 0) > 60e3) load({ quiet: true }); });
@@ -545,6 +719,7 @@ function showLogin() {
 (function boot() {
   const qs = new URLSearchParams(location.search);
   if (["list", "stock", "alert"].includes(qs.get("tab"))) S.tab = qs.get("tab");
+  if (/^[0-9a-f]{32}$/.test(qs.get("list") || "")) S.wantList = qs.get("list");
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (!memoryKey) { showLogin(); return; }
   const snap = store.json("snap", null);

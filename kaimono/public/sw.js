@@ -1,5 +1,5 @@
 // 画面ファイルをキャッシュする（/api は常にネットワーク）。在庫アラートのプッシュ通知も受ける
-const CACHE = "kaimono-v1";
+const CACHE = "kaimono-v2";
 const SHELL = ["./", "index.html", "app.js", "aisle.js", "style.css", "manifest.webmanifest", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

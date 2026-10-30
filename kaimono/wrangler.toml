@@ -9,9 +9,9 @@ directory = "./public"
 binding = "ASSETS"
 run_worker_first = ["/api/*"]
 
-# 毎時0分に動き、通知の時刻（日本時間）を選んだ端末にだけ在庫アラートを送る
+# 15分ごとに動く：買い物の時刻のリマインド（30分前・ちょうど）と、毎時0分台に在庫アラート（時刻を選んだ端末だけ）
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/15 * * * *"]
 
 # 通知を受ける端末の登録（宛先・時刻・何日前から）と通知の鍵
 [[kv_namespaces]]
@@ -22,6 +22,7 @@ id = "03aa8893821942c0a13fd8f7dba53529"
 # データソースID（IDだけでは読み書きできない。権限はインテグレーションの接続で決まる）
 TASK_DS_ID = "21762844-acbe-8075-bbe6-000bcaf22801"   # DB_タスク管理（買い物リスト＝分類タグ BUY のタスク）
 DAILY_DS_ID = "53881991-7268-41b5-8954-2bc4b2bf1971"  # DB_Daily（在庫・補充）
+TEMPLATE_DS_ID = "88548654-76ee-40be-a367-74ccaaa466e1"  # DB_買い物テンプレート（よく買う品のひな形）
 PLAYER_ID = "3e962844acbe81b0843ff78fe19791fa"        # DB_プレイヤー（作るタスクのプレイヤー。届かなければ付けない）
 # 通知（Web Push）の送り主。鍵は Worker がはじめて使うときに作って KV（SUBS の "vapid"）にしまう
 VAPID_SUBJECT = "https://kaimono.roranosuke2525.workers.dev"

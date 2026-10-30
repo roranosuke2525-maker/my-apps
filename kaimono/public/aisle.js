@@ -36,7 +36,7 @@
 
   // 「牛乳 2」「卵×1パック」の数を分ける
   function splitQty(text) {
-    const m = String(text || "").match(/^(.*?)[\s　]*(?:[x×＊*]\s*)?(\d+(?:\.\d+)?\s*(?:個|本|袋|パック|枚|箱|缶|玉|束|kg|g|L|ml|mL|人前|切れ|尾|房)?)$/);
+    const m = String(text || "").match(/^(.*?)[\s　]*(?:[x×＊*]\s*)?(\d+(?:\.\d+)?\s*(?:個|本|袋|パック|枚|箱|缶|玉|束|株|丁|kg|g|L|ml|mL|人前|切れ|尾|房)?)$/);
     if (!m || !m[1].trim()) return { name: String(text || "").trim(), qty: "" };
     return { name: m[1].trim(), qty: m[2].replace(/\s+/g, "") };
   }

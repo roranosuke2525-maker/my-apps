@@ -6,6 +6,7 @@ import { b64u } from "../src/webpush.js";
 
 const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
 const DAILY_DS = "53881991-7268-41b5-8954-2bc4b2bf1971";
+const TPL_DS = "88548654-76ee-40be-a367-74ccaaa466e1";
 const KEY = "test-key-0123456789";
 const hex = (n) => n.toString(16).padStart(32, "0");
 const rt = (s) => [{ plain_text: s }];
@@ -31,14 +32,14 @@ function kv() {
 
 let env, pages, blocks, children, calls, pushes, next;
 const row = (id, ds, properties, edited = "2026-10-28T00:00:00.000Z") => ({ object: "page", id, url: `https://www.notion.so/${id}`, parent: { type: "data_source_id", data_source_id: ds }, last_edited_time: edited, properties });
-function task(id, { name, status = "⏭ NEXT", tag = "BUY", refill = [], url = null }) {
+function task(id, { name, status = "⏭ NEXT", tag = "BUY", refill = [], url = null, at = null }) {
   return row(id, TASK_DS, {
     名前: { type: "title", title: rt(name) },
     ステータス: { type: "status", status: { name: status } },
     分類タグ: { type: "select", select: tag ? { name: tag } : null },
     NEXT: { type: "rich_text", rich_text: [] },
     URL: { type: "url", url },
-    実行日: { type: "date", date: null },
+    実行日: { type: "date", date: at ? { start: at } : null },
     補充対象: { type: "relation", relation: refill.map((r) => ({ id: r })) },
   });
 }
@@ -69,6 +70,8 @@ function match(p, f) {
   if (f.select) return prop?.select?.name === f.select.equals;
   if (f.relation?.is_not_empty) return (prop?.relation || []).length > 0;
   if (f.relation?.contains) return (prop?.relation || []).some((r) => r.id.replace(/-/g, "") === f.relation.contains);
+  if (f.checkbox) return !!prop?.checkbox === f.checkbox.equals;
+  if (f.date?.on_or_after) return !!prop?.date?.start && prop.date.start.slice(0, 10) >= f.date.on_or_after;
   return true;
 }
 
@@ -77,7 +80,7 @@ beforeEach(() => {
   calls = [];
   pushes = [];
   env = {
-    NOTION_TOKEN: "ntn_fake", APP_KEY: KEY, TASK_DS_ID: TASK_DS, DAILY_DS_ID: DAILY_DS, PLAYER_ID: hex(99),
+    NOTION_TOKEN: "ntn_fake", APP_KEY: KEY, TASK_DS_ID: TASK_DS, DAILY_DS_ID: DAILY_DS, TEMPLATE_DS_ID: TPL_DS, PLAYER_ID: hex(99),
     NOTION_API_BASE: "https://notion.test/v1", ASSETS: { fetch: async () => new Response("asset") },
     SUBS: kv(), VAPID_SUBJECT: "https://kaimono.test",
   };
@@ -97,6 +100,13 @@ beforeEach(() => {
   put(todoBlock(hex(52), L1, "キャベツ"));
   put(todoBlock(hex(53), L1, "牛乳 2", true));
   put(todoBlock(hex(54), OTHER, "ほかのタスクの項目"));
+  // 「スーパー」の ToDo の下に品目を書く形（1段の入れ子）
+  const parent = { ...todoBlock(hex(55), L1, "ヤオコー"), has_children: true };
+  put(parent);
+  const kid = { ...todoBlock(hex(56), L1, "えのき"), parent: { type: "block_id", block_id: hex(55) } };
+  blocks.set(kid.id, kid); children[hex(55)] = [kid.id];
+  pages.set(hex(61), row(hex(61), TPL_DS, { 名前: { type: "title", title: rt("もやし") }, 店: { type: "select", select: { name: "ヤオコー" } }, 売り場: { type: "select", select: { name: "野菜・果物" } }, いつもの数: { type: "number", number: 3 }, 単位: { type: "rich_text", rich_text: rt("袋") }, 並び: { type: "number", number: 80 }, 使う: { type: "checkbox", checkbox: true } }));
+  pages.set(hex(62), row(hex(62), TPL_DS, { 名前: { type: "title", title: rt("使わない品") }, 店: { type: "select", select: null }, 使う: { type: "checkbox", checkbox: false } }));
 
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
@@ -167,7 +177,9 @@ test("読みこみ：開いている BUY タスクと補充タスク、本文の
   assert.equal(status, 200);
   assert.deepEqual(data.lists.map((t) => t.name).sort(), ["スーパー", "補充:洗剤"]);
   const sup = data.lists.find((t) => t.id === L1);
-  assert.deepEqual(sup.items.map((i) => [i.text, i.checked, i.group]), [["キャベツ", false, "野菜"], ["牛乳 2", true, "野菜"]]);
+  assert.deepEqual(sup.items.map((i) => [i.text, i.checked, i.group]), [["キャベツ", false, "野菜"], ["牛乳 2", true, "野菜"], ["えのき", false, "ヤオコー"]]);
+  assert.deepEqual(data.templates.map((x) => [x.name, x.store, x.aisle, x.qty, x.unit]), [["もやし", "ヤオコー", "野菜・果物", 3, "袋"]]);
+  assert.equal(data.templateErr, "");
   assert.equal(data.lists.find((t) => t.id === R1).items, undefined); // 補充タスクの本文は読まない
   const st = Object.fromEntries(data.stock.map((x) => [x.name, x]));
   assert.equal(st["トイレットペーパー"].left, 1);
@@ -188,6 +200,8 @@ test("品目：足す・チェック・名前を直す・消す。買い物タ�
   assert.equal((await api("DELETE", `/api/items/${egg}`)).status, 200);
   assert.ok(!blocks.has(egg));
 
+  assert.equal((await api("PATCH", `/api/items/${hex(56)}`, { checked: true })).status, 200); // 入れ子の品目
+  assert.equal(blocks.get(hex(56)).to_do.checked, true);
   assert.equal((await api("PATCH", `/api/items/${hex(54)}`, { checked: true })).status, 403);
   assert.equal((await api("POST", `/api/lists/${OTHER}/items`, { items: ["x"] })).status, 403);
   assert.equal((await api("POST", `/api/lists/${R1}/items`, { items: ["x"] })).status, 403);
@@ -200,7 +214,7 @@ test("品目：足す・チェック・名前を直す・消す。買い物タ�
 test("かごの品を消す・買い物おわり", async () => {
   const res = await api("POST", `/api/lists/${L1}/clear`);
   assert.deepEqual(res.data.removed, [hex(53)]);
-  assert.deepEqual(children[L1], [hex(51), hex(52)]);
+  assert.deepEqual(children[L1], [hex(51), hex(52), hex(55)]);
   assert.equal((await api("POST", `/api/lists/${L1}/done`)).status, 200);
   assert.equal(pages.get(L1).properties["ステータス"].status.name, "✅ DONE");
   assert.equal((await api("POST", `/api/lists/${OTHER}/done`)).status, 403);
@@ -290,7 +304,7 @@ test("通知：登録・状態・テスト送信（暗号化と VAPID の署名�
   const vapidKey = await crypto.subtle.importKey("raw", b64u.decode(VAPID_PUBLIC), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
   assert.equal((await api("PUT", "/api/push", { subscription: { ...subscription, endpoint: "https://evil.example/x" } })).status, 400);
   const put = await api("PUT", "/api/push", { subscription, hour: 7, days: 2, list: false });
-  assert.deepEqual(put.data, { subscribed: true, hour: 7, days: 2, list: false });
+  assert.deepEqual(put.data, { subscribed: true, hour: 7, days: 2, list: false, remind: true });
   assert.equal((await api("POST", "/api/push/status", { endpoint: ENDPOINT })).data.hour, 7);
 
   const t = await api("POST", "/api/push/test", { endpoint: ENDPOINT });
@@ -326,4 +340,48 @@ test("定時のアラート：選んだ時刻の端末にだけ、1日1回。切
   await runAlerts(env, at8 + 3600e3);
   assert.equal([...env.SUBS.m.keys()].filter((k) => k.startsWith("sub:")).length, 1);
   globalThis.fetch = fetch0;
+});
+
+test("買い物の時刻：リストを作るときと後から。形が違えば断る", async () => {
+  const res = await api("POST", "/api/lists", { name: "🛒 ヤオコー 10/31", items: ["もやし 3袋"], at: "2026-10-31T10:00+09:00" });
+  assert.equal(res.status, 200);
+  assert.equal(pages.get(res.data.list.id).properties["実行日"].date.start, "2026-10-31T10:00:00+09:00");
+  assert.equal(res.data.list.at, "2026-10-31T10:00:00+09:00");
+  assert.equal((await api("PATCH", `/api/lists/${L1}/when`, { at: "2026-11-01T17:30:00+09:00" })).data.at, "2026-11-01T17:30:00+09:00");
+  assert.equal((await api("PATCH", `/api/lists/${L1}/when`, { at: null })).data.at, null);
+  assert.equal(pages.get(L1).properties["実行日"].date, null);
+  assert.equal((await api("PATCH", `/api/lists/${L1}/when`, { at: "明日" })).status, 400);
+  assert.equal((await api("PATCH", `/api/lists/${OTHER}/when`, { at: null })).status, 403);
+});
+
+test("テンプレートに足す", async () => {
+  const res = await api("POST", "/api/templates", { name: "豆腐", store: "ヤオコー", qty: 2, unit: "丁" });
+  assert.equal(res.status, 200);
+  assert.deepEqual([res.data.template.name, res.data.template.qty, res.data.template.unit], ["豆腐", 2, "丁"]);
+  assert.equal(pages.get(res.data.template.id).parent.data_source_id, TPL_DS);
+  assert.equal((await api("POST", "/api/templates", { name: "" })).status, 400);
+});
+
+test("買い物のリマインド：30分前と時刻ちょうどに1度ずつ。通知をオフにした端末には送らない", async () => {
+  const at = "2026-10-31T10:00:00+09:00";
+  pages.set(hex(70), task(hex(70), { name: "🛒 ヤオコー 10/31", at }));
+  children[hex(70)] = [];
+  const b = todoBlock(hex(71), hex(70), "もやし 3袋"); blocks.set(b.id, b); children[hex(70)].push(b.id);
+  await api("PUT", "/api/push", { subscription, hour: 3, days: 3 });
+  const other = { endpoint: `${ENDPOINT}9`, keys: subscription.keys };
+  await api("PUT", "/api/push", { subscription: other, hour: 3, days: 3, remind: false });
+  const t0 = Date.parse(at);
+  await runAlerts(env, t0 - 31 * 60e3);
+  assert.equal(pushes.length, 0);
+  await runAlerts(env, t0 - 25 * 60e3); // 9:35 の回 → 30分前の知らせ
+  assert.equal(pushes.length, 1);
+  assert.equal(pushes[0].url, ENDPOINT);
+  const m1 = await decrypt(new Uint8Array(pushes[0].body));
+  assert.equal(m1.title, "🛒 10:00 から買い物（あと30分）");
+  assert.equal(m1.body, "🛒 ヤオコー 10/31：1品（もやし 3袋）");
+  await runAlerts(env, t0 - 20 * 60e3); // 同じ知らせは2度送らない
+  assert.equal(pushes.length, 1);
+  await runAlerts(env, t0 + 5 * 60e3);
+  assert.equal(pushes.length, 2);
+  assert.equal((await decrypt(new Uint8Array(pushes[1].body))).title, "🛒 買い物の時間です（10:00）");
 });

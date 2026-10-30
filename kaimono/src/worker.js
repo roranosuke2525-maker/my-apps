@@ -18,6 +18,9 @@ const LIST_MAX = 20; // 本文まで読むリストの数（無料プランの W
 const CLEAR_MAX = 40;
 const NAME_MAX = 100;
 const MAX_QUERY_PAGES = 3;
+const NEST_MAX = 12; // 入れ子の ToDo（「スーパー」の下の品目など）を読む親の数
+const REMIND_BEFORE = 30; // 買い物の時刻の何分前にも知らせるか
+const TICK_MIN = 15; // cron の間隔（分）
 const PUSH_HOSTS = /(^|\.)push\.apple\.com$|^fcm\.googleapis\.com$|^android\.googleapis\.com$|(^|\.)push\.services\.mozilla\.com$|(^|\.)notify\.windows\.com$/;
 
 export default {
@@ -31,7 +34,7 @@ export default {
       const notion = notionClient(env);
       const p = url.pathname;
       const m = request.method;
-      const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done)$/i);
+      const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when)$/i);
       const item = p.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
       const stock = p.match(/^\/api\/stock\/([0-9a-f-]{32,36})\/(refill|restocked)$/i);
 
@@ -40,6 +43,8 @@ export default {
       if (list?.[2] === "items" && m === "POST") return json(await addItems(notion, env, list[1], await readJson(request)));
       if (list?.[2] === "clear" && m === "POST") return json(await clearChecked(notion, env, list[1]));
       if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1]));
+      if (list?.[2] === "when" && m === "PATCH") return json(await setWhen(notion, env, list[1], await readJson(request)));
+      if (p === "/api/templates" && m === "POST") return json(await addTemplate(notion, env, await readJson(request)));
       if (item && m === "PATCH") return json(await updateItem(notion, env, item[1], await readJson(request)));
       if (item && m === "DELETE") return json(await removeItem(notion, env, item[1]));
       if (p === "/api/stock" && m === "POST") return json(await addStock(notion, env, await readJson(request)));
@@ -56,7 +61,7 @@ export default {
     }
   },
 
-  // 毎時0分に動き、通知の時刻を選んだ端末にだけ在庫アラートを送る
+  // 15分ごとに動く。買い物の時刻（30分前・ちょうど）のリマインドと、毎時0分台に在庫アラート（時刻を選んだ端末だけ）
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runAlerts(env, controller.scheduledTime || Date.now()));
   },
@@ -154,6 +159,7 @@ function taskOf(page) {
     next: propText(p.NEXT),
     link: propText(p.URL),
     date: propDate(p["実行日"]),
+    at: /T\d\d:\d\d/.test(p["実行日"]?.date?.start || "") ? p["実行日"].date.start : null, // 時刻つきの実行日＝買い物の時刻
     refill: relIds(p["補充対象"]),
     edited: page.last_edited_time || null,
   };
@@ -186,14 +192,46 @@ function stockOf(page, today, restockedOn) {
   return x;
 }
 
-function itemsOf(blocks) {
+// 本文の ToDo を品目にする。子を持つ ToDo（「スーパー」の下に品目を書く形）は見出しとして扱い、子を品目にする
+function itemsOf(blocks, kids = {}) {
   const items = [];
   let group = "";
   for (const b of blocks) {
     if (/^heading_[123]$/.test(b.type)) group = plain(b[b.type]?.rich_text).trim();
-    else if (b.type === "to_do") items.push({ id: normalizeId(b.id), text: plain(b.to_do?.rich_text).trim() || "（空）", checked: !!b.to_do?.checked, group });
+    else if (b.type === "to_do" && kids[normalizeId(b.id)]) {
+      const g = plain(b.to_do?.rich_text).trim();
+      for (const c of kids[normalizeId(b.id)]) if (c.type === "to_do") items.push(itemOf(c, g));
+    } else if (b.type === "to_do") items.push(itemOf(b, group));
   }
   return items;
+}
+const itemOf = (b, group) => ({ id: normalizeId(b.id), text: plain(b.to_do?.rich_text).trim() || "（空）", checked: !!b.to_do?.checked, group });
+
+async function readItems(notion, t, budget) {
+  const res = await notion("GET", `/blocks/${t.id}/children?page_size=100`);
+  const blocks = res.results || [];
+  const kids = {};
+  for (const b of blocks.filter((x) => x.type === "to_do" && x.has_children)) {
+    if (budget.n-- <= 0) break;
+    kids[normalizeId(b.id)] = (await notion("GET", `/blocks/${normalizeId(b.id)}/children?page_size=100`)).results || [];
+  }
+  t.items = itemsOf(blocks, kids);
+  t.more = !!res.has_more;
+}
+
+function templateOf(page) {
+  const p = page.properties || {};
+  return {
+    id: normalizeId(page.id),
+    url: page.url,
+    name: propText(p["名前"]),
+    store: propText(p["店"]) || "その他",
+    aisle: propText(p["売り場"]),
+    qty: propNum(p["いつもの数"]) || 1,
+    unit: propText(p["単位"]),
+    order: typeof p["並び"]?.number === "number" ? p["並び"].number : 999,
+    memo: propText(p["メモ"]),
+  };
 }
 
 async function queryAll(notion, dataSourceId, body) {
@@ -213,24 +251,29 @@ const recent = [{ timestamp: "last_edited_time", direction: "descending" }];
 
 async function loadState(notion, env) {
   const today = todayJst();
-  const [tasks, stockPages] = await Promise.all([
+  const [tasks, stockPages, templates] = await Promise.all([
     queryAll(notion, env.TASK_DS_ID, {
       filter: { and: [openFilter, { or: [{ property: "分類タグ", select: { equals: "BUY" } }, { property: "補充対象", relation: { is_not_empty: true } }] }] },
       sorts: recent,
     }),
     queryAll(notion, env.DAILY_DS_ID, {}),
+    // テンプレートは読めなくても（DB が未接続でも）ほかの画面は出す
+    env.TEMPLATE_DS_ID
+      ? queryAll(notion, env.TEMPLATE_DS_ID, { filter: { property: "使う", checkbox: { equals: true } } }).then((r) => ({ ok: r }), (err) => ({ err: err.publicMessage || "読めませんでした" }))
+      : { err: "TEMPLATE_DS_ID が設定されていません" },
   ]);
   const lists = tasks.map(taskOf);
   // チェックリストとして使うのは補充タスク以外。本文の ToDo を読む
   const bodies = lists.filter((t) => !t.refill.length).slice(0, LIST_MAX);
-  await Promise.all(bodies.map(async (t) => {
-    const res = await notion("GET", `/blocks/${t.id}/children?page_size=100`);
-    t.items = itemsOf(res.results || []);
-    t.more = !!res.has_more;
-  }));
+  const budget = { n: NEST_MAX };
+  await Promise.all(bodies.map((t) => readItems(notion, t, budget)));
   const stock = stockPages.map((pg) => stockOf(pg, today));
   for (const x of stock) x.open = lists.filter((t) => t.refill.includes(x.id)).map((t) => t.id);
-  return { lists, stock, today, loadedAt: new Date().toISOString() };
+  return {
+    lists, stock, today, loadedAt: new Date().toISOString(),
+    templates: (templates.ok || []).map(templateOf).filter((x) => x.name),
+    templateErr: templates.err || "",
+  };
 }
 
 // ---------- 書き込みの前の確かめ ----------
@@ -243,8 +286,15 @@ async function listPage(notion, env, id) {
 }
 async function itemBlock(notion, env, id) {
   const block = await notion("GET", `/blocks/${normalizeId(id)}`);
-  if (block.type !== "to_do" || block.parent?.type !== "page_id") throw httpError(403, "買い物リストの品目ではありません");
-  await listPage(notion, env, block.parent.page_id);
+  if (block.type !== "to_do") throw httpError(403, "買い物リストの品目ではありません");
+  let pageId = block.parent?.type === "page_id" ? block.parent.page_id : null;
+  if (block.parent?.type === "block_id") {
+    // 1段の入れ子まで（「スーパー」の ToDo の下の品目）
+    const up = await notion("GET", `/blocks/${normalizeId(block.parent.block_id)}`);
+    if (up.type === "to_do" && up.parent?.type === "page_id") pageId = up.parent.page_id;
+  }
+  if (!pageId) throw httpError(403, "買い物リストの品目ではありません");
+  await listPage(notion, env, pageId);
   return block;
 }
 async function stockPage(notion, env, id) {
@@ -279,10 +329,12 @@ async function createTask(notion, env, properties) {
 async function createList(notion, env, body) {
   const name = clean(body?.name, NAME_MAX, "リストの名前") || "買い物リスト";
   const texts = itemTexts(body?.items ?? []);
+  const at = whenOf(body?.at);
   const page = await createTask(notion, env, {
     "名前": { title: rich(name) },
     "分類タグ": { select: { name: "BUY" } },
     "枠": { select: { name: WAKU_HOME } },
+    ...(at ? { "実行日": { date: { start: at } } } : {}),
   });
   const t = taskOf(page);
   t.items = [];
@@ -334,6 +386,42 @@ async function clearChecked(notion, env, id) {
   const done = (res.results || []).filter((b) => b.type === "to_do" && b.to_do?.checked).slice(0, CLEAR_MAX);
   for (const b of done) await notion("DELETE", `/blocks/${normalizeId(b.id)}`);
   return { removed: done.map((b) => normalizeId(b.id)) };
+}
+
+// 買い物の時刻（日本時間・15分きざみに丸めない。null で外す）
+function whenOf(v) {
+  if (v == null || v === "") return null;
+  const s = String(v);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?\+09:00$/.test(s) || Number.isNaN(Date.parse(s))) throw httpError(400, "時刻の形が正しくありません");
+  return s.slice(0, 16) + ":00+09:00";
+}
+async function setWhen(notion, env, id, body) {
+  const t = await listPage(notion, env, id);
+  const at = whenOf(body?.at);
+  await notion("PATCH", `/pages/${t.id}`, { properties: { "実行日": { date: at ? { start: at } : null } } });
+  return { at };
+}
+
+async function addTemplate(notion, env, body) {
+  if (!env.TEMPLATE_DS_ID) throw httpError(500, "TEMPLATE_DS_ID が設定されていません");
+  const name = clean(body?.name, NAME_MAX, "名前");
+  if (!name) throw httpError(400, "名前を入れてください");
+  const store = clean(body?.store, 30, "店") || "その他";
+  const aisle = clean(body?.aisle, 30, "売り場");
+  const qty = Number(body?.qty) > 0 && Number(body.qty) < 1000 ? Number(body.qty) : 1;
+  const unit = clean(body?.unit, 10, "単位");
+  const page = await notion("POST", "/pages", {
+    parent: { type: "data_source_id", data_source_id: env.TEMPLATE_DS_ID },
+    properties: {
+      "名前": { title: rich(name) },
+      "店": { select: { name: store } },
+      ...(aisle ? { "売り場": { select: { name: aisle } } } : {}),
+      "いつもの数": { number: qty },
+      ...(unit ? { "単位": { rich_text: rich(unit) } } : {}),
+      "使う": { checkbox: true },
+    },
+  });
+  return { template: templateOf(page) };
 }
 
 async function finishList(notion, env, id) {
@@ -459,7 +547,7 @@ const clampInt = (v, lo, hi, d) => (Number.isInteger(v) && v >= lo && v <= hi ? 
 async function pushStatus(env, body) {
   needPush(env);
   const rec = await env.SUBS.get(await subKey(checkEndpoint(body?.endpoint)), "json");
-  return rec ? { subscribed: true, hour: rec.hour, days: rec.days, list: rec.list } : { subscribed: false };
+  return rec ? { subscribed: true, hour: rec.hour, days: rec.days, list: rec.list, remind: rec.remind !== false } : { subscribed: false };
 }
 
 async function pushSubscribe(env, body) {
@@ -475,10 +563,11 @@ async function pushSubscribe(env, body) {
     hour: clampInt(body?.hour, 0, 23, 8),
     days: clampInt(body?.days, 0, 14, 3),
     list: !!body?.list,
+    remind: body?.remind !== false,
     lastSent: prev?.lastSent || "",
   };
   await env.SUBS.put(key, JSON.stringify(rec));
-  return { subscribed: true, hour: rec.hour, days: rec.days, list: rec.list };
+  return { subscribed: true, hour: rec.hour, days: rec.days, list: rec.list, remind: rec.remind };
 }
 
 async function pushUnsubscribe(env, body) {
@@ -508,18 +597,23 @@ export async function runAlerts(env, at) {
   const jst = new Date(at + 9 * 3600e3);
   const hour = jst.getUTCHours();
   const today = jst.toISOString().slice(0, 10);
-  const due = [];
+  const subs = [];
   let cursor;
   do {
     const page = await env.SUBS.list({ prefix: "sub:", cursor });
     for (const k of page.keys) {
       const rec = await env.SUBS.get(k.name, "json");
-      if (rec && rec.hour === hour && rec.lastSent !== today) due.push([k.name, rec]);
+      if (rec) subs.push([k.name, rec]);
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
-  if (!due.length) return { sent: 0 };
-  const state = await loadState(notionClient(env), env);
+  if (!subs.length) return { sent: 0 };
+  const notion = notionClient(env);
+  const reminded = await runReminders(notion, env, at, subs.filter(([, r]) => r.remind !== false));
+  // 在庫アラートは毎時の最初の回（0〜14分）だけ
+  const due = jst.getUTCMinutes() < TICK_MIN ? subs.filter(([, r]) => r.hour === hour && r.lastSent !== today) : [];
+  if (!due.length) return { sent: reminded };
+  const state = await loadState(notion, env);
   const vapid = await vapidOf(env);
   let sent = 0;
   for (const [key, rec] of due) {
@@ -531,7 +625,43 @@ export async function runAlerts(env, at) {
       if (status < 400) { sent++; await env.SUBS.put(key, JSON.stringify({ ...rec, lastSent: today })); }
     } catch { /* 1台に送れなくても、ほかの端末には送る */ }
   }
-  return { sent };
+  return { sent: sent + reminded };
+}
+
+// 実行日に時刻のある買い物タスクを、その30分前と時刻ちょうどに知らせる（同じ知らせは1度だけ）
+async function runReminders(notion, env, at, subs) {
+  if (!subs.length) return 0;
+  const pages = await queryAll(notion, env.TASK_DS_ID, {
+    filter: { and: [openFilter, { property: "分類タグ", select: { equals: "BUY" } }, { property: "実行日", date: { on_or_after: new Date(at - 864e5).toISOString().slice(0, 10) } }] },
+  });
+  let sent = 0;
+  const vapid = await vapidOf(env);
+  for (const t of pages.map(taskOf).filter((x) => x.at)) {
+    const when = Date.parse(t.at);
+    for (const [kind, fire] of [["before", when - REMIND_BEFORE * 60e3], ["now", when]]) {
+      if (!(fire <= at && fire > at - TICK_MIN * 60e3)) continue;
+      const mark = `rem:${t.id}:${t.at}:${kind}`;
+      if (await env.SUBS.get(mark)) continue;
+      await env.SUBS.put(mark, "1", { expirationTtl: 3 * 86400 });
+      await readItems(notion, t, { n: 3 });
+      const left = (t.items || []).filter((i) => !i.checked).map((i) => i.text);
+      const hm = t.at.slice(11, 16);
+      const msg = {
+        title: kind === "before" ? `🛒 ${hm} から買い物（あと${REMIND_BEFORE}分）` : `🛒 買い物の時間です（${hm}）`,
+        body: `${t.name}${left.length ? `：${left.length}品（${left.slice(0, 4).join("・")}${left.length > 4 ? "…" : ""}）` : ""}`,
+        tag: `kaimono-${t.id}`,
+        url: `./?tab=list&list=${t.id}`,
+      };
+      for (const [key, rec] of subs) {
+        try {
+          const status = await sendPush(rec.subscription, msg, vapid, { urgency: "high", ttl: 3600 });
+          if (status === 404 || status === 410) await env.SUBS.delete(key);
+          else if (status < 400) sent++;
+        } catch { /* ほかの端末には送る */ }
+      }
+    }
+  }
+  return sent;
 }
 
 // ---------- 小物 ----------
