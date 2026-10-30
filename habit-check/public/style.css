@@ -467,7 +467,8 @@ body.theater-open { overflow: hidden; }
 .th-actors { position: absolute; inset: 0; pointer-events: none; container-type: size; }
 /* 立ち絵の大きさ：舞台の高さに対する割合。ただし横幅の --wmax を超えない。はみ出さないよう左右の位置を詰める */
 .actor { --w: min(calc(var(--h) * 100cqh), var(--wmax, 58cqw)); position: absolute; bottom: 2%; width: var(--w); height: var(--w);
-  left: clamp(calc(var(--w) / 2 - 8cqw), var(--x), calc(100cqw - var(--w) / 2 + 8cqw)); transform: translateX(-50%); transition: left 0.6s, filter 0.3s, transform 0.5s, opacity 0.5s; filter: brightness(0.62) saturate(0.8); opacity: 0; }
+  left: clamp(calc(var(--w) / 2 - 8cqw), var(--x), calc(100cqw - var(--w) / 2 + 8cqw)); transform: translateX(-50%);
+  transition: left 0.9s cubic-bezier(.22, 1, .36, 1), filter 0.4s, transform 0.8s cubic-bezier(.22, 1, .36, 1), opacity 0.6s ease; filter: brightness(0.62) saturate(0.8); opacity: 0; }
 .actor img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)); }
 .actor.enter-left { transform: translateX(-160%); }
 .actor.enter-right { transform: translateX(60%); }
@@ -487,11 +488,11 @@ body.theater-open { overflow: hidden; }
 
 /* 吹き出し */
 .th-bubbles { position: absolute; inset: 0; pointer-events: none; }
-.th-bubble { position: absolute; top: 5%; left: 8px; width: max-content; max-width: min(78%, 520px); padding: 10px 14px 12px; border-radius: 18px; background: #fffdf6; color: #2b2118; border: 3px solid #2b2118; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); animation: th-pop 0.22s ease-out; font-size: 15px; line-height: 1.6; }
+.th-bubble { position: absolute; top: 5%; left: 8px; width: max-content; transform-origin: var(--tail, 50%) 110%; max-width: min(78%, 520px); padding: 10px 14px 12px; border-radius: 18px; background: #fffdf6; color: #2b2118; border: 3px solid #2b2118; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); animation: th-pop 0.38s cubic-bezier(.34, 1.56, .64, 1); font-size: 15px; line-height: 1.6; }
 .th-bubble::after { content: ""; position: absolute; bottom: -12px; left: var(--tail, 50%); width: 18px; height: 18px; background: #fffdf6; border-right: 3px solid #2b2118; border-bottom: 3px solid #2b2118; transform: translateX(-50%) rotate(45deg) skew(8deg, 8deg); }
 .th-bubble.voice { border-style: dashed; background: #f3eefc; }
 .th-bubble.voice::after { display: none; }
-.th-bubble.loud { border-width: 4px; font-weight: 700; animation: th-pop-loud 0.3s ease-out; }
+.th-bubble.loud { border-width: 4px; font-weight: 700; animation: th-pop-loud 0.42s cubic-bezier(.34, 1.56, .64, 1); }
 .th-bubble.soft { border-color: #8a7f74; color: #4d443b; }
 .th-bubble-name { position: absolute; top: -12px; left: 12px; padding: 1px 10px; border-radius: 10px; background: #2b2118; color: #ffe9b0; font-size: 11px; font-weight: 800; }
 .th-bubble-text { display: block; white-space: pre-wrap; }
@@ -570,5 +571,25 @@ body.theater-open { overflow: hidden; }
 .art-host .art { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.25)); }
 .art-host.has-art svg { display: none; }
 .art-host.has-art:not([data-kind="egg"])[data-motion="idle"] .pet-body { animation-timing-function: ease-in-out; animation-name: pet-float; animation-duration: 2.2s; }
-@keyframes pet-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4%); } }
+@keyframes pet-float { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-4%) scale(1.015, 0.99); } }
+.art-host .pet-body { position: relative; }
+.art-gl { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.art-host.gl .art { opacity: 0; }
 .art-host.has-art.blink .pet-body { filter: brightness(1.04); }
+
+/* ---- なめらかな動き（theater-gl.js） ---- */
+.th-gl { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.th-actors.gl .actor { filter: none; }
+.th-actors.gl .actor img { opacity: 0; }
+/* 奥行き：背景が流れると、立ち絵は少し、手前の粒はもう少し反対へ */
+.th-actors { transform: translateX(calc((0.5 - var(--par, 0.5)) * 5%)); transition: transform 1.8s cubic-bezier(.4, .1, .3, 1); }
+.th-weather { transform: translateX(calc((0.5 - var(--par, 0.5)) * 10%)) scale(1.1); transition: transform 1.8s cubic-bezier(.4, .1, .3, 1); }
+/* 背景はゆっくり寄ったり引いたり（カメラが生きている感じ） */
+.th-bgwrap { animation: th-kb 26s ease-in-out infinite alternate; transform-origin: 50% 60%; }
+@keyframes th-kb { from { transform: scale(1.02); } to { transform: scale(1.08) translateY(-1%); } }
+/* 文字は1字ずつ ふわっと */
+.ch { opacity: 0; animation: th-ch 0.32s ease-out forwards; }
+.typed .ch { animation: none; opacity: 1; }
+@keyframes th-ch { from { opacity: 0; filter: blur(3px); } to { opacity: 1; filter: none; } }
+.th-stage.shake { animation: th-shake2 0.55s cubic-bezier(.36, .07, .19, .97); }
+@keyframes th-shake2 { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-7px, 3px) rotate(-0.4deg); } 40%, 60% { transform: translate(7px, -3px) rotate(0.4deg); } }

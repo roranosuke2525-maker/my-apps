@@ -6,6 +6,7 @@ import { SPEAKERS } from "./theater-speakers.js";
 import { chapterBgs, BG_WORDS, weatherOf } from "./theater-stage.js";
 import { BOSS_IMAGES, CAST_VARIANTS } from "./art-index.js";
 import { fillStory, petKey } from "./aibou.js";
+import { createActorGL } from "./theater-gl.js";
 
 const IMG = (name) => `img/${name}.webp`;
 
@@ -69,7 +70,8 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
   const bubbles = h("div", { class: "th-bubbles", "aria-live": "polite" });
   const fx = h("div", { class: "th-fx", "aria-hidden": "true" });
   const sys = h("div", { class: "th-system" });
-  const stage = h("div", { class: "th-stage" }, h("div", { class: "th-bgwrap" }, bgA, bgB), weather, actors, bubbles, sys, fx,
+  const glCanvas = h("canvas", { class: "th-gl", "aria-hidden": "true" });
+  const stage = h("div", { class: "th-stage" }, h("div", { class: "th-bgwrap" }, bgA, bgB), weather, actors, glCanvas, bubbles, sys, fx,
     h("div", { class: "th-vignette", "aria-hidden": "true" }));
   const capName = h("span", { class: "th-cap-name" });
   const capText = h("p", { class: "th-cap-text" });
@@ -89,6 +91,13 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
       h("button", { type: "button", class: "th-btn close", "aria-label": "とじる", text: "✕", onclick: (e) => { e.stopPropagation(); close(); } })));
   document.body.append(root);
   document.body.classList.add("theater-open");
+  // 立ち絵を WebGL でなめらかに動かす（使えない端末・動きを減らす設定では、ふつうの絵）
+  let glr = null;
+  if (!SKIP_FX) {
+    try { glr = createActorGL(glCanvas); } catch { glr = null; }
+  }
+  if (glr) actors.classList.add("gl");
+  else glCanvas.remove();
 
   // ---------- 状態 ----------
   let i = -1;
@@ -158,6 +167,8 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
     const seg = segSteps[k];
     const p = seg.end > seg.start ? (k - seg.start) / (seg.end - seg.start) : 0.5;
     front.style.setProperty("--pan", String(p));
+    // 奥行き：背景が流れると、立ち絵と手前の粒は少しだけ反対に動く
+    stage.style.setProperty("--par", String(p));
   }
 
   function setWeather(kind) {
@@ -229,7 +240,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
         const leave = [...onStage].sort((x, y) => (x.who === "さとし") - (y.who === "さとし") || x.last - y.last)[0];
         slot = leave.slot;
         leave.el.classList.add("leave");
-        setTimeout(() => leave.el.remove(), 500);
+        setTimeout(() => { leave.el.remove(); glr?.remove(leave.el); }, 600);
         onStage.splice(onStage.indexOf(leave), 1);
       }
       const img = h("img", { src: imgOf(c, emo), alt: displayName(who), draggable: "false" });
@@ -243,6 +254,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
       el.style.setProperty("--x", `${SLOTS[slot] * 100}%`);
       el.style.setProperty("--h", c.h);
       actors.append(el);
+      glr?.add(el, img, { float: c.float, boss: c.boss });
       a = { who, el, slot, last: now, c };
       onStage.push(a);
       requestAnimationFrame(() => el.classList.add("on"));
@@ -256,27 +268,36 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
   }
 
   function clearStage() {
-    for (const a of onStage) a.el.remove();
+    for (const a of onStage) { a.el.remove(); glr?.remove(a.el); }
     onStage.length = 0;
   }
 
   // ---------- 文字 ----------
-  function type(el, text, speed = 28) {
+  // 文字は1字ずつ、ふわっと浮かび上がる。せりふのあいだは話し手がうなずく
+  function type(el, text, speed = 30, { talk = false } = {}) {
     stopTyping();
-    el.textContent = "";
     if (SKIP_FX) { el.textContent = text; return; }
-    let n = 0;
-    typing = { el, text, timer: setInterval(() => {
-      n += /[、。！？…]/.test(text[n]) ? 1 : 2;
-      el.textContent = text.slice(0, n);
-      if (n >= text.length) stopTyping();
-    }, speed) };
+    const frag = document.createDocumentFragment();
+    let delay = 0;
+    for (const ch of text) {
+      const sp = document.createElement("span");
+      sp.className = "ch";
+      sp.textContent = ch;
+      sp.style.animationDelay = `${delay}ms`;
+      delay += /[、。！？…]/.test(ch) ? speed * 4 : speed;
+      frag.append(sp);
+    }
+    el.classList.remove("typed");
+    el.replaceChildren(frag);
+    if (talk) glr?.talkAll(true);
+    typing = { el, text, timer: setTimeout(() => { typing = null; glr?.talkAll(false); scheduleAuto(); }, delay + 250) };
   }
   function stopTyping() {
     if (!typing) return false;
-    clearInterval(typing.timer);
-    typing.el.textContent = typing.text;
+    clearTimeout(typing.timer);
+    typing.el.classList.add("typed");
     typing = null;
+    glr?.talkAll(false);
     scheduleAuto();
     return true;
   }
@@ -299,7 +320,10 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
     }
     if (kind === "ember") for (let k = 0; k < 14; k++) spark();
     if (kind === "tear") burst("tear");
-    if (kind === "smile" && actor) { actor.el.classList.remove("hop"); void actor.el.offsetWidth; actor.el.classList.add("hop"); }
+    if (kind === "smile" && actor) {
+      if (glr) glr.hop(actor.el);
+      else { actor.el.classList.remove("hop"); void actor.el.offsetWidth; actor.el.classList.add("hop"); }
+    }
   }
   function burst(cls) {
     const b = h("div", { class: `th-burst ${cls}` });
@@ -385,7 +409,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
     bubble.style.left = `${left}px`;
     bubble.style.setProperty("--tail", `${Math.min(bw - 22, Math.max(22, x * W - left))}px`);
     bubble.style.minHeight = `${bubble.offsetHeight}px`;
-    type(body, `「${s.text}」`);
+    type(body, `「${s.text}」`, 30, { talk: true });
     effect(s.fx, s, actor);
   }
 
@@ -482,6 +506,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
 
   function close() {
     stopTyping();
+    glr?.destroy();
     clearTimeout(autoTimer);
     document.removeEventListener("keydown", onKey);
     root.classList.add("closing");

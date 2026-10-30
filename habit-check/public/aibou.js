@@ -2,6 +2,26 @@
 // 描画は renderPet(段階, 型, 動き) だけを呼ぶ。assets/aibou/ に GLB があれば 3D 表示（aibou-3d.js）に、無ければドット絵。
 import { SPRITES } from "./aibou-sprites.js";
 import { BOSS_IMAGES, FAMILY_BY_COLOR } from "./art-index.js";
+import { createActorGL } from "./theater-gl.js";
+
+// 大きく見せる絵（あいぼう・ボス）は WebGL でなめらかに息づかせる。小さな絵や、動きを減らす設定では CSS の動きだけ
+const SMOOTH_MIN = 110;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function smooth(el, size, opts) {
+  if (size < SMOOTH_MIN || reduceMotion) return;
+  const body = el.querySelector(".pet-body");
+  const img = body?.querySelector("img.art");
+  if (!img) return;
+  const canvas = document.createElement("canvas");
+  canvas.className = "art-gl";
+  body.append(canvas);
+  let g = null;
+  try { g = createActorGL(canvas); } catch { g = null; }
+  if (!g) return canvas.remove();
+  g.add(body, img, opts);
+  el.classList.add("gl");
+  el.hop = () => g.hop(body);
+}
 
 // Gemini で描いた絵（img/<名前>.webp）。読めなければドット絵のまま
 function artImg(name, alt) {
@@ -73,6 +93,7 @@ export function renderPet(stage, type, motion = "idle", { crack = 0, size = 160 
     `<g class="f-idle">${frameSvg(sp.palette, frames.idle)}</g><g class="f-blink">${frameSvg(sp.palette, frames.blink)}</g></svg></div>` +
     `<div class="pet-fx" aria-hidden="true"></div>`;
   el.dataset.kind = key === "egg" ? "egg" : "pet";
+  smooth(el, size, { float: false, boss: false });
 
   let timer = null;
   const blink = () => {
@@ -133,6 +154,7 @@ export function renderMonster(shape, colors, { size = 56, motion = "idle", boss 
   if (art) el.classList.add("art-host", "has-art");
   el.innerHTML = `<div class="pet-body">${art ? artImg(art, "") : ""}<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">` +
     `<g class="f-idle">${frameSvg(palette, sp.frames.idle)}</g><g class="f-blink">${frameSvg(palette, sp.frames.blink)}</g></svg></div>`;
+  if (art) smooth(el, size, { boss: shape === "boss" });
   return el;
 }
 
