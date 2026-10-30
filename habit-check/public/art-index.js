@@ -62,3 +62,5 @@ export const FAMILY_BY_COLOR = {
   "#f0a067": "zatsumu",
   "#e9e4f2": "moyamoya"
 };
+// 登場人物の表情・構えの差分（img/cast2/<名前>_<差分>.webp）
+export const CAST_VARIANTS = {"hero_6":["smile","angry","sad","surprised","battle"],"hero_1":["smile","surprised"],"hero_2":[],"hero_3":[],"hero_4":["battle"],"hero_5":["battle"],"rumi":["smile","angry","sad","surprised"],"muki":["smile","angry","sad","surprised","battle"],"fumi":["smile","angry","sad","surprised","battle"],"zeni":["smile","angry","sad","surprised","battle"],"shirogane":["smile","angry","sad","surprised","battle"],"rensa":["smile","angry","sad","surprised"],"obaasan":["smile","sad"],"kazoe":["smile","sad"],"gou":["angry","sad"],"tsuma":["smile","sad"],"chiisana":["smile"],"tokijii":[]};

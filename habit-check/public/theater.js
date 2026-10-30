@@ -4,25 +4,26 @@
 import { toScript, subjectOf } from "./theater-script.js";
 import { SPEAKERS } from "./theater-speakers.js";
 import { chapterBgs, BG_WORDS, weatherOf } from "./theater-stage.js";
-import { BOSS_IMAGES } from "./art-index.js";
+import { BOSS_IMAGES, CAST_VARIANTS } from "./art-index.js";
 import { fillStory, petKey } from "./aibou.js";
 
 const IMG = (name) => `img/${name}.webp`;
 
 // 立ち絵：名前 → 絵と大きさ（舞台の高さに対する割合）・浮かぶかどうか
+// key があれば img/cast2/<key>.webp と、表情・構えの差分 <key>_<差分>.webp（CAST_VARIANTS にあるもの）
 const CAST = {
-  ムキ: { img: "cast/party_7_muki", h: 0.66 },
-  フミ: { img: "cast/party_8_fumi", h: 0.6 },
-  ゼニ: { img: "cast/party_9_zeni", h: 0.62 },
-  ルミ: { img: "cast/rumi", h: 0.3, float: true },
-  シロガネ: { img: "cast/shirogane", h: 0.68 },
-  おばあさん: { img: "cast/obaasan", h: 0.54 },
-  レンサ: { img: "cast/rensa", h: 0.52, float: true },
-  カゾエ: { img: "cast/kazoe", h: 0.48 },
-  ゴウ: { img: "cast/gou", h: 0.7 },
-  妻: { img: "cast/tsuma", h: 0.6 },
-  小さな勇者: { img: "cast/chiisana", h: 0.3 },
-  トキ爺: { img: "cast/tokijii", h: 0.56 },
+  ムキ: { key: "muki", h: 0.68 },
+  フミ: { key: "fumi", h: 0.62 },
+  ゼニ: { key: "zeni", h: 0.64 },
+  ルミ: { key: "rumi", h: 0.3, float: true },
+  シロガネ: { key: "shirogane", h: 0.7 },
+  おばあさん: { key: "obaasan", h: 0.56 },
+  レンサ: { key: "rensa", h: 0.56, float: true },
+  カゾエ: { key: "kazoe", h: 0.48 },
+  ゴウ: { key: "gou", h: 0.72 },
+  妻: { key: "tsuma", h: 0.62 },
+  小さな勇者: { key: "chiisana", h: 0.3 },
+  トキ爺: { key: "tokijii", h: 0.58 },
   SYSTEM: { img: "cast/system", h: 0.3, float: true },
   モヤ: { img: "mon/moyamoya_dragon", h: 0.7, boss: true },
   霧の声: { img: "mon/moyamoya_slime", h: 0.45, boss: true },
@@ -31,7 +32,10 @@ const CAST = {
   灯籠の少女: { img: BOSS_IMAGES.冷たい灯籠, h: 0.55, boss: true },
   百回隊: { img: BOSS_IMAGES.百回隊の総攻撃, h: 0.7, boss: true },
 };
-const HERO_FILES = { みならい: "1_minarai", かけだし: "2_kakedashi", いちにんまえ: "3_ichininmae", ベテラン: "4_veteran", たつじん: "5_tatsujin", でんせつ: "6_densetsu" };
+// 戦いの場面（WARNING のあと）で、構えの絵に切り替わる人
+const FIGHTERS = new Set(["さとし", "ムキ", "フミ", "ゼニ", "シロガネ"]);
+const BATTLE_STEPS = 14;
+const HERO_KEYS = { みならい: "hero_1", かけだし: "hero_2", いちにんまえ: "hero_3", ベテラン: "hero_4", たつじん: "hero_5", でんせつ: "hero_6" };
 const EP1_HERO = { 0: "みならい", 1: "みならい", 2: "かけだし", 3: "かけだし", 4: "いちにんまえ", 5: "ベテラン", 6: "ベテラン", 7: "たつじん", 8: "たつじん", 9: "でんせつ" };
 const PET_HEIGHT = { egg: 0.26, baby: 0.28, child: 0.36, adult: 0.5 };
 const SLOTS = [0.2, 0.5, 0.8];
@@ -94,6 +98,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
   let auto = false;
   let autoTimer = null;
   let ended = false;
+  let battleLeft = 0; // WARNING のあと、しばらくは戦いの構え
   const onStage = []; // { who, el, slot, last }
   const segSteps = []; // 背景ごとの、その背景で進んだ段の数（横に流す量）
   const bgAt = []; // 各段の背景の番号（もどるとき用）
@@ -177,7 +182,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
     if (who === "さとし") {
       // エピソード1の本編は、その章のころの姿。ほかは今の姿（DB_すがた）
       const stageName = EP1_HERO[order] || (hero || "").match(/（(.+)）/)?.[1];
-      return { img: `cast/party_${HERO_FILES[stageName] || "1_minarai"}`, h: 0.64 };
+      return { key: HERO_KEYS[stageName] || "hero_6", h: 0.66 };
     }
     if (who === "あいぼう") {
       const key = petKey(pet?.stage || "たまご", pet?.stage === "成長期" || pet?.stage === "成体" ? pet?.type : null);
@@ -185,6 +190,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
       return { img: `pet/${key}`, h: PET_HEIGHT[size], float: key === "egg" };
     }
     if (CAST[who]) return CAST[who];
+
     if (BOSS_IMAGES[who]) return { img: BOSS_IMAGES[who], h: 0.74, boss: true };
     return null;
   }
@@ -195,7 +201,21 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
     return who;
   }
 
-  function bringOn(who, { quiet } = {}) {
+  // 表情・構えの差分があればその絵、なければ ふつうの絵
+  function imgOf(c, emo) {
+    if (!c.key) return IMG(c.img);
+    return IMG(emo && CAST_VARIANTS[c.key]?.includes(emo) ? `cast2/${c.key}_${emo}` : `cast2/${c.key}`);
+  }
+
+  function setFace(a, emo) {
+    const src = imgOf(a.c, emo);
+    const img = a.el.firstElementChild;
+    if (img.getAttribute("src") === src) return;
+    img.src = src;
+    a.el.classList.remove("swap"); void a.el.offsetWidth; a.el.classList.add("swap");
+  }
+
+  function bringOn(who, { quiet, emo } = {}) {
     const c = castOf(who);
     if (!c) return null;
     let a = onStage.find((x) => x.who === who);
@@ -212,17 +232,23 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
         setTimeout(() => leave.el.remove(), 500);
         onStage.splice(onStage.indexOf(leave), 1);
       }
-      const img = h("img", { src: IMG(c.img), alt: displayName(who), draggable: "false" });
-      img.onerror = () => { a.el.classList.add("noimg"); };
+      const img = h("img", { src: imgOf(c, emo), alt: displayName(who), draggable: "false" });
+      // 差分の絵がなければ ふつうの絵、それもなければ立ち絵なし
+      img.onerror = () => {
+        const base = imgOf(c, null);
+        if (img.getAttribute("src") !== base) img.src = base;
+        else a.el.classList.add("noimg");
+      };
       const el = h("div", { class: `actor${c.float ? " float" : ""}${c.boss ? " boss" : ""} enter-${SLOTS[slot] < 0.5 ? "left" : "right"}` }, img);
       el.style.setProperty("--x", `${SLOTS[slot] * 100}%`);
       el.style.setProperty("--h", c.h);
       actors.append(el);
-      a = { who, el, slot, last: now };
+      a = { who, el, slot, last: now, c };
       onStage.push(a);
       requestAnimationFrame(() => el.classList.add("on"));
     }
     a.last = now;
+    if (!quiet || emo) setFace(a, emo);
     if (!quiet) {
       for (const x of onStage) x.el.classList.toggle("speaking", x === a);
     }
@@ -323,6 +349,9 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
         stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
         const boss = s.text.match(/(?:出現|ラスボス)[：:]\s*(.+)$/)?.[1]?.trim();
         if (boss && castOf(boss)) bringOn(boss);
+        // 仲間は構える
+        battleLeft = BATTLE_STEPS;
+        for (const a of onStage) if (FIGHTERS.has(a.who)) setFace(a, "battle");
       }
       return;
     }
@@ -337,7 +366,8 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
       return;
     }
     // せりふ：立ち絵の上に吹き出し
-    const actor = bringOn(s.who);
+    if (battleLeft > 0) battleLeft--;
+    const actor = bringOn(s.who, { emo: s.emo || (battleLeft > 0 && FIGHTERS.has(s.who) ? "battle" : null) });
     if (!actor) for (const x of onStage) x.el.classList.remove("speaking");
     const name = displayName(s.who);
     const bubble = h("div", { class: `th-bubble${actor ? "" : " voice"}${/！|!/.test(s.text) ? " loud" : ""}${/……|…$/.test(s.text) ? " soft" : ""}` },

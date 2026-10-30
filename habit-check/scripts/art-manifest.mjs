@@ -153,4 +153,45 @@ export const BACKGROUNDS = [
   bg("bg/dawn", "A peaceful dawn over a small town and a home balcony, the sky clearing, warm sunrise colors, hope."),
 ];
 
-export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS];
+// ---------- 登場人物（第2版：精密な線の青年漫画風。表情・装備・構えの差分つき） ----------
+// 劇は cast2/<名前>.webp（ふつう）。旧版の cast/ は SYSTEM の窓の絵だけ使うと cast2/<名前>_<差分>.webp を使う。差分：smile 笑顔／angry 怒り・気迫／sad 悲しみ・不安／surprised 驚き／battle 戦いの構え
+export const STYLE2_REF = "https://gemini-art.roranosuke2525.workers.dev/i/5bf2e0f2fb1fd72f152e72e332ea8cd4.png";
+const MANGA = "Japanese seinen manga cover illustration style: extremely detailed and precise ink linework, realistic slender proportions, sharp angular facial features with intense eyes, " +
+  "fine cross-hatching and subtle screentone shading, dramatic rim lighting, meticulous detail on armor and cloth folds, refined polished coloring. " +
+  "Full body, plain pure white background, single character only, centered with margin, no text, no frame.";
+const VARIANT = {
+  smile: "Change only the facial expression and body language: a warm genuine smile, relaxed open posture.",
+  angry: "Change only the facial expression and body language: fierce determined glare, gritted teeth, tense leaning-forward posture, clenched fist.",
+  sad: "Change only the facial expression and body language: sad, worried eyes looking down, shoulders slumped, hand near chest.",
+  surprised: "Change only the facial expression and body language: wide-eyed shock, mouth open, leaning back slightly, hands raised.",
+  battle: "Change only the pose: a dynamic battle-ready combat stance, weapon raised, cape and hair swept by motion, intense focused expression.",
+};
+const HERO_FACE = "Satoshi, a Japanese man in his early 30s, short dark brown hair, calm but determined expression";
+const person = (id, desc, variants = [], { ref = null } = {}) => [
+  { id: `cast2/${id}`, kind: "sprite", ratio: "3:4", prompt: `${MANGA} ${ref ? "Same art style and same face as the reference image. " : "Same art style as the reference image. "}${desc}`, ...(ref ? { ref } : { refUrl: STYLE2_REF }) },
+  ...variants.map((v) => ({ id: `cast2/${id}_${v}`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`,
+    prompt: `${MANGA} The exact same character, outfit, colors and art style as the reference image. ${VARIANT[v]}` })),
+];
+export const CAST2 = [
+  // さとし：装備の6段階（顔は でんせつ と同じ）。表情・構えの差分は でんせつ（エピソード2の姿）
+  ...person("hero_6", `${HERO_FACE}, the legendary hero in elegant golden armor with a small crown and a starry midnight-blue cape, holding a holy shining longsword, a small glowing lantern at his belt.`, ["smile", "angry", "sad", "surprised", "battle"]),
+  ...person("hero_1", `${HERO_FACE}, an apprentice adventurer in a simple green tunic and boots, holding a wooden staff and a small glowing lantern.`, ["smile", "surprised"], { ref: "cast2/hero_6" }),
+  ...person("hero_2", `${HERO_FACE}, a novice adventurer in a brown leather cap and leather armor, a short sword, lantern at his belt.`, [], { ref: "cast2/hero_6" }),
+  ...person("hero_3", `${HERO_FACE}, a full-fledged adventurer in a steel helmet, chainmail and blue tunic, sword and round copper shield, lantern at his belt.`, [], { ref: "cast2/hero_6" }),
+  ...person("hero_4", `${HERO_FACE}, a veteran knight in silver plate armor with pauldrons and a blue cape, sword and a blue shield with a lion crest, lantern at his belt.`, ["battle"], { ref: "cast2/hero_6" }),
+  ...person("hero_5", `${HERO_FACE}, a master warrior in sky-blue horned armor and a red cape, a sword glowing with blue magic, silver shield, lantern at his belt.`, ["battle"], { ref: "cast2/hero_6" }),
+  ...person("rumi", "Rumi, a palm-sized candle-flame fairy girl, fluffy orange hair like sparks, a small living flame on top of her head, large expressive eyes, a dress like melted candle wax, warm glow, floating.", ["smile", "angry", "sad", "surprised"]),
+  ...person("muki", "Muki, a big muscular warrior man in his 30s with spiky red hair, rugged face, bare strong arms with leather wristbands, a chain-shaped old burn scar around his left wrist, brown sleeveless jerkin, huge battle axe.", ["smile", "angry", "sad", "surprised", "battle"]),
+  ...person("fumi", "Fumi, a young woman librarian scholar in her 20s, long purple hair in a single braid, round glasses, earnest intelligent face, layered purple robe and scarf, holding a thick record book and a quill pen.", ["smile", "angry", "sad", "surprised", "battle"]),
+  ...person("zeni", "Zeni, a slim merchant steward man in his late 20s, narrow smiling eyes, wide-brimmed green hat, long brown coat with many pockets, holding an abacus, a leather ledger under his arm, a small sapling pin on his coat.", ["smile", "angry", "sad", "surprised", "battle"]),
+  ...person("shirogane", "Shirogane, a tall elegant knight with long straight silver hair, cold sorrowful eyes, silver plate armor with dark chain engravings and dark leather straps, a long grey-blue cape, a chain-shaped burn scar on his wrist, holding a sword. Strong dark outlines.", ["smile", "angry", "sad", "surprised", "battle"]),
+  ...person("rensa", "Rensa, an empress girl spirit made of cold blue fire, long flowing hair of blue flame, a small crown, white and blue dress with chain patterns, bright smile with unsettlingly intense eyes, human-sized.", ["smile", "angry", "sad", "surprised"]),
+  ...person("obaasan", "Fumiyo, a kind but sharp old woman guild receptionist in her 70s, grey hair in a bun, round glasses, a shawl over a dark dress, holding a worn register book.", ["smile", "sad"]),
+  ...person("kazoe", "Kazoe, a young girl traveler with short dark hair, a simple grey travel cloak over a tunic, a metal bracelet on her wrist with a small glowing number display, shy gentle expression.", ["smile", "sad"]),
+  ...person("gou", "Gou, a stern huge imperial captain in heavy black armor with chain emblems, short grey hair, a diagonal scar across his face, a greatsword engraved with chains.", ["angry", "sad"]),
+  ...person("tsuma", "The hero's wife, a kind Japanese woman in her early 30s, shoulder-length dark hair, casual home clothes and an apron, holding a coffee mug.", ["smile", "sad"]),
+  ...person("chiisana", "The 'little hero', a 1-year-old Japanese toddler sitting, a tiny red cape over baby clothes, chubby cheeks, curious face.", ["smile"]),
+  ...person("tokijii", "Toki-jii, a thin old prisoner man with a long white beard, ragged clothes, kind tired eyes."),
+];
+
+export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS, ...CAST2];

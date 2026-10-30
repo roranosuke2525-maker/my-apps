@@ -478,6 +478,8 @@ body.theater-open { overflow: hidden; }
 .actor.float { bottom: 34%; animation: th-float 2.6s ease-in-out infinite; }
 .actor.boss.on { animation: th-boss-in 0.7s ease-out; }
 .actor.hop img { animation: th-hop 0.45s ease-out 2; }
+.actor.swap img { animation: th-swap 0.35s ease-out; }
+@keyframes th-swap { from { opacity: 0.4; transform: scale(0.97); } }
 .actor.noimg { display: none; }
 @keyframes th-float { 50% { translate: 0 -6%; } }
 @keyframes th-boss-in { 0% { transform: translateX(-50%) scale(1.6); filter: brightness(3); opacity: 0; } 100% { transform: translateX(-50%) scale(1); } }

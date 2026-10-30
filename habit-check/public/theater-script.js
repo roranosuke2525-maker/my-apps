@@ -1,6 +1,7 @@
 // ものがたりの本文（段落の並び）を「劇の台本」にする。だれが話しているかは本文の書き方から推しはかる。
 // 画面に依存しないので node でもテストできる。
-//   toScript(blocks, labels?) → [{ kind: "say"|"narr"|"system"|"warn"|"title"|"pause", who?, text, fx? }]
+//   toScript(blocks, labels?) → [{ kind: "say"|"narr"|"system"|"warn"|"title"|"pause", who?, text, fx?, emo? }]
+//   emo：せりふの表情（smile／angry／sad／surprised。決まらなければ null）
 // labels：せりふのある段落ごとの話し手（theater-speakers.js）。段落の数が合えばそれを使い、合わなければ推しはかる。
 
 // 登場人物：台本の名前 → 本文に出てくる呼び名（長い順に調べる）
@@ -68,6 +69,19 @@ function recent(paras, i) {
   return set;
 }
 
+// せりふの表情：せりふそのものと、同じ段落の地の文（「…」ルミは笑った。など）から決める
+const EMOS = [
+  ["surprised", /^(え[？?！!]|えっ|えー|な、|なっ|ひゃ|ひっ|うそ|まさか)|！？|!\?|[？?]！/, /目を丸く|驚|固まっ|息を呑|ぎょっと|飛び上が|びくっ/],
+  ["angry", /ふざけ|てめえ|黙れ|許さ|やめろ|貴様|返せ|うるせえ|ちがう！|違う！|！！/, /怒鳴|叫ん|にらみ|睨|歯を食いしば|拳を握|声を荒/],
+  ["sad", /ごめん|すまな|すみません|つかれ|疲れ|こわかった|怖|さみし|寂し|いなくな|消え/, /泣|涙|震え|うつむ|うなだれ|唇を噛|かすれ|小さく言/],
+  ["smile", /やった|よかった|ありがと|えらい|すごい|がっはっは|あはは|ふふ|おはよー|おめでと|かわいい|うまいうまい/, /笑|ほほえ|微笑|にっこり|嬉し|うれし|頬をゆる/],
+];
+export function emoOf(line, narr = "") {
+  for (const [emo, say, around] of EMOS) if (around.test(narr)) return emo;
+  for (const [emo, say] of EMOS) if (say.test(line)) return emo;
+  return null;
+}
+
 function fxOf(text) {
   const hit = FX_WORDS.find(([re]) => re.test(text));
   return hit ? hit[1] : null;
@@ -119,13 +133,15 @@ export function toScript(blocks, labels) {
 
     const narr = b.parts.filter((p) => !p.say).map((p) => p.text).join("");
     const says = b.parts.filter((p) => p.say);
+    const after = paras[i + 1]?.type === "p" && !paras[i + 1].text.startsWith("「") ? paras[i + 1].text.slice(0, 30) : "";
+    const mood = `${narr}${after}`;
     if (useGiven && hasSay(b)) {
       const token = given[sayIndex++];
       if (token === "-") return out.push({ kind: "narr", text: b.text, fx: fxOf(b.text) });
       const whos = token.split("/").map((t) => SPEAKER_CODES[t] || t);
       let k = 0;
       for (const p of b.parts) {
-        if (p.say) out.push({ kind: "say", who: whos[Math.min(k++, whos.length - 1)], text: p.text, fx: fxOf(p.text) });
+        if (p.say) out.push({ kind: "say", who: whos[Math.min(k++, whos.length - 1)], text: p.text, fx: fxOf(p.text), emo: emoOf(p.text, mood) });
         else out.push({ kind: "narr", text: p.text, fx: fxOf(p.text), aside: true });
       }
       return remember(whos.at(-1));
@@ -168,7 +184,7 @@ export function toScript(blocks, labels) {
     const who = [...score.entries()].sort((a, b) => b[1] - a[1])[0][0];
 
     for (const p of b.parts) {
-      if (p.say) out.push({ kind: "say", who, text: p.text, fx: fxOf(p.text) });
+      if (p.say) out.push({ kind: "say", who, text: p.text, fx: fxOf(p.text), emo: emoOf(p.text, mood) });
       else out.push({ kind: "narr", text: p.text, fx: fxOf(p.text), aside: true });
     }
     remember(who);

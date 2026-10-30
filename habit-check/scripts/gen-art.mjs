@@ -1,7 +1,8 @@
 // art-manifest.mjs の絵を、gemini-art の Worker（Gemini の画像生成）でまとめて描く。
 //   GEMINI_ART_URL=https://gemini-art.<アカウント>.workers.dev/mcp/<合言葉> node scripts/gen-art.mjs <保存先フォルダ> [id の一部…]
 // 保存先にもうある絵は描かない（描き直すときは消してから）。描いたら scripts/finish-art.py で背景を抜いて public/img へ。
-import { mkdirSync, existsSync, writeFileSync } from "node:fs";
+// ref のある絵（表情・装備の差分）は、その元の絵を見本にして描く。元の絵の URL は保存先の urls.json に残す（30日有効）。
+import { mkdirSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ALL } from "./art-manifest.mjs";
 
@@ -28,14 +29,27 @@ async function callTool(args) {
   return url;
 }
 
+const urlsFile = join(outDir, "urls.json");
+const urls = existsSync(urlsFile) ? JSON.parse(readFileSync(urlsFile, "utf8")) : {};
+const saveUrls = () => writeFileSync(urlsFile, JSON.stringify(urls, null, 2));
 const todo = ALL.filter((a) => (!only.length || only.some((o) => a.id.includes(o))) && !existsSync(join(outDir, `${a.id}.png`)));
+// 元の絵を先に（差分は元の絵ができるのを待つ）
+todo.sort((a, b) => !!a.ref - !!b.ref);
 console.log(`${todo.length} 枚を描きます`);
+const waitFor = async (id) => {
+  for (let k = 0; k < 600 && !urls[id]; k++) await new Promise((r) => setTimeout(r, 1000));
+  return urls[id];
+};
 let failed = 0;
 async function worker() {
   for (let a = todo.shift(); a; a = todo.shift()) {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const url = await callTool({ prompt: a.prompt, aspect_ratio: a.ratio, ...(styleRef ? { reference_image_urls: [styleRef] } : {}) });
+        const ref = a.ref ? await waitFor(a.ref) : a.refUrl || styleRef;
+        if (a.ref && !ref) throw new Error(`見本の絵がありません: ${a.ref}`);
+        const url = await callTool({ prompt: a.prompt, aspect_ratio: a.ratio, ...(ref ? { reference_image_urls: [ref] } : {}) });
+        urls[a.id] = url;
+        saveUrls();
         const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
         const file = join(outDir, `${a.id}.png`);
         mkdirSync(dirname(file), { recursive: true });

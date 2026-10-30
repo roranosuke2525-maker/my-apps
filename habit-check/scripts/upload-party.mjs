@@ -4,7 +4,7 @@
 // 各ページの先頭の画像を新しい絵にし、前の絵は「エピソード1のすがた」のトグルの中へ移す（フォルダを渡したときだけ。
 // ファイル名は「なまえ」の（）を _ にしたもの）。アプリは先頭の画像だけを使う。
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { root } from "./inline-page.mjs";
 
 const PARTY_DS_ID = "7ab3aa8b-2f1e-44cb-b2f8-592202bab226";
@@ -12,7 +12,7 @@ const token = process.env.NOTION_TOKEN;
 if (!token) throw new Error("NOTION_TOKEN がありません");
 const args = process.argv.slice(2);
 const dirAt = args.indexOf("--dir");
-const dir = dirAt >= 0 ? join(root, args.splice(dirAt, 2)[1].replace(/^\.?\/?/, "")) : join(root, "public", "img", "party");
+const dir = dirAt >= 0 ? resolve(root, args.splice(dirAt, 2)[1]) : join(root, "public", "img", "party");
 const oldDir = args[0];
 const typeOf = (name) => (name.endsWith(".png") ? "image/png" : "image/svg+xml");
 const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8"));
