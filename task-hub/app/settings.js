@@ -6,6 +6,7 @@
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
+    news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
   };
   const DB_PAGE = "3ed62844acbe81438bf3c88092856f8b"; // 🗄 データベース
@@ -22,12 +23,12 @@
   const TAGS = ["HOME", "BUILD", "CHILD", "FAMILY", "MONEY", "FOOD", "HEALTH", "BEAUTY", "LEARN", "AI", "TECH", "BOOK", "MUSIC", "COFFEE", "MOVIE", "TRIP", "TOY", "CAR", "WORK", "BUY"];
   // GTD の段。色は CSS の --s-*。今日・予定は実行日で決まる（DB_タスク管理の「今どこ」と同じ規則）
   const STAGES = {
-    inbox: { name: "収集", sub: "📥 INBOX", c: "var(--s-inbox)" },
+    inbox: { name: "収集", sub: "📥 INBOX：入れただけ・まだ決めていない", c: "var(--s-inbox)" },
     ai: { name: "AI", sub: "🤖 AIに預けた", c: "var(--s-ai)" },
-    next: { name: "次にやる", sub: "⏭ NEXT・▶️ DOING", c: "var(--s-next)" },
+    next: { name: "次にやる", sub: "⏭ NEXT・▶️ DOING で日付なし", c: "var(--s-next)" },
     plan: { name: "予定", sub: "実行日が明日以降", c: "var(--s-plan)" },
     today: { name: "今日", sub: "実行日が今日まで", c: "var(--s-today)" },
-    wait: { name: "待ち", sub: "⏳ WAITING", c: "var(--s-wait)" },
+    wait: { name: "待ち", sub: "⏳ WAITING：相手・返事待ち", c: "var(--s-wait)" },
     some: { name: "いつか", sub: "🕰 SOMEDAY", c: "var(--s-some)" },
     ref: { name: "資料", sub: "📚 REFERENCE", c: "var(--s-ref)" },
     done: { name: "済み", sub: "✅ 今日終えた", c: "var(--s-done)" },
@@ -56,7 +57,7 @@
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
-    shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
+    news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };

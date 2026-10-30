@@ -193,7 +193,7 @@
     x = x.replace(/(`+)([\s\S]*?[^`])\1(?!`)/g, (m, f, c) => put(`<code>${esc(c)}</code>`));
     x = x.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, tx, u) => put(`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(decode(tx.replace(/\\([^\w\s])/g, "$1")))}</a>`));
     x = x.replace(/\\([\\`*_{}[\]()#+\-.!<>|~$])/g, (m, c) => put(esc(c)));
-    x = esc(decode(x));
+    x = esc(decode(x)).replace(/https?:\/\/[^\s<>"]+[^\s<>".,、。）)]/g, (u) => `<a class="auto" href="${u}" target="_blank" rel="noopener">${u}</a>`);
     x = x.replace(/&lt;(\/?)(b|i|s|u)&gt;/g, "<$1$2>").replace(/&lt;br\s*\/?&gt;/g, "<br>")
       .replace(/&lt;span color=&quot;([a-z_]+)&quot;&gt;/g, (m, c) => `<span data-color="${c}" class="${c.endsWith("_bg") ? `bg-${c.slice(0, -3)}` : `c-${c}`}">`).replace(/&lt;\/span&gt;/g, "</span>");
     x = x.replace(/\*\*([^*]+?)\*\*/g, "<b>$1</b>").replace(/__([^_]+?)__/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<i>$2</i>").replace(/~~([^~]+?)~~/g, "<s>$1</s>");
@@ -217,6 +217,7 @@
       else if (tag === "s" || tag === "strike" || tag === "del") out += `<s>${inner}</s>`;
       else if (tag === "u") out += `<u>${inner}</u>`;
       else if (tag === "code") { const raw = n.textContent; const f = "`".repeat(Math.max(0, ...(raw.match(/`+/g) || [""]).map((y) => y.length)) + 1); out += `${f}${raw}${f}`; }
+      else if (tag === "a" && n.classList.contains("auto")) out += escMd(n.textContent);
       else if (tag === "a") out += `[${inner}](${n.getAttribute("href") || ""})`;
       else if (tag === "span" && n.dataset.color) out += `<span color="${n.dataset.color}">${inner}</span>`;
       else if (tag === "div" || tag === "p") out += (out && !out.endsWith("\n") ? "\n" : "") + inner;

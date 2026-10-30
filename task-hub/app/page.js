@@ -43,7 +43,7 @@
     if (t) {
       const sel = (prop, opts, val, blank = true) => `<select data-prop="${prop}" aria-label="${prop}">${blank ? `<option value="">—</option>` : ""}${opts.map((o) => `<option ${o === val ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
       const pj = S.projects.filter((p) => t.projects.includes(p.id));
-      return `<dl class="props"><dt>ステータス</dt><dd>${sel("ステータス", ALL_STATUSES, t.status, false)}</dd>
+      return `${quickHtml(t)}<dl class="props"><dt>ステータス</dt><dd>${sel("ステータス", ALL_STATUSES, t.status, false)}</dd>
         <dt>AIアクション</dt><dd>${sel("AIアクション", AIA, t.ai)} <span class="mute" style="font-size:11.5px">${t.ai ? AI_LABEL[t.ai] : ""}</span></dd>
         <dt>実行日</dt><dd><input type="date" data-prop="date:実行日:start" value="${t.date || ""}" aria-label="実行日">${t.date ? `<button type="button" class="mute" data-cleardate="1" style="font-size:12px;padding:0 6px">外す</button>` : ""}</dd>
         <dt>次の一歩</dt><dd><input type="text" data-prop="NEXT" value="${esc(t.next || "")}" placeholder="（空）" aria-label="次の一歩"></dd>
@@ -51,14 +51,51 @@
         ${pj.length ? `<dt>プロジェクト</dt><dd>${pj.map((p) => `<button type="button" class="pill" data-proj="${p.id}">${esc(p.name)}</button>`).join("")}</dd>` : ""}
         ${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;overflow-wrap:anywhere">${esc(t.link.slice(0, 70))}</a></dd>` : ""}</dl>`;
     }
-    if (P.fields) return `<dl class="props">${P.fields.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+    if (P.fields) return `<dl class="props">${P.fields.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${linky(v)}</dd>`).join("")}</dl>`;
     if (P.row) {
       const schema = S.dbSchema || {}; const props = Object.values(schema).filter((p) => p.name !== P.titleProp && !["button"].includes(p.type));
-      const shown = props.map((p) => { const v = p.type === "formula" || p.type === "rollup" ? "" : cell(P.row, p); return v ? `<dt>${esc(p.name)}</dt><dd>${SECRET.test(p.name) ? "••••（隠しています）" : esc(v)}</dd>` : ""; }).join("");
+      const shown = props.map((p) => { const v = p.type === "formula" || p.type === "rollup" ? "" : cell(P.row, p); return v ? `<dt>${esc(p.name)}</dt><dd>${SECRET.test(p.name) ? "••••（隠しています）" : linky(v)}</dd>` : ""; }).join("");
       return `<dl class="props">${shown}</dl>`;
     }
     return "";
   }
+  // 文字の中の URL を押せるリンクにする
+  const linky = (v) => esc(v).replace(/https?:\/\/[^\s<>"'）)]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener" class="ulink">${u.length > 60 ? `${u.slice(0, 58)}…` : u}</a>`);
+  // URL を開く：知っている Notion のページならこの画面で、それ以外は新しいタブで
+  function openLink(href) {
+    const id = /notion\.(so|site|com)/.test(href) ? idOf(href) : "";
+    if (id && known.has(id)) { openTask(id); return; }
+    const x = id && S.stock.find((r) => r.id === id); if (x) { openStock(id); return; }
+    window.open(href, "_blank", "noopener");
+  }
+
+  // ================= 日付・状態をすぐ変える =================
+  const nextDow = (w) => { const d = TODAY(); return addDays(d, ((w - dow(d) + 7) % 7) || 7); };
+  const QUICK_DATES = [["today", "今日"], ["tomorrow", "明日"], ["sat", "土曜"], ["mon", "来週月"], ["week", "1週間後"]];
+  const QUICK_ST = [["next", ST.next, "次にやる"], ["doing", ST.doing, "進行中"], ["wait", ST.wait, "待ち"], ["some", ST.some, "いつか"], ["ref", ST.ref, "資料"], ["inbox", ST.inbox, "収集に戻す"]];
+  function quickDate(k) { const d = TODAY(); return { today: d, tomorrow: addDays(d, 1), sat: nextDow(6), mon: nextDow(1), week: addDays(d, 7) }[k]; }
+  function quickHtml(t) {
+    const done = t.status === ST.done;
+    return `<div class="quick" data-qt="${t.id}">
+      <div class="qrow"><span class="ql">日付</span>${QUICK_DATES.map(([k, n]) => `<button type="button" class="qc${t.date === quickDate(k) ? " on" : ""}" data-qk="d:${k}">${n}<small>${md(quickDate(k))}</small></button>`).join("")}<label class="qc pick">📅 選ぶ<input type="date" data-qdate="1" value="${t.date || ""}" aria-label="日付を選ぶ"></label>${t.date ? `<button type="button" class="qc" data-qk="d:none">日付なし</button>` : ""}</div>
+      <div class="qrow"><span class="ql">状態</span>${QUICK_ST.filter(([, v]) => v !== t.status).map(([k, , n]) => `<button type="button" class="qc" data-qk="s:${k}" style="--c:${STAGES[k === "doing" ? "next" : k].c}">${n}</button>`).join("")}<button type="button" class="qc ok" data-qk="s:${done ? "next" : "done"}">${done ? "↩ 戻す" : "✓ 済み"}</button></div>
+      ${t.status === ST.ai ? "" : `<div class="qrow"><span class="ql">AI</span><button type="button" class="qc ai" data-qk="a:🔍">🔍 調べて</button><button type="button" class="qc ai" data-qk="a:💬">💬 一緒に分解</button><button type="button" class="qc ai" data-qk="a:🔬">🔬 徹底調査</button></div>`}
+    </div>`;
+  }
+  async function applyQuick(t, key, val) {
+    const [kind, k] = key.split(":");
+    let props, msg;
+    if (kind === "d") { const d = k === "pick" ? val : k === "none" ? null : quickDate(k); props = { ...dateProps(d), ...(d && ![ST.next, ST.doing].includes(t.status) ? { "ステータス": ST.next } : {}) }; msg = d ? `「${short(t.name)}」→ ${md(d)}（${WD[dow(d)]}）にやる` : `「${short(t.name)}」の日付を外しました`; }
+    else if (kind === "s") { const v = k === "done" ? ST.done : QUICK_ST.find((q) => q[0] === k)[1]; props = { "ステータス": v }; msg = `「${short(t.name)}」→ ${k === "done" ? "済み" : QUICK_ST.find((q) => q[0] === k)[2]}`; }
+    else { props = { "ステータス": ST.ai, "AIアクション": k }; msg = `AIに預けました（${k}・次の定時処理 ${nextRun()}）`; }
+    await setProps(t, props, msg);
+    if (PG?.task === t) { $("#pprops").innerHTML = propsHtml(); drawAiBar(); }
+  }
+  function openQuick(id) {
+    const t = known.get(id); if (!t) return;
+    modal(`<h3 class="qhead"><span class="dot" style="--c:${STAGES[stageOf(t)]?.c}"></span>${esc(t.name)}</h3><div class="form">${quickHtml(t)}<div style="display:flex;gap:8px"><button type="button" class="btn pri" data-mopen="${t.id}" style="flex:1">ページを開く</button><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
+  }
+
   // AIとのやり取りの帯（ページの上）
   function drawAiBar() {
     const box = $("#aibar"); const P = PG; if (!box || !P) return;

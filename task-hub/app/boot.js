@@ -9,14 +9,22 @@
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     if (warped) stars.warp();
     const view = $(".view", main);
-    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     S.slide = null;
+    renderConciergeFab();
+    try { history.replaceState(null, "", `#${S.tab}`); } catch { /* なし */ }
   }
   // 画面とページ（開いていれば）を描き直す
   function refresh() { render(); if (PG && $("#pprops") && !document.activeElement?.closest("#pprops")) { $("#pprops").innerHTML = propsHtml(); drawAiBar(); } }
 
   // ================= 操作 =================
   document.addEventListener("click", (e) => {
+    // URL・ページへのリンクは押せば開く（本文の中でも）
+    const a = e.target.closest("a[href]");
+    if (a && ED && ED.box.contains(a)) { e.preventDefault(); openLink(a.getAttribute("href")); return; }
+    const mn = e.target.closest(".mention[data-src]");
+    if (mn) { const u = (decodeURIComponent(mn.dataset.src).match(/url="([^"]+)"/) || [])[1]; if (u) { e.preventDefault(); openLink(u); return; } }
+    if (a) return;
     if (ED && ED.box.contains(e.target)) { onEdClick(e); return; }
     if (swipe.suppress) { e.preventDefault(); return; }
     if (e.target.id === "modal") { closeModal(); return; }
@@ -58,10 +66,27 @@
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
+    if (d.quick) { openQuick(d.quick); return; }
+    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inC = !!el.closest(".concierge"); if (!inC && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inC && !$("#modal").hidden) openConcierge(); }); return; }
+    if (d.mopen) { closeModal(); openTask(d.mopen); return; }
+    if (d.stagestep) { stageStep(+d.stagestep); return; }
+    if (d.concierge) { openConcierge(); return; }
+    if (d.cact) { conciergeAct(d.cact); return; }
+    if (d.avpick) { openConcierge(true); return; }
+    if (d.avatar) { store.set("avatar", d.avatar); openConcierge(true); render(); toast(`コンシェルジュを ${avatar().name} にしました`); return; }
+    if (d.newsday) { S.newsDay = d.newsday; render(); return; }
+    if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
+    if (d.newshide) { S.newsHide = !S.newsHide; render(); return; }
+    if (d.newsstate) { const k = d.newsstate.indexOf(":"); setNews(d.newsstate.slice(0, k).split(","), d.newsstate.slice(k + 1)); return; }
+    if (d.newsopen) { openNews(d.newsopen); return; }
     if (onShopClick(d, el)) return;
     if (d.open) { openTask(d.open); }
   });
-  document.addEventListener("change", (e) => { if (e.target.matches?.("[data-prop]")) onPropChange(e.target); });
+  document.addEventListener("change", (e) => {
+    if (e.target.matches?.("[data-prop]")) onPropChange(e.target);
+    if (e.target.matches?.("[data-qdate]") && e.target.value) { const host = e.target.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; if (e.target.closest("#modal") && !e.target.closest(".concierge")) closeModal(); applyQuick(t, "d:pick", e.target.value); }
+  });
+  document.addEventListener("click", (e) => { const a = e.target.closest("[data-newsread]"); if (a) setNews([a.dataset.newsread], "読んだ", true); }, true);
   document.addEventListener("keydown", (e) => {
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();
@@ -75,6 +100,27 @@
   });
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (!document.activeElement?.matches("input, textarea")) render(); }, 150); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.mode === "live" && Date.now() - (S.loadedAt || 0) > 10 * 60e3 && $("#page").hidden) load(); });
+
+  // ================= 階層をスワイプで行き来する =================
+  // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
+  const TABS = ["flow", "ai", "triage", "shop", "news", "log", "db"];
+  (() => {
+    let g = null;
+    addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
+    addEventListener("pointerup", (e) => {
+      if (!g || e.pointerId !== g.id) return; const G = g; g = null;
+      const dx = e.clientX - G.x, dy = e.clientY - G.y; if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || performance.now() - G.t > 700) return;
+      const el = G.el instanceof Element ? G.el : null; if (!el) return;
+      if (el.closest("input, textarea, select, [data-swipe], .board, .tablewrap, .tcard, .menu")) return;
+      const edge = G.x < 40;
+      if (!$("#modal").hidden) { if (dx > 0 && el.closest("#modal")) closeModal(); return; }
+      if (!$("#page").hidden) { if (dx > 0 && (edge || !el.closest(".ed"))) { swipeGuard(); closePage(); } return; }
+      if (el.closest("nav.tabs")) { const i = TABS.indexOf(S.tab) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
+      if (S.tab === "db" && S.dbOpen && dx > 0) { swipeGuard(); S.dbOpen = null; render(); return; }
+      if (S.tab === "flow" && el.closest("[data-swipestage], .pipe, .park")) { swipeGuard(); stageStep(dx < 0 ? 1 : -1); }
+    }, true);
+    function swipeGuard() { const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener("click", stop, { capture: true, once: true }); setTimeout(() => removeEventListener("click", stop, { capture: true }), 300); }
+  })();
 
   // ================= 星空（タブを変えるとワープ） =================
   const stars = (() => {
@@ -107,6 +153,7 @@
     catch (err) { S.error = errText(err); S.mode = S.tasks.length ? "live" : "error"; setSync("err"); toast(S.error); }
     render();
     if (!load.dbDone) { load.dbDone = true; refreshDbList(); }
+    if (S.tab === "news" || S.newsAt) loadNews();
     prefetchBodies();
   }
   const DEMO_BODY = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [x] 候補を3つに絞る\n- [ ] 寸法を測る\n  - [ ] 幅と奥行き\n- [ ] 色を決める\n\n郵便受けに雨が入るので対策を考えたい\n\n## メモ\n\n（例）次の打ち合わせで聞く";
@@ -170,6 +217,7 @@
     DEMO_BODIES[ai[0].id] = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [x] 今の不満を書き出す\n- [ ] 質問票に答える\n\n## 💬 最新のやり取り（10/24 10:52）\n\n### ✍️ 受け取ったこと（検出 10/24 10:40）\n\n- 「AIリサーチの選別とやり取りを一番やりやすく」\n\n### ✅ 決めることリスト（10/24 10:52）\n\n- [x] よく使う機能\n- [x] 画面の数\n- [x] スクロールの扱い\n- [ ] ホームに置くもの\n- [ ] 本文の編集のしかた\n- [ ] 色の方針\n\n明確度 3/6＝50%\n\n**Q1. ホームにいちばん大きく置くものは？**\n\n- [ ] A. GTDの流れの図（⭐ 全体が見える）\n- [ ] B. 今日やるの一覧\n- [ ] C. AIのあなたの番\n- [ ] その他\n\n💬 コメント：\n\n**Q2. 本文はどう編集したい？**\n\n- [ ] A. Notionと同じように直接書く（⭐）\n- [ ] B. 追記だけでよい\n- [ ] その他\n\n💬 コメント：\n\n### 🗂 過去のやり取り（1件）\n\n<toggle>\n10/23 15:52 1回目 🔍 ─ 案を3つに絞った\n\n- ベント・リバー・デッキ\n</toggle>\n\n## メモ\n\n- 社内PCでも開けるように";
     DEMO_BODIES[ai[1].id] = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [ ] 比較表を見て決める\n- [ ] 設置寸法を測る\n- [ ] 見積を取る\n\n## 🔍 調査結果（最新・2026/10/22 13:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）パナソニックのミドルタイプ。45cm幅で5人分、静音で乾燥も強い\n</callout>\n\n### 📊 比較（10/22 13:52）\n\n| 候補 | 価格 | 容量 | 静音 |\n| --- | --- | --- | --- |\n| ⭐ （例）A社ミドル | 約12万円 | 5人分 | 38dB |\n| （例）B社ディープ | 約15万円 | 6人分 | 40dB |\n| （例）C社スリム | 約9万円 | 4人分 | 42dB |\n\n### ▶️ 次の手順（10/22 13:52）\n\n1. キッチンの開口寸法を測る\n2. 型番を決めて見積を取る\n3. 工事日を決める\n\n<toggle>\n詳しく（要点・注意点・参照）\n\n- 深型は入るか要確認\n- [（例）メーカー比較](https://example.com)\n</toggle>\n\n### 🗂 過去のやり取り（1件）\n\n<toggle>\n10/20 09:52 1回目 🔍 ─ 候補を広く洗い出した\n\n- 6機種を候補にした\n</toggle>\n\n## メモ\n\n- 予算は15万円まで";
     DEMO_BODIES[ai[2].id] = "## 🔍 調査結果（最新・2026/10/24 11:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）16インチ・ペダルを外せるタイプ。身長105cmならちょうど\n</callout>\n\n### ▶️ 次の手順（10/24 11:52）\n\n1. 店で跨がってみる\n2. 色を決める";
+    demoNews();
     S.loadedAt = Date.now(); render(); setSync("ok");
   }
 
@@ -181,7 +229,7 @@
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "shop", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用

@@ -95,7 +95,7 @@
     const st = stageOf(t); const m = metaOf(t);
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
     return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : `<span class="dot"></span>`}
-      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button><span class="meta${m.late ? " late" : ""}">${esc(m.tx)}</span></div>`;
+      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div>`;
   }
   function stageItems(k) {
     const items = inStage(k).slice(); const d = TODAY();
@@ -115,42 +115,39 @@
   }
 
   // ================= 流れ（GTD） =================
-  const FLOW_POS = { inbox: "1/1/2/4", ai: "1/4/2/7", next: "2/1/3/3", plan: "2/3/3/5", wait: "2/5/3/7", today: "3/1/4/5", some: "3/5/4/7", done: "4/1/5/4", ref: "4/4/5/7" };
-  const EDGES = [["inbox", "ai"], ["inbox", "next"], ["ai", "next"], ["ai", "some"], ["ai", "ref"], ["next", "today"], ["plan", "today"], ["next", "wait"], ["today", "done"]];
+  // 本流：集める → 決める → 日を決める → やる → 終わる。待ち・いつか・資料は横の置き場。AI は独立した AI タブで扱う
+  const FLOW_MAIN = ["inbox", "next", "plan", "today", "done"];
+  const FLOW_SIDE = ["wait", "some", "ref"];
+  const FLOW_ORDER = [...FLOW_MAIN, ...FLOW_SIDE];
+  const FLOW_VERB = { inbox: "集めた", next: "やると決めた", plan: "日を決めた", today: "今日やる", done: "終わった", wait: "相手待ち", some: "寝かせ中", ref: "取っておく" };
+  function stageStep(dir) {
+    const i = FLOW_ORDER.indexOf(S.stage); const j = Math.max(0, Math.min(FLOW_ORDER.length - 1, (i < 0 ? 0 : i) + dir));
+    if (FLOW_ORDER[j] === S.stage) return;
+    S.stage = FLOW_ORDER[j]; S.slide = { key: "stage", dir }; render();
+  }
   function renderFlow(view) {
-    const d = TODAY(); const late = lateOf().length; const mine = myTurn().length;
-    const cnt = Object.fromEntries(Object.keys(STAGES).map((k) => [k, inStage(k).length]));
-    const inflow = [...S.tasks, ...S.doneToday, ...S.refs].filter((t) => t.created && jst(Date.parse(t.created)) === d).length;
+    if (!FLOW_ORDER.includes(S.stage)) S.stage = "today";
+    const d = TODAY(); const late = lateOf().length;
+    const cnt = Object.fromEntries(FLOW_ORDER.map((k) => [k, inStage(k).length]));
+    const inflow = [...S.tasks, ...S.doneToday, ...S.refs].filter((t) => t.created && jst(Date.parse(t.created)) === d && t.status !== ST.ai).length;
     const maxAge = (k) => Math.max(0, ...inStage(k).map(ageOf));
     const soon = stageItems("plan")[0];
-    const sub = { inbox: inflow ? `今日 +${inflow}` : S.more?.[ST.inbox] ? "100件以上" : "入ってきたもの", ai: `AI作業中 ${aiTurn().length}`, next: cnt.next ? `いちばん古い ${maxAge("next")}日` : "", plan: soon ? `次 ${md(soon.date)}（${WD[dow(soon.date)]}）` : "", today: late ? `遅れ ${late}` : cnt.today ? "のこり" : "終わり", wait: cnt.wait ? `最長 ${maxAge("wait")}日` : "", some: "", done: "今日", ref: `最近の${cnt.ref}件` };
+    const sub = { inbox: inflow ? `今日 +${inflow}` : cnt.inbox ? `最古 ${maxAge("inbox")}日` : "空っぽ", next: cnt.next ? `最古 ${maxAge("next")}日` : "—", plan: soon ? `次 ${md(soon.date)}` : "—", today: late ? `遅れ ${late}` : cnt.today ? "のこり" : "完了", done: "今日" };
     const loading = S.mode === "loading" && !S.tasks.length;
-    view.insertAdjacentHTML("beforeend", `<div class="flow" id="flow"><svg class="edges" id="edges" aria-hidden="true"></svg><div class="nodes">${Object.entries(STAGES).map(([k, s]) => `<button type="button" class="node" data-stage="${k}" style="--c:${s.c};grid-area:${FLOW_POS[k]}" aria-pressed="${S.stage === k}" title="${s.sub}"><span class="k">${s.name}</span><span class="n">${loading ? "…" : cnt[k]}${k === "ref" && S.refMore ? "+" : ""}</span><span class="s${k === "today" && late ? " late" : ""}">${esc(sub[k])}</span>${k === "ai" && mine ? `<span class="flag">あなたの番 ${mine}</span>` : ""}</button>`).join("")}</div></div>
-      <div class="card panel" id="stagepanel"></div>`);
-    requestAnimationFrame(() => drawEdges(cnt));
-    const st = STAGES[S.stage]; const items = stageItems(S.stage);
+    const tip = adviceTop();
+    view.insertAdjacentHTML("beforeend", `<div class="pipe" role="group" aria-label="GTDの流れ">${FLOW_MAIN.map((k, i) => `<button type="button" class="step" data-stage="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}" title="${STAGES[k].sub}"><span class="no">${i + 1}</span><span class="n">${loading ? "…" : cnt[k]}</span><span class="k">${STAGES[k].name}</span><span class="s${k === "today" && late ? " late" : ""}">${esc(sub[k])}</span></button>${i < FLOW_MAIN.length - 1 ? `<span class="arr" aria-hidden="true"></span>` : ""}`).join("")}</div>
+      <div class="park"><span class="lbl">置き場</span>${FLOW_SIDE.map((k) => `<button type="button" class="pk" data-stage="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}"><i></i>${STAGES[k].name}<b>${loading ? "…" : cnt[k]}${k === "ref" && S.refMore ? "+" : ""}</b></button>`).join("")}</div>
+      ${tip ? `<button type="button" class="cbubble" data-concierge="1"><img src="${avatar().img}" alt=""><span><b>${esc(avatar().name)}</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
+      <div class="card panel" id="stagepanel" data-swipestage="1"></div>`);
+    const st = STAGES[S.stage]; const items = stageItems(S.stage); const pos = FLOW_ORDER.indexOf(S.stage);
     const panel = $("#stagepanel");
-    panel.innerHTML = `<div class="panel-head"><span class="dot" style="--c:${st.c}"></span><b>${st.name}</b><span class="mute" style="font-size:12px">${items.length}件</span><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="list" id="stagelist"></div>`;
+    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${FLOW_MAIN.includes(S.stage) ? `${pos + 1}. ` : ""}${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll" id="stagelist"></div>`;
     const box = $("#stagelist");
-    if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました" : "ここには何もありません"}</div>`; return; }
+    if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
+    if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
     if (S.stageView === "board") { box.outerHTML = `<div class="board">${groupBy(items, S.stage).map(([g, list]) => `<div class="col"><h4><span>${esc(g)}</span><span class="num mute">${list.length}</span></h4>${list.slice(0, 12).map((t) => `<button type="button" class="bcard" data-open="${t.id}">${esc(t.name)}<span class="sub">${esc(t.next || metaOf(t).tx)}</span></button>`).join("")}${list.length > 12 ? `<span class="mute" style="font-size:11px;padding:2px 4px">ほか ${list.length - 12}件</span>` : ""}</div>`).join("")}</div>`; return; }
-    if (S.stageView === "table") { box.className = "tablewrap"; const per = Math.max(1, Math.floor((box.clientHeight - 32) / 33)); const { slice, p, pages } = pageOf(`tb:${S.stage}`, items, per); box.innerHTML = tableHtml(slice); box.dataset.swipe = `tb:${S.stage}`; box.dataset.pages = pages; box.insertAdjacentHTML("afterend", `<div class="pager">${pages > 1 ? `<button type="button" data-pg="tb:${S.stage}:-1" ${p ? "" : "disabled"}>◀</button><span>${p + 1} / ${pages}</span><button type="button" data-pg="tb:${S.stage}:1" ${p < pages - 1 ? "" : "disabled"}>▶</button>` : `<span>${items.length}件</span>`}</div>`); return; }
-    paged(box, `st:${S.stage}`, items, 52, (t, i) => rowHtml(t, i, { check: !["done", "ref"].includes(S.stage) }));
-  }
-  function drawEdges(cnt) {
-    const svg = $("#edges"); const flow = $("#flow"); if (!svg || !flow) return;
-    const fr = flow.getBoundingClientRect();
-    const rect = (k) => { const r = flow.querySelector(`.node[data-stage="${k}"]`).getBoundingClientRect(); return { x: r.left - fr.left, y: r.top - fr.top, w: r.width, h: r.height }; };
-    let html = "";
-    EDGES.forEach(([a, b], i) => {
-      const A = rect(a), B = rect(b); let d;
-      if (Math.abs(A.y - B.y) < 4) { const x1 = A.x + A.w, y1 = A.y + A.h / 2, x2 = B.x, y2 = B.y + B.h / 2; d = `M${x1},${y1} L${x2},${y2}`; }
-      else { const x1 = Math.min(Math.max(A.x + A.w / 2, B.x + 14), B.x + B.w - 14), y1 = A.y + A.h, x2 = Math.min(Math.max(x1, B.x + 14), B.x + B.w - 14), y2 = B.y; const my = (y1 + y2) / 2; d = `M${A.x + A.w / 2},${y1} C${A.x + A.w / 2},${my} ${x2},${my} ${x2},${y2}`; }
-      html += `<path class="edge" id="e${i}" d="${d}"/>`;
-      const n = reduce ? 0 : Math.min(3, Math.ceil((cnt[a] || 0) / 4));
-      for (let k = 0; k < n; k++) html += `<circle r="3" class="pt" style="--c:${STAGES[a].c}"><animateMotion dur="${2.6 + i * .15}s" repeatCount="indefinite" begin="${(-k * (2.6 / n)).toFixed(2)}s"><mpath href="#e${i}"/></animateMotion></circle>`;
-    });
-    svg.innerHTML = html;
+    if (S.stageView === "table") { box.className = "tablewrap"; box.innerHTML = tableHtml(items); return; }
+    box.innerHTML = items.map((t, i) => rowHtml(t, i, { check: !["done", "ref"].includes(S.stage) })).join("");
   }
 
   // ================= AI =================
