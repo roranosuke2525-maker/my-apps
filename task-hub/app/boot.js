@@ -73,7 +73,7 @@
     if (d.concierge) { openConcierge(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
     if (d.avpick) { openConcierge(true); return; }
-    if (d.avatar) { store.set("avatar", d.avatar); openConcierge(true); render(); toast(`コンシェルジュを ${avatar().name} にしました`); return; }
+    if (d.outfit) { store.set("outfit", d.outfit); openConcierge(true); render(); toast(d.outfit === "auto" ? "服は季節と時間で着替えます" : `${CNAME}の服を「${outfit().label}」に固定しました`); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
     if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
     if (d.newshide) { S.newsHide = !S.newsHide; render(); return; }

@@ -137,7 +137,7 @@
     const tip = adviceTop();
     view.insertAdjacentHTML("beforeend", `<div class="pipe" role="group" aria-label="GTDの流れ">${FLOW_MAIN.map((k, i) => `<button type="button" class="step" data-stage="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}" title="${STAGES[k].sub}"><span class="no">${i + 1}</span><span class="n">${loading ? "…" : cnt[k]}</span><span class="k">${STAGES[k].name}</span><span class="s${k === "today" && late ? " late" : ""}">${esc(sub[k])}</span></button>${i < FLOW_MAIN.length - 1 ? `<span class="arr" aria-hidden="true"></span>` : ""}`).join("")}</div>
       <div class="park"><span class="lbl">置き場</span>${FLOW_SIDE.map((k) => `<button type="button" class="pk" data-stage="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}"><i></i>${STAGES[k].name}<b>${loading ? "…" : cnt[k]}${k === "ref" && S.refMore ? "+" : ""}</b></button>`).join("")}</div>
-      ${tip ? `<button type="button" class="cbubble" data-concierge="1"><img src="${avatar().img}" alt=""><span><b>${esc(avatar().name)}</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
+      ${tip ? `<button type="button" class="cbubble" data-concierge="1"><span class="face" style="${faceStyle(outfit(), 40)}"></span><span class="tx"><b>${CNAME}</b>${esc(tip.say || tip.title)}</span><i>›</i></button>` : ""}
       <div class="card panel" id="stagepanel" data-swipestage="1"></div>`);
     const st = STAGES[S.stage]; const items = stageItems(S.stage); const pos = FLOW_ORDER.indexOf(S.stage);
     const panel = $("#stagepanel");
