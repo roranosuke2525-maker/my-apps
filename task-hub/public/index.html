@@ -2467,7 +2467,7 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     return `background-image:url(${o.img});background-size:${W.toFixed(1)}px ${H.toFixed(1)}px;background-position:${(size / 2 - o.hx * o.w * k).toFixed(1)}px ${(-o.hy * o.h * k + size * 0.06).toFixed(1)}px`;
   }
   const avatar = () => ({ name: CNAME });
-  const IDLE = ["な、何よ。じっと見ないで。", "用がないなら手を動かしなさいよ。", "…ちゃんと休憩もしなさいよね。", "べ、別にあなたのために待ってたわけじゃないから。", "タスク、1つでいいから片づけてきなさいよ。", "…今日もおつかれさま。い、一回しか言わないから。"];
+  const IDLE = ["…なにかご用でしょうか。じっと見られると、仕事がしにくいのですが。", "ご用がなければ、タスクをひとつ進めましょう。", "適度に休憩もとってくださいね。…業務効率のためです。", "お待ちしていました。…いえ、たまたまです。", "おつかれさまです。…一度しか言いませんので。", "何かあれば遠慮なくどうぞ。そのための私ですから。"];
   const W8 = { S: 1, M: 2, L: 4, XL: 8 };
   const load8 = (list) => list.reduce((n, t) => n + (W8[t.weight] || 2), 0);
   // 提案の一覧（大事な順）。acts は押せる操作、items は1件ずつ動かせるタスク
@@ -2475,40 +2475,40 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     const d = TODAY(); const out = [];
     const today = inStage("today"); const late = lateOf(); const next = inStage("next"); const inbox = inStage("inbox");
     const wait = inStage("wait"); const some = inStage("some");
-    if (late.length) out.push({ pri: 100, icon: "⏰", say: `…遅れが${late.length}件あるんだけど。べ、別に心配してるわけじゃないから。`, title: `遅れが ${late.length}件あります`, body: "日付を過ぎたものは、今日やるか、日を決め直すと流れが戻ります。", acts: [["late:today", "全部 今日にする"], ["late:tomorrow", "全部 明日にずらす"]], items: late.slice(0, 4), itemActs: [["d:today", "今日"], ["d:sat", "土曜"], ["s:some", "いつか"]] });
+    if (late.length) out.push({ pri: 100, icon: "⏰", say: `遅れが${late.length}件ございます。…別に、心配しているわけではありません。予定の管理も私の仕事ですので。`, title: `遅れが ${late.length}件あります`, body: "日付を過ぎたものは、今日やるか、日を決め直すと流れが戻ります。", acts: [["late:today", "全部 今日にする"], ["late:tomorrow", "全部 明日にずらす"]], items: late.slice(0, 4), itemActs: [["d:today", "今日"], ["d:sat", "土曜"], ["s:some", "いつか"]] });
     const w = load8(today);
     if (today.length >= 8 || w > 12) {
       const heavy = today.filter((t) => ["L", "XL"].includes(t.weight) || !t.weight).slice(0, 4);
-      out.push({ pri: 90, icon: "🧺", say: `ちょっと、今日${today.length}件も詰めすぎ。倒れられたら困るのよ…わたしが。`, title: `今日が詰まっています（${today.length}件・重さ ${w}）`, body: "1日に終わるのは重さ12くらいまで。重いものを明日以降へ回して、終わる量に絞りましょう。", items: heavy.length ? heavy : today.slice(0, 4), itemActs: [["d:tomorrow", "明日へ"], ["d:mon", "来週月"], ["s:some", "いつか"]] });
+      out.push({ pri: 90, icon: "🧺", say: `本日${today.length}件は詰め込みすぎです。重いものは明日以降へ回しましょう。…倒れられては、私が困りますので。`, title: `今日が詰まっています（${today.length}件・重さ ${w}）`, body: "1日に終わるのは重さ12くらいまで。重いものを明日以降へ回して、終わる量に絞りましょう。", items: heavy.length ? heavy : today.slice(0, 4), itemActs: [["d:tomorrow", "明日へ"], ["d:mon", "来週月"], ["s:some", "いつか"]] });
     }
     if (!today.length && next.length) {
       const pick = next.slice().sort((a, b) => (W8[a.weight] || 2) - (W8[b.weight] || 2) || ageOf(b) - ageOf(a)).slice(0, 3);
-      out.push({ pri: 85, icon: "🎯", say: "今日やること、決めてないでしょ。しょうがないから3つ選んであげたわよ。", title: "今日やることが決まっていません", body: "次にやるから軽いもの・古いものを3つ選びました。今日に入れてみませんか。", items: pick, itemActs: [["d:today", "今日やる"], ["d:tomorrow", "明日"]] });
+      out.push({ pri: 85, icon: "🎯", say: "本日の予定がまだ決まっていません。候補を3つ選んでおきました。…仕方なく、ですけれど。", title: "今日やることが決まっていません", body: "次にやるから軽いもの・古いものを3つ選びました。今日に入れてみませんか。", items: pick, itemActs: [["d:today", "今日やる"], ["d:tomorrow", "明日"]] });
     }
     const mine = myTurn();
-    if (mine.length) out.push({ pri: 80, icon: "💬", say: "AIが返事を待ってるわよ。人を待たせるなんて、いい度胸ね。", title: `AIからの返事が ${mine.length}件 待っています`, body: "回答（💭）や判定（🔍✅）を返すと、次の定時処理でAIが続きを進めます。", acts: [["tab:ai", "AIの番を見る"]] });
+    if (mine.length) out.push({ pri: 80, icon: "💬", say: "AIからの返事がお待ちです。お返事は早めにお願いします。待たせるのは失礼ですよ。", title: `AIからの返事が ${mine.length}件 待っています`, body: "回答（💭）や判定（🔍✅）を返すと、次の定時処理でAIが続きを進めます。", acts: [["tab:ai", "AIの番を見る"]] });
     const oldIn = inbox.filter((t) => ageOf(t) >= 3);
-    if (inbox.length >= 10 || oldIn.length) out.push({ pri: 70, icon: "📥", say: `収集箱、${inbox.length}件もたまってる。…5分だけなら付き合ってあげてもいいけど。`, title: `収集箱に ${inbox.length}件${oldIn.length ? `（3日以上 ${oldIn.length}件）` : ""}`, body: "1件ずつ「やる・いつか・AI・資料」に振り分けると頭が軽くなります。5分だけ仕分けしましょう。", acts: [["triage:inbox", "仕分けを始める"]] });
+    if (inbox.length >= 10 || oldIn.length) out.push({ pri: 70, icon: "📥", say: `収集箱に${inbox.length}件たまっています。5分ほど仕分けしませんか。…お付き合いしますので。`, title: `収集箱に ${inbox.length}件${oldIn.length ? `（3日以上 ${oldIn.length}件）` : ""}`, body: "1件ずつ「やる・いつか・AI・資料」に振り分けると頭が軽くなります。5分だけ仕分けしましょう。", acts: [["triage:inbox", "仕分けを始める"]] });
     const noStep = next.filter((t) => !t.next);
-    if (noStep.length >= 3) out.push({ pri: 60, icon: "👣", say: "次の一歩が空っぽのタスクがあるの。何から手をつけるかくらい書いておきなさいよ。", title: `次の一歩が空のタスクが ${noStep.length}件`, body: "「最初に何をするか」が書いてあると手が動きます。開いて一歩を書くか、AIに分解を頼みましょう。", items: noStep.slice(0, 3), itemActs: [["open", "開く"], ["a:💬", "AIと分解"]] });
+    if (noStep.length >= 3) out.push({ pri: 60, icon: "👣", say: "次の一歩が空欄のタスクがあります。最初の一手だけでも書いておいていただけますか。", title: `次の一歩が空のタスクが ${noStep.length}件`, body: "「最初に何をするか」が書いてあると手が動きます。開いて一歩を書くか、AIに分解を頼みましょう。", items: noStep.slice(0, 3), itemActs: [["open", "開く"], ["a:💬", "AIと分解"]] });
     const stale = next.filter((t) => ageOf(t) >= 14);
-    if (stale.length) out.push({ pri: 55, icon: "🕸", say: "2週間も放っておいたのがあるわね。やるの？やらないの？はっきりして。", title: `2週間動いていない「次にやる」が ${stale.length}件`, body: "やらないなら いつか へ、迷っているなら AI に調べてもらうと進みます。", items: stale.slice(0, 3), itemActs: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]] });
+    if (stale.length) out.push({ pri: 55, icon: "🕸", say: "2週間動いていないタスクがあります。進めるのか見送るのか、ご判断をお願いします。", title: `2週間動いていない「次にやる」が ${stale.length}件`, body: "やらないなら いつか へ、迷っているなら AI に調べてもらうと進みます。", items: stale.slice(0, 3), itemActs: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]] });
     const longWait = wait.filter((t) => ageOf(t) >= 7);
-    if (longWait.length) out.push({ pri: 50, icon: "📮", say: "1週間以上待たされてるの、あるでしょ。…催促くらい、してもいいのよ。", title: `1週間以上の待ちが ${longWait.length}件`, body: "相手に確かめる日を決めておくと抜けません。", items: longWait.slice(0, 3), itemActs: [["d:tomorrow", "明日確認"], ["s:next", "自分で進める"]] });
+    if (longWait.length) out.push({ pri: 50, icon: "📮", say: "1週間以上お待ちの件があります。確認のご連絡を入れても失礼にはあたりませんよ。", title: `1週間以上の待ちが ${longWait.length}件`, body: "相手に確かめる日を決めておくと抜けません。", items: longWait.slice(0, 3), itemActs: [["d:tomorrow", "明日確認"], ["s:next", "自分で進める"]] });
     const soon = typeof stockSoon === "function" ? stockSoon() : [];
-    if (soon.length) out.push({ pri: 45, icon: "🛒", say: "日用品、もうすぐ切れるわよ。切らしてから慌てても知らないんだから。", title: `もうすぐ切れる日用品が ${soon.length}点`, body: soon.slice(0, 3).map((x) => `${x.name}（${leftTx(x)}）`).join("・"), acts: [["shop:stock", "在庫を見る"]] });
+    if (soon.length) out.push({ pri: 45, icon: "🛒", say: "日用品がもうすぐ切れます。切らしてから慌てても、私は知りませんからね。", title: `もうすぐ切れる日用品が ${soon.length}点`, body: soon.slice(0, 3).map((x) => `${x.name}（${leftTx(x)}）`).join("・"), acts: [["shop:stock", "在庫を見る"]] });
     const buyToday = shopLists().filter((t) => t.date && t.date <= d);
-    if (buyToday.length) out.push({ pri: 44, icon: "🧾", say: "今日は買い物の日でしょ。リスト、忘れないでよね。", title: `今日の買い物リストが ${buyToday.length}件`, body: buyToday.map((t) => t.name).join("・"), acts: [["shop:list", "買い物リストを開く"]] });
-    if (some.length >= 20 && [5, 6, 0].includes(dow(d))) out.push({ pri: 30, icon: "🕰", say: "週末なんだから、いつかの山くらい見直したら？…手伝ってあげなくもないわ。", title: `週末の見直し：いつか ${some.length}件`, body: "今週やりたくなったものを次にやるへ戻しましょう。", acts: [["triage:some", "いつかを見直す"]] });
+    if (buyToday.length) out.push({ pri: 44, icon: "🧾", say: "本日は買い物の予定がございます。リストのお忘れなく。…念のため、です。", title: `今日の買い物リストが ${buyToday.length}件`, body: buyToday.map((t) => t.name).join("・"), acts: [["shop:list", "買い物リストを開く"]] });
+    if (some.length >= 20 && [5, 6, 0].includes(dow(d))) out.push({ pri: 30, icon: "🕰", say: "週末ですので、いつかの見直しをおすすめします。…お手伝いしてもかまいません。", title: `週末の見直し：いつか ${some.length}件`, body: "今週やりたくなったものを次にやるへ戻しましょう。", acts: [["triage:some", "いつかを見直す"]] });
     const dg = S.diag.at(-1);
-    if (dg?.next) out.push({ pri: 20, icon: "🩺", say: "前の診断で決めた次の一手、覚えてる？…覚えてないと思ったわ。", title: "前回の診断の「次の一手」", body: dg.next, acts: [["tab:log", "診断を見る"]] });
-    if (!out.some((x) => x.pri >= 50)) out.push({ pri: 10, icon: "✨", say: S.doneToday.length ? `ふん、今日はもう${S.doneToday.length}件も終わってるじゃない。…やればできるのね。` : "今のところ問題なし。…べ、別にほめてないから。", title: S.doneToday.length ? `今日は ${S.doneToday.length}件 終わりました。いい流れです` : "流れは整っています", body: today.length ? `今日の残り ${today.length}件。上から1つずつどうぞ。` : "余裕があれば、次にやるから1つ今日に入れてみましょう。", acts: today.length ? [["stage:today", "今日の一覧"]] : [["stage:next", "次にやるを見る"]] });
+    if (dg?.next) out.push({ pri: 20, icon: "🩺", say: "前回の診断で決めた次の一手です。お忘れではないかと思いまして。", title: "前回の診断の「次の一手」", body: dg.next, acts: [["tab:log", "診断を見る"]] });
+    if (!out.some((x) => x.pri >= 50)) out.push({ pri: 10, icon: "✨", say: S.doneToday.length ? `本日はもう${S.doneToday.length}件完了しています。…お見事です。べ、別にほめているわけでは。` : "今のところ問題ございません。…別に、ほめているわけではありませんので。", title: S.doneToday.length ? `今日は ${S.doneToday.length}件 終わりました。いい流れです` : "流れは整っています", body: today.length ? `今日の残り ${today.length}件。上から1つずつどうぞ。` : "余裕があれば、次にやるから1つ今日に入れてみましょう。", acts: today.length ? [["stage:today", "今日の一覧"]] : [["stage:next", "次にやるを見る"]] });
     return out.sort((a, b) => b.pri - a.pri);
   }
   const adviceTop = () => (S.mode === "loading" && !S.tasks.length ? null : advise()[0]);
   function sayNow(list = advise()) {
     const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
-    if (h >= 23 || h < 5) return "まだ起きてるの？…明日に響くわよ。早く寝なさい。";
+    if (h >= 23 || h < 5) return "まだ起きていらしたんですか。明日に響きますので、そろそろお休みください。…心配ではなく、業務上の助言です。";
     return list[0]?.say || IDLE[0];
   }
   let lines = [], lineAt = 0;
