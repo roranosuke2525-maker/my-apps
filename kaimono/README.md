@@ -61,7 +61,7 @@ iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Work
 
 （Claude に「かいものをデプロイして」と頼んでもよい。その場合は手順3のシークレットだけ自分で入れる）
 
-> 10/30：Worker `kaimono` は Claude の作業環境から `npx wrangler deploy` で公開済み（https://kaimono.roranosuke2525.workers.dev・毎時の cron つき）。APP_KEY も設定済み。残りは手順1と、シークレット `NOTION_TOKEN` だけ（「変数とシークレット」で足せば再デプロイは要らない）。GitHub との連携（push で自動デプロイ）はまだつないでいない
+> 10/30：Worker `kaimono` は Claude の作業環境から `npx wrangler deploy` で公開済み（https://kaimono.roranosuke2525.workers.dev・毎時の cron つき）。APP_KEY も設定済み。NOTION_TOKEN もダッシュボードで足し、Claude が有効にした（ダッシュボードで「保存」だけ押すと新しい版ができるだけで、動いている版には入らない。「デプロイ」まで押すか、Claude に頼む）。GitHub との連携（push で自動デプロイ）はまだつないでいない
 
 ### 3. iPhone：ホーム画面に追加して通知をオンにする
 
