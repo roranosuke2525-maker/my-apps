@@ -90,7 +90,7 @@
 
   // ================= 日付・状態をすぐ変える =================
   const nextDow = (w) => { const d = TODAY(); return addDays(d, ((w - dow(d) + 7) % 7) || 7); };
-  const QUICK_DATES = [["today", "今日"], ["tomorrow", "明日"], ["sat", "土曜"], ["mon", "来週月"], ["week", "1週間後"]];
+  const QUICK_DATES = [["today", "今日"], ["tomorrow", "明日"], ["sat", "土曜"], ["mon", "月曜"], ["week", "1週間後"]];
   const QUICK_ST = [["next", ST.next, "次にやる"], ["doing", ST.doing, "進行中"], ["wait", ST.wait, "待ち"], ["some", ST.some, "いつか"], ["ref", ST.ref, "資料"], ["inbox", ST.inbox, "収集に戻す"]];
   function quickDate(k) { const d = TODAY(); return { today: d, tomorrow: addDays(d, 1), sat: nextDow(6), mon: nextDow(1), week: addDays(d, 7) }[k]; }
   function quickHtml(t) {
