@@ -20,7 +20,7 @@ const store = {
 
 const S = {
   tab: "list", lists: [], stock: [], today: "", loadedAt: "", cur: store.get("cur"), sort: store.get("sort", "aisle"),
-  showBasket: false, edit: "", sheet: null, pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
+  showBasket: false, edit: "", sheet: null, lpick: null, // lpick：リストで選んで消す品の id pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
   seg: store.get("seg", "usual"), templates: [], templateErr: "", planning: false, whenFor: "", openOther: "", wantList: "",
   plan: { counts: {}, extra: [], at: "", store: "", ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
 };
@@ -238,6 +238,15 @@ function removeItem(id) {
   t.items = t.items.filter((i) => i.id !== id);
   S.edit = ""; render();
   enqueue({ k: "del", item: id });
+}
+// 選んだ品をまとめてリストから消す（チェックの有無は問わない。圏外でも順番待ちで消す）
+function deletePicked(t) {
+  const ids = [...(S.lpick || [])].filter((id) => (t.items || []).some((i) => i.id === id));
+  if (!ids.length) return;
+  t.items = t.items.filter((i) => !ids.includes(i.id));
+  S.lpick = null; render();
+  for (const id of ids) enqueue({ k: "del", item: id });
+  toast(`${ids.length}品をリストから消しました`);
 }
 function clearBasket(t) {
   const done = (t.items || []).filter((i) => i.checked);
@@ -715,8 +724,13 @@ function listView(t, ph) {
   const todo = items.filter((i) => !i.checked); const basket = items.filter((i) => i.checked);
   const when = `<div class="when"><span>⏰ ${t.at ? `<b>${esc(fmtAt(t.at))}</b>` : `<span class="mute">時刻なし</span>`}</span><button type="button" class="btn ghost sm" data-whenopen="${t.id}">${t.at ? "変える" : "時刻を決める"}</button></div>${S.whenFor === t.id ? whenChips(t.id, t.at) : ""}`;
   const tools = `<div class="ltools"><div class="seg"><button type="button" data-sort="aisle" aria-pressed="${S.sort === "aisle"}">売り場順</button><button type="button" data-sort="added" aria-pressed="${S.sort === "added"}">入れた順</button></div>
-    <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${basket.length ? `<button type="button" class="btn ghost sm" data-clear="${t.id}">🗑 チェック済み${basket.length}品を消す</button>` : ""}${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
+    <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${basket.length && !S.lpick ? `<button type="button" class="btn ghost sm" data-clear="${t.id}">🗑 チェック済み${basket.length}品を消す</button>` : ""}${items.length ? `<button type="button" class="btn ${S.lpick ? "pri" : "ghost"} sm" data-lpickmode="1">${S.lpick ? "選ぶのをやめる" : "☑ 選んで消す"}</button>` : ""}${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
   const prog = items.length ? `<div class="prog"><i style="width:${Math.round((basket.length / items.length) * 100)}%"></i></div>` : "";
+  if (S.lpick) {
+    const all = items.every((i) => S.lpick.has(i.id));
+    return `${when}<div class="card list">${tools}${groups(items)}</div>
+      <div class="card bulkbar"><b>${S.lpick.size}品を選択中</b><div class="row-end"><button type="button" class="btn ghost sm" data-lpickall="${t.id}">${all ? "全部外す" : "全部選ぶ"}</button><button type="button" class="btn danger sm" data-lpickdel="${t.id}" ${S.lpick.size ? "" : "disabled"}>🗑 選んだ${S.lpick.size}品を消す</button></div></div>`;
+  }
   const body = todo.length ? groups(todo) : `<div class="empty small">${items.length ? "🎉 ぜんぶかごに入りました" : "上の欄から入れてください。「、」で区切るとまとめて入ります"}</div>`;
   const bk = basket.length ? `<div class="basket"><button type="button" class="bhead" data-basket="1" aria-expanded="${S.showBasket}">🧺 かごの中 ${basket.length}品 <span>${S.showBasket ? "▲" : "▼"}</span></button>${S.showBasket ? basket.map(itemRow).join("") : ""}</div>` : "";
   const foot = `<div class="lfoot">${basket.length ? `<button type="button" class="btn" data-clear="${t.id}">かごの${basket.length}品をリストから消す</button>` : ""}${items.length && !todo.length ? `<button type="button" class="btn ok" data-finish="${t.id}">買い物おわり（済みにする）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
@@ -774,6 +788,10 @@ function groups(items) {
   return [...by.values()].sort((x, y) => x.a.order - y.a.order).map(({ a, items: xs }) => `<div class="ghead"><span>${a.icon}</span>${esc(a.name)}<small>${xs.length}</small></div>${xs.map(itemRow).join("")}`).join("");
 }
 function itemRow(i) {
+  if (S.lpick) {
+    const q = A.splitQty(i.text); const on = S.lpick.has(i.id);
+    return `<div class="item${on ? " picked" : ""}"><button type="button" class="tick" data-lpick="${i.id}" aria-pressed="${on}"><span class="pickbox${on ? " on" : ""}" aria-hidden="true"></span><span class="tx">${esc(q.name)}</span>${q.qty ? `<span class="qty">${esc(q.qty)}</span>` : ""}${i.checked ? `<small class="mute">かご</small>` : ""}</button></div>`;
+  }
   if (S.edit === i.id) {
     return `<form class="item editing" data-editform="${i.id}"><input id="editin" value="${esc(i.text)}" maxlength="200" aria-label="品目の名前" enterkeyhint="done"><button type="submit" class="btn pri sm">直す</button><button type="button" class="btn danger sm" data-del="${i.id}">消す</button></form>`;
   }
@@ -909,10 +927,10 @@ async function pushAction(kind) {
 document.addEventListener("click", (e) => {
   const el = e.target.closest("button,[data-go],[data-sheetclose]"); if (!el) return;
   const d = el.dataset;
-  if (d.tab) { S.tab = d.tab; S.edit = ""; S.pick = null; render(); if (d.tab === "alert") loadPush(); window.scrollTo(0, 0); return; }
+  if (d.tab) { S.tab = d.tab; S.edit = ""; S.pick = null; S.lpick = null; render(); if (d.tab === "alert") loadPush(); window.scrollTo(0, 0); return; }
   if (d.go) { S.tab = d.go; render(); window.scrollTo(0, 0); return; }
-  if (d.cur) { S.cur = d.cur; store.set("cur", d.cur); S.edit = ""; S.whenFor = ""; render(); return; }
-  if (d.seg) { S.seg = d.seg; store.set("seg", d.seg); S.edit = ""; S.whenFor = ""; render(); return; }
+  if (d.cur) { S.cur = d.cur; store.set("cur", d.cur); S.edit = ""; S.whenFor = ""; S.lpick = null; render(); return; }
+  if (d.seg) { S.seg = d.seg; store.set("seg", d.seg); S.edit = ""; S.whenFor = ""; S.lpick = null; render(); return; }
   if (d.plan) { S.planning = d.plan === "1"; render(); window.scrollTo(0, 0); return; }
   if (d.plannew) { createList(`🛒 買い物 ${md(jstDay())}`); return; }
   if (d.pstore) { S.plan.store = d.pstore; savePlan(); render(); return; }
@@ -927,6 +945,10 @@ document.addEventListener("click", (e) => {
   if (d.oopen) { S.openOther = S.openOther === d.oopen ? "" : d.oopen; render(); return; }
   if (d.sort) { S.sort = d.sort; store.set("sort", d.sort); render(); return; }
   if (d.toggle) { toggle(d.toggle); return; }
+  if (d.lpickmode) { S.lpick = S.lpick ? null : new Set(); S.edit = ""; render(); return; }
+  if (d.lpick) { S.lpick.has(d.lpick) ? S.lpick.delete(d.lpick) : S.lpick.add(d.lpick); render(); return; }
+  if (d.lpickall) { const t = listOf(d.lpickall); const ids = (t?.items || []).map((i) => i.id); if (ids.every((id) => S.lpick.has(id))) S.lpick.clear(); else ids.forEach((id) => S.lpick.add(id)); render(); return; }
+  if (d.lpickdel) { const t = listOf(d.lpickdel); if (t) deletePicked(t); return; }
   if (d.edit) { S.edit = d.edit; render(); return; }
   if (d.del) { removeItem(d.del); return; }
   if (d.basket) { S.showBasket = !S.showBasket; render(); return; }
