@@ -20,7 +20,7 @@ const store = {
 
 const S = {
   tab: "list", lists: [], stock: [], today: "", loadedAt: "", cur: store.get("cur"), sort: store.get("sort", "aisle"),
-  showBasket: false, edit: "", sheet: null, stockCat: "", alertDays: 3, push: null, loading: false,
+  showBasket: false, edit: "", sheet: null, pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
   seg: store.get("seg", "usual"), templates: [], templateErr: "", planning: false, whenFor: "", openOther: "", wantList: "",
   plan: { counts: {}, extra: [], at: "", store: "", ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
 };
@@ -387,6 +387,28 @@ async function restock(id, btn) {
     toast(`「${x.name}」を補充しました${x.left != null ? `（${leftTx(x.left)}）` : ""}`);
   } catch (err) { setSync("err"); if (btn) btn.disabled = false; toast(`記録できませんでした：${err.message}`); }
 }
+// ---------- 補充：選んでまとめて操作 ----------
+async function bulk(kind, btn) {
+  const ids = [...(S.pick || [])]; const xs = S.stock.filter((x) => ids.includes(x.id));
+  if (!xs.length) { toast("品を選んでください"); return; }
+  if (kind === "trash" && !confirm(`${xs.length}品を在庫から消しますか？\n（Notion のゴミ箱に入り、30日はそこから戻せます）`)) return;
+  btn.disabled = true; let ok = 0;
+  for (const x of xs) {
+    btn.textContent = `${ok + 1}/${xs.length}…`;
+    try {
+      if (kind === "list") { if (!x.open?.length && (await toList(x.id))) ok++; else if (x.open?.length) ok++; }
+      else if (kind === "restock") { await api("POST", `/api/stock/${x.id}/restocked`).then((res) => { S.lists = S.lists.filter((t) => !res.done.includes(t.id)); Object.assign(x, res.stock); }); ok++; }
+      else if (kind === "trash") { await api("DELETE", `/api/stock/${x.id}`); S.stock = S.stock.filter((s) => s.id !== x.id); ok++; }
+    } catch (err) { toast(`「${x.name}」：${err.message}`); }
+  }
+  S.pick = null; saveSnap(); setSync("ok"); render();
+  toast(`${ok}品を${{ list: "補充リストに入れました", restock: "補充した記録にしました", trash: "消しました（Notion のゴミ箱から戻せます）" }[kind]}`);
+}
+
+// Google で調べる（新しいタブで開く。キーや設定は要らない）
+const googleUrl = (q, images = false) => `https://www.google.com/search?q=${encodeURIComponent(q)}${images ? "&tbm=isch" : ""}`;
+const googleBtns = (q) => (q ? `<a class="btn ghost sm" href="${esc(googleUrl(q))}" target="_blank" rel="noopener">🔎 Google</a><a class="btn ghost sm" href="${esc(googleUrl(q, true))}" target="_blank" rel="noopener">🖼 画像検索</a>` : "");
+
 // ---------- 在庫を直す・登録する（下から出るシート） ----------
 const CAT_ICON = { 日用品: "🧻", 消耗品: "🧽", 食品: "🍚", 育児: "👶", サプリ: "💊", 美容: "🧴" };
 const thumb = (x, cls = "thumb") => (x.image ? `<img class="${cls}" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${cls} ph',textContent:'${CAT_ICON[x.cat] || "📦"}'}))">` : `<span class="${cls} ph">${CAT_ICON[x.cat] || "📦"}</span>`);
@@ -413,6 +435,7 @@ function updSheet() {
   const x = S.stock.find((s) => s.id === S.sheet.id);
   $("#shper").textContent = perText(S.sheet, x);
   $("[data-sheetimg]").disabled = !S.sheet.link;
+  $("#glinks").innerHTML = googleBtns(S.sheet.name || S.sheet.jan);
 }
 function renderSheet() {
   const d = S.sheet; const el = $("#sheet");
@@ -422,6 +445,7 @@ function renderSheet() {
     <div class="sh-top">${thumb({ image: d.image, cat: d.cat }, "big")}
       <div class="sh-img"><input name="image" type="url" inputmode="url" placeholder="画像の URL（自動でも入る）" value="${esc(d.image)}">
       <button type="button" class="btn sm" data-sheetimg="1" ${d.link ? "" : "disabled"}>🖼 商品ページから画像を取る</button></div></div>
+    <div class="glinks" id="glinks">${googleBtns(d.name || d.jan)}</div>
     <label>名前<input name="name" required maxlength="100" value="${esc(d.name)}" autocomplete="off"></label>
     <div class="row2"><label>カテゴリ<select name="cat"><option value="">—</option>${CATS.map((c) => `<option ${c === d.cat ? "selected" : ""}>${c}</option>`).join("")}</select></label>
       <label>バーコード（JAN）<span class="inrow"><input name="jan" inputmode="numeric" maxlength="13" value="${esc(d.jan)}" placeholder="13桁"><button type="button" class="btn sm" data-scanjan="1" aria-label="バーコードを読む">📷</button></span></label></div>
@@ -550,7 +574,7 @@ async function onBarcode(code) {
   const pre = { jan: code, name: info.name || "", image: info.image || "", link: info.url || "" };
   scan.pre = pre;
   scanCard(`<div class="sc-row">${thumb({ image: pre.image })}<div><b>${esc(pre.name || "名前が分からない商品")}</b><small>新しい商品・バーコード ${code}${info.configured === false ? "（名前の検索は未設定）" : ""}</small></div></div>
-    <div class="row-end">${pre.name ? `<button type="button" class="btn pri sm" data-scanreg="list">登録して補充リストへ</button>` : ""}<button type="button" class="btn sm" data-scanreg="edit">${pre.name ? "直して登録" : "名前を入れて登録"}</button><button type="button" class="btn ghost sm" data-scanagain="1">読み直す</button></div>`);
+    <div class="row-end">${pre.name ? `<button type="button" class="btn pri sm" data-scanreg="list">登録して補充リストへ</button>` : ""}<button type="button" class="btn sm" data-scanreg="edit">${pre.name ? "直して登録" : "名前を入れて登録"}</button><a class="btn ghost sm" href="${esc(googleUrl(pre.name || code))}" target="_blank" rel="noopener">🔎 Google</a><button type="button" class="btn ghost sm" data-scanagain="1">読み直す</button></div>`);
 }
 function foundCard(x, why) {
   scan.found = true; scan.hit = x.id;
@@ -571,7 +595,7 @@ async function guess() {
     scan.pre = { name: r.name, cat: r.category };
     $("#scanmsg").textContent = "写真から予測しました";
     scanCard(`<div class="sc-row">${thumb({ cat: r.category })}<div><b>${esc(r.name)}</b><small>写真からの予測・在庫にない品</small></div></div>
-      <div class="row-end"><button type="button" class="btn pri sm" data-scanreg="list">登録して補充リストへ</button><button type="button" class="btn sm" data-scanreg="edit">直して登録</button><button type="button" class="btn ghost sm" data-scanguess="1">もう一度</button></div>`);
+      <div class="row-end"><button type="button" class="btn pri sm" data-scanreg="list">登録して補充リストへ</button><button type="button" class="btn sm" data-scanreg="edit">直して登録</button><a class="btn ghost sm" href="${esc(googleUrl(r.name))}" target="_blank" rel="noopener">🔎 Google</a><button type="button" class="btn ghost sm" data-scanguess="1">もう一度</button></div>`);
   } catch (err) { if (scan) $("#scanmsg").textContent = `予測できませんでした（${err.message}）。バーコードを写してください`; } finally { if (scan) scan.busy = false; }
 }
 async function scanRegister(how, btn) {
@@ -647,7 +671,7 @@ function listView(t, ph) {
   const todo = items.filter((i) => !i.checked); const basket = items.filter((i) => i.checked);
   const when = `<div class="when"><span>⏰ ${t.at ? `<b>${esc(fmtAt(t.at))}</b>` : `<span class="mute">時刻なし</span>`}</span><button type="button" class="btn ghost sm" data-whenopen="${t.id}">${t.at ? "変える" : "時刻を決める"}</button></div>${S.whenFor === t.id ? whenChips(t.id, t.at) : ""}`;
   const tools = `<div class="ltools"><div class="seg"><button type="button" data-sort="aisle" aria-pressed="${S.sort === "aisle"}">売り場順</button><button type="button" data-sort="added" aria-pressed="${S.sort === "added"}">入れた順</button></div>
-    <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
+    <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${basket.length ? `<button type="button" class="btn ghost sm" data-clear="${t.id}">🗑 チェック済み${basket.length}品を消す</button>` : ""}${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
   const prog = items.length ? `<div class="prog"><i style="width:${Math.round((basket.length / items.length) * 100)}%"></i></div>` : "";
   const body = todo.length ? groups(todo) : `<div class="empty small">${items.length ? "🎉 ぜんぶかごに入りました" : "上の欄から入れてください。「、」で区切るとまとめて入ります"}</div>`;
   const bk = basket.length ? `<div class="basket"><button type="button" class="bhead" data-basket="1" aria-expanded="${S.showBasket}">🧺 かごの中 ${basket.length}品 <span>${S.showBasket ? "▲" : "▼"}</span></button>${S.showBasket ? basket.map(itemRow).join("") : ""}</div>` : "";
@@ -759,15 +783,19 @@ function renderStock() {
   const rows = items.map((x) => {
     const pct = x.left != null && x.days ? Math.max(0, Math.min(100, Math.round((x.left / x.days) * 100))) : null;
     const sub = x.left == null ? (x.use ? "買った日が未入力" : "使う数が未入力") : `${md(x.end)}まで${x.days ? `・1個${x.days}日` : ""}`;
-    const act = x.open?.length ? `<button type="button" class="ib ok" data-restock="${x.id}" aria-label="「${esc(x.name)}」を補充した" title="補充した">✓</button>`
+    const on = S.pick?.has(x.id);
+    const act = S.pick ? `<span class="pickbox${on ? " on" : ""}" aria-hidden="true"></span>`
+      : x.open?.length ? `<button type="button" class="ib ok" data-restock="${x.id}" aria-label="「${esc(x.name)}」を補充した" title="補充した">✓</button>`
       : `<button type="button" class="ib" data-tolist="${x.id}" aria-label="「${esc(x.name)}」を補充リストへ" title="補充リストへ">🛒</button>`;
-    return `<div class="srow" style="--c:${leftColor(x)}"><button type="button" class="sm-main" data-sheet="${x.id}">${thumb(x)}<span class="sm-tx"><span class="nm">${esc(x.name)}</span><span class="sub"><b>${esc(leftTx(x.left) || "—")}</b>${x.open?.length ? `<i class="tag">リスト済</i>` : ""} ${esc(sub)}</span>${pct != null ? `<span class="gauge"><i style="width:${pct}%"></i></span>` : ""}</span></button>${act}</div>`;
+    return `<div class="srow${on ? " picked" : ""}" style="--c:${leftColor(x)}"><button type="button" class="sm-main" ${S.pick ? `data-pick="${x.id}" aria-pressed="${!!on}"` : `data-sheet="${x.id}"`}>${thumb(x)}<span class="sm-tx"><span class="nm">${esc(x.name)}</span><span class="sub"><b>${esc(leftTx(x.left) || "—")}</b>${x.open?.length ? `<i class="tag">リスト済</i>` : ""} ${esc(sub)}</span>${pct != null ? `<span class="gauge"><i style="width:${pct}%"></i></span>` : ""}</span></button>${act}</div>`;
   }).join("");
   return `<div class="stats1"><span><b style="color:var(--bad)">${out}</b>切れ</span><span><b style="color:var(--warn)">${week}</b>${SOON_DAYS}日内</span><span><b>${listed}</b>リスト済</span><span><b>${all.length}</b>全部</span></div>
     <div class="stock-acts"><button type="button" class="btn pri" data-scan="add">📷 スキャンして追加</button><button type="button" class="btn" data-sheet="new">＋ 登録</button></div>
     ${soon || noImg ? `<div class="row-end">${soon ? `<button type="button" class="btn sm" data-alltolist="1">切れそうな${soon}品をまとめてリストへ</button>` : ""}${noImg ? `<button type="button" class="btn ghost sm" data-fillimg="1">🖼 画像をまとめて取る（${noImg}品）</button>` : ""}</div>` : ""}
     ${cats.length ? `<div class="chips"><button type="button" class="chip" data-cat="" aria-pressed="${!S.stockCat}">すべて</button>${cats.map((c) => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${S.stockCat === c}">${CAT_ICON[c] || ""}${esc(c)}</button>`).join("")}${unset ? `<button type="button" class="chip" data-cat="未設定" aria-pressed="${S.stockCat === "未設定"}">⚙️ 未設定 ${unset}</button>` : ""}</div>` : ""}
+    <div class="ltools pickbar"><span class="mute">${items.length}品</span>${S.pick ? `<button type="button" class="btn ghost sm" data-pickall="1">${items.every((x) => S.pick.has(x.id)) ? "全部外す" : "全部選ぶ"}</button>` : ""}<button type="button" class="btn ${S.pick ? "pri" : "ghost"} sm" data-pickmode="1">${S.pick ? "選ぶのをやめる" : "☑ 選んでまとめて"}</button></div>
     <div class="card list">${rows || `<div class="empty small">${S.loading ? "読みこみ中…" : "在庫の登録がありません"}</div>`}</div>
+    ${S.pick ? `<div class="card bulkbar"><b>${S.pick.size}品を選択中</b><div class="row-end"><button type="button" class="btn sm" data-bulk="list" ${S.pick.size ? "" : "disabled"}>🛒 補充リストへ</button><button type="button" class="btn ok sm" data-bulk="restock" ${S.pick.size ? "" : "disabled"}>✓ 補充した</button><button type="button" class="btn danger sm" data-bulk="trash" ${S.pick.size ? "" : "disabled"}>🗑 消す</button></div></div>` : ""}
     <p class="note pad">行をタップで直す（使う頻度・商品の変更・画像・バーコード）。🛒 は補充タスクを作り、✓ で済みにすると最終補充日が今日になります。</p>`;
 }
 
@@ -837,7 +865,7 @@ async function pushAction(kind) {
 document.addEventListener("click", (e) => {
   const el = e.target.closest("button,[data-go],[data-sheetclose]"); if (!el) return;
   const d = el.dataset;
-  if (d.tab) { S.tab = d.tab; S.edit = ""; render(); if (d.tab === "alert") loadPush(); window.scrollTo(0, 0); return; }
+  if (d.tab) { S.tab = d.tab; S.edit = ""; S.pick = null; render(); if (d.tab === "alert") loadPush(); window.scrollTo(0, 0); return; }
   if (d.go) { S.tab = d.go; render(); window.scrollTo(0, 0); return; }
   if (d.cur) { S.cur = d.cur; store.set("cur", d.cur); S.edit = ""; S.whenFor = ""; render(); return; }
   if (d.seg) { S.seg = d.seg; store.set("seg", d.seg); S.edit = ""; S.whenFor = ""; render(); return; }
@@ -881,6 +909,14 @@ document.addEventListener("click", (e) => {
   if (d.scanreg) { scanRegister(d.scanreg, el); return; }
   if (d.scanact) { scanAct(d.scanact); return; }
   if (d.fillimg) { fillImages(el); return; }
+  if (d.pickmode) { S.pick = S.pick ? null : new Set(); render(); return; }
+  if (d.pick) { S.pick.has(d.pick) ? S.pick.delete(d.pick) : S.pick.add(d.pick); render(); return; }
+  if (d.pickall) {
+    const vis = S.stock.filter((x) => !S.stockCat || (S.stockCat === "未設定" ? x.left == null : x.cat === S.stockCat)).map((x) => x.id);
+    if (vis.every((id) => S.pick.has(id))) vis.forEach((id) => S.pick.delete(id)); else vis.forEach((id) => S.pick.add(id));
+    render(); return;
+  }
+  if (d.bulk) { bulk(d.bulk, el); return; }
   if (d.cat !== undefined && el.classList.contains("chip")) { S.stockCat = d.cat; render(); return; }
   if (d.push) { pushAction(d.push); return; }
   if (d.logout) { memoryKey = ""; store.set(KEY_STORAGE, ""); showLogin(); return; }
@@ -907,7 +943,7 @@ document.addEventListener("change", (e) => {
 document.addEventListener("keydown", (e) => { if (e.target.id === "editin" && e.key === "Escape") { S.edit = ""; render(); } });
 $("#reload").addEventListener("click", () => load());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && scan) closeScanner(); });
-document.addEventListener("input", (e) => { if (S.sheet && e.target.closest("#sheetform") && ["use", "size", "link"].includes(e.target.name)) updSheet(); });
+document.addEventListener("input", (e) => { if (S.sheet && e.target.closest("#sheetform") && ["use", "size", "link", "name", "jan"].includes(e.target.name)) updSheet(); });
 document.addEventListener("change", (e) => { if (S.sheet && e.target.closest("#sheetform") && e.target.name === "freq") updSheet(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && memoryKey && Date.now() - Date.parse(S.loadedAt || 0) > 60e3) load({ quiet: true }); });
 

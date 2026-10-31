@@ -142,6 +142,7 @@ beforeEach(() => {
     if ((m = path.match(/^\/pages\/([^/]+)$/))) {
       const p = pages.get(m[1]); if (!p) return nf();
       if (init.method === "PATCH") for (const [k, v] of Object.entries(body.properties || {})) p.properties[k] = { ...p.properties[k], ...v };
+      if (init.method === "PATCH" && body.in_trash) p.in_trash = true;
       return ok(p);
     }
     if (path === "/pages" && init.method === "POST") {
@@ -439,4 +440,11 @@ test("写真から商品を当てる（Workers AI。在庫の中の同じ品を�
   env.AI = { run: async () => ({ response: { name: "見本シャンプー", category: "美容", match: "" } }) }; // 読み取り済みで返ることもある
   assert.deepEqual((await api("POST", "/api/identify", { image: img, names: [] })).data, { name: "見本シャンプー", category: "美容", match: "" });
   assert.equal((await api("POST", "/api/identify", { image: "nope" })).status, 400);
+});
+
+test("在庫の品を消す（ゴミ箱へ）。DB_Daily の行だけ", async () => {
+  assert.equal((await api("DELETE", `/api/stock/${D3}`)).status, 200);
+  assert.equal(pages.get(D3).in_trash, true);
+  assert.equal((await api("DELETE", `/api/stock/${L1}`)).status, 403);
+  assert.ok(!pages.get(L1).in_trash);
 });

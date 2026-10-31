@@ -52,6 +52,7 @@ export default {
       if (stock?.[2] === "refill" && m === "POST") return json(await refill(notion, env, stock[1]));
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1]));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
+      if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
       if (p === "/api/lookup" && m === "POST") return json(await lookupPage((await readJson(request))?.url));
       if (jan && m === "GET") return json(await lookupJan(env, jan[1]));
       if (p === "/api/identify" && m === "POST") return json(await identify(env, await readJson(request)));
@@ -536,6 +537,13 @@ async function editStock(notion, env, id, body) {
   if (!Object.keys(props).length) throw httpError(400, "変える内容がありません");
   const after = await notion("PATCH", `/pages/${normalizeId(page.id)}`, { properties: props });
   return { stock: stockOf(after, todayJst()) };
+}
+
+// 在庫の品を消す（Notion のゴミ箱へ。30日はゴミ箱から戻せる）。開いている補充タスクは残す
+async function trashStock(notion, env, id) {
+  const page = await stockPage(notion, env, id);
+  await notion("PATCH", `/pages/${normalizeId(page.id)}`, { in_trash: true });
+  return { trashed: normalizeId(page.id) };
 }
 
 // ---------- 商品ページ・バーコード・写真から商品を調べる ----------

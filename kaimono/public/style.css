@@ -266,4 +266,14 @@ body.modal { overflow: hidden; }
 .sc-row small { color: var(--mute); font-size: 12px; }
 .scan-card .row-end { margin: 0; }
 
+.glinks { display: flex; gap: 6px; flex-wrap: wrap; }
+.glinks:empty { display: none; }
+.pickbar { padding: 0 2px 6px; }
+.pickbox { flex: none; width: 24px; height: 24px; margin: 0 8px; border-radius: 7px; border: 2px solid var(--pri); display: grid; place-items: center; }
+.pickbox.on { background: var(--pri); }
+.pickbox.on::after { content: "✓"; color: var(--pri-ink); font-size: 14px; font-weight: 700; }
+.srow.picked { background: var(--pri-soft); }
+.bulkbar { position: sticky; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 3; display: flex; flex-direction: column; gap: 6px; }
+.bulkbar .row-end { margin: 0; }
+
 [hidden] { display: none !important; }
