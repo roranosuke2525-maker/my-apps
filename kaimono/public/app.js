@@ -9,6 +9,8 @@ const SOON_DAYS = 7; // 補充の画面で「そろそろ」に数える日数
 const KEY_STORAGE = "key";
 const QUICK = "⚡ ちょい買い";
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
+const REMIND_CHOICES = [[1440, "前日"], [180, "3時間前"], [60, "1時間前"], [30, "30分前"], [10, "10分前"], [0, "ちょうど"]];
+const REMIND_DEFAULT = [30, 0];
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -22,7 +24,8 @@ const S = {
   tab: "list", lists: [], stock: [], today: "", loadedAt: "", cur: store.get("cur"), sort: store.get("sort", "aisle"),
   showBasket: false, edit: "", sheet: null, lpick: null, // lpick：リストで選んで消す品の id pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
   seg: store.get("seg", "usual"), templates: [], templateErr: "", planning: false, whenFor: "", openOther: "", wantList: "",
-  plan: { counts: {}, extra: [], at: "", store: "", ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
+  reminders: {}, // タスク id → 何分前に知らせるか（決めていないタスクは REMIND_DEFAULT）
+  plan: { counts: {}, extra: [], at: "", store: "", before: [30, 0], ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
 };
 let memoryKey = store.get(KEY_STORAGE);
 let Q = store.json("queue", []); // 送る前の書き込み
@@ -109,7 +112,7 @@ async function load({ quiet = false } = {}) {
   if (!quiet) setStatus("Notion から読みこみ中…");
   try {
     const st = await api("GET", "/api/state");
-    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "" });
+    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "", reminders: st.reminders || {} });
     if (S.wantList) { const t = listOf(S.wantList); if (t) { S.seg = kindOf(t); S.cur = t.id; S.tab = "list"; } S.wantList = ""; }
     for (const t of S.lists.filter((x) => kindOf(x) !== "other")) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
     saveSnap(); saveHist();
@@ -296,6 +299,27 @@ function whenOptions() {
   return opts.map(([label, d, h]) => [label, `${d}T${String(h).padStart(2, "0")}:00:00+09:00`]).filter(([, at]) => Date.parse(at) > Date.now() + 5 * 60e3)
     .filter(([, at], k, a) => a.findIndex(([, b]) => b === at) === k);
 }
+const remindsOf = (target) => (target === "plan" ? S.plan.before : S.reminders[target]) ?? REMIND_DEFAULT;
+const remindText = (b) => (b.length ? REMIND_CHOICES.filter(([m]) => b.includes(m)).map(([, n]) => n).join("・") : "知らせない");
+// タスクごとの「いつ買う・何分前に知らせる」の行と、開いたときの選択肢
+function whenBar(target, at, { open = S.whenFor === target, label = "" } = {}) {
+  const b = remindsOf(target);
+  const head = `<div class="when"><span>⏰ ${label}${at ? `<b>${esc(fmtAt(at))}</b>${`<small class="rem">🔔 ${esc(remindText(b))}</small>`}` : `<span class="mute">時刻なし</span>`}</span>${target === "plan" ? "" : `<button type="button" class="btn ghost sm" data-whenopen="${target}">${at ? "変える" : "時刻を決める"}</button>`}</div>`;
+  if (!open) return head;
+  const noPush = S.push && !S.push.subscribed && !S.push.unsupported;
+  return `${head}<div class="whenpanel">${whenChips(target, at)}
+    <div class="remrow"><span class="mute">🔔 知らせる</span>${REMIND_CHOICES.map(([m, n]) => `<button type="button" class="chip${b.includes(m) ? " on" : ""}" data-remind="${target}|${m}" aria-pressed="${b.includes(m)}">${n}</button>`).join("")}</div>
+    ${noPush ? `<p class="note">この端末は通知がオフです。🔔 通知タブでオンにすると届きます</p>` : ""}</div>`;
+}
+async function toggleRemind(target, m) {
+  const cur = remindsOf(target);
+  const next = cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m].sort((a, b) => b - a);
+  if (target === "plan") { S.plan.before = next; savePlan(); render(); return; }
+  const prev = S.reminders[target];
+  S.reminders[target] = next; render();
+  try { await api("PUT", `/api/lists/${target}/remind`, { before: next }); saveSnap(); toast(next.length ? `このタスクは ${remindText(next)} に知らせます` : "このタスクは知らせません"); }
+  catch (err) { if (prev) S.reminders[target] = prev; else delete S.reminders[target]; render(); toast(`変えられませんでした：${err.message}`); }
+}
 function whenChips(target, cur) {
   return `<div class="whens">${whenOptions().map(([label, at]) => `<button type="button" class="chip${cur === at ? " on" : ""}" data-when="${target}|${at}">${esc(label)}</button>`).join("")}
     <label class="chip pick">日時を選ぶ<input type="datetime-local" step="900" data-whenpick="${target}" value="${cur ? cur.slice(0, 16) : ""}"></label>
@@ -305,12 +329,12 @@ async function setWhen(target, at) {
   if (target === "plan") { S.plan.at = at; savePlan(); render(); return; }
   const t = listOf(target); if (!t) return;
   const prev = t.at;
-  t.at = at || null; S.whenFor = ""; render();
+  t.at = at || null; render();
   try {
     setSync("busy");
     await api("PATCH", `/api/lists/${t.id}/when`, { at: at || null });
     saveSnap(); setSync("ok");
-    toast(at ? `${fmtAt(at)} に知らせます（30分前と時刻ちょうど）` : "時刻を外しました");
+    toast(at ? `${fmtAt(at)}・🔔 ${remindText(remindsOf(t.id))}` : "時刻を外しました");
   } catch (err) { t.at = prev; setSync("err"); render(); toast(`時刻を入れられませんでした：${err.message}`); }
 }
 
@@ -347,8 +371,13 @@ async function createPlan(btn) {
     S.lists.unshift(res.list);
     S.cur = res.list.id; store.set("cur", S.cur); S.planning = false;
     texts.forEach((t) => remember(A.splitQty(t).name));
-    S.plan = { counts: {}, extra: [], at: "", store: S.plan.store }; savePlan(); saveHist(); saveSnap(); setSync("ok"); render();
-    toast(`「${name}」を作りました（${texts.length}品${res.list.at ? `・${fmtAt(res.list.at)}に知らせます` : ""}）`);
+    const before = S.plan.before;
+    if (res.list.at && JSON.stringify(before) !== JSON.stringify(REMIND_DEFAULT)) {
+      S.reminders[res.list.id] = before;
+      api("PUT", `/api/lists/${res.list.id}/remind`, { before }).catch((err) => toast(`知らせ方を保存できませんでした：${err.message}`));
+    }
+    S.plan = { counts: {}, extra: [], at: "", store: S.plan.store, before }; savePlan(); saveHist(); saveSnap(); setSync("ok"); render();
+    toast(`「${name}」を作りました（${texts.length}品${res.list.at ? `・${fmtAt(res.list.at)} 🔔 ${remindText(before)}` : ""}）`);
   } catch (err) { btn.disabled = false; setSync("err"); toast(`作れませんでした：${err.message}`); }
 }
 async function addToTemplate(k, btn) {
@@ -722,7 +751,7 @@ function renderQuick() {
 function listView(t, ph) {
   const items = t.items || [];
   const todo = items.filter((i) => !i.checked); const basket = items.filter((i) => i.checked);
-  const when = `<div class="when"><span>⏰ ${t.at ? `<b>${esc(fmtAt(t.at))}</b>` : `<span class="mute">時刻なし</span>`}</span><button type="button" class="btn ghost sm" data-whenopen="${t.id}">${t.at ? "変える" : "時刻を決める"}</button></div>${S.whenFor === t.id ? whenChips(t.id, t.at) : ""}`;
+  const when = whenBar(t.id, t.at);
   const tools = `<div class="ltools"><div class="seg"><button type="button" data-sort="aisle" aria-pressed="${S.sort === "aisle"}">売り場順</button><button type="button" data-sort="added" aria-pressed="${S.sort === "added"}">入れた順</button></div>
     <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${basket.length && !S.lpick ? `<button type="button" class="btn ghost sm" data-clear="${t.id}">🗑 チェック済み${basket.length}品を消す</button>` : ""}${items.length ? `<button type="button" class="btn ${S.lpick ? "pri" : "ghost"} sm" data-lpickmode="1">${S.lpick ? "選ぶのをやめる" : "☑ 選んで消す"}</button>` : ""}${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
   const prog = items.length ? `<div class="prog"><i style="width:${Math.round((basket.length / items.length) * 100)}%"></i></div>` : "";
@@ -760,7 +789,7 @@ function renderPlan(canBack) {
     <div class="list">${rows}</div>
     ${extra ? `<div class="ghead"><span>✍️</span>今回だけ</div>${extra}` : ""}
     <form class="addbox" id="planextra"><input id="pextra" type="text" maxlength="200" autocomplete="off" enterkeyhint="done" placeholder="テンプレにない品（例：ケーキ）" aria-label="テンプレにない品"><button type="submit" class="btn">足す</button></form></div>
-    <div class="card pfoot"><div class="when"><span>⏰ いつ買う？ ${S.plan.at ? `<b>${esc(fmtAt(S.plan.at))}</b>` : `<span class="mute">時刻なし</span>`}</span></div>${whenChips("plan", S.plan.at)}
+    <div class="card pfoot">${whenBar("plan", S.plan.at, { open: true, label: "いつ買う？ " })}
     <div class="row-end">${picked ? `<button type="button" class="btn ghost" data-planclear="1">選び直す</button>` : ""}<button type="button" class="btn pri" data-plancreate="1" ${picked ? "" : "disabled"}>${picked}品でリストを作る</button></div></div>`;
 }
 
@@ -774,6 +803,7 @@ function renderOther() {
       ${t.next ? `<div class="osub">次：${esc(t.next)}</div>` : ""}
       ${items.length ? `<button type="button" class="oprog" data-oopen="${t.id}"><span class="prog"><i style="width:${Math.round((done / items.length) * 100)}%"></i></span><small>${done}/${items.length} ${open ? "▲" : "▼"}</small></button>` : ""}
       ${open && items.length ? `<div class="list">${items.map(itemRow).join("")}</div>` : ""}
+      ${whenBar(t.id, t.at)}
       <div class="oacts">${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener">Notion ↗</a><button type="button" class="btn ok sm" data-finish="${t.id}">✓ 済み</button></div></div>`;
   };
   return rest.map(card).join("") + (refills.length ? `<h3 class="sec">📦 補充（在庫から）</h3>${renderRefills(refills)}` : "");
@@ -801,7 +831,7 @@ function itemRow(i) {
 function renderRefills(ts) {
   return `<p class="note pad">買えたら ✓ で済みにすると、DB_Daily の最終補充日が今日になります。</p><div class="card list">${ts.map((t) => {
     const x = S.stock.find((s) => t.refill.includes(s.id));
-    return `<div class="item"><button type="button" class="tick" data-finish="${t.id}" aria-label="「${esc(t.name)}」を買えた"><span class="box" aria-hidden="true"></span><span class="tx">${esc(t.name.replace(/^補充:/, ""))}</span>${x ? `<span class="qty" style="color:${leftColor(x)}">${esc(leftTx(x.left))}</span>` : ""}</button>${t.link ? `<a class="more" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="注文ページを開く">🛒</a>` : ""}</div>`;
+    return `<div class="item"><button type="button" class="tick" data-finish="${t.id}" aria-label="「${esc(t.name)}」を買えた"><span class="box" aria-hidden="true"></span><span class="tx">${esc(t.name.replace(/^補充:/, ""))}</span>${x ? `<span class="qty" style="color:${leftColor(x)}">${esc(leftTx(x.left))}</span>` : ""}</button><button type="button" class="more${t.at ? " on" : ""}" data-whenopen="${t.id}" aria-label="「${esc(t.name)}」の時刻と通知">⏰</button>${t.link ? `<a class="more" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="注文ページを開く">🛒</a>` : ""}</div>${t.at || S.whenFor === t.id ? `<div class="rwhen">${whenBar(t.id, t.at)}</div>` : ""}`;
   }).join("")}</div>`;
 }
 
@@ -880,7 +910,7 @@ function pushForm() {
   return `<label>知らせる時刻<select name="hour">${Array.from({ length: 18 }, (_, k) => k + 5).map((h) => `<option value="${h}" ${h === hour ? "selected" : ""}>${h}:00</option>`).join("")}</select></label>
     <label>切れる何日前から<select name="days">${[[0, "切れた日から"], [1, "1日前"], [2, "2日前"], [3, "3日前"], [5, "5日前"], [7, "7日前"]].map(([d, n]) => `<option value="${d}" ${d === days ? "selected" : ""}>${n}</option>`).join("")}</select></label>
     <label class="check"><input type="checkbox" name="list" ${p.list ? "checked" : ""}> 在庫と一緒に、リストに残っている品目も知らせる</label>
-    <label class="check"><input type="checkbox" name="remind" ${p.remind !== false ? "checked" : ""}> 買い物の時刻を知らせる（30分前と時刻ちょうど）</label>`;
+    <label class="check"><input type="checkbox" name="remind" ${p.remind !== false ? "checked" : ""}> 買い物の時刻を知らせる（タスクごとに決めた何分前に）</label>`;
 }
 function renderAlert() {
   const p = S.push;
@@ -891,7 +921,7 @@ function renderAlert() {
   else if (p.subscribed) body = `<p class="ok-line">✅ この端末に通知します（在庫は毎日 ${p.hour}:00${p.remind !== false ? "・買い物の時刻" : ""}）</p><form id="pushform" class="form">${pushForm()}<div class="row-end"><button type="button" class="btn ghost" data-push="off">オフにする</button><button type="button" class="btn" data-push="test">いま試す</button><button type="submit" class="btn pri">保存</button></div></form>`;
   else body = `<form id="pushform" class="form">${pushForm()}<div class="row-end"><button type="submit" class="btn pri">通知をオンにする</button></div></form>${p.err ? `<p class="note err">${esc(p.err)}</p>` : ""}`;
   const soon = soonStock();
-  return `<div class="card form"><h2>🔔 通知</h2><p class="note">・在庫：DB_Daily の切れる予定日が近い品（補充タスクがまだないもの）を毎日決めた時刻に。アイコンのバッジにも件数が出ます<br>・買い物の時刻：リストに決めた時刻の30分前と、時刻ちょうどに</p>${body}</div>
+  return `<div class="card form"><h2>🔔 通知</h2><p class="note">・在庫：DB_Daily の切れる予定日が近い品（補充タスクがまだないもの）を毎日決めた時刻に。アイコンのバッジにも件数が出ます<br>・買い物の時刻：各タスクの ⏰ で決めた時刻に、そのタスクで選んだタイミング（前日・1時間前・30分前・ちょうど など。決めていなければ30分前とちょうど）で</p>${body}</div>
     <div class="card"><h2>いま知らせる内容</h2>${soon.length ? `<ul class="plain">${soon.map((x) => `<li><span style="color:${leftColor(x)}">●</span> ${esc(x.name)}<small>${esc(leftTx(x.left))}</small></li>`).join("")}</ul>` : `<p class="note">切れそうな在庫はありません（${S.alertDays}日前まで）</p>`}</div>
     <div class="card"><h2>この端末</h2><p class="note">合言葉はこの端末にだけ保存しています。</p><div class="row-end"><button type="button" class="btn ghost" data-logout="1">合言葉を消す</button></div></div>`;
 }
@@ -940,6 +970,7 @@ document.addEventListener("click", (e) => {
   if (d.tpladd) { addToTemplate(+d.tpladd, el); return; }
   if (d.planclear) { S.plan.counts = {}; S.plan.extra = []; savePlan(); render(); return; }
   if (d.plancreate) { createPlan(el); return; }
+  if (d.remind) { const [target, m] = d.remind.split("|"); toggleRemind(target, +m); return; }
   if (d.whenopen) { S.whenFor = S.whenFor === d.whenopen ? "" : d.whenopen; render(); return; }
   if (d.when !== undefined && d.when.includes("|")) { const [target, at] = d.when.split("|"); setWhen(target, at); return; }
   if (d.oopen) { S.openOther = S.openOther === d.oopen ? "" : d.oopen; render(); return; }

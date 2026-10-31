@@ -384,15 +384,15 @@ test("買い物のリマインド：30分前と時刻ちょうどに1度ずつ�
   const t0 = Date.parse(at);
   await runAlerts(env, t0 - 31 * 60e3);
   assert.equal(pushes.length, 0);
-  await runAlerts(env, t0 - 25 * 60e3); // 9:35 の回 → 30分前の知らせ
+  await runAlerts(env, t0 - 28 * 60e3); // 9:32 の回 → 30分前の知らせ
   assert.equal(pushes.length, 1);
   assert.equal(pushes[0].url, ENDPOINT);
   const m1 = await decrypt(new Uint8Array(pushes[0].body));
   assert.equal(m1.title, "🛒 10:00 から買い物（あと30分）");
   assert.equal(m1.body, "🛒 ヤオコー 10/31：1品（もやし 3袋）");
-  await runAlerts(env, t0 - 20 * 60e3); // 同じ知らせは2度送らない
+  await runAlerts(env, t0 - 27 * 60e3); // 同じ知らせは2度送らない
   assert.equal(pushes.length, 1);
-  await runAlerts(env, t0 + 5 * 60e3);
+  await runAlerts(env, t0 + 2 * 60e3);
   assert.equal(pushes.length, 2);
   assert.equal((await decrypt(new Uint8Array(pushes[1].body))).title, "🛒 買い物の時間です（10:00）");
 });
@@ -464,4 +464,20 @@ test("写真から商品を当てる（ANTHROPIC_API_KEY があれば Claude）"
   assert.equal(sent.fallbacks, "default");
   assert.equal(sent.output_config.format.type, "json_schema");
   assert.equal(sent.messages[0].content[0].source.data, Buffer.from("fakejpeg").toString("base64"));
+});
+
+test("知らせ方はタスクごと：前日・1時間前などを選べる。空にすればそのタスクは知らせない", async () => {
+  const at = "2026-11-03T10:00:00+09:00";
+  pages.set(hex(80), task(hex(80), { name: "⚡ ちょい買い", at })); children[hex(80)] = [];
+  pages.set(hex(81), task(hex(81), { name: "🛒 ヤオコー 11/3", at })); children[hex(81)] = [];
+  await api("PUT", "/api/push", { subscription, hour: 3, days: 3 });
+  assert.deepEqual((await api("PUT", `/api/lists/${hex(80)}/remind`, { before: [0, 1440, 60, 999] })).data, { before: [1440, 60, 0] });
+  assert.deepEqual((await api("PUT", `/api/lists/${hex(81)}/remind`, { before: [] })).data, { before: [] });
+  assert.equal((await api("PUT", `/api/lists/${OTHER}/remind`, { before: [0] })).status, 403);
+  const st = (await api("GET", "/api/state")).data;
+  assert.deepEqual(st.reminders[hex(80)], [1440, 60, 0]);
+  const t0 = Date.parse(at);
+  for (const back of [1440, 60, 30, 0]) await runAlerts(env, t0 - back * 60e3 + 60e3);
+  const titles = await Promise.all(pushes.map(async (p) => (await decrypt(new Uint8Array(p.body))).title));
+  assert.deepEqual(titles, ["🛒 明日10:00 から買い物（前日のお知らせ）", "🛒 10:00 から買い物（あと1時間）", "🛒 買い物の時間です（10:00）"]); // 30分前は選んでいない・ヤオコーは知らせない
 });

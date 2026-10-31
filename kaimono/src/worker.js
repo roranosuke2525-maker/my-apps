@@ -20,8 +20,10 @@ const CLEAR_MAX = 40;
 const NAME_MAX = 100;
 const MAX_QUERY_PAGES = 3;
 const NEST_MAX = 12; // 入れ子の ToDo（「スーパー」の下の品目など）を読む親の数
-const REMIND_BEFORE = 30; // 買い物の時刻の何分前にも知らせるか
-const TICK_MIN = 15; // cron の間隔（分）
+// 買い物の時刻の何分前に知らせるか。タスクごとに選べる（KV の remcfg:<タスク> に保存。決めていないタスクは 30分前とちょうど）
+const REMIND_CHOICES = [0, 10, 30, 60, 180, 1440];
+const REMIND_DEFAULT = [30, 0];
+const TICK_MIN = 5; // cron の間隔（分）
 const PUSH_HOSTS = /(^|\.)push\.apple\.com$|^fcm\.googleapis\.com$|^android\.googleapis\.com$|(^|\.)push\.services\.mozilla\.com$|(^|\.)notify\.windows\.com$/;
 
 export default {
@@ -35,7 +37,7 @@ export default {
       const notion = notionClient(env);
       const p = url.pathname;
       const m = request.method;
-      const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when)$/i);
+      const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when|remind)$/i);
       const item = p.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
       const stock = p.match(/^\/api\/stock\/([0-9a-f-]{32,36})(?:\/(refill|restocked))?$/i);
       const jan = p.match(/^\/api\/jan\/(\d{8}|\d{12,13})$/);
@@ -46,6 +48,7 @@ export default {
       if (list?.[2] === "clear" && m === "POST") return json(await clearChecked(notion, env, list[1]));
       if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1]));
       if (list?.[2] === "when" && m === "PATCH") return json(await setWhen(notion, env, list[1], await readJson(request)));
+      if (list?.[2] === "remind" && m === "PUT") return json(await setRemind(notion, env, list[1], await readJson(request)));
       if (p === "/api/templates" && m === "POST") return json(await addTemplate(notion, env, await readJson(request)));
       if (item && m === "PATCH") return json(await updateItem(notion, env, item[1], await readJson(request)));
       if (item && m === "DELETE") return json(await removeItem(notion, env, item[1]));
@@ -290,6 +293,7 @@ async function loadState(notion, env) {
     lists, stock, today, loadedAt: new Date().toISOString(),
     templates: (templates.ok || []).map(templateOf).filter((x) => x.name),
     templateErr: templates.err || "",
+    reminders: await remindMap(env, lists.map((t) => t.id)),
   };
 }
 
@@ -412,6 +416,23 @@ function whenOf(v) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?\+09:00$/.test(s) || Number.isNaN(Date.parse(s))) throw httpError(400, "時刻の形が正しくありません");
   return s.slice(0, 16) + ":00+09:00";
 }
+// タスクごとの知らせ方（何分前に知らせるか）。決めていないタスクは返さない（画面は既定の 30分前・ちょうど を出す）
+async function remindMap(env, ids) {
+  if (!env.SUBS) return {};
+  const out = {};
+  await Promise.all(ids.map(async (id) => { const v = await env.SUBS.get(`remcfg:${id}`, "json"); if (v) out[id] = v; }));
+  return out;
+}
+const remindOf = async (env, id) => (env.SUBS && (await env.SUBS.get(`remcfg:${id}`, "json"))) || REMIND_DEFAULT;
+async function setRemind(notion, env, id, body) {
+  needPush(env);
+  const t = await listPage(notion, env, id);
+  if (!Array.isArray(body?.before)) throw httpError(400, "知らせる時刻を選んでください");
+  const before = [...new Set(body.before.map(Number))].filter((n) => REMIND_CHOICES.includes(n)).sort((a, b) => b - a);
+  await env.SUBS.put(`remcfg:${t.id}`, JSON.stringify(before));
+  return { before };
+}
+
 async function setWhen(notion, env, id, body) {
   const t = await listPage(notion, env, id);
   const at = whenOf(body?.at);
@@ -799,7 +820,7 @@ export async function runAlerts(env, at) {
   return { sent: sent + reminded };
 }
 
-// 実行日に時刻のある買い物タスクを、その30分前と時刻ちょうどに知らせる（同じ知らせは1度だけ）
+// 実行日に時刻のある買い物タスクを、タスクごとに決めた時刻（既定は30分前と時刻ちょうど）に知らせる（同じ知らせは1度だけ）
 async function runReminders(notion, env, at, subs) {
   if (!subs.length) return 0;
   const pages = await queryAll(notion, env.TASK_DS_ID, {
@@ -809,16 +830,17 @@ async function runReminders(notion, env, at, subs) {
   const vapid = await vapidOf(env);
   for (const t of pages.map(taskOf).filter((x) => x.at)) {
     const when = Date.parse(t.at);
-    for (const [kind, fire] of [["before", when - REMIND_BEFORE * 60e3], ["now", when]]) {
+    for (const before of await remindOf(env, t.id)) {
+      const fire = when - before * 60e3;
       if (!(fire <= at && fire > at - TICK_MIN * 60e3)) continue;
-      const mark = `rem:${t.id}:${t.at}:${kind}`;
+      const mark = `rem:${t.id}:${t.at}:${before}`;
       if (await env.SUBS.get(mark)) continue;
       await env.SUBS.put(mark, "1", { expirationTtl: 3 * 86400 });
       await readItems(notion, t, { n: 3 });
       const left = (t.items || []).filter((i) => !i.checked).map((i) => i.text);
       const hm = t.at.slice(11, 16);
       const msg = {
-        title: kind === "before" ? `🛒 ${hm} から買い物（あと${REMIND_BEFORE}分）` : `🛒 買い物の時間です（${hm}）`,
+        title: before ? `🛒 ${before >= 1440 ? "明日" : ""}${hm} から買い物（${beforeText(before)}）` : `🛒 買い物の時間です（${hm}）`,
         body: `${t.name}${left.length ? `：${left.length}品（${left.slice(0, 4).join("・")}${left.length > 4 ? "…" : ""}）` : ""}`,
         tag: `kaimono-${t.id}`,
         url: `./?tab=list&list=${t.id}`,
@@ -834,6 +856,8 @@ async function runReminders(notion, env, at, subs) {
   }
   return sent;
 }
+
+const beforeText = (m) => (m >= 1440 ? "前日のお知らせ" : m >= 60 ? `あと${m / 60}時間` : `あと${m}分`);
 
 // ---------- 小物 ----------
 function todayJst() {
