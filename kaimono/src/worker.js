@@ -1,6 +1,7 @@
 // かいもの：画面の配信と Notion API の中継・在庫アラートの通知（Cloudflare Worker）
 // Notion のトークンはこの Worker の secret にだけ置き、ブラウザには渡さない。
 // 書き換えるのは DB_タスク管理 の買い物タスク（分類タグ BUY か 補充対象つき）とその本文の ToDo、DB_Daily への行の追加だけ。
+import Anthropic from "@anthropic-ai/sdk";
 import { sendPush, b64u } from "./webpush.js";
 
 const NOTION_BASE = "https://api.notion.com/v1";
@@ -594,17 +595,65 @@ async function lookupJan(env, code) {
 }
 
 const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
-// カメラの1枚から商品を当てる（Cloudflare Workers AI）。候補（在庫の名前）があれば、その中の同じ品も選ばせる
-async function identify(env, body) {
-  if (!env.AI) throw httpError(500, "Workers AI が設定されていません");
-  const m = String(body?.image || "").match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
-  if (!m || m[2].length > 700000) throw httpError(400, "画像が正しくないか大きすぎます");
-  const names = (Array.isArray(body?.names) ? body.names : []).map((n) => String(n).slice(0, 60)).slice(0, 150);
-  const prompt = `写真の中央に写っている商品を見て、JSONだけを返してください。
-{"name":"商品名（ブランド・品名・容量が読めれば入れる。日本語）","category":"日用品|消耗品|食品|育児|サプリ|美容 のどれか","match":"下の在庫リストに同じ商品があればその名前をそのまま。なければ空文字"}
+const CLAUDE_MODEL = "claude-opus-5-5";
+const IDENTIFY_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string", description: "商品名（ブランド・品名・容量・入り数が読めれば入れる。日本語）" },
+    category: { type: "string", enum: [...CATS, ""] },
+    match: { type: "string", description: "在庫リストに同じ商品があればその名前をそのまま。なければ空文字" },
+    jan: { type: "string", description: "写真にバーコードの数字（8桁か13桁）が読めればその数字。なければ空文字" },
+  },
+  required: ["name", "category", "match", "jan"],
+  additionalProperties: false,
+};
+const identifyPrompt = (names) => `写真の中央に写っている商品を見てください。パッケージの文字（ブランド名・商品名・容量・入り数）をよく読み、商品を特定してください。
 在庫リスト：${names.join(" / ") || "（なし）"}`;
+
+// カメラの1枚から商品を当てる。ANTHROPIC_API_KEY があれば Claude、なければ Cloudflare Workers AI
+async function identify(env, body) {
+  const m = String(body?.image || "").match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m || m[2].length > 1_500_000) throw httpError(400, "画像が正しくないか大きすぎます");
+  const names = (Array.isArray(body?.names) ? body.names : []).map((n) => String(n).slice(0, 60)).slice(0, 150);
+  const j = env.ANTHROPIC_API_KEY ? await identifyClaude(env, m, names) : await identifyWorkersAI(env, body.image, names);
+  const name = String(j.name || "").trim().slice(0, 80);
+  const jan = String(j.jan || "").replace(/\D/g, "");
+  return { name, category: CATS.includes(j.category) ? j.category : "", match: names.includes(j.match) ? j.match : "", jan: /^(\d{8}|\d{13})$/.test(jan) ? jan : "", by: env.ANTHROPIC_API_KEY ? "claude" : "workers-ai" };
+}
+
+async function identifyClaude(env, m, names) {
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1 });
+  let res;
+  try {
+    res = await client.beta.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      output_config: { effort: "low", format: { type: "json_schema", schema: IDENTIFY_SCHEMA } },
+      // 安全のための判定で断られたときは、Anthropic のおすすめのモデルでやり直す
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: `image/${m[1]}`, data: m[2] } },
+        { type: "text", text: identifyPrompt(names) },
+      ] }],
+    });
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw httpError(502, "Claude の API キーが正しくありません");
+    if (err instanceof Anthropic.RateLimitError) throw httpError(429, "Claude が混み合っています。少し待ってください");
+    if (err instanceof Anthropic.APIError) throw httpError(502, `写真から商品を当てられませんでした（Claude ${err.status ?? ""}）`);
+    throw httpError(502, "写真から商品を当てられませんでした");
+  }
+  if (res.stop_reason === "refusal") throw httpError(502, "写真から商品を当てられませんでした（断られました）");
+  const text = res.content.filter((x) => x.type === "text").map((x) => x.text).join("");
+  try { return JSON.parse(text); } catch { throw httpError(502, "写真から商品を当てられませんでした（返事の形が違いました）"); }
+}
+
+async function identifyWorkersAI(env, image, names) {
+  if (!env.AI) throw httpError(500, "Workers AI が設定されていません");
+  const prompt = `${identifyPrompt(names)}
+JSONだけを返してください：{"name":"商品名","category":"日用品|消耗品|食品|育児|サプリ|美容 のどれか","match":"在庫リストの同じ商品の名前か空文字","jan":""}`;
   // 画像はメッセージの中に data URL で渡す（image 引数に分けると "no user-supplied messages" になる）
-  const run = () => env.AI.run(VISION_MODEL, { messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: body.image } }] }], max_tokens: 200 });
+  const run = () => env.AI.run(VISION_MODEL, { messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }], max_tokens: 200 });
   let out;
   try { out = await run(); } catch (err) {
     // はじめて使うときはモデルの利用規約への同意が要る
@@ -614,12 +663,9 @@ async function identify(env, body) {
   }
   const resp = out?.response ?? out?.result?.response ?? "";
   // 返事は JSON の文字列か、すでに読み取られたオブジェクト
-  const text = typeof resp === "string" ? resp : "";
-  let j = typeof resp === "object" && resp ? resp : {};
-  if (text) { try { j = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}"); } catch { /* 形が崩れていたら名前だけ拾う */ } }
-  const name = String(j.name || text.replace(/[{}"]/g, "").split("\n")[0] || "").trim().slice(0, 80);
-  const match = names.includes(j.match) ? j.match : "";
-  return { name, category: CATS.includes(j.category) ? j.category : "", match };
+  if (resp && typeof resp === "object") return resp;
+  const text = String(resp);
+  try { return JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}"); } catch { return { name: text.replace(/[{}"]/g, "").split("\n")[0] }; }
 }
 
 // ---------- アラート ----------

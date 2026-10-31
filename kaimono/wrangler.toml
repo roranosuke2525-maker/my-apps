@@ -34,4 +34,5 @@ VAPID_SUBJECT = "https://kaimono.roranosuke2525.workers.dev"
 # 秘密の値は Cloudflare の「変数とシークレット」か wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
 #   APP_KEY      : アプリを開くときの合言葉（16文字以上）
+#   ANTHROPIC_API_KEY : Claude の API キー（写真から商品を当てる。なければ Workers AI）
 #   YAHOO_APPID  : Yahoo!ショッピングAPI の Client ID（バーコードから商品名を引く。なくても動く）

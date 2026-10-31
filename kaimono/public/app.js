@@ -517,12 +517,18 @@ async function openScanner(mode) {
   const el = $("#scanner");
   el.innerHTML = `<video playsinline muted></video><div class="scan-guide"></div>
     <div class="scan-top"><span id="scanmsg">${mode === "jan" ? "バーコードを枠に入れてください" : "バーコードか、商品の正面を写してください"}</span><button type="button" class="more" data-scanclose="1" aria-label="閉じる">×</button></div>
+    <div class="scan-tools"><button type="button" class="btn sm" data-torch="1" hidden>🔦 ライト</button><label class="btn pri sm">📸 撮って読む<input type="file" accept="image/*" capture="environment" id="scanshot" hidden></label>${mode === "add" ? `<button type="button" class="btn sm" data-scanguess="1">🤖 いま予測</button>` : ""}</div>
     <div class="scan-card" id="scancard" hidden></div>`;
   el.hidden = false; document.body.classList.add("modal");
   scan = { mode, stop: false, guessN: 0, busy: false, found: false };
   try {
-    scan.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    scan.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
   } catch { closeScanner(); toast("カメラを使えませんでした（設定でカメラを許可してください）"); return; }
+  // ピントを合わせ続ける・ライトがあればボタンを出す（対応している端末だけ）
+  const track = scan.stream.getVideoTracks()[0]; scan.track = track;
+  const caps = track.getCapabilities?.() || {};
+  if (caps.focusMode?.includes("continuous")) track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {});
+  if (caps.torch) { const t = el.querySelector("[data-torch]"); if (t) t.hidden = false; }
   const v = el.querySelector("video"); v.srcObject = scan.stream; await v.play().catch(() => {});
   scan.video = v; scan.started = Date.now();
   if ("BarcodeDetector" in window) { try { scan.detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a"] }); } catch { /* 下の ZXing で読む */ } }
@@ -534,30 +540,65 @@ function closeScanner() {
   scan = null; const el = $("#scanner"); el.hidden = true; el.innerHTML = "";
   if (!S.sheet) document.body.classList.remove("modal");
 }
-function frame(w) {
-  const v = scan.video; const c = document.createElement("canvas");
-  const sc = Math.min(1, w / (v.videoWidth || w)); c.width = Math.round((v.videoWidth || w) * sc); c.height = Math.round((v.videoHeight || w) * sc);
-  c.getContext("2d").drawImage(v, 0, 0, c.width, c.height); return c;
+// 映像（か写真）の一部を切り出す。crop は [左, 上, 幅, 高さ] の割合、rotate で縦向きのバーコードも読む
+function frame(w, { src = scan.video, crop = [0, 0, 1, 1], rotate = false } = {}) {
+  const sw = src.videoWidth || src.naturalWidth || src.width || w; const sh = src.videoHeight || src.naturalHeight || src.height || w;
+  const [cx, cy, cw, ch] = [crop[0] * sw, crop[1] * sh, crop[2] * sw, crop[3] * sh];
+  const sc = Math.min(1, w / cw); const c = document.createElement("canvas"); const g = c.getContext("2d");
+  const W = Math.round(cw * sc), H = Math.round(ch * sc);
+  if (rotate) { c.width = H; c.height = W; g.translate(H, 0); g.rotate(Math.PI / 2); } else { c.width = W; c.height = H; }
+  g.drawImage(src, cx, cy, cw, ch, 0, 0, W, H); return c;
+}
+const CROPS = [{ crop: [0.05, 0.2, 0.9, 0.6] }, { crop: [0, 0, 1, 1] }, { crop: [0.3, 0.1, 0.4, 0.8], rotate: true }];
+function zxDecode(canvas) {
+  const Z = window.ZXing; if (!Z) return "";
+  scan.hints ||= new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A]], [Z.DecodeHintType.TRY_HARDER, true]]);
+  scan.reader ||= new Z.MultiFormatReader();
+  try { return scan.reader.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(canvas))), scan.hints).getText(); } catch { return ""; }
 }
 async function readBarcode() {
   if (scan.detector) { const r = await scan.detector.detect(scan.video).catch(() => []); return r[0]?.rawValue || ""; }
-  if (!window.ZXing) return "";
-  const Z = window.ZXing;
-  scan.hints ||= new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A]], [Z.DecodeHintType.TRY_HARDER, true]]);
-  scan.reader ||= new Z.MultiFormatReader();
-  try { return scan.reader.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(frame(800)))), scan.hints).getText(); } catch { return ""; }
+  // 枠の中を高い解像度で → 全体 → 縦向き の順に、回ごとに切り替えて読む
+  scan.tick = (scan.tick || 0) + 1;
+  const o = CROPS[scan.tick % CROPS.length];
+  return zxDecode(frame(o.crop[2] === 1 ? 1000 : 1280, o));
+}
+// 読み違いを避けるため、同じ番号を2回続けて読めたら決める
+function confirmCode(code) {
+  const now = Date.now();
+  if (scan.last === code && now - scan.lastAt < 2000) return true;
+  scan.last = code; scan.lastAt = now; return false;
+}
+// 撮った写真（ピントの合った静止画）からバーコードを読み、なければ写真から予測する
+async function readShot(file) {
+  if (!scan || !file) return;
+  scan.found = true; $("#scanmsg").textContent = "写真を読んでいます…";
+  const img = new Image(); const url = URL.createObjectURL(file);
+  try {
+    await new Promise((ok, ng) => { img.onload = ok; img.onerror = ng; img.src = url; });
+    await loadZxing().catch(() => {});
+    let code = "";
+    if (scan.detector) { const r = await scan.detector.detect(img).catch(() => []); code = r[0]?.rawValue || ""; }
+    const tries = [{ crop: [0, 0, 1, 1], w: 1600 }, { crop: [0.1, 0.25, 0.8, 0.5], w: 1600 }, { crop: [0, 0, 1, 1], w: 2400 }, { crop: [0.25, 0.05, 0.5, 0.9], w: 1600, rotate: true }, { crop: [0, 0, 1, 1], w: 1600, rotate: true }];
+    for (const t of tries) { if (code) break; code = zxDecode(frame(t.w, { src: img, crop: t.crop, rotate: t.rotate })); }
+    if (code.length === 12) code = `0${code}`;
+    if (code && eanOk(code)) { scan.found = false; onBarcode(code); return; }
+    if (scan.mode === "jan") { scan.found = false; $("#scanmsg").textContent = "バーコードが読めませんでした。近づけて、もう一度撮ってください"; return; }
+    scan.found = false; await guess(frame(1280, { src: img }));
+  } catch { if (scan) { scan.found = false; $("#scanmsg").textContent = "写真を読めませんでした"; } } finally { URL.revokeObjectURL(url); }
 }
 async function scanLoop() {
   while (scan && !scan.stop) {
     if (!scan.found && scan.video.readyState >= 2) {
-      const code = await readBarcode();
+      let code = await readBarcode();
       if (!scan || scan.stop) return;
-      if (code && eanOk(code.length === 12 ? `0${code}` : code)) { onBarcode(code.length === 12 ? `0${code}` : code); continue; }
+      if (code.length === 12) code = `0${code}`;
+      if (code && eanOk(code) && confirmCode(code)) { onBarcode(code); continue; }
       // バーコードが見つからなければ、かざしているだけで写真から当てる（2.5秒後・その後8秒ごと・3回まで）
       const t = Date.now() - scan.started;
       if (scan.mode === "add" && !scan.busy && scan.guessN < 3 && t > 2500 + scan.guessN * 8000) guess();
     }
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 150));
   }
 }
 function scanCard(html) { const c = $("#scancard"); if (!c) return; c.innerHTML = html; c.hidden = false; }
@@ -582,13 +623,16 @@ function foundCard(x, why) {
   scanCard(`<div class="sc-row">${thumb(x)}<div><b>${esc(x.name)}</b><small>${esc([x.cat, leftTx(x.left), x.open?.length ? "リスト済み" : ""].filter(Boolean).join("・"))}</small></div></div>
     <div class="row-end">${x.open?.length ? "" : `<button type="button" class="btn pri sm" data-scanact="list">🛒 補充リストへ</button>`}<button type="button" class="btn ok sm" data-scanact="restock">✓ 補充した</button><button type="button" class="btn sm" data-scanact="edit">直す</button><button type="button" class="btn ghost sm" data-scanagain="1">ちがう</button></div>`);
 }
-async function guess() {
+async function guess(canvas) {
+  if (!scan || scan.busy) return;
   scan.busy = true; scan.guessN++;
   $("#scanmsg").textContent = "写真から商品を予測しています…";
   try {
-    const img = frame(512).toDataURL("image/jpeg", 0.7);
+    const img = (canvas || frame(1024)).toDataURL("image/jpeg", 0.8);
     const r = await api("POST", "/api/identify", { image: img, names: S.stock.map((x) => x.name) });
     if (!scan || scan.found) return;
+    // 写真にバーコードの数字が読めたら、そちらで調べる
+    if (r.jan && eanOk(r.jan) && !scan.found) { onBarcode(r.jan); return; }
     const hit = r.match && S.stock.find((x) => x.name === r.match);
     if (hit) { foundCard(hit, `写真から：たぶん「${hit.name}」`); return; }
     if (!r.name) { $("#scanmsg").textContent = "分かりませんでした。バーコードを写すか、もう一度"; return; }
@@ -905,7 +949,8 @@ document.addEventListener("click", (e) => {
   if (d.scan) { openScanner(d.scan); return; }
   if (d.scanclose) { closeScanner(); return; }
   if (d.scanagain) { scan.found = false; scan.hit = ""; scan.pre = null; $("#scancard").hidden = true; $("#scanmsg").textContent = "バーコードか、商品の正面を写してください"; scan.started = Date.now(); scan.guessN = 0; return; }
-  if (d.scanguess) { $("#scancard").hidden = true; guess(); return; }
+  if (d.scanguess) { $("#scancard").hidden = true; scan.found = false; guess(); return; }
+  if (d.torch) { scan.torch = !scan.torch; scan.track?.applyConstraints({ advanced: [{ torch: scan.torch }] }).catch(() => toast("ライトを点けられませんでした")); el.classList.toggle("pri", scan.torch); return; }
   if (d.scanreg) { scanRegister(d.scanreg, el); return; }
   if (d.scanact) { scanAct(d.scanact); return; }
   if (d.fillimg) { fillImages(el); return; }
@@ -945,6 +990,7 @@ $("#reload").addEventListener("click", () => load());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && scan) closeScanner(); });
 document.addEventListener("input", (e) => { if (S.sheet && e.target.closest("#sheetform") && ["use", "size", "link", "name", "jan"].includes(e.target.name)) updSheet(); });
 document.addEventListener("change", (e) => { if (S.sheet && e.target.closest("#sheetform") && e.target.name === "freq") updSheet(); });
+document.addEventListener("change", (e) => { if (e.target.id === "scanshot") { readShot(e.target.files?.[0]); e.target.value = ""; } });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && memoryKey && Date.now() - Date.parse(S.loadedAt || 0) > 60e3) load({ quiet: true }); });
 
 function showLogin() {

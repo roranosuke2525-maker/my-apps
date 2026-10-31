@@ -111,6 +111,11 @@ beforeEach(() => {
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
     const body = init.body && typeof init.body === "string" ? JSON.parse(init.body) : init.body || null;
+    if (u.hostname === "api.anthropic.com") {
+      const b = JSON.parse(init.body || (await new Response(url.body ?? null).text?.()) || "{}");
+      calls.push({ method: "POST", path: "anthropic", body: b, headers: init.headers });
+      return new Response(JSON.stringify({ id: "msg_1", type: "message", role: "assistant", model: b.model, stop_reason: "end_turn", content: [{ type: "text", text: '{"name":"見本シャンプー 詰替 400ml","category":"美容","match":"サプリ","jan":"4901234567894"}' }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (u.hostname === "shopping.yahooapis.jp") {
       calls.push({ method: "GET", path: "yahoo", url: u.href });
       return new Response(JSON.stringify(u.searchParams.get("jan_code") === "4901234567894" ? { hits: [{ name: "【送料無料】見本洗剤 つめかえ用 400ml", exImage: { url: "https://item-shopping.c.yimg.jp/x.jpg" }, url: "https://store.shopping.yahoo.co.jp/x" }] } : { hits: [] }), { status: 200 });
@@ -433,12 +438,12 @@ test("写真から商品を当てる（Workers AI。在庫の中の同じ品を�
   env.AI = { run: async (model, input) => { seen.push(input); if (seen.length === 1) throw new Error("Please agree to the license"); return input.prompt === "agree" ? {} : { response: '{"name":"見本洗剤 400ml","category":"日用品","match":"洗剤"}' }; } };
   const img = "data:image/jpeg;base64," + Buffer.from("fakejpeg").toString("base64");
   const res = await api("POST", "/api/identify", { image: img, names: ["洗剤", "サプリ"] });
-  assert.deepEqual(res.data, { name: "見本洗剤 400ml", category: "日用品", match: "洗剤" });
+  assert.deepEqual(res.data, { name: "見本洗剤 400ml", category: "日用品", match: "洗剤", jan: "", by: "workers-ai" });
   assert.equal(seen[1].prompt, "agree"); // はじめは規約に同意してからやり直す
   assert.match(seen[2].messages[0].content[0].text, /洗剤 \/ サプリ/);
   assert.equal(seen[2].messages[0].content[1].image_url.url, img);
   env.AI = { run: async () => ({ response: { name: "見本シャンプー", category: "美容", match: "" } }) }; // 読み取り済みで返ることもある
-  assert.deepEqual((await api("POST", "/api/identify", { image: img, names: [] })).data, { name: "見本シャンプー", category: "美容", match: "" });
+  assert.deepEqual((await api("POST", "/api/identify", { image: img, names: [] })).data, { name: "見本シャンプー", category: "美容", match: "", jan: "", by: "workers-ai" });
   assert.equal((await api("POST", "/api/identify", { image: "nope" })).status, 400);
 });
 
@@ -447,4 +452,16 @@ test("在庫の品を消す（ゴミ箱へ）。DB_Daily の行だけ", async ()
   assert.equal(pages.get(D3).in_trash, true);
   assert.equal((await api("DELETE", `/api/stock/${L1}`)).status, 403);
   assert.ok(!pages.get(L1).in_trash);
+});
+
+test("写真から商品を当てる（ANTHROPIC_API_KEY があれば Claude）", async () => {
+  env.ANTHROPIC_API_KEY = "sk-ant-fake";
+  const img = "data:image/jpeg;base64," + Buffer.from("fakejpeg").toString("base64");
+  const res = await api("POST", "/api/identify", { image: img, names: ["サプリ"] });
+  assert.deepEqual(res.data, { name: "見本シャンプー 詰替 400ml", category: "美容", match: "サプリ", jan: "4901234567894", by: "claude" });
+  const sent = calls.find((c) => c.path === "anthropic").body;
+  assert.equal(sent.model, "claude-opus-5-5");
+  assert.equal(sent.fallbacks, "default");
+  assert.equal(sent.output_config.format.type, "json_schema");
+  assert.equal(sent.messages[0].content[0].source.data, Buffer.from("fakejpeg").toString("base64"));
 });
