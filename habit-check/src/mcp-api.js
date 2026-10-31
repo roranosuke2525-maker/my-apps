@@ -357,14 +357,24 @@
     return c;
   }
 
+  // エピソード2 は「前の話のボスを倒したか（撃破日）」で開く
   async function getStories() {
     const rows = await queryRows(DS.story, { sort: [{ property: "じゅんばん", direction: "ascending" }] });
-    return { chapters: rows.map(summarizeChapter) };
+    let prevDefeated = null;
+    return { chapters: rows.map((r) => {
+      const c = summarizeChapter(r);
+      if (c.kind === "エピソード2") {
+        c.locked = prevDefeated === false;
+        prevDefeated = !!text(r["date:撃破日:start"]);
+      }
+      return c;
+    }) };
   }
 
   function chapterOf(id) {
     const c = knownChapters.get(id);
     if (!c) throw apiError(403, "読み込んだ章ではありません。「更新」してからやり直してください");
+    if (c.locked) throw apiError(403, "前の話のボスを倒すと読めます");
     return c;
   }
 
@@ -434,6 +444,9 @@
     if (p === "/api/party" && method === "GET") return getParty();
     if (p === "/api/guild" && method === "GET") return getGuild();
     if (p === "/api/guild/reports" && method === "POST") return createReport(body);
+    if (p.startsWith("/api/items")) throw apiError(501, "そうびは Cloudflare版だけで使えます");
+    if (p === "/api/battle") throw apiError(501, "ぼうけんは Cloudflare版だけで使えます（Notion の MCP では計算式の値が読めないため）");
+    if (p === "/api/aibou") throw apiError(501, "あいぼうは Cloudflare版だけで使えます（Notion の MCP では計算式の値が読めないため）");
     if (p === "/api/story" && method === "GET") return getStories();
     if (idMatch?.[1] === "story" && method === "GET") return getStory(idMatch[2].toLowerCase());
     if (idMatch?.[1] === "story" && method === "PATCH") return markStory(idMatch[2].toLowerCase(), body);

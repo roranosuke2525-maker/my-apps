@@ -8,11 +8,22 @@ export const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFile(join(root, p), "utf8");
 const dataUri = async (p, type) => `data:${type};base64,${(await readFile(join(root, p))).toString("base64")}`;
 
+// 画面のJSが import している public/ の中のファイルを、1つのスクリプトにつなげる（export は外す）
+async function bundle(file, seen = new Set()) {
+  if (seen.has(file)) return "";
+  seen.add(file);
+  const code = await read(`public/${file}`);
+  const parts = [];
+  for (const m of code.matchAll(/^import \{[^}]*\} from "\.\/([\w.-]+)";$/gm)) parts.push(await bundle(m[1], seen));
+  parts.push(code.replace(/^import \{[^}]*\} from "\.\/[\w.-]+";\n/gm, "").replace(/^export (const|function|async function) /gm, "$1 "));
+  return parts.join("\n");
+}
+
 export async function inlinePage({ apiScript, bodyStart = "", extraCss = "" }) {
   const [html, css, app, walnut, oak] = await Promise.all([
     read("public/index.html"),
     read("public/style.css"),
-    read("public/app.js"),
+    bundle("app.js"),
     dataUri("public/img/walnut.jpg", "image/jpeg"),
     dataUri("public/img/oak.jpg", "image/jpeg"),
   ]);

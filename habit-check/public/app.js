@@ -1,5 +1,7 @@
 // 習慣チェック（画面側）。Notion へは必ず Worker の /api を経由する。
-// 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）を1画面ずつで見せる。
+// 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）と、あいぼうを1画面ずつで見せる。
+import { renderPet, renderMonster, renderItem, fillStory, petLine, petName, evolveStory, SLEEP_LINES, TYPE_COLORS } from "./aibou.js";
+import { openTheater } from "./theater.js";
 
 const KEY_STORAGE = "habit-check:key";
 const MAX_BACK_DAYS = 6;
@@ -14,7 +16,7 @@ const SLOTS = [
 ];
 const WEEK = "月火水木金土日";
 const CATEGORY_COLORS = { 家事: "orange", 育児: "pink", 家: "brown", お金: "green", からだ: "red", 学び: "blue", 趣味: "purple" };
-const VIEW_TITLES = { habit: "習慣チェック", party: "パーティー", guild: "ギルド", story: "ものがたり", me: "きろく" };
+const VIEW_TITLES = { habit: "習慣チェック", aibou: "あいぼう", battle: "ぼうけん", guild: "ギルド", story: "ものがたり", me: "きろく" };
 const GRAPH_DAYS = 30;
 const BAR_DAYS = 14;
 
@@ -164,8 +166,18 @@ async function loadData(name, path, { force = false } = {}) {
   return state.data[name];
 }
 
+// Lv・EXP は読みこみに数秒かかるので、前回の値をこの端末に覚えておき、先に出しておく
+const PLAYER_MEMO = "habit-check:player";
+try {
+  const memo = JSON.parse(localStorage.getItem(PLAYER_MEMO) || "null");
+  if (memo?.player) { state.data.player = memo; state.loadedAt.player = 0; }
+} catch { /* 覚えていなければ「—」から */ }
+
 async function loadPlayer(opts) {
   await loadData("player", "/api/player", opts);
+  if (state.data.player?.player && !state.errors.player) {
+    try { localStorage.setItem(PLAYER_MEMO, JSON.stringify(state.data.player)); } catch { /* 保存できなくても動く */ }
+  }
   renderHeader();
 }
 
@@ -183,13 +195,13 @@ function show() {
   $("login").hidden = true;
   $("bottom-nav").hidden = false;
   const viewId = state.view === "habit" ? state.tab : state.view;
-  for (const id of ["day", "week", "cal", "graph", "party", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
+  for (const id of ["day", "week", "cal", "graph", "aibou", "battle", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
   for (const b of document.querySelectorAll("#bottom-nav button")) {
     b.setAttribute("aria-current", b.dataset.view === state.view ? "page" : "false");
   }
   for (const b of document.querySelectorAll("#habit-tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
   renderHeader();
-  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, party: renderParty, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
+  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, aibou: renderAibou, battle: renderBattle, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
 }
 
 function renderHeader() {
@@ -225,6 +237,7 @@ async function loadDay({ quiet = false } = {}) {
     state.row = data.row;
     state.savedNote = data.row?.note || "";
     state.dayError = "";
+    updateBadge();
   } catch (err) {
     state.dayError = err.message;
     if (quiet) toast(err.message, true);
@@ -292,7 +305,25 @@ function renderDay() {
     h("div", { class: "habits scroll fill" }, groups),
     canEdit ? noteRow(row) : h("p", { class: "readonly", text: `${MAX_BACK_DAYS}日より前の日は見るだけです` }),
   ], `day:${state.date}`);
+  fitHabits();
 }
+
+// 1画面に収めるため、タイル1行に使える高さで詰め方を変える：ふつう → compact（説明を隠す）→ tight（名前1行）
+const FIT_FULL = 44;
+const FIT_COMPACT = 32;
+function fitHabits() {
+  const box = document.querySelector("#day-body .habits");
+  if (!box) return;
+  box.classList.remove("compact", "tight");
+  const lines = [...box.querySelectorAll(".slot-line")];
+  const rows = lines.reduce((a, l) => a + Number(l.style.getPropertyValue("--rows") || 1), 0);
+  if (!rows) return;
+  const gaps = (lines.length - 1) * 6 + lines.reduce((a, l) => a + (Number(l.style.getPropertyValue("--rows") || 1) - 1) * 4, 0);
+  const per = (box.clientHeight - gaps) / rows;
+  if (per < FIT_COMPACT) box.classList.add("compact", "tight");
+  else if (per < FIT_FULL) box.classList.add("compact");
+}
+window.addEventListener("resize", () => { if (state.view === "habit" && state.tab === "day") fitHabits(); });
 
 function statusCard(row) {
   const scored = state.habits.filter((x) => counts(x, state.date));
@@ -351,6 +382,9 @@ function toggleCheck(row, date, habit, next, done) {
       const { row: updated } = await api("PATCH", `/api/pages/${row.id}`, { name: habit.name, value: next });
       if (state.row?.id === updated.id) state.row.stats = updated.stats;
       toast(next ? `✓ ${habit.label}` : `${habit.label} を外しました`);
+      if (next) aibouPop(habit);
+      // あいぼう・ボスへのダメージが変わったので、次に開いたとき読み直す
+      for (const k of ["aibou", "battle"]) if (state.loadedAt[k]) state.loadedAt[k] = 0;
       scheduleRefresh();
     } catch (err) {
       setCheck(row.id, habit.name, !next);
@@ -370,7 +404,28 @@ function setCheck(rowId, name, value) {
 }
 
 function rerenderHabit() {
+  updateBadge();
   if (state.view === "habit") show();
+}
+
+// ホーム画面のアイコンの赤い数字＝今日のまだチェックしていない習慣の数（★ボーナスとお休みの曜日は数えない）。
+// 開いたとき・チェックしたときに更新する（閉じているあいだは変わらない）。iPhone は通知の許可が要る
+function updateBadge() {
+  if (!state.row || state.date !== todayJst() || !("setAppBadge" in navigator)) return;
+  const left = state.habits.filter((x) => counts(x, state.date) && !state.row.checks[x.name]).length;
+  (left ? navigator.setAppBadge(left) : navigator.clearAppBadge()).catch(() => {});
+}
+
+function setupBadgeButton() {
+  const btn = $("badge-btn");
+  const can = "setAppBadge" in navigator && "Notification" in window;
+  btn.hidden = !can || Notification.permission !== "default";
+  btn.onclick = async () => {
+    const res = await Notification.requestPermission().catch(() => "denied");
+    btn.hidden = true;
+    if (res === "granted") { updateBadge(); toast("アイコンに のこりの数を出します"); }
+    else toast("通知が許可されなかったので、数は出せません", true);
+  };
 }
 
 function saveNote(row, input, save) {
@@ -576,17 +631,10 @@ function renderGraph() {
   }, () => todayJst() === to);
 }
 
-// ================= パーティー（DB_すがた） =================
-async function renderParty() {
-  const body = $("party-body");
-  if (!state.data.party) body.replaceChildren(loadingEl());
-  await Promise.all([loadData("party", "/api/party"), loadPlayer()]);
-  if (state.view !== "party") return;
-  if (state.errors.party && !state.data.party) return body.replaceChildren(h("p", { class: "err", text: state.errors.party }));
-  const lv = state.data.player?.player?.level;
-  const members = state.data.party.members;
-  if (!members.length) return body.replaceChildren(h("p", { class: "empty-msg", text: "まだなかまがいません" }));
-  swap(body, [h("div", { class: "party scroll fill" }, members.map((m) => {
+// ================= パーティー（DB_すがた）：きろくの中に出す =================
+function partyGrid(members, lv) {
+  if (!members?.length) return null;
+  return h("div", { class: "party" }, members.map((m) => {
     const isNow = m.kind === "しゅじんこう" && typeof lv === "number" && lv >= (m.needLv ?? 0) && lv < (m.nextLv ?? Infinity);
     return h("div", { class: "card member" },
       isNow ? h("span", { class: "now-badge", text: "いま" }) : null,
@@ -595,7 +643,163 @@ async function renderParty() {
       h("span", { class: `tag ${m.kind === "なかま" ? "blue" : "yellow"}`, text: m.kind || "—" }),
       typeof m.needLv === "number" ? h("span", { class: "sub", text: `Lv${m.needLv}〜` }) : null,
     );
-  }))], "party");
+  }));
+}
+
+// ================= ぼうけん（章ボス・モンスター） =================
+const WEAK_LABEL = { ちから: "ちから", かしこさ: "かしこさ", やさしさ: "やさしさ", しっかり: "しっかり", バランス: "4つすべて" };
+
+async function renderBattle() {
+  const body = $("battle-body");
+  if (!state.data.battle) body.replaceChildren(loadingEl());
+  const [data] = await Promise.all([loadData("battle", "/api/battle"), loadData("items", "/api/items")]);
+  if (state.view !== "battle") return;
+  if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.battle || "読み込めませんでした" }));
+  // ボスを倒したら、ものがたりの一覧も読み直す（次の話が開く）
+  if (data.boss?.defeatedOn) state.loadedAt.story = 0;
+  swap(body, [h("div", { class: "scroll fill stack" },
+    bossCard(data),
+    equipCard(data),
+    h("div", { class: "card stack", style: "gap:8px" },
+      h("div", { class: "kv" }, h("h3", { text: "モンスター（まだ終わっていないタスク）" }), h("b", { text: `${data.monsters.length}${data.moreMonsters ? "+" : ""}体` })),
+      h("p", { class: "sub", style: "margin:0", text: "古いほど凶暴（★）。たおすと ★1つにつき ボスへのダメージ＋20%" }),
+      data.monsters.length
+        ? h("div", { class: "monsters" }, data.monsters.map(monsterTile))
+        : h("p", { class: "sub", text: "モンスターはいません" }),
+    ),
+  )], "battle");
+}
+
+function bossCard(data) {
+  const b = data.boss;
+  if (!b) {
+    return h("div", { class: "card boss-card" },
+      h("h2", { text: data.cleared ? "すべてのボスを たおした！" : "いまは しずか……" }),
+      h("p", { class: "sub", text: data.next ? `ものがたり「${data.next.title}」を読むと、ボスが現れます。` : "ものがたりの続きを待っています。" }),
+      data.next ? h("button", { type: "button", class: "primary", onclick: () => { state.view = "story"; show(); } }, "ものがたりへ") : null,
+    );
+  }
+  const left = Math.max(0, b.hp - b.damage);
+  const pet = data.pet;
+  const won = !!b.defeatedOn;
+  const sprite = renderMonster("boss", BOSS_COLORS[b.weak] || BOSS_COLORS.バランス, { size: 140, motion: won ? "defeated" : "idle", boss: b.name });
+  return h("div", { class: `card boss-card${won ? " won" : ""}` },
+    h("span", { class: "sub", text: b.chapter }),
+    h("h2", { class: "boss-name", text: b.name }),
+    sprite,
+    h("div", { class: "kv" }, h("span", { text: "HP" }), h("b", { text: `${fmt(left)} / ${fmt(b.hp)}` })),
+    h("div", { class: "bar hp", style: "flex:none" }, h("span", { style: `width:${(left / b.hp) * 100}%` })),
+    h("div", { class: "boss-tags" },
+      h("span", { class: "pet-stage", style: `--chip:${TYPE_COLORS[b.weak] || "#a58bd0"}`, text: `じゃくてん：${WEAK_LABEL[b.weak] || b.weak || "—"}` }),
+      b.petHit ? h("span", { class: "pet-stage", style: "--chip:#d9822b", text: `${pet?.name || "あいぼう"}：こうかばつぐん` }) : null,
+      h("span", { class: "sub", text: `ダメージ×${b.mult}` }),
+    ),
+    won
+      ? h("p", { class: "win", text: `${b.name}を たおした！ つぎの話が 開きました` })
+      : b.start > todayJst()
+        ? h("p", { class: "sub", style: "margin:0", text: `${b.start.slice(5).replace("-", "/")}（あした）から たたかう。きょうのEXPは前のボスに使ったので、あしたから ダメージが入ります` })
+        : h("p", { class: "sub", style: "margin:0", text: `きょうのダメージ ${fmt(b.today)}（${b.start.slice(5).replace("-", "/")}から たたかっている）` }),
+    won && data.next ? h("button", { type: "button", class: "primary", onclick: () => { state.view = "story"; show(); } }, "つぎの話を読む") : null,
+    b.log.length ? h("div", { class: "battle-log" }, b.log.map((x) => h("div", { class: "log-row" },
+      x.kind === "task" ? renderMonster(x.shape, x.colors, { size: 28 }) : h("span", { class: "log-icon", text: "✓" }),
+      h("span", { class: "log-text", text: x.kind === "task" ? `${x.name}${"★".repeat(x.stars)}（${x.title}）を たおした` : `${x.date.slice(5).replace("-", "/")} 習慣` }),
+      h("b", { text: `${fmt(x.damage)}` })))) : null,
+  );
+}
+
+// ---------- そうび（DB_そうび） ----------
+const SLOT_NAMES = ["武器", "かぶと", "たて", "よろい", "アクセサリー"];
+const stars = (n) => "★".repeat(n || 0);
+
+function equipCard(battle) {
+  const data = state.data.items;
+  if (!data) {
+    return h("div", { class: "card stack", style: "gap:4px" }, h("h3", { text: "そうび" }),
+      h("p", { class: "sub", style: "margin:0", text: state.errors.items || "読み込み中…" }));
+  }
+  const bonus = Object.entries(battle?.equip || {}).filter(([, v]) => v).map(([t, v]) => `${t}＋${Math.round(v * 10) / 10}%`).join("　");
+  return h("div", { class: "card stack", style: "gap:6px" },
+    h("div", { class: "kv" }, h("h3", { text: "そうび" }), h("span", { class: "sub", text: `もちもの ${data.items.length}こ` })),
+    h("p", { class: "sub", style: "margin:0", text: bonus ? `ボスへのダメージ：${bonus}` : "ギルドで ほうこくすると、そうびが落ちます" }),
+    SLOT_NAMES.map((slot) => {
+      const it = data.items.find((x) => x.slot === slot && x.equipped);
+      const have = data.items.filter((x) => x.slot === slot).length;
+      return h("button", { type: "button", class: "equip-row", onclick: () => openSlot(slot) },
+        it ? renderItem(slot, it.rarity, { size: 32 }) : h("span", { class: "item-icon empty" }),
+        h("span", { class: "equip-slot", text: slot }),
+        h("span", { class: "equip-name", text: it ? `${it.name} ${stars(it.rarity)}` : have ? "なし（タップで そうび）" : "なし" }),
+        it ? h("b", { text: `${it.type}＋${it.type === "ぜんぶ" ? it.effect / 2 : it.effect}%` }) : null,
+      );
+    }),
+  );
+}
+
+function openSlot(slot) {
+  const render = () => {
+    const list = (state.data.items?.items || []).filter((x) => x.slot === slot)
+      .sort((a, b) => (b.rarity || 0) - (a.rarity || 0) || String(b.date).localeCompare(String(a.date)));
+    if (!list.length) return [h("p", { class: "sub", text: "この部位のそうびは、まだありません。" })];
+    return list.map((it) => h("div", { class: `item-row${it.equipped ? " on" : ""}` },
+      renderItem(slot, it.rarity, { size: 40 }),
+      h("span", { class: "item-text" },
+        h("b", { text: it.name }),
+        h("span", { class: "sub", text: `${stars(it.rarity)}${it.crit ? " かいしん" : ""}　${it.type}＋${it.type === "ぜんぶ" ? `${it.effect / 2}%（4つすべて）` : `${it.effect}%`}　${(it.date || "").slice(5).replace("-", "/")}` })),
+      h("button", { type: "button", class: it.equipped ? "chip-btn" : "primary small", onclick: (e) => equip(it, !it.equipped, e.currentTarget) }, it.equipped ? "はずす" : "そうびする"),
+    ));
+  };
+  const equip = async (it, on, btn) => {
+    btn.disabled = true;
+    try {
+      state.data.items = await api("PATCH", `/api/items/${it.id}`, { equipped: on });
+      state.loadedAt.items = Date.now();
+      state.loadedAt.battle = 0;
+      $("sheet-body").replaceChildren(...render());
+      toast(on ? `${it.name} を そうびした` : `${it.name} を はずした`);
+      if (state.view === "battle") renderBattle();
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+    }
+  };
+  openSheet(`そうび：${slot}`, render());
+}
+
+function showDrops(drops) {
+  openSheet("アイテムを てにいれた！", drops.map((it) => h("div", { class: "item-row drop" },
+    renderItem(it.slot, it.rarity, { size: 56 }),
+    h("span", { class: "item-text" },
+      h("b", { text: `${it.name} ${stars(it.rarity)}` }),
+      h("span", { class: "sub", text: `${it.crit ? "かいしんドロップ！　" : ""}${it.slot}・${it.type}＋${it.type === "ぜんぶ" ? `${it.effect / 2}%（4つすべて）` : `${it.effect}%`}` }),
+      h("span", { class: "sub", text: `「${it.quest}」から` })),
+  )), [h("button", { type: "button", class: "primary", onclick: () => { closeSheet(); state.view = "battle"; show(); } }, "そうびを みる")]);
+}
+
+const BOSS_COLORS = {
+  ちから: ["#e0603a", "#a93f22", "#ffc2a8"],
+  かしこさ: ["#5b7fd6", "#3a56a0", "#c8d6ff"],
+  やさしさ: ["#e2789e", "#b04e72", "#ffd6e4"],
+  しっかり: ["#4f9a6a", "#33704a", "#c6ecd2"],
+  バランス: ["#bba7e8", "#8a73bd", "#f1eaff"],
+};
+
+function monsterTile(m) {
+  const el = h("button", { type: "button", class: "monster-tile", onclick: () => openMonster(m) },
+    renderMonster(m.shape, m.colors, { size: 44 }),
+    h("span", { class: "mname", text: m.name }),
+    m.stars ? h("span", { class: "stars", text: "★".repeat(m.stars) }) : null,
+  );
+  return el;
+}
+
+function openMonster(m) {
+  openSheet(m.name, [
+    h("div", { class: "pet-box" }, renderMonster(m.shape, m.colors, { size: 120 })),
+    h("p", { style: "margin:0;font-weight:700", text: m.title || "（名前なし）" }),
+    h("div", { class: "kv" }, h("span", { text: "ステータス" }), h("b", { text: m.status || "—" })),
+    h("div", { class: "kv" }, h("span", { text: "重さ" }), h("b", { text: m.weight })),
+    h("div", { class: "kv" }, h("span", { text: "凶暴さ" }), h("b", { text: m.stars ? `${"★".repeat(m.stars)}（${m.ageDays}日め）` : `ふつう（${m.ageDays}日め）` })),
+    h("p", { class: "sub", text: "Notion で DONE にすると たおせます。" }),
+  ], m.url ? [h("a", { class: "primary", href: m.url, target: "_blank", rel: "noopener", style: "text-align:center;text-decoration:none;display:block;padding:12px" }, "Notionで開く")] : []);
 }
 
 // ================= ギルド（DB_ギルド依頼・DB_ギルド達成記録） =================
@@ -632,7 +836,8 @@ async function renderGuild() {
 }
 
 function questLocked(q) {
-  return typeof q.lv === "number" && typeof q.playerLv === "number" && q.playerLv < q.lv;
+  const need = q.need ?? q.lv; // 段階が進むと必要Lvが上がる（Worker が計算）
+  return typeof need === "number" && typeof q.playerLv === "number" && q.playerLv < need;
 }
 
 function questCard(q) {
@@ -643,7 +848,7 @@ function questCard(q) {
       h("span", { class: "qtitle", text: q.title }),
       h("span", { class: "qmeta" },
         q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
-        h("span", { text: locked ? `Lv${q.lv}で受注` : `受注Lv${q.lv ?? "—"}` }),
+        h("span", { text: locked ? `Lv${q.need ?? q.lv}で受注` : `受注Lv${q.need ?? q.lv ?? "—"}` }),
         h("span", { text: `基本${q.exp ?? "—"}EXP` }),
         h("span", { text: `達成${q.count ?? 0}回` }),
       ),
@@ -679,8 +884,12 @@ function openQuest(q) {
 async function submitReport(selected, note, send) {
   send.disabled = true;
   try {
-    await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
+    const { drops = [] } = await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
     toast(`ほうこくしました：${selected.map((q) => q.title).join("、")}`);
+    if (drops.length) {
+      state.loadedAt.items = 0;
+      setTimeout(() => showDrops(drops), 1700);
+    }
     closeSheet();
     state.loadedAt.guild = 0;
     if (state.view === "guild") renderGuild();
@@ -780,7 +989,8 @@ function openNewReport() {
   let timer = null;
   note.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(draw, 150); update(); });
   send.addEventListener("click", () => submitReport([...selected.values()], note.value, send));
-  openSheet("ほうこく", [note, picked, hint, list], [send]);
+  const rule = h("p", { class: "sub", style: "margin:0", text: "※ 習慣でチェックしたことは、ほうこくしない（習慣より一歩先のことだけ）" });
+  openSheet("ほうこく", [note, rule, picked, hint, list], [send]);
   draw();
   note.focus();
 }
@@ -797,52 +1007,66 @@ async function renderStory() {
     const list = chapters.filter((c) => (c.kind || "ほんぺん") === kind);
     return list.length ? [h("p", { class: "section-title", text: title }), ...list.map(chapterRow)] : [];
   };
-  swap(body, [h("div", { class: "list scroll fill" }, section("ほんぺん", "ほんぺん"), section("よりみち", "よりみち"))], "story");
+  swap(body, [h("div", { class: "list scroll fill" },
+    section("エピソード2", "エピソード2　ツヅキの帝国"),
+    section("ほんぺん", "エピソード1　霧の国"),
+    section("よりみち", "よりみち"))], "story");
 }
 
 function chapterRow(c) {
   return h("button", { type: "button", class: `card chapter${c.locked ? " locked" : ""}`, disabled: c.locked, onclick: () => openChapter(c) },
     h("span", { class: "cbody" },
       h("span", { class: "ctitle", text: c.title }),
-      h("span", { class: "cstate", text: c.locked ? `Lv${c.unlockLv}で解放` : c.state || "" }),
+      h("span", { class: "cstate", text: c.locked ? (c.kind === "エピソード2" ? "前の話のボスを倒すと開く" : `Lv${c.unlockLv}で解放`) : c.state || "" }),
     ),
     c.read ? h("span", { class: "read-badge", text: "よんだ" }) : null,
   );
 }
 
 async function openChapter(c) {
-  const toggleBtn = h("button", { type: "button", class: "primary" }, c.read ? "「よんだ」を外す" : "よんだ");
-  openSheet(c.title, [loadingEl()], [toggleBtn]);
-  toggleBtn.addEventListener("click", async () => {
-    toggleBtn.disabled = true;
-    try {
-      const { chapter } = await api("PATCH", `/api/story/${c.id}`, { read: !c.read });
-      Object.assign(c, chapter);
-      toast(chapter.read ? "よんだ を付けました" : "よんだ を外しました");
-      closeSheet();
-      renderStory();
-    } catch (err) {
-      toast(err.message, true);
-      toggleBtn.disabled = false;
-    }
-  });
+  // 劇で見せる（文字だけで読みたいときは、劇の「ログ」）
+  const wait = h("div", { class: "theater-loading" }, h("span", { class: "spinner" }), h("span", { text: "舞台を じゅんび中…" }));
+  document.body.append(wait);
   try {
-    const { blocks } = await api("GET", `/api/story/${c.id}`);
-    if ($("sheet").hidden || $("sheet-title").textContent !== c.title) return;
-    $("sheet-body").replaceChildren(h("div", { class: "reader" }, blocks.length
-      ? blocks.map((b) => (b.type === "quote" ? h("blockquote", { text: b.text }) : b.type === "heading" ? h("h3", { text: b.text }) : h("p", { text: b.text })))
-      : h("p", { class: "sub", text: "本文がありません" })));
-    $("sheet-body").scrollTop = 0;
+    const [{ blocks }, pet, party] = await Promise.all([api("GET", `/api/story/${c.id}`), storyPet(), loadData("party", "/api/party")]);
+    const hero = party?.members?.find((m) => m.kind === "しゅじんこう")?.name || "";
+    openTheater({ chapter: c, blocks, pet, hero, onRead: () => markRead(c, true), onUnread: () => markRead(c, false) });
   } catch (err) {
-    $("sheet-body").replaceChildren(h("p", { class: "err", text: err.message }));
+    toast(err.message, true);
+  } finally {
+    wait.remove();
   }
+}
+
+async function markRead(c, read) {
+  try {
+    const { chapter } = await api("PATCH", `/api/story/${c.id}`, { read });
+    Object.assign(c, chapter);
+    toast(chapter.read ? "よんだ を付けました" : "よんだ を外しました");
+    state.loadedAt.battle = 0;
+    // エピソード2 の話を読んだら、ボス戦へ
+    if (chapter.read && chapter.kind === "エピソード2" && chapter.boss && !chapter.defeated) {
+      state.view = "battle";
+      show();
+      return;
+    }
+    renderStory();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+// 本文の {あいぼう} などに入れる、あいぼうの名前・段階・型（読めなければ「たまご」として出す）
+async function storyPet() {
+  const data = await loadData("aibou", "/api/aibou");
+  return data?.pet || null;
 }
 
 // ================= きろく（DB_プレイヤー） =================
 async function renderMe() {
   const body = $("me-body");
   if (!state.data.player) body.replaceChildren(loadingEl());
-  await Promise.all([loadPlayer(), loadData("party", "/api/party")]);
+  await Promise.all([loadPlayer(), loadData("party", "/api/party"), loadData("battle", "/api/battle")]);
   if (state.view !== "me") return;
   const p = state.data.player?.player;
   if (!p) return body.replaceChildren(h("p", { class: "err", text: state.errors.player || "読み込めませんでした" }));
@@ -867,11 +1091,196 @@ async function renderMe() {
     typeof p.habitExp === "number" && p.taskExp == null
       ? h("p", { class: "err", text: "タスクEXPが読めません。Notion の DB_タスク管理 に「習慣チェック」を接続すると、Lv にタスクの分が入ります" })
       : null,
+    statsCard(state.data.battle?.stats),
     textCard("ステータス", p.status),
     textCard("なかま", p.party),
     textCard("じゅもん", p.spell),
+    state.data.party?.members?.length ? h("h3", { class: "section-title", text: "パーティー" }) : null,
+    partyGrid(state.data.party?.members, lv),
     p.url ? h("a", { class: "link", href: p.url, target: "_blank", rel: "noopener", style: "text-align:center" }, "Notionで開く") : null,
   )], "me");
+}
+
+// さとしの能力値（これまでの全EXPを4つの型に振り分け。ボスの弱点と同じ能力値が高いほどダメージが少し増える）
+function statsCard(stats) {
+  if (!stats) return null;
+  const max = Math.max(1, ...Object.values(stats));
+  return h("div", { class: "card stack", style: "gap:6px" }, h("h3", { text: "のうりょく" }),
+    Object.entries(stats).map(([t, v]) => h("div", { class: "rank-row" },
+      h("span", { class: "label", text: t }),
+      h("div", { class: "bar", style: `--fill:${TYPE_COLORS[t]}` }, h("span", { style: `width:${(v / max) * 100}%` })),
+      h("b", { text: fmt(v) }))));
+}
+
+// ================= あいぼう（DB_あいぼう） =================
+// 最後に見た段階・型をこの端末に覚えておき、変わっていたら進化の演出を出す（習慣チェック時の小さな表示にも使う）
+const AIBOU_MEMO = "habit-check:aibou";
+function aibouMemo() {
+  try { return JSON.parse(localStorage.getItem(AIBOU_MEMO) || "null"); } catch { return null; }
+}
+function setAibouMemo(v) {
+  try { localStorage.setItem(AIBOU_MEMO, JSON.stringify(v)); } catch { /* 保存できない端末では演出を出さないだけ */ }
+}
+
+function stageLabel(pet) {
+  return pet.type ? `${pet.stage}・${pet.type}` : pet.stage;
+}
+
+// たまごのひび：次の段階までの進み具合で 0〜2
+function crackOf(data) {
+  if (data.pet.stage !== "たまご" || !data.next) return 0;
+  const p = (data.exp - data.from) / (data.next.at - data.from);
+  return p >= 0.85 ? 2 : p >= 0.5 ? 1 : 0;
+}
+
+async function renderAibou() {
+  const body = $("aibou-body");
+  if (!state.data.aibou) body.replaceChildren(loadingEl());
+  const data = await loadData("aibou", "/api/aibou");
+  if (state.view !== "aibou") return;
+  if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.aibou || "読み込めませんでした" }));
+  if (!data.pet) return swap(body, [eggOffer()], "aibou:none");
+
+  const pet = data.pet;
+  const memo = aibouMemo();
+  setAibouMemo({ stage: pet.stage, type: pet.type });
+  const evolving = memo && memo.stage !== pet.stage;
+  const sleeping = pet.stage !== "たまご" && !data.today;
+  const motion = sleeping ? "sleep" : "idle";
+  const bubble = h("p", { class: "bubble", text: sleeping ? pick1(SLEEP_LINES) : petLine(pet.stage, pet.type) });
+  const box = h("div", { class: "pet-box" });
+  const story = h("p", { class: "evolve-story", hidden: true });
+
+  const showPet = (m) => {
+    const el = renderPet(pet.stage, pet.type, m, { crack: crackOf(data) });
+    el.addEventListener("click", () => {
+      el.play("happy");
+      bubble.textContent = pet.stage === "たまご" ? petLine("たまご") : petLine(pet.stage, pet.type);
+      if (navigator.vibrate) navigator.vibrate(8);
+    });
+    box.replaceChildren(el);
+  };
+  if (evolving) {
+    // 前のすがたが光に包まれて、新しいすがたに入れ替わる
+    const old = renderPet(memo.stage, memo.type, memo.stage === "たまご" ? "hatch" : "evolve", { crack: 2 });
+    box.replaceChildren(old);
+    box.classList.add("flash");
+    bubble.textContent = memo.stage === "たまご" ? "……ぴしっ！？" : "……！？";
+    setTimeout(() => {
+      showPet("happy");
+      story.textContent = evolveStory(pet.stage, pet.type, pet.name);
+      story.hidden = false;
+      bubble.textContent = petLine(pet.stage, pet.type);
+      if (pet.stage !== "たまご" && !pet.name) setTimeout(askPetName, 1400);
+    }, 1500);
+  } else {
+    showPet(motion);
+    if (pet.stage !== "たまご" && !pet.name) setTimeout(askPetName, 600);
+  }
+
+  const next = data.next;
+  const gauge = next ? Math.max(0, Math.min(1, (data.exp - data.from) / (next.at - data.from))) : 1;
+  const points = pet.stage === "成体" ? data.points : data.period;
+  const max = Math.max(1, ...Object.values(points));
+  const periodTitle = { たまご: "たまごの あいだの傾向", 幼体: "いまの傾向（成長期の すがたが きまる）", 成長期: "いまの傾向（成体の すがたが きまる）", 成体: "これまでの傾向" }[pet.stage];
+
+  swap(body, [h("div", { class: "scroll fill stack" },
+    h("div", { class: "card pet-card" },
+      h("div", { class: "pet-head" },
+        h("b", { class: "pet-name", text: pet.stage === "たまご" ? "たまご" : pet.name || petName(pet.stage, pet.type) }),
+        h("span", { class: "pet-stage", style: pet.type && TYPE_COLORS[pet.type] ? `--chip:${TYPE_COLORS[pet.type]}` : null, text: stageLabel(pet) }),
+        pet.stage !== "たまご" ? h("button", { type: "button", class: "chip-btn", onclick: askPetName }, "なまえ") : null,
+      ),
+      box,
+      story,
+      bubble,
+    ),
+    h("div", { class: "card stack", style: "gap:6px" },
+      h("div", { class: "kv" },
+        h("span", { text: next ? `${next.stage === "幼体" ? "孵化" : next.stage}まで` : "さいごの すがた" }),
+        h("b", { text: next ? `あと ${fmt(Math.max(0, next.at - data.exp))} EXP` : `総EXP ${fmt(data.exp)}` })),
+      h("div", { class: "bar", style: "flex:none" }, h("span", { style: `width:${gauge * 100}%` })),
+    ),
+    h("div", { class: "card stack", style: "gap:6px" },
+      h("h3", { text: periodTitle }),
+      Object.entries(points).map(([t, v]) => h("div", { class: "rank-row" },
+        h("span", { class: "label", text: t }),
+        h("div", { class: "bar", style: `--fill:${TYPE_COLORS[t]}` }, h("span", { style: `width:${(v / max) * 100}%` })),
+        h("b", { text: fmt(v) }))),
+    ),
+    h("div", { class: "card stack", style: "gap:4px" },
+      h("div", { class: "kv" }, h("span", { text: "たんじょうび" }), h("b", { text: pet.birthday || "—" })),
+      h("div", { class: "kv" }, h("span", { text: "これまでのEXP" }), h("b", { text: fmt(data.exp) })),
+      h("div", { class: "kv" }, h("span", { text: "きょうのEXP" }), h("b", { text: fmt(data.today) })),
+      pet.history ? h("p", { class: "sub", style: "margin:4px 0 0", text: pet.history }) : null,
+    ),
+  )], `aibou:${pet.stage}:${pet.type}`);
+}
+
+function pick1(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function eggOffer() {
+  const btn = h("button", { type: "button", class: "primary" }, "たまごを うけとる");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      state.data.aibou = await api("POST", "/api/aibou");
+      state.loadedAt.aibou = Date.now();
+      setAibouMemo({ stage: "たまご", type: null });
+      renderAibou();
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+  return h("div", { class: "card pet-card" },
+    h("h2", { text: "ふしぎな たまごを みつけた" }),
+    h("div", { class: "pet-box" }, renderPet("たまご", null, "idle")),
+    h("p", { class: "sub", text: "習慣のチェックとタスクのDONEで育ちます。やったことの傾向で、すがたが かわります。おなかが すいたり、弱ったりは しません。" }),
+    btn,
+  );
+}
+
+function askPetName() {
+  const pet = state.data.aibou?.pet;
+  if (!pet || !$("sheet").hidden) return;
+  const input = h("input", { type: "text", maxlength: "20", placeholder: petName(pet.stage, pet.type), "aria-label": "なまえ" });
+  input.value = pet.name || "";
+  const save = h("button", { type: "button", class: "primary" }, "これにする");
+  save.addEventListener("click", async () => {
+    const name = input.value.trim() || petName(pet.stage, pet.type);
+    save.disabled = true;
+    try {
+      const res = await api("PATCH", "/api/aibou", { name });
+      pet.name = res.pet.name;
+      closeSheet();
+      toast(`${pet.name} に なりました`);
+      if (state.view === "aibou") renderAibou();
+    } catch (err) {
+      toast(err.message, true);
+      save.disabled = false;
+    }
+  });
+  openSheet(pet.name ? "なまえを かえる" : "なまえを つけよう", [
+    h("p", { class: "sub", text: "あいぼうの なまえを きめてください（20字まで）。" }),
+    input,
+  ], [save]);
+  input.focus();
+}
+
+// 習慣をチェックしたとき、あいぼうが小さく出てきて喜ぶ
+function aibouPop(habit) {
+  const memo = aibouMemo();
+  if (!memo || !habit.aibou) return;
+  const { exp, type } = habit.aibou;
+  const pop = h("div", { class: "aibou-pop", "aria-hidden": "true" },
+    renderPet(memo.stage, memo.type, "happy", { size: 44 }),
+    h("span", { class: "pop-text", style: type ? `--chip:${TYPE_COLORS[type]}` : null, text: `あいぼう ＋${exp}${type ? ` ${type}` : ""}` }));
+  document.querySelector(".aibou-pop")?.remove();
+  document.body.append(pop);
+  setTimeout(() => pop.remove(), 1900);
 }
 
 // ---------- シート ----------
@@ -964,6 +1373,7 @@ if ("serviceWorker" in navigator) {
 }
 
 function start() {
+  setupBadgeButton();
   show();
   if (!memoryKey) return;
   loadDay();

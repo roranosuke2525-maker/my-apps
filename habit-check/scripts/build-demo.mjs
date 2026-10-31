@@ -4,6 +4,7 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { inlinePage, root } from "./inline-page.mjs";
+import { habitType, habitWeight } from "../src/aibou-config.js";
 
 const out = process.argv[2] || join(root, "dist", "demo.html");
 
@@ -25,13 +26,14 @@ const mock = `
 // ---- デモ用：Worker の代わりに画面の中で返事をする（Notion には何も送らない） ----
 (() => {
   const HABITS = ${JSON.stringify(habits)};
+  const AIBOU = ${JSON.stringify(Object.fromEntries(habits.map(([n]) => [n, { type: habitType(n), exp: habitWeight(n) }])))};
   const EXP_PER_CHECK = 5, EXP_PER_LV = 150;
   const habitList = HABITS.map(([name, hint]) => {
     const m = name.match(/^([◆◇★])\\s*([☼☀◷◐☾↻])[\\uFE0E\\uFE0F]?\\s*(.+)$/u);
     const slot = { "☼": "morning", "☀": "noon", "◷": "noon", "◐": "evening", "☾": "night", "↻": "anytime" }[m[2]];
     const label = m[3].trim();
     const d = label.match(/[（(]([日月火水木金土]+)[）)]\\s*$/u);
-    return { name, label, must: m[1] === "◆", bonus: m[1] === "★", slot, days: d ? [...d[1]].map((c) => "日月火水木金土".indexOf(c)) : null, hint };
+    return { name, label, must: m[1] === "◆", bonus: m[1] === "★", slot, days: d ? [...d[1]].map((c) => "日月火水木金土".indexOf(c)) : null, hint, aibou: AIBOU[name] };
   });
   const jst = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
   const addDays = (d, n) => { const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -70,16 +72,57 @@ const mock = `
     { id: "s".repeat(31) + "2", title: "第2章　きこりのモリ", kind: "ほんぺん", order: 2, unlockLv: 3, state: "よめる", read: false },
     { id: "s".repeat(31) + "3", title: "第3章　霧の湖", kind: "ほんぺん", order: 3, unlockLv: 15, state: "", read: false },
     { id: "s".repeat(31) + "4", title: "寄り道　台所の小人", kind: "よりみち", order: 101, unlockLv: 3, state: "依頼「台所の砦」を1回たっせいで よめる", read: false },
+    { id: "s".repeat(31) + "5", title: "第1話　たまごと灰", kind: "エピソード2", order: 201, unlockLv: 1, state: "⚔️ ボスと たたかっている", read: true, boss: "灰のスライム", hp: 300, weak: "しっかり" },
+    { id: "s".repeat(31) + "6", title: "第2話　ぴしっ、ぱりん", kind: "エピソード2", order: 202, unlockLv: 1, state: "🔒 前の話のボスを倒すと開く", read: false, locked: true },
   ];
   const storyText = [
     { type: "p", text: "（デモ用の文章です）木の香りのする部屋で、ひかるは目をさました。" },
     { type: "p", text: "窓の外では、朝の霧がゆっくりと晴れていく。" },
     { type: "quote", text: "【SYSTEM】デモの章を読みました" },
   ];
-  const withLv = (c) => ({ ...c, playerLv: level(), locked: level() < c.unlockLv });
+  const withLv = (c) => ({ ...c, playerLv: level(), locked: c.locked || level() < c.unlockLv });
+  // ぼうけん：第1話のボスと、タスクのモンスター（作りもの）
+  const fam = { ホコリ: ["#9aa0a6", "#6f757b", "#d7dadd"], コイン: ["#f2c14e", "#c9962a", "#fff0b8"], モジ: ["#7fb2f0", "#4f84c9", "#d4e6fc"], ヨナキ: ["#f4a3b8", "#d97c95", "#ffd9e3"] };
+  const mon = (i, family, rank, shape, title, stars, status, weight) => ({ id: "t" + i, url: "", title, status, weight, family, colors: fam[family], shape, name: family + rank, stars, ageDays: stars * 14 + 3 });
+  const monsters = [
+    mon(1, "ホコリ", "ドラゴン", "dragon", "物置を空にする", 5, "🕰 SOMEDAY", "XL"), mon(2, "コイン", "ゴーレム", "golem", "保険を見直す", 3, "📥 INBOX", "L"),
+    mon(3, "モジ", "ゴブリン", "goblin", "本を1冊読みきる", 1, "⏭ NEXT", "M"), mon(4, "ヨナキ", "スライム", "slime", "保育園の書類", 0, "▶️ DOING", "S"),
+    mon(5, "ホコリ", "スライム", "slime", "玄関のマット", 0, "⏭ NEXT", "S"),
+  ];
+  // そうび（作りもの）
+  const items = [
+    { id: "i1", name: "吸込口のたて", slot: "たて", type: "やさしさ", rarity: 1, effect: 3, crit: false, equipped: true, date: addDays(today, -26) },
+    { id: "i2", name: "風見のたて", slot: "たて", type: "やさしさ", rarity: 3, effect: 8, crit: true, equipped: false, date: addDays(today, -3) },
+    { id: "i3", name: "一行の革よろい", slot: "よろい", type: "しっかり", rarity: 1, effect: 3, crit: false, equipped: true, date: addDays(today, -15) },
+    { id: "i4", name: "一杯目のしずく", slot: "アクセサリー", type: "ぜんぶ", rarity: 1, effect: 3, crit: false, equipped: false, date: addDays(today, -26) },
+    { id: "i5", name: "栞のはちまき", slot: "かぶと", type: "かしこさ", rarity: 2, effect: 5, crit: false, equipped: false, date: addDays(today, -8) },
+  ];
+  const equipNow = () => {
+    const b = {};
+    for (const it of items.filter((x) => x.equipped)) {
+      if (it.type === "ぜんぶ") for (const t of ["ちから", "かしこさ", "やさしさ", "しっかり"]) b[t] = (b[t] || 0) + it.effect / 2;
+      else b[it.type] = (b[it.type] || 0) + it.effect;
+    }
+    return b;
+  };
+  const battle = () => {
+    const t = Object.entries(rows[today].checks).filter(([, v]) => v).reduce((s, [n]) => s + AIBOU[n].exp, 0);
+    return { boss: { chapterId: "s".repeat(31) + "5", chapter: "第1話　たまごと灰", name: "灰のスライム", hp: 300, weak: "しっかり", start: addDays(today, -1),
+      damage: Math.min(300, 140 + t), today: t, petHit: false, mult: 1.02, defeatedOn: null,
+      log: [{ date: today, kind: "habit", damage: t }, { date: addDays(today, -1), kind: "task", name: "コインゴーレム", title: "保険を見直す", stars: 3, family: "コイン", shape: "golem", colors: fam.コイン, damage: 84 }, { date: addDays(today, -1), kind: "habit", damage: 56 }] },
+      next: null, cleared: false, stats: { ちから: 31, かしこさ: 52, やさしさ: 40, しっかり: 63 }, equip: equipNow(), pet: { name: "", stage: "成長期", type: "ちから" }, monsters, moreMonsters: false };
+  };
   const player = () => ({ id: "player", url: "", name: "デモのプレイヤー", level: level(), toNext: EXP_PER_LV - (total() % EXP_PER_LV),
     totalExp: total(), habitExp: habitExp(), taskExp, guildExp,
     status: "ちから 12 ／ まもり 9 ／ かしこさ 14", party: "モリ（きこり）・ノア（ものしり）", spell: "ととのえ（Lv3）\\nはやおき（Lv5）" });
+  // あいぼう：成長期（ちから）の途中。今日のチェックのぶんだけ増える
+  const pet = { id: "pet", url: "", name: "", birthday: addDays(today, -20), stage: "成長期", childType: "ちから", adultType: null, type: "ちから",
+    history: addDays(today, -19) + " 孵化／" + addDays(today, -6) + " 成長期（ちから）" };
+  const aibouData = () => {
+    const t = Object.entries(rows[today].checks).filter(([, v]) => v).reduce((s, [n]) => s + AIBOU[n].exp, 0);
+    return { pet, exp: 5200 + t, today: t, from: 4000, next: { stage: "成体", at: 18000 }, evolved: [],
+      points: { ちから: 2100, かしこさ: 1500, やさしさ: 1300, しっかり: 1600 + t }, period: { ちから: 620, かしこさ: 310, やさしさ: 280, しっかり: 400 + t } };
+  };
   const reply = (data, status = 200) => new Promise((ok) =>
     setTimeout(() => ok(new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } })), 200));
   const realFetch = window.fetch.bind(window);
@@ -107,12 +150,24 @@ const mock = `
     if (p === "/api/party") return reply({ members: members.filter((m) => m.needLv <= level()) });
     if (p === "/api/guild" && method === "GET") return reply({ quests: quests.map((q) => ({ ...q, playerLv: level() })), reports });
     if (p === "/api/guild/reports") {
-      const q = quests.find((x) => x.id === body.questId);
+      const q = quests.find((x) => x.id === (body.questIds?.[0] || body.questId));
       q.count += 1; q.totalExp += q.exp; guildExp += q.exp;
       const r = { id: "r" + Date.now(), note: body.note.trim(), questIds: [q.id], date: new Date().toISOString() };
       reports.unshift(r);
-      return reply({ report: r });
+      const drop = { id: "i" + Date.now(), name: "鉄のよろい", slot: "よろい", type: "しっかり", rarity: 3, effect: 8, crit: true, equipped: false, date: today, quest: q.title };
+      items.push(drop);
+      return reply({ report: r, drops: [drop] });
     }
+    if (p === "/api/battle") return reply(battle());
+    if (p === "/api/items") return reply({ items, drops: [], slots: [] });
+    if (p.startsWith("/api/items/")) {
+      const it = items.find((x) => x.id === p.split("/").pop());
+      if (body.equipped) items.forEach((x) => { if (x.slot === it.slot) x.equipped = false; });
+      it.equipped = body.equipped;
+      return reply({ items, drops: [], slots: [] });
+    }
+    if (p === "/api/aibou" && method === "PATCH") { pet.name = body.name; return reply({ pet }); }
+    if (p === "/api/aibou") return reply(aibouData());
     if (p === "/api/story") return reply({ chapters: chapters.map(withLv) });
     if (p.startsWith("/api/story/")) {
       const c = chapters.find((x) => x.id === p.split("/").pop());
