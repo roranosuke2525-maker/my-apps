@@ -36,7 +36,8 @@ export default {
       const m = request.method;
       const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when)$/i);
       const item = p.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
-      const stock = p.match(/^\/api\/stock\/([0-9a-f-]{32,36})\/(refill|restocked)$/i);
+      const stock = p.match(/^\/api\/stock\/([0-9a-f-]{32,36})(?:\/(refill|restocked))?$/i);
+      const jan = p.match(/^\/api\/jan\/(\d{8}|\d{12,13})$/);
 
       if (p === "/api/state" && m === "GET") return json(await loadState(notion, env));
       if (p === "/api/lists" && m === "POST") return json(await createList(notion, env, await readJson(request)));
@@ -50,6 +51,10 @@ export default {
       if (p === "/api/stock" && m === "POST") return json(await addStock(notion, env, await readJson(request)));
       if (stock?.[2] === "refill" && m === "POST") return json(await refill(notion, env, stock[1]));
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1]));
+      if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
+      if (p === "/api/lookup" && m === "POST") return json(await lookupPage((await readJson(request))?.url));
+      if (jan && m === "GET") return json(await lookupJan(env, jan[1]));
+      if (p === "/api/identify" && m === "POST") return json(await identify(env, await readJson(request)));
       if (p === "/api/push" && m === "GET") return json(pushReady(env) ? { publicKey: (await vapidOf(env)).publicKey, ready: true } : { publicKey: "", ready: false });
       if (p === "/api/push/status" && m === "POST") return json(await pushStatus(env, await readJson(request)));
       if (p === "/api/push" && m === "PUT") return json(await pushSubscribe(env, await readJson(request)));
@@ -148,6 +153,14 @@ function rollupDate(prop) {
   return null;
 }
 
+function imageOf(prop) {
+  for (const f of prop?.files || []) {
+    const src = f.type === "external" ? f.external?.url : f.file?.url;
+    if (/^https:\/\//.test(src || "")) return src;
+  }
+  return "";
+}
+
 function taskOf(page) {
   const p = page.properties || {};
   return {
@@ -180,6 +193,8 @@ function stockOf(page, today, restockedOn) {
     size: propNum(p["内容量"]),
     bought: propDate(p["購入日（手入力）"]),
     rollup: rollupDate(p["最終補充日"]),
+    jan: propText(p.JAN),
+    image: imageOf(p["画像"]),
   };
   const formulaEnd = formulaDate(p["切れる予定日"]);
   const base = [x.bought, x.rollup, restockedOn].filter(Boolean).sort().at(-1) || null;
@@ -466,35 +481,137 @@ async function restocked(notion, env, id) {
   return { stock: after, done: open.map((t) => t.id) };
 }
 
-async function addStock(notion, env, body) {
-  const name = clean(body?.name, NAME_MAX, "名前");
-  if (!name) throw httpError(400, "名前を入れてください");
-  const cat = CATS.includes(body?.cat) ? body.cat : null;
-  const freq = FREQS.includes(body?.freq) ? body.freq : null;
+// 在庫の列を body から組み立てる（edit のときは送られてきた項目だけ）
+function stockProps(body, { edit = false } = {}) {
+  const has = (k) => !edit || (body && Object.prototype.hasOwnProperty.call(body, k));
+  const props = {};
+  if (has("name")) {
+    const name = clean(body?.name, NAME_MAX, "名前");
+    if (!name) throw httpError(400, "名前を入れてください");
+    props["名前"] = { title: rich(name) };
+  }
+  if (has("cat")) props["カテゴリ"] = { select: CATS.includes(body?.cat) ? { name: body.cat } : null };
+  if (has("freq")) props["使う頻度"] = { select: FREQS.includes(body?.freq) ? { name: body.freq } : null };
   const num = (v, label) => {
     if (v === "" || v == null) return null;
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0 || n > 1e6) throw httpError(400, `${label}の数が正しくありません`);
     return n;
   };
-  const use = num(body?.use, "使う数");
-  const size = num(body?.size, "内容量");
-  const link = String(body?.link || "").trim();
-  if (link && !/^https:\/\/\S{1,1900}$/.test(link)) throw httpError(400, "URL は https:// で始めてください");
-  const bought = dateOf(body?.bought) || todayJst();
-  const props = {
-    "名前": { title: rich(name) },
-    "購入日（手入力）": { date: { start: bought } },
-    ...(cat ? { "カテゴリ": { select: { name: cat } } } : {}),
-    ...(freq ? { "使う頻度": { select: { name: freq } } } : {}),
-    ...(use != null ? { "使う数": { number: use } } : {}),
-    ...(size != null ? { "内容量": { number: size } } : {}),
-    ...(link ? { "URL": { url: link } } : {}),
-  };
-  const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.DAILY_DS_ID }, properties: props });
+  if (has("use")) props["使う数"] = { number: num(body?.use, "使う数") };
+  if (has("size")) props["内容量"] = { number: num(body?.size, "内容量") };
+  if (has("link")) {
+    const link = String(body?.link || "").trim();
+    if (link && !/^https:\/\/\S{1,1900}$/.test(link)) throw httpError(400, "URL は https:// で始めてください");
+    props["URL"] = { url: link || null };
+  }
+  if (has("memo")) props["メモ"] = { rich_text: clean(body?.memo, 1000, "メモ") ? rich(clean(body.memo, 1000, "メモ")) : [] };
+  if (has("jan")) {
+    const j = String(body?.jan || "").replace(/\D/g, "");
+    if (j && !/^(\d{8}|\d{12,13})$/.test(j)) throw httpError(400, "バーコードは8桁か13桁の数字です");
+    props.JAN = { rich_text: j ? rich(j) : [] };
+  }
+  if (has("image")) {
+    const img = String(body?.image || "").trim();
+    if (img && !/^https:\/\/\S{1,1900}$/.test(img)) throw httpError(400, "画像の URL は https:// で始めてください");
+    props["画像"] = { files: img ? [{ name: "商品画像", type: "external", external: { url: img } }] : [] };
+  }
+  if (!edit || body?.bought) props["購入日（手入力）"] = { date: { start: dateOf(body?.bought) || todayJst() } };
+  // 空の値は作るときには送らない
+  if (!edit) for (const [k, v] of Object.entries(props)) if (v.select === null || v.number === null || v.url === null || v.files?.length === 0 || v.rich_text?.length === 0) delete props[k];
+  return props;
+}
+
+async function addStock(notion, env, body) {
+  const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.DAILY_DS_ID }, properties: stockProps(body) });
   const x = stockOf(page, todayJst());
   x.open = [];
   return { stock: x };
+}
+
+// 名前・使う頻度・商品（URL・画像・JAN）などを直す。商品を変えたときは bought で買った日も今日にできる
+async function editStock(notion, env, id, body) {
+  const page = await stockPage(notion, env, id);
+  const props = stockProps(body, { edit: true });
+  if (!Object.keys(props).length) throw httpError(400, "変える内容がありません");
+  const after = await notion("PATCH", `/pages/${normalizeId(page.id)}`, { properties: props });
+  return { stock: stockOf(after, todayJst()) };
+}
+
+// ---------- 商品ページ・バーコード・写真から商品を調べる ----------
+const UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+function publicHttps(raw) {
+  let u;
+  try { u = new URL(String(raw || "")); } catch { throw httpError(400, "URL が正しくありません"); }
+  if (u.protocol !== "https:" || /^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || !u.hostname.includes(".")) throw httpError(400, "https の商品ページを指定してください");
+  return u;
+}
+const decodeHtml = (s) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#x2F;/g, "/");
+// 商品ページの og:image（Amazon は商品画像の URL）と名前を拾う
+export function pickMeta(html, base) {
+  const meta = (key) => {
+    const re = new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]*>`, "i");
+    const tag = html.match(re)?.[0];
+    return tag ? decodeHtml(tag.match(/content=["']([^"']*)["']/i)?.[1] || "") : "";
+  };
+  let image = meta("og:image") || meta("twitter:image") || html.match(/data-old-hires=["'](https:[^"']+)["']/)?.[1] || html.match(/"hiRes":"(https:[^"]+)"/)?.[1] || html.match(/https:\/\/m\.media-amazon\.com\/images\/I\/[\w.%-]+\.jpg/)?.[0] || "";
+  if (image) { try { image = new URL(image, base).href; } catch { image = ""; } }
+  if (!/^https:/.test(image)) image = "";
+  const title = (meta("og:title") || decodeHtml(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || "")).replace(/\s+/g, " ").trim().slice(0, 200);
+  return { image, title };
+}
+async function lookupPage(raw) {
+  const u = publicHttps(raw);
+  let res;
+  try { res = await fetch(u.href, { headers: { "User-Agent": UA, "Accept-Language": "ja,en;q=0.5", Accept: "text/html" }, redirect: "follow" }); } catch { throw httpError(502, "商品ページを開けませんでした"); }
+  if (!res.ok) throw httpError(502, `商品ページを開けませんでした（${res.status}）`);
+  const html = (await res.text()).slice(0, 600000);
+  const got = pickMeta(html, res.url || u.href);
+  if (!got.image) throw httpError(404, "このページから画像を見つけられませんでした（画像の URL を直接貼ってもよい）");
+  return got;
+}
+
+// Yahoo!ショッピングの商品検索で JAN から名前・画像・ページを引く（YAHOO_APPID がなければ使わない）
+export function cleanItemName(name) {
+  return String(name || "").replace(/【[^】]*】|［[^］]*］|\[[^\]]*\]|★[^★]*★|《[^》]*》/g, " ").replace(/送料無料|ポイント\d+倍|あす楽|まとめ買い/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+async function lookupJan(env, code) {
+  if (!env.YAHOO_APPID) return { configured: false };
+  const res = await fetch(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=${encodeURIComponent(env.YAHOO_APPID)}&jan_code=${code}&results=5`);
+  if (!res.ok) throw httpError(502, `商品の検索に失敗しました（${res.status}）`);
+  const data = await res.json().catch(() => ({}));
+  const hit = (data.hits || []).find((h) => h.name) || null;
+  if (!hit) return { configured: true, found: false };
+  return { configured: true, found: true, name: cleanItemName(hit.name), image: hit.exImage?.url || hit.image?.medium || "", url: hit.url || "", brand: hit.brand?.name || "" };
+}
+
+const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+// カメラの1枚から商品を当てる（Cloudflare Workers AI）。候補（在庫の名前）があれば、その中の同じ品も選ばせる
+async function identify(env, body) {
+  if (!env.AI) throw httpError(500, "Workers AI が設定されていません");
+  const m = String(body?.image || "").match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m || m[2].length > 700000) throw httpError(400, "画像が正しくないか大きすぎます");
+  const names = (Array.isArray(body?.names) ? body.names : []).map((n) => String(n).slice(0, 60)).slice(0, 150);
+  const prompt = `写真の中央に写っている商品を見て、JSONだけを返してください。
+{"name":"商品名（ブランド・品名・容量が読めれば入れる。日本語）","category":"日用品|消耗品|食品|育児|サプリ|美容 のどれか","match":"下の在庫リストに同じ商品があればその名前をそのまま。なければ空文字"}
+在庫リスト：${names.join(" / ") || "（なし）"}`;
+  // 画像はメッセージの中に data URL で渡す（image 引数に分けると "no user-supplied messages" になる）
+  const run = () => env.AI.run(VISION_MODEL, { messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: body.image } }] }], max_tokens: 200 });
+  let out;
+  try { out = await run(); } catch (err) {
+    // はじめて使うときはモデルの利用規約への同意が要る
+    if (!/agree/i.test(String(err?.message))) throw httpError(502, `写真から商品を当てられませんでした（${String(err?.message || "").slice(0, 120)}）`);
+    await env.AI.run(VISION_MODEL, { prompt: "agree" }).catch(() => {});
+    try { out = await run(); } catch (e2) { throw httpError(502, `写真から商品を当てられませんでした（${String(e2?.message || "").slice(0, 120)}）`); }
+  }
+  const resp = out?.response ?? out?.result?.response ?? "";
+  // 返事は JSON の文字列か、すでに読み取られたオブジェクト
+  const text = typeof resp === "string" ? resp : "";
+  let j = typeof resp === "object" && resp ? resp : {};
+  if (text) { try { j = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}"); } catch { /* 形が崩れていたら名前だけ拾う */ } }
+  const name = String(j.name || text.replace(/[{}"]/g, "").split("\n")[0] || "").trim().slice(0, 80);
+  const match = names.includes(j.match) ? j.match : "";
+  return { name, category: CATS.includes(j.category) ? j.category : "", match };
 }
 
 // ---------- アラート ----------

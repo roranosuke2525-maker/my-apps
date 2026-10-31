@@ -1,7 +1,7 @@
 // Worker の動作確認。Notion API と通知サービスは偽物に差し替える（値はすべて作りもの）。 npm test
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import worker, { alertOf, runAlerts } from "../src/worker.js";
+import worker, { alertOf, runAlerts, pickMeta, cleanItemName } from "../src/worker.js";
 import { b64u } from "../src/webpush.js";
 
 const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
@@ -111,6 +111,11 @@ beforeEach(() => {
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
     const body = init.body && typeof init.body === "string" ? JSON.parse(init.body) : init.body || null;
+    if (u.hostname === "shopping.yahooapis.jp") {
+      calls.push({ method: "GET", path: "yahoo", url: u.href });
+      return new Response(JSON.stringify(u.searchParams.get("jan_code") === "4901234567894" ? { hits: [{ name: "【送料無料】見本洗剤 つめかえ用 400ml", exImage: { url: "https://item-shopping.c.yimg.jp/x.jpg" }, url: "https://store.shopping.yahoo.co.jp/x" }] } : { hits: [] }), { status: 200 });
+    }
+    if (u.hostname === "shop.example.jp") return new Response(`<html><head><title>見本 | 店</title><meta property="og:image" content="/img/p.jpg"></head></html>`, { status: 200 });
     if (u.hostname.endsWith("push.apple.com")) { pushes.push({ url: u.href, headers: init.headers, body }); return new Response("", { status: 201 }); }
     const path = u.pathname.replace(/^\/v1/, "");
     calls.push({ method: init.method, path, body });
@@ -384,4 +389,54 @@ test("買い物のリマインド：30分前と時刻ちょうどに1度ずつ�
   await runAlerts(env, t0 + 5 * 60e3);
   assert.equal(pushes.length, 2);
   assert.equal((await decrypt(new Uint8Array(pushes[1].body))).title, "🛒 買い物の時間です（10:00）");
+});
+
+test("在庫を直す：使う頻度・商品（名前・URL・画像・JAN）。商品を変えたら買った日を今日に", async () => {
+  const res = await api("PATCH", `/api/stock/${D1}`, { name: "新しいトイレットペーパー", freq: "毎週", use: 2, image: "https://img.example/p.jpg", jan: "4901234567894", bought: "today" });
+  assert.equal(res.status, 200);
+  const p = pages.get(D1).properties;
+  assert.equal(p["名前"].title[0].text.content, "新しいトイレットペーパー");
+  assert.equal(p["使う頻度"].select.name, "毎週");
+  assert.equal(p["画像"].files[0].external.url, "https://img.example/p.jpg");
+  assert.equal(p.JAN.rich_text[0].text.content, "4901234567894");
+  assert.equal(p["購入日（手入力）"].date.start, today);
+  assert.equal(p["カテゴリ"].select.name, "日用品"); // 送らなかった列はそのまま
+  assert.equal((await api("PATCH", `/api/stock/${D1}`, { jan: "12" })).status, 400);
+  assert.equal((await api("PATCH", `/api/stock/${D1}`, { image: "http://x" })).status, 400);
+  assert.equal((await api("PATCH", `/api/stock/${L1}`, { name: "x" })).status, 403);
+  assert.equal((await api("PATCH", `/api/stock/${D1}`, {})).status, 400);
+});
+
+test("商品ページから画像を拾う", async () => {
+  assert.deepEqual(pickMeta(`<meta content="https://a.jp/i.jpg" property="og:image"><meta property="og:title" content="商品 &amp; 名前">`, "https://a.jp/p"), { image: "https://a.jp/i.jpg", title: "商品 & 名前" });
+  assert.equal(pickMeta(`<img id="landingImage" data-old-hires="https://m.media-amazon.com/images/I/81abc.jpg">`, "https://www.amazon.co.jp/dp/x").image, "https://m.media-amazon.com/images/I/81abc.jpg");
+  const res = await api("POST", "/api/lookup", { url: "https://shop.example.jp/item/1" });
+  assert.deepEqual(res.data, { image: "https://shop.example.jp/img/p.jpg", title: "見本 | 店" });
+  assert.equal((await api("POST", "/api/lookup", { url: "http://shop.example.jp/" })).status, 400);
+  assert.equal((await api("POST", "/api/lookup", { url: "https://127.0.0.1/" })).status, 400);
+});
+
+test("バーコードから商品を引く（Yahoo!ショッピング。Client ID がなければ使わない）", async () => {
+  assert.deepEqual((await api("GET", "/api/jan/4901234567894")).data, { configured: false });
+  env.YAHOO_APPID = "fake-id";
+  const hit = (await api("GET", "/api/jan/4901234567894")).data;
+  assert.equal(hit.name, "見本洗剤 つめかえ用 400ml");
+  assert.equal(hit.image, "https://item-shopping.c.yimg.jp/x.jpg");
+  assert.equal((await api("GET", "/api/jan/4900000000000")).data.found, false);
+  assert.equal((await api("GET", "/api/jan/12ab")).status, 404);
+  assert.equal(cleanItemName("★ポイント5倍★ 洗剤 【あす楽】"), "洗剤");
+});
+
+test("写真から商品を当てる（Workers AI。在庫の中の同じ品を選ばせる）", async () => {
+  const seen = [];
+  env.AI = { run: async (model, input) => { seen.push(input); if (seen.length === 1) throw new Error("Please agree to the license"); return input.prompt === "agree" ? {} : { response: '{"name":"見本洗剤 400ml","category":"日用品","match":"洗剤"}' }; } };
+  const img = "data:image/jpeg;base64," + Buffer.from("fakejpeg").toString("base64");
+  const res = await api("POST", "/api/identify", { image: img, names: ["洗剤", "サプリ"] });
+  assert.deepEqual(res.data, { name: "見本洗剤 400ml", category: "日用品", match: "洗剤" });
+  assert.equal(seen[1].prompt, "agree"); // はじめは規約に同意してからやり直す
+  assert.match(seen[2].messages[0].content[0].text, /洗剤 \/ サプリ/);
+  assert.equal(seen[2].messages[0].content[1].image_url.url, img);
+  env.AI = { run: async () => ({ response: { name: "見本シャンプー", category: "美容", match: "" } }) }; // 読み取り済みで返ることもある
+  assert.deepEqual((await api("POST", "/api/identify", { image: img, names: [] })).data, { name: "見本シャンプー", category: "美容", match: "" });
+  assert.equal((await api("POST", "/api/identify", { image: "nope" })).status, 400);
 });

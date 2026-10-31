@@ -18,6 +18,10 @@ crons = ["*/15 * * * *"]
 binding = "SUBS"
 id = "03aa8893821942c0a13fd8f7dba53529"
 
+# 写真から商品を当てる（Cloudflare Workers AI。無料枠の中で使う）
+[ai]
+binding = "AI"
+
 [vars]
 # データソースID（IDだけでは読み書きできない。権限はインテグレーションの接続で決まる）
 TASK_DS_ID = "21762844-acbe-8075-bbe6-000bcaf22801"   # DB_タスク管理（買い物リスト＝分類タグ BUY のタスク）
@@ -30,3 +34,4 @@ VAPID_SUBJECT = "https://kaimono.roranosuke2525.workers.dev"
 # 秘密の値は Cloudflare の「変数とシークレット」か wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
 #   APP_KEY      : アプリを開くときの合言葉（16文字以上）
+#   YAHOO_APPID  : Yahoo!ショッピングAPI の Client ID（バーコードから商品名を引く。なくても動く）
