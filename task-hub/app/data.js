@@ -208,7 +208,7 @@
       // この1週間の済み（セレナとの関係の累計に数える）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is_on_or_after", value: { type: "relative", value: "one_week_ago" } }], sort: sortEdited, limit: 100 }),
     ]);
-    if (week.status === "fulfilled") S.doneWeek = week.value.results.map((r) => ({ id: idOf(r.url), edited: r["最終更新日時"] || null }));
+    if (week.status === "fulfilled") S.doneWeek = week.value.results.map((r) => ({ id: idOf(r.url), edited: r["最終更新日時"] || null, tag: r["分類タグ"] || null }));
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({
       url: r.url, id: idOf(r.url), name: text(r["名前"]), no: Number(r["回"]) || 0, rate: Number(r["今日やる完了率"]) || 0, done: Number(r["完了件数"]) || 0, inflow: Number(r["流入件数"]) || 0,

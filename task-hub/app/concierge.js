@@ -82,7 +82,8 @@
   const REACT = ["かしこまりました。…べ、別にあなたのためではありません。", "承知しました。こういうのは、早いほうがいいですから。", "はい、やっておきました。…お礼は結構です。"];
   function openConcierge(panel = "") {
     const o = outfit(); const list = advise(); const auto = !store.get("outfit") || store.get("outfit") === "auto";
-    const ev = pendingEvent(); if (ev && !panel) { playEvent(ev); return; }
+    const ev = pendingEvent("serena"); if (ev && !panel) { playEvent("serena", ev); return; }
+    sceneCtx = { hero: "serena", panel };
     const lv = bondLv(); const up = panel ? "" : levelUpLine();
     lines = [...(up ? [up] : []), greetLine(), ...list.map((x) => callName(x.say)).filter(Boolean), ...BOND_IDLE[lv - 1]]; lineAt = 0;
     const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
@@ -90,11 +91,11 @@
     const choices = list.slice(0, 3).map((x, i) => x.acts?.length ? `<button type="button" data-cact="${x.acts[0][0]}">${x.icon} ${esc(x.acts[0][1])}</button>` : `<button type="button" data-scenelog="${i}">${x.icon} ${esc(short(x.title, 20))}</button>`).join("");
     const sc = $("#scene"); sc.hidden = false;
     sc.innerHTML = `<div class="tint" style="background:${tint}"></div>
-      <div class="sbar"><span class="love">${loveHtml()}</span>${bondHtml()}<span class="sp"></span><button type="button" data-scenelog="-1">LOG</button><button type="button" data-scenepanel="album">思い出</button><button type="button" data-avpick="1">着替え</button><button type="button" data-sceneclose="1">とじる</button></div>
+      <div class="sbar"><span class="love">${loveHtml()}</span>${bondHtml()}<span class="sp"></span><button type="button" data-heroes="1">ヒロイン${anyPending() ? "<em class=\"new\">NEW</em>" : ""}</button><button type="button" data-scenepanel="album">思い出</button><button type="button" data-avpick="1">着替え</button><button type="button" data-sceneclose="1">とじる</button></div>
       <div class="chara"><div class="floor"></div><canvas id="serena" role="img" aria-label="${CNAME}（${esc(o.label)}）"></canvas></div>
       <div class="msgwrap"><div class="choices" id="choices" hidden>${choices}<button type="button" data-sceneclose="1">あとで</button></div>
         <div class="msg" id="msgbox"><span class="nameplate">${CNAME}<small>${esc(o.label)}${auto ? "" : "（固定）"}</small></span><div class="line" id="sayline"></div><span class="next" aria-hidden="true">▼</span><span class="menu2"><button type="button" data-scenelog="-1">LOG</button><button type="button" data-avpick="1">CLOSET</button></span></div></div>
-      ${panel === "closet" ? closetHtml(o, auto) : panel === "album" ? albumHtml() : panel.startsWith("log") ? logHtml(list, +panel.split(":")[1] || 0) : ""}`;
+      ${panel === "closet" ? closetHtml(o, auto) : panel === "album" ? albumHtml("serena") : panel === "heroes" ? heroesHtml() : panel.startsWith("log") ? logHtml(list, +panel.split(":")[1] || 0) : ""}`;
     serena.mount($("#serena"), o, lv >= 3 && lateOf().length < 3);
     if (up) serena.blush(5000);
     typeLine(lines[0], () => { $("#choices") && ($("#choices").hidden = false); });
@@ -195,5 +196,5 @@
     const n = S.mode === "loading" ? 0 : advise().filter((x) => x.pri >= 50).length;
     b.innerHTML = `<span class="face" style="${faceStyle(outfit(), 54)}"></span>${n ? `<span class="badge">${n}</span>` : ""}`;
     b.hidden = S.tab === "flow";
-    const lv = $("#love"); if (lv) lv.innerHTML = loveHtml();
+    const lv = $("#love"); if (lv) lv.innerHTML = loveHtml() + (anyPending() ? `<em class="new">NEW</em>` : "");
   }

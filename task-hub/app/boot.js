@@ -67,13 +67,15 @@
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
     if (d.quick) { openQuick(d.quick); return; }
-    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inS = !!el.closest("#scene"); if (!inS && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inS && !$("#scene").hidden) { openConcierge("log"); } }); return; }
+    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inS = !!el.closest("#scene"); if (!inS && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inS && !$("#scene").hidden) { if (sceneCtx.hero === "serena") openConcierge(sceneCtx.panel || "log"); else openHeroine(sceneCtx.hero, sceneCtx.panel); } }); return; }
     if (d.mopen) { closeModal(); if (!$("#scene").hidden) closeScene(); openTask(d.mopen); return; }
     if (d.sceneclose) { closeScene(); return; }
-    if (d.evskip) { openConcierge("album"); return; }
-    if (d.evplay) { const ev = EVENTS.find((x) => x.key === d.evplay); if (ev) playEvent(ev); return; }
+    if (d.evskip) { if (d.evskip === "serena") openConcierge(); else openHeroine(d.evskip); return; }
+    if (d.evplay) { const [k, n] = d.evplay.split(":"); const ch = (CHAPTERS[k] || []).find((c) => c.n === +n); if (ch) playEvent(k, ch); return; }
+    if (d.hero) { openHeroine(d.hero); return; }
+    if (d.heroes) { openHeroines(); return; }
     if (d.scenelog !== undefined) { openConcierge(`log:${Math.max(0, +d.scenelog)}`); $("#logat")?.scrollIntoView({ block: "start" }); return; }
-    if (d.scenepanel !== undefined) { openConcierge(d.scenepanel); return; }
+    if (d.scenepanel !== undefined) { if (sceneCtx.hero === "serena") openConcierge(d.scenepanel); else openHeroine(sceneCtx.hero, d.scenepanel); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }

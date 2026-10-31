@@ -534,7 +534,7 @@ nav.tabs .badge { color: #1c1236; background: var(--hi); box-shadow: 0 0 8px rgb
 @keyframes chin { from { opacity: 0; transform: translateY(8px); } }
 #scene .msgwrap { position: relative; z-index: 3; padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
 #scene .msg { position: relative; min-height: 132px; padding: 22px 16px 34px; border-radius: 20px; background: linear-gradient(180deg, rgba(48, 26, 84, .9), rgba(30, 16, 56, .94)); box-shadow: 0 0 0 2px rgba(255, 182, 222, .75), inset 0 0 0 5px rgba(30, 16, 56, .9), inset 0 0 0 6px rgba(255, 182, 222, .3), 0 10px 30px rgba(10, 0, 30, .5); cursor: pointer; }
-#scene .nameplate { position: absolute; top: -14px; left: 16px; padding: 3px 16px; border-radius: 12px; background: linear-gradient(180deg, #ff9cc8, #ff6aa8); color: #fff; font-weight: 800; font-size: 14px; letter-spacing: .1em; box-shadow: 0 0 0 2px #ffd1e6, 0 4px 10px rgba(255, 106, 168, .45); }
+#scene .nameplate { text-shadow: 0 1px 2px rgba(60, 10, 50, .55); position: absolute; top: -14px; left: 16px; padding: 3px 16px; border-radius: 12px; background: linear-gradient(180deg, #ff9cc8, #ff6aa8); color: #fff; font-weight: 800; font-size: 14px; letter-spacing: .1em; box-shadow: 0 0 0 2px #ffd1e6, 0 4px 10px rgba(255, 106, 168, .45); }
 #scene .nameplate small { font-size: 10px; font-weight: 500; margin-left: 6px; letter-spacing: 0; opacity: .9; }
 #scene .line { font-size: 15px; line-height: 1.75; min-height: 3.5em; white-space: pre-wrap; }
 #scene .next { position: absolute; right: 16px; bottom: 10px; color: var(--accent); font-size: 12px; animation: blinkd 1s infinite; }
@@ -563,12 +563,29 @@ nav.tabs .badge { color: #1c1236; background: var(--hi); box-shadow: 0 0 8px rgb
 .bondinfo p { margin: 8px 0 0; line-height: 1.7; }
 #scene .sbar button { white-space: nowrap; flex: none; }
 @media (max-width: 440px) { #scene .sbar { gap: 5px; padding-left: 10px; padding-right: 10px; } #scene .sbar .bond small, #scene .sbar .love { display: none; } #scene .sbar .bond { margin-left: 0; } #scene .sbar button { padding: 0 9px; font-size: 11px; } }
+em.new { font-style: normal; font-size: 8.5px; font-weight: 800; color: #1c1236; background: var(--hi); border-radius: 6px; padding: 0 4px; margin-left: 4px; letter-spacing: 0; }
+.love { position: relative; }
+.heartpop { position: fixed; left: 50%; top: 42%; z-index: 90; transform: translateX(-50%); padding: 8px 16px; border-radius: 20px; background: rgba(38, 22, 66, .95); color: var(--c); font-weight: 800; font-size: 15px; box-shadow: 0 0 0 2px var(--c), 0 0 22px var(--c); pointer-events: none; animation: heartup 1.8s ease-out forwards; }
+.heartpop b { color: #fff; }
+@keyframes heartup { 0% { opacity: 0; transform: translate(-50%, 16px) scale(.8); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.05); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60px) scale(1); } }
+.herohint { margin: 0; padding: 0 16px 8px; font-size: 12px; color: var(--mute); line-height: 1.6; }
+.heroes { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; }
+.hero { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 16px; background: var(--sunk); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, transparent); text-align: left; }
+.hero .face { width: 56px; height: 56px; box-shadow: 0 0 0 2px var(--c); }
+.hero .hi { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hero .hi > b { font-size: 15px; color: var(--c); } .hero .hi > b small { font-size: 11px; color: var(--mute); margin-left: 6px; font-weight: 500; }
+.hero .bond { align-self: flex-start; padding: 2px 8px; border-radius: 10px; background: rgba(20, 10, 40, .5); display: inline-flex; gap: 6px; align-items: center; font-size: 10.5px; }
+.hero .nx { font-size: 11px; color: var(--mute); } .hero .nx em { font-style: normal; color: #1c1236; background: var(--hi); border-radius: 6px; padding: 0 5px; font-weight: 800; margin-right: 4px; }
+.albh { display: flex; align-items: center; gap: 8px; padding: 10px 16px 0; flex-wrap: wrap; } .albh > b { color: var(--c); font-size: 14px; } .albh > small { color: var(--mute); font-size: 11px; }
+.albh .bond { display: inline-flex; gap: 6px; align-items: center; font-size: 10.5px; padding: 2px 8px; border-radius: 10px; background: var(--sunk); }
+.alb .pic.noc { background-repeat: no-repeat; }
+#scene .evtitle { background: linear-gradient(180deg, var(--c, #ff9cc8), #ff6aa8); }
 #scene .panel2 .body { flex: 1; min-height: 0; overflow-y: auto; }
 </style>
 
 <canvas id="stars" aria-hidden="true"></canvas>
 <div id="app">
-  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><button type="button" class="love" id="love" data-concierge="1" aria-label="セレナの好感度"></button><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
+  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><button type="button" class="love" id="love" data-heroes="1" aria-label="ヒロイン"></button><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
