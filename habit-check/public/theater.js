@@ -16,7 +16,7 @@ const CAST = {
   ムキ: { key: "muki", h: 0.68 },
   フミ: { key: "fumi", h: 0.62 },
   ゼニ: { key: "zeni", h: 0.64 },
-  ルミ: { key: "rumi", h: 0.3, float: true },
+  ルミ: { key: "rumi", h: 0.62 },
   シロガネ: { key: "shirogane", h: 0.7 },
   おばあさん: { key: "obaasan", h: 0.56 },
   レンサ: { key: "rensa", h: 0.56, float: true },
