@@ -63,16 +63,65 @@
     if (h >= 23 || h < 5) return "まだ起きていらしたんですか。明日に響きますので、そろそろお休みください。…心配ではなく、業務上の助言です。";
     return list[0]?.say || IDLE[0];
   }
-  let lines = [], lineAt = 0;
-  function openConcierge(pickOutfit = false) {
+  document.documentElement.style.setProperty("--bgimg", `url("${SCENE_BG}")`);
+  // 好感度（ハート5つ）：今日終えた数で上がり、遅れ・たまった収集箱で下がる
+  function loveLv() {
+    if (S.mode === "loading" && !S.tasks.length) return 3;
+    const late = lateOf().length; const inbox = inStage("inbox").length;
+    return Math.max(0, Math.min(5, 2 + Math.min(2, Math.floor(S.doneToday.length / 2)) + (late ? -1 : 1) + (inbox >= 10 ? -1 : 0)));
+  }
+  const loveHtml = () => { const n = loveLv(); return `<span style="font-size:10px;margin-right:4px;color:var(--mute);letter-spacing:0">好感度</span>${[0, 1, 2, 3, 4].map((i) => `<i class="${i < n ? "" : "off"}">♥</i>`).join("")}`; };
+  function greetLine() {
+    const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+    if (h >= 23 || h < 5) return sayNow();
+    if (h < 11) return "おはようございます。本日もよろしくお願いいたします。…べ、別に、お待ちしていたわけではありません。";
+    if (h < 17) return "おつかれさまです。進み具合はいかがですか。…気になったので、確認しただけです。";
+    return "おつかれさまでした。今日の残りを一緒に確認しましょう。…手短に、ですけれど。";
+  }
+  // ---- 会話の場面：背景・全身のセレナ・メッセージ窓・選択肢（ギャルゲーの画面） ----
+  let lines = [], lineAt = 0, typing = null;
+  const REACT = ["かしこまりました。…べ、別にあなたのためではありません。", "承知しました。こういうのは、早いほうがいいですから。", "はい、やっておきました。…お礼は結構です。"];
+  function openConcierge(panel = "") {
     const o = outfit(); const list = advise(); const auto = !store.get("outfit") || store.get("outfit") === "auto";
-    lines = [...list.map((x) => x.say).filter(Boolean), ...IDLE]; lineAt = 0;
-    const itemRow = (t, acts) => `<div class="crow" data-qt="${t.id}"><button type="button" class="cname" data-mopen="${t.id}">${esc(short(t.name, 26))}<small>${esc(metaOf(t).tx)}${t.weight ? `・${t.weight}` : ""}</small></button><span class="cacts">${acts.map(([k, n]) => k === "open" ? `<button type="button" class="qc" data-mopen="${t.id}">${n}</button>` : `<button type="button" class="qc" data-qk="${k}">${n}</button>`).join("")}</span></div>`;
-    modal(`<div class="concierge"><div class="stage"><canvas id="serena" aria-label="${CNAME}（${esc(o.label)}）" role="img"></canvas><div class="say"><div class="cn">${CNAME}<small>${esc(o.label)}${auto ? `・${esc(o.when)}` : "・固定"}</small></div><p id="sayline">${esc(sayNow(list))}</p><button type="button" class="cswap" data-avpick="1">👗 着替え</button></div></div>
-      ${pickOutfit ? `<div class="wardrobe"><button type="button" data-outfit="auto" aria-pressed="${auto}"><span class="auto">AUTO</span><b>自動</b><small>季節と時間で</small></button>${OUTFITS.map((x) => `<button type="button" data-outfit="${x.key}" aria-pressed="${!auto && x.key === o.key}"><span class="face" style="${faceStyle(x, 52)}"></span><b>${esc(x.label)}</b><small>${esc(x.when)}</small></button>`).join("")}</div>` : ""}
-      <div class="clist">${list.map((x) => `<section class="csug"><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], i) => `<button type="button" class="btn${i ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
-      <div class="form" style="padding-top:0"><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
+    lines = [greetLine(), ...list.map((x) => x.say).filter(Boolean), ...IDLE]; lineAt = 0;
+    const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+    const tint = h < 5 || h >= 21 ? "rgba(16,6,44,.42)" : h < 10 ? "rgba(255,214,190,.10)" : h >= 17 ? "rgba(255,120,170,.12)" : "rgba(0,0,0,0)";
+    const choices = list.slice(0, 3).map((x, i) => x.acts?.length ? `<button type="button" data-cact="${x.acts[0][0]}">${x.icon} ${esc(x.acts[0][1])}</button>` : `<button type="button" data-scenelog="${i}">${x.icon} ${esc(short(x.title, 20))}</button>`).join("");
+    const sc = $("#scene"); sc.hidden = false;
+    sc.innerHTML = `<div class="tint" style="background:${tint}"></div>
+      <div class="sbar"><span class="love">${loveHtml()}</span><span class="sp"></span><button type="button" data-scenelog="-1">LOG</button><button type="button" data-avpick="1">着替え</button><button type="button" data-sceneclose="1">とじる</button></div>
+      <div class="chara"><div class="floor"></div><canvas id="serena" role="img" aria-label="${CNAME}（${esc(o.label)}）"></canvas></div>
+      <div class="msgwrap"><div class="choices" id="choices" hidden>${choices}<button type="button" data-sceneclose="1">あとで</button></div>
+        <div class="msg" id="msgbox"><span class="nameplate">${CNAME}<small>${esc(o.label)}${auto ? "" : "（固定）"}</small></span><div class="line" id="sayline"></div><span class="next" aria-hidden="true">▼</span><span class="menu2"><button type="button" data-scenelog="-1">LOG</button><button type="button" data-avpick="1">CLOSET</button></span></div></div>
+      ${panel === "closet" ? closetHtml(o, auto) : panel.startsWith("log") ? logHtml(list, +panel.split(":")[1] || 0) : ""}`;
     serena.mount($("#serena"), o);
+    typeLine(lines[0], () => { $("#choices") && ($("#choices").hidden = false); });
+    $("#msgbox").onclick = (e) => { if (e.target.closest(".menu2")) return; nextLine(); };
+  }
+  function closeScene() { const sc = $("#scene"); sc.hidden = true; sc.innerHTML = ""; clearInterval(typing); render(); }
+  function typeLine(text, done) {
+    const el = $("#sayline"); if (!el) return; clearInterval(typing);
+    if (reduce) { el.textContent = text; done?.(); return; }
+    let i = 0; el.textContent = "";
+    typing = setInterval(() => { i += 1; el.textContent = text.slice(0, i); if (i >= text.length) { clearInterval(typing); typing = null; done?.(); } }, 32);
+    typeLine.full = text; typeLine.done = done;
+  }
+  function nextLine() {
+    if (typing) { clearInterval(typing); typing = null; $("#sayline").textContent = typeLine.full; typeLine.done?.(); return; }
+    lineAt = (lineAt + 1) % lines.length; serena.hop(); typeLine(lines[lineAt]);
+  }
+  function sayReact(text) { serena.hop(); typeLine(text || REACT[Math.floor(Math.random() * REACT.length)]); }
+  function closetHtml(o, auto) {
+    return `<div class="panel2"><h3>👗 クローゼット<button type="button" data-scenepanel="">もどる</button></h3><div class="body"><div class="wardrobe"><button type="button" data-outfit="auto" aria-pressed="${auto}"><span class="auto">AUTO</span><b>自動</b><small>季節と時間で</small></button>${OUTFITS.map((x) => `<button type="button" data-outfit="${x.key}" aria-pressed="${!auto && x.key === o.key}"><span class="face" style="${faceStyle(x, 52)}"></span><b>${esc(x.label)}</b><small>${esc(x.when)}</small></button>`).join("")}</div></div></div>`;
+  }
+  function logHtml(list, at) {
+    const itemRow = (t, acts) => `<div class="crow" data-qt="${t.id}"><button type="button" class="cname" data-mopen="${t.id}">${esc(short(t.name, 26))}<small>${esc(metaOf(t).tx)}${t.weight ? `・${t.weight}` : ""}</small></button><span class="cacts">${acts.map(([k, n]) => k === "open" ? `<button type="button" class="qc" data-mopen="${t.id}">${n}</button>` : `<button type="button" class="qc" data-qk="${k}">${n}</button>`).join("")}</span></div>`;
+    return `<div class="panel2"><h3>📜 セレナからの提案<button type="button" data-scenepanel="">もどる</button></h3><div class="body"><div class="clist">${list.map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div></div></div>`;
+  }
+  // 1日1回、最初に開いたときにあいさつに出てくる
+  function maybeGreet() {
+    if (store.get("greet") === TODAY() || !$("#page").hidden || !$("#scene").hidden) return;
+    store.set("greet", TODAY()); openConcierge();
   }
   // ---- 動き：全身の絵を細い横帯に切って、帯ごとにずらす（足は固定・上ほど揺れる・胸は呼吸でふくらむ・髪は遅れて揺れる） ----
   const serena = (() => {
@@ -101,24 +150,36 @@
     }
     function mount(el, of) {
       cv = el; ctx = cv.getContext("2d"); o = of; img = new Image(); img.src = o.img; img.onload = () => { if (!raf) raf = requestAnimationFrame(frame); };
-      cv.onclick = () => { hop = performance.now() + 420; const p = $("#sayline"); if (p) { lineAt = (lineAt + 1) % lines.length; p.classList.remove("pop"); void p.offsetWidth; p.textContent = lines[lineAt]; p.classList.add("pop"); } if (!raf) raf = requestAnimationFrame(frame); };
+      cv.onclick = () => nextLine();
       if (!raf) raf = requestAnimationFrame(frame);
     }
     document.addEventListener("visibilitychange", () => { if (!document.hidden && cv && !raf) raf = requestAnimationFrame(frame); });
-    return { mount };
+    return { mount, hop() { hop = performance.now() + 420; if (cv && !raf) raf = requestAnimationFrame(frame); } };
   })();
   async function conciergeAct(k) {
     const [kind, v] = k.split(":");
-    if (kind === "late") { const late = lateOf(); closeModal(); const d = v === "today" ? TODAY() : addDays(TODAY(), 1); for (const t of late) await setProps(t, dateProps(d), `遅れ ${late.length}件を${v === "today" ? "今日" : "明日"}にしました`, { undo: false, quiet: t !== late[0] }); return; }
-    closeModal();
-    if (kind === "tab") { S.tab = v; render(); return; }
-    if (kind === "stage") { S.tab = "flow"; S.stage = v; render(); return; }
-    if (kind === "triage") { S.tab = "triage"; S.pileKey = v === "some" ? "some" : "inbox"; render(); return; }
-    if (kind === "shop") { S.tab = "shop"; S.shopSeg = v; render(); }
+    const inScene = !$("#scene").hidden;
+    if (kind === "late") {
+      const late = lateOf(); const d = v === "today" ? TODAY() : addDays(TODAY(), 1);
+      if (inScene) { $("#choices") && ($("#choices").hidden = true); sayReact(`遅れの${late.length}件を${v === "today" ? "本日" : "明日"}に移しました。…今度は遅れないでくださいね。`); }
+      else closeModal();
+      for (const t of late) await setProps(t, dateProps(d), `遅れ ${late.length}件を${v === "today" ? "今日" : "明日"}にしました`, { undo: false, quiet: t !== late[0] });
+      $("#scene .love") && ($("#scene .love").innerHTML = loveHtml());
+      return;
+    }
+    const go = () => {
+      if (kind === "tab") { S.tab = v; }
+      else if (kind === "stage") { S.tab = "flow"; S.stage = v; }
+      else if (kind === "triage") { S.tab = "triage"; S.pileKey = v === "some" ? "some" : "inbox"; }
+      else if (kind === "shop") { S.tab = "shop"; S.shopSeg = v; }
+      if (inScene) closeScene(); else { closeModal(); render(); }
+    };
+    if (inScene) { sayReact(); setTimeout(go, 900); } else go();
   }
   function renderConciergeFab() {
     const b = $("#cfab"); if (!b) return;
     const n = S.mode === "loading" ? 0 : advise().filter((x) => x.pri >= 50).length;
     b.innerHTML = `<span class="face" style="${faceStyle(outfit(), 54)}"></span>${n ? `<span class="badge">${n}</span>` : ""}`;
     b.hidden = S.tab === "flow";
+    const lv = $("#love"); if (lv) lv.innerHTML = loveHtml();
   }

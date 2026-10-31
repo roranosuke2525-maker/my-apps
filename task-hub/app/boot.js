@@ -67,13 +67,16 @@
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
     if (d.quick) { openQuick(d.quick); return; }
-    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inC = !!el.closest(".concierge"); if (!inC && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inC && !$("#modal").hidden) openConcierge(); }); return; }
-    if (d.mopen) { closeModal(); openTask(d.mopen); return; }
+    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inS = !!el.closest("#scene"); if (!inS && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inS && !$("#scene").hidden) { openConcierge("log"); } }); return; }
+    if (d.mopen) { closeModal(); if (!$("#scene").hidden) closeScene(); openTask(d.mopen); return; }
+    if (d.sceneclose) { closeScene(); return; }
+    if (d.scenelog !== undefined) { openConcierge(`log:${Math.max(0, +d.scenelog)}`); $("#logat")?.scrollIntoView({ block: "start" }); return; }
+    if (d.scenepanel !== undefined) { openConcierge(d.scenepanel); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
-    if (d.avpick) { openConcierge(true); return; }
-    if (d.outfit) { store.set("outfit", d.outfit); openConcierge(true); render(); toast(d.outfit === "auto" ? "服は季節と時間で着替えます" : `${CNAME}の服を「${outfit().label}」に固定しました`); return; }
+    if (d.avpick) { openConcierge("closet"); return; }
+    if (d.outfit) { store.set("outfit", d.outfit); openConcierge("closet"); renderConciergeFab(); toast(d.outfit === "auto" ? "服は季節と時間で着替えます" : `${CNAME}の服を「${outfit().label}」に固定しました`); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
     if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
     if (d.newshide) { S.newsHide = !S.newsHide; render(); return; }
@@ -90,7 +93,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();
-    if (e.key === "Escape") { if (document.querySelector(".menu")) closeMenus(); else if (!$("#modal").hidden) closeModal(); else if (!$("#page").hidden && !e.target.closest(".ed")) closePage(); }
+    if (e.key === "Escape") { if (!$("#scene").hidden) { closeScene(); return; } if (document.querySelector(".menu")) closeMenus(); else if (!$("#modal").hidden) closeModal(); else if (!$("#page").hidden && !e.target.closest(".ed")) closePage(); }
   });
   document.addEventListener("focusout", (e) => { if (e.target.id === "ptitle") saveTitle(); });
   document.addEventListener("input", (e) => {
@@ -113,6 +116,7 @@
       const el = G.el instanceof Element ? G.el : null; if (!el) return;
       if (el.closest("input, textarea, select, [data-swipe], .board, .tablewrap, .tcard, .menu")) return;
       const edge = G.x < 40;
+      if (!$("#scene").hidden) return;
       if (!$("#modal").hidden) { if (dx > 0 && el.closest("#modal")) closeModal(); return; }
       if (!$("#page").hidden) { if (dx > 0 && (edge || !el.closest(".ed"))) { swipeGuard(); closePage(); } return; }
       if (el.closest("nav.tabs")) { const i = TABS.indexOf(S.tab) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
@@ -154,6 +158,7 @@
     render();
     if (!load.dbDone) { load.dbDone = true; refreshDbList(); }
     if (S.tab === "news" || S.newsAt) loadNews();
+    if (S.mode === "live") maybeGreet();
     prefetchBodies();
   }
   const DEMO_BODY = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [x] 候補を3つに絞る\n- [ ] 寸法を測る\n  - [ ] 幅と奥行き\n- [ ] 色を決める\n\n郵便受けに雨が入るので対策を考えたい\n\n## メモ\n\n（例）次の打ち合わせで聞く";
@@ -218,7 +223,7 @@
     DEMO_BODIES[ai[1].id] = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [ ] 比較表を見て決める\n- [ ] 設置寸法を測る\n- [ ] 見積を取る\n\n## 🔍 調査結果（最新・2026/10/22 13:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）パナソニックのミドルタイプ。45cm幅で5人分、静音で乾燥も強い\n</callout>\n\n### 📊 比較（10/22 13:52）\n\n| 候補 | 価格 | 容量 | 静音 |\n| --- | --- | --- | --- |\n| ⭐ （例）A社ミドル | 約12万円 | 5人分 | 38dB |\n| （例）B社ディープ | 約15万円 | 6人分 | 40dB |\n| （例）C社スリム | 約9万円 | 4人分 | 42dB |\n\n### ▶️ 次の手順（10/22 13:52）\n\n1. キッチンの開口寸法を測る\n2. 型番を決めて見積を取る\n3. 工事日を決める\n\n<toggle>\n詳しく（要点・注意点・参照）\n\n- 深型は入るか要確認\n- [（例）メーカー比較](https://example.com)\n</toggle>\n\n### 🗂 過去のやり取り（1件）\n\n<toggle>\n10/20 09:52 1回目 🔍 ─ 候補を広く洗い出した\n\n- 6機種を候補にした\n</toggle>\n\n## メモ\n\n- 予算は15万円まで";
     DEMO_BODIES[ai[2].id] = "## 🔍 調査結果（最新・2026/10/24 11:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）16インチ・ペダルを外せるタイプ。身長105cmならちょうど\n</callout>\n\n### ▶️ 次の手順（10/24 11:52）\n\n1. 店で跨がってみる\n2. 色を決める";
     demoNews();
-    S.loadedAt = Date.now(); render(); setSync("ok");
+    S.loadedAt = Date.now(); render(); setSync("ok"); maybeGreet();
   }
 
   initDbs();
