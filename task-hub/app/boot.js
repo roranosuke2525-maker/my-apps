@@ -94,6 +94,12 @@
     if (e.target.matches?.("[data-qdate]") && e.target.value) { const host = e.target.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; if (e.target.closest("#modal") && !e.target.closest(".concierge")) closeModal(); applyQuick(t, "d:pick", e.target.value); }
   });
   document.addEventListener("click", (e) => { const a = e.target.closest("[data-newsread]"); if (a) setNews([a.dataset.newsread], "読んだ", true); }, true);
+  // 画面の中の外部リンク（本文の外）も Chrome で開く
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="http"]'); if (!a || (ED && ED.box.contains(a)) || e.defaultPrevented) return;
+    if (!chromeUrl(a.href) || store.get("chrome") === false) return;
+    e.preventDefault(); openExternal(a.href);
+  });
   document.addEventListener("keydown", (e) => {
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();

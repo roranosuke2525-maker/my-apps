@@ -66,7 +66,26 @@
     const id = /notion\.(so|site|com)/.test(href) ? idOf(href) : "";
     if (id && known.has(id)) { openTask(id); return; }
     const x = id && S.stock.find((r) => r.id === id); if (x) { openStock(id); return; }
-    window.open(href, "_blank", "noopener");
+    openExternal(href);
+  }
+  // 外のページは Chrome で開く（iPhone・iPad は googlechromes://、Android は intent://）。Notion のページは Notion アプリに任せる
+  // Chrome が入っていなくて開けなかったときは、少し待ってからいつものブラウザで開く
+  const UA = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(UA);
+  function chromeUrl(href) {
+    if (!/^https?:\/\//i.test(href) || /(^|\.)notion\.(so|site|com)\//i.test(href.replace(/^https?:\/\//i, ""))) return null;
+    if (isIOS && !/CriOS/.test(UA)) return href.replace(/^http(s?):\/\//i, (_, s) => `googlechrome${s}://`);
+    if (isAndroid) { const u = new URL(href); return `intent://${u.host}${u.pathname}${u.search}${u.hash}#Intent;scheme=${u.protocol.slice(0, -1)};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`; }
+    return null;
+  }
+  function openExternal(href) {
+    const c = store.get("chrome") === false ? null : chromeUrl(href);
+    if (!c) { window.open(href, "_blank", "noopener"); return; }
+    let left = false; const onHide = () => { left = true; };
+    document.addEventListener("visibilitychange", onHide, { once: true });
+    try { window.location.href = c; } catch { left = false; }
+    if (isIOS) setTimeout(() => { document.removeEventListener("visibilitychange", onHide); if (!left && !document.hidden) window.open(href, "_blank", "noopener"); }, 1500);
   }
 
   // ================= 日付・状態をすぐ変える =================
