@@ -1,5 +1,5 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク）
-const CACHE = "habit-check-v11";
+const CACHE = "habit-check-v12";
 const SHELL = ["./", "index.html", "app.js", "aibou.js", "aibou-sprites.js", "art-index.js", "theater.js", "theater-gl.js", "theater-script.js", "theater-speakers.js", "theater-stage.js", "style.css", "manifest.webmanifest", "icons/icon-192.png", "img/walnut.jpg", "img/oak.jpg"];
 
 self.addEventListener("install", (e) => {

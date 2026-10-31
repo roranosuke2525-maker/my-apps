@@ -166,20 +166,20 @@ const VARIANT = {
   surprised: "Change only the facial expression and body language: wide-eyed shock, mouth open, leaning back slightly, hands raised.",
   battle: "Change only the pose: a dynamic battle-ready combat stance, weapon raised, cape and hair swept by motion, intense focused expression.",
 };
-const HERO_FACE = "Satoshi, a Japanese man in his early 30s, short dark brown hair, calm but determined expression";
+const HERO_FACE = "Satoshi, a shonen manga hero around 20, fluffy messy black hair with an ahoge, large earnest eyes, warm determined smile, a white towel-like scarf, a hooded green cloak and a small glowing lantern (a traveler, never wears armor)";
 const person = (id, desc, variants = [], { ref = null } = {}) => [
   { id: `cast2/${id}`, kind: "sprite", ratio: "3:4", prompt: `${MANGA} ${ref ? "Same art style and same face as the reference image. " : "Same art style as the reference image. "}${desc}`, ...(ref ? { ref } : { refUrl: STYLE2_REF }) },
   ...variants.map((v) => ({ id: `cast2/${id}_${v}`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`,
     prompt: `${MANGA} The exact same character, outfit, colors and art style as the reference image. ${VARIANT[v]}` })),
 ];
 export const CAST2 = [
-  // さとし：装備の6段階（顔は でんせつ と同じ）。表情・構えの差分は でんせつ（エピソード2の姿）
-  ...person("hero_6", `${HERO_FACE}, the legendary hero in elegant golden armor with a small crown and a starry midnight-blue cape, holding a holy shining longsword, a small glowing lantern at his belt.`, ["smile", "angry", "sad", "surprised", "battle"]),
-  ...person("hero_1", `${HERO_FACE}, an apprentice adventurer in a simple green tunic and boots, holding a wooden staff and a small glowing lantern.`, ["smile", "surprised"], { ref: "cast2/hero_6" }),
-  ...person("hero_2", `${HERO_FACE}, a novice adventurer in a brown leather cap and leather armor, a short sword, lantern at his belt.`, [], { ref: "cast2/hero_6" }),
-  ...person("hero_3", `${HERO_FACE}, a full-fledged adventurer in a steel helmet, chainmail and blue tunic, sword and round copper shield, lantern at his belt.`, [], { ref: "cast2/hero_6" }),
-  ...person("hero_4", `${HERO_FACE}, a veteran knight in silver plate armor with pauldrons and a blue cape, sword and a blue shield with a lion crest, lantern at his belt.`, ["battle"], { ref: "cast2/hero_6" }),
-  ...person("hero_5", `${HERO_FACE}, a master warrior in sky-blue horned armor and a red cape, a sword glowing with blue magic, silver shield, lantern at his belt.`, ["battle"], { ref: "cast2/hero_6" }),
+  // さとし：旅人のまま6段階（鎧は着ない）。顔は候補C（2026-10-31 に決定）。表情・構えの差分は でんせつ
+  ...person("hero_6", `${HERO_FACE}. Stage 6 legendary: a grand flowing green-and-gold mantle embroidered with stars, the scarf streaming like a banner, an elegant traveler's coat, a sword of holy light, a lantern shining like the dawn sun, a soft warm aura.`, ["smile", "angry", "sad", "surprised", "battle"]),
+  ...person("hero_1", `${HERO_FACE}. Stage 1 apprentice: a worn plain hooded green cloak, simple linen tunic, a small tin lantern, a wooden walking stick.`, ["smile", "surprised"], { ref: "cast2/hero_6" }),
+  ...person("hero_2", `${HERO_FACE}. Stage 2 novice: the cloak with a few patches, a brown leather vest, a canvas satchel, a short knife, a brass lantern.`, [], { ref: "cast2/hero_6" }),
+  ...person("hero_3", `${HERO_FACE}. Stage 3 full-fledged: a well-made green cloak with an embroidered hem, a dark travel coat, leather gloves, a short sword.`, [], { ref: "cast2/hero_6" }),
+  ...person("hero_4", `${HERO_FACE}. Stage 4 veteran: a long weathered green mantle with a fur-lined collar, layered travel clothes, pouches and a map case, a well-used sword.`, ["battle"], { ref: "cast2/hero_6" }),
+  ...person("hero_5", `${HERO_FACE}. Stage 5 master: a deep green mantle with silver clasps and glowing rune embroidery, a refined long coat, a sword with a soft blue glow, a blue-white flame lantern.`, ["battle"], { ref: "cast2/hero_6" }),
   ...person("rumi", "Rumi, a palm-sized candle-flame fairy girl, fluffy orange hair like sparks, a small living flame on top of her head, large expressive eyes, a dress like melted candle wax, warm glow, floating.", ["smile", "angry", "sad", "surprised"]),
   ...person("muki", "Muki, a big muscular warrior man in his 30s with spiky red hair, rugged face, bare strong arms with leather wristbands, a chain-shaped old burn scar around his left wrist, brown sleeveless jerkin, huge battle axe.", ["smile", "angry", "sad", "surprised", "battle"]),
   ...person("fumi", "Fumi, a young woman librarian scholar in her 20s, long purple hair in a single braid, round glasses, earnest intelligent face, layered purple robe and scarf, holding a thick record book and a quill pen.", ["smile", "angry", "sad", "surprised", "battle"]),
