@@ -11,7 +11,7 @@
     const view = $(".view", main);
     ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     S.slide = null;
-    renderConciergeFab();
+    bondSync(); renderConciergeFab();
     try { history.replaceState(null, "", `#${S.tab}`); } catch { /* なし */ }
   }
   // 画面とページ（開いていれば）を描き直す
@@ -70,6 +70,8 @@
     if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inS = !!el.closest("#scene"); if (!inS && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inS && !$("#scene").hidden) { openConcierge("log"); } }); return; }
     if (d.mopen) { closeModal(); if (!$("#scene").hidden) closeScene(); openTask(d.mopen); return; }
     if (d.sceneclose) { closeScene(); return; }
+    if (d.evskip) { openConcierge("album"); return; }
+    if (d.evplay) { const ev = EVENTS.find((x) => x.key === d.evplay); if (ev) playEvent(ev); return; }
     if (d.scenelog !== undefined) { openConcierge(`log:${Math.max(0, +d.scenelog)}`); $("#logat")?.scrollIntoView({ block: "start" }); return; }
     if (d.scenepanel !== undefined) { openConcierge(d.scenepanel); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }

@@ -74,27 +74,29 @@
   function greetLine() {
     const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
     if (h >= 23 || h < 5) return sayNow();
-    if (h < 11) return "おはようございます。本日もよろしくお願いいたします。…べ、別に、お待ちしていたわけではありません。";
-    if (h < 17) return "おつかれさまです。進み具合はいかがですか。…気になったので、確認しただけです。";
-    return "おつかれさまでした。今日の残りを一緒に確認しましょう。…手短に、ですけれど。";
+    if (lateOf().length >= 3) return BOND_SULK[Math.min(bondLv(), 4) - 1];
+    return BOND_GREET[bondLv() - 1][h < 11 ? 0 : h < 17 ? 1 : 2];
   }
   // ---- 会話の場面：背景・全身のセレナ・メッセージ窓・選択肢（ギャルゲーの画面） ----
   let lines = [], lineAt = 0, typing = null;
   const REACT = ["かしこまりました。…べ、別にあなたのためではありません。", "承知しました。こういうのは、早いほうがいいですから。", "はい、やっておきました。…お礼は結構です。"];
   function openConcierge(panel = "") {
     const o = outfit(); const list = advise(); const auto = !store.get("outfit") || store.get("outfit") === "auto";
-    lines = [greetLine(), ...list.map((x) => x.say).filter(Boolean), ...IDLE]; lineAt = 0;
+    const ev = pendingEvent(); if (ev && !panel) { playEvent(ev); return; }
+    const lv = bondLv(); const up = panel ? "" : levelUpLine();
+    lines = [...(up ? [up] : []), greetLine(), ...list.map((x) => callName(x.say)).filter(Boolean), ...BOND_IDLE[lv - 1]]; lineAt = 0;
     const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
     const tint = h < 5 || h >= 21 ? "rgba(16,6,44,.42)" : h < 10 ? "rgba(255,214,190,.10)" : h >= 17 ? "rgba(255,120,170,.12)" : "rgba(0,0,0,0)";
     const choices = list.slice(0, 3).map((x, i) => x.acts?.length ? `<button type="button" data-cact="${x.acts[0][0]}">${x.icon} ${esc(x.acts[0][1])}</button>` : `<button type="button" data-scenelog="${i}">${x.icon} ${esc(short(x.title, 20))}</button>`).join("");
     const sc = $("#scene"); sc.hidden = false;
     sc.innerHTML = `<div class="tint" style="background:${tint}"></div>
-      <div class="sbar"><span class="love">${loveHtml()}</span><span class="sp"></span><button type="button" data-scenelog="-1">LOG</button><button type="button" data-avpick="1">着替え</button><button type="button" data-sceneclose="1">とじる</button></div>
+      <div class="sbar"><span class="love">${loveHtml()}</span>${bondHtml()}<span class="sp"></span><button type="button" data-scenelog="-1">LOG</button><button type="button" data-scenepanel="album">思い出</button><button type="button" data-avpick="1">着替え</button><button type="button" data-sceneclose="1">とじる</button></div>
       <div class="chara"><div class="floor"></div><canvas id="serena" role="img" aria-label="${CNAME}（${esc(o.label)}）"></canvas></div>
       <div class="msgwrap"><div class="choices" id="choices" hidden>${choices}<button type="button" data-sceneclose="1">あとで</button></div>
         <div class="msg" id="msgbox"><span class="nameplate">${CNAME}<small>${esc(o.label)}${auto ? "" : "（固定）"}</small></span><div class="line" id="sayline"></div><span class="next" aria-hidden="true">▼</span><span class="menu2"><button type="button" data-scenelog="-1">LOG</button><button type="button" data-avpick="1">CLOSET</button></span></div></div>
-      ${panel === "closet" ? closetHtml(o, auto) : panel.startsWith("log") ? logHtml(list, +panel.split(":")[1] || 0) : ""}`;
-    serena.mount($("#serena"), o);
+      ${panel === "closet" ? closetHtml(o, auto) : panel === "album" ? albumHtml() : panel.startsWith("log") ? logHtml(list, +panel.split(":")[1] || 0) : ""}`;
+    serena.mount($("#serena"), o, lv >= 3 && lateOf().length < 3);
+    if (up) serena.blush(5000);
     typeLine(lines[0], () => { $("#choices") && ($("#choices").hidden = false); });
     $("#msgbox").onclick = (e) => { if (e.target.closest(".menu2")) return; nextLine(); };
   }
@@ -110,7 +112,7 @@
     if (typing) { clearInterval(typing); typing = null; $("#sayline").textContent = typeLine.full; typeLine.done?.(); return; }
     lineAt = (lineAt + 1) % lines.length; serena.hop(); typeLine(lines[lineAt]);
   }
-  function sayReact(text) { serena.hop(); typeLine(text || REACT[Math.floor(Math.random() * REACT.length)]); }
+  function sayReact(text) { serena.hop(); if (bondLv() >= 2) serena.blush(); const r = BOND_REACT[bondLv() - 1]; typeLine(text || r[Math.floor(Math.random() * r.length)]); }
   function closetHtml(o, auto) {
     return `<div class="panel2"><h3>👗 クローゼット<button type="button" data-scenepanel="">もどる</button></h3><div class="body"><div class="wardrobe"><button type="button" data-outfit="auto" aria-pressed="${auto}"><span class="auto">AUTO</span><b>自動</b><small>季節と時間で</small></button>${OUTFITS.map((x) => `<button type="button" data-outfit="${x.key}" aria-pressed="${!auto && x.key === o.key}"><span class="face" style="${faceStyle(x, 52)}"></span><b>${esc(x.label)}</b><small>${esc(x.when)}</small></button>`).join("")}</div></div></div>`;
   }
@@ -125,36 +127,48 @@
   }
   // ---- 動き：全身の絵を細い横帯に切って、帯ごとにずらす（足は固定・上ほど揺れる・胸は呼吸でふくらむ・髪は遅れて揺れる） ----
   const serena = (() => {
-    let cv, ctx, img, o, raf = 0, hop = 0, t0 = performance.now();
+    let cv, ctx, img, img2, o, raf = 0, hop = 0, t0 = performance.now(), smile = 0, want = 0, smileUntil = 0;
     const ease = (x) => x * x * (3 - 2 * x);
+    function draw(im, alpha, t, now, Wc, Hc, dpr) {
+      if (alpha <= .01 || !im?.naturalWidth) return;
+      const w = im.naturalWidth, h = im.naturalHeight; ctx.globalAlpha = alpha;
+      const sc = (Hc * 0.97) / h; const dw = w * sc; const x0 = (Wc - dw) / 2; const base = Hc;
+      const br = Math.sin(t * 2 * Math.PI / 3.8); const sw = Math.sin(t * 2 * Math.PI / 5.6); const hair = Math.sin(t * 2 * Math.PI / 5.6 - .9);
+      const hp = hop > now ? Math.sin(((hop - now) / 420) * Math.PI) : 0; // 押したときの小さな跳ね
+      const strip = 2 * dpr; const n = Math.ceil((h * sc) / strip);
+      for (let i = 0; i < n; i++) {
+        const yd = i * strip; const v = yd / (h * sc); // 0＝頭 1＝足
+        const up = 1 - v; const k = Math.pow(up, 1.7);
+        const dx = sw * 3.2 * dpr * k + (v < .2 ? hair * 2.4 * dpr * ease(1 - v / .2) : 0);
+        const chest = v > .16 && v < .42 ? Math.sin(((v - .16) / .26) * Math.PI) : 0;
+        const sx = 1 + br * .012 * chest; const lift = (br * 1.4 * dpr + hp * 10 * dpr) * ease(Math.min(1, up / .55));
+        const w2 = dw * sx; const sy = yd / sc; const sh = Math.min(strip / sc + .6, h - sy); if (sh <= 0) break;
+        ctx.drawImage(im, 0, sy, w, sh, x0 + dx - (w2 - dw) / 2, base - h * sc * (1 + hp * .015) + yd * (1 + hp * .015) - lift, w2, strip * (1 + hp * .015) + .6);
+      }
+      ctx.globalAlpha = 1;
+    }
     function frame(now) {
       raf = 0; if (!cv?.isConnected) { cv = null; return; }
       const dpr = Math.min(2, devicePixelRatio || 1); const Hc = cv.clientHeight * dpr, Wc = cv.clientWidth * dpr;
       if (cv.width !== Wc || cv.height !== Hc) { cv.width = Wc; cv.height = Hc; }
       ctx.clearRect(0, 0, Wc, Hc);
-      if (!img.complete || !img.naturalWidth) { raf = requestAnimationFrame(frame); return; }
-      const t = (now - t0) / 1000; const sc = (Hc * 0.97) / o.h; const dw = o.w * sc; const x0 = (Wc - dw) / 2; const base = Hc;
-      const br = Math.sin(t * 2 * Math.PI / 3.8); const sw = Math.sin(t * 2 * Math.PI / 5.6); const hair = Math.sin(t * 2 * Math.PI / 5.6 - .9);
-      const hp = hop > now ? Math.sin(((hop - now) / 420) * Math.PI) : 0; // 押したときの小さな跳ね
-      const strip = 2 * dpr; const n = Math.ceil((o.h * sc) / strip);
-      for (let i = 0; i < n; i++) {
-        const yd = i * strip; const v = yd / (o.h * sc); // 0＝頭 1＝足
-        const up = 1 - v; const k = Math.pow(up, 1.7);
-        let dx = sw * 3.2 * dpr * k + (v < .2 ? hair * 2.4 * dpr * ease(1 - v / .2) : 0);
-        const chest = v > .16 && v < .42 ? Math.sin(((v - .16) / .26) * Math.PI) : 0;
-        const sx = 1 + br * .012 * chest; const lift = (br * 1.4 * dpr + hp * 10 * dpr) * ease(Math.min(1, up / .55));
-        const w2 = dw * sx; const sy = yd / sc; const sh = Math.min(strip / sc + .6, o.h - sy); if (sh <= 0) break;
-        ctx.drawImage(img, 0, sy, o.w, sh, x0 + dx - (w2 - dw) / 2, base - o.h * sc * (1 + hp * .015) + yd * (1 + hp * .015) - lift, w2, strip * (1 + hp * .015) + .6);
-      }
+      const target = smileUntil > now ? 1 : want; smile += (target - smile) * .08; if (Math.abs(target - smile) < .01) smile = target;
+      const t = (now - t0) / 1000;
+      draw(img, smile >= .99 && img2?.naturalWidth ? 0 : 1, t, now, Wc, Hc, dpr);
+      draw(img2, smile, t, now, Wc, Hc, dpr);
       if (!reduce && !document.hidden) raf = requestAnimationFrame(frame);
+      else if (smile !== target) raf = requestAnimationFrame(frame);
     }
-    function mount(el, of) {
-      cv = el; ctx = cv.getContext("2d"); o = of; img = new Image(); img.src = o.img; img.onload = () => { if (!raf) raf = requestAnimationFrame(frame); };
+    const kick = () => { if (cv && !raf) raf = requestAnimationFrame(frame); };
+    function mount(el, of, smiling = false) {
+      cv = el; ctx = cv.getContext("2d"); o = of; img = new Image(); img.onload = kick; img.src = o.img;
+      img2 = o.smile ? Object.assign(new Image(), { onload: kick, src: o.smile }) : null;
+      want = smiling ? 1 : 0; smile = want;
       cv.onclick = () => nextLine();
-      if (!raf) raf = requestAnimationFrame(frame);
+      kick();
     }
-    document.addEventListener("visibilitychange", () => { if (!document.hidden && cv && !raf) raf = requestAnimationFrame(frame); });
-    return { mount, hop() { hop = performance.now() + 420; if (cv && !raf) raf = requestAnimationFrame(frame); } };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) kick(); });
+    return { mount, hop() { hop = performance.now() + 420; kick(); }, blush(ms = 3200) { smileUntil = performance.now() + ms; kick(); }, setSmile(v) { want = v ? 1 : 0; kick(); } };
   })();
   async function conciergeAct(k) {
     const [kind, v] = k.split(":");

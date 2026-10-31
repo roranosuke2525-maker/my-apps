@@ -198,14 +198,17 @@
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, refills] = await Promise.allSettled([
+    const [diag, logs, goals, stock, refills, week] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
       rows(DS.daily, { limit: 100 }),
       // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
+      // この1週間の済み（セレナとの関係の累計に数える）
+      rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is_on_or_after", value: { type: "relative", value: "one_week_ago" } }], sort: sortEdited, limit: 100 }),
     ]);
+    if (week.status === "fulfilled") S.doneWeek = week.value.results.map((r) => ({ id: idOf(r.url), edited: r["最終更新日時"] || null }));
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({
       url: r.url, id: idOf(r.url), name: text(r["名前"]), no: Number(r["回"]) || 0, rate: Number(r["今日やる完了率"]) || 0, done: Number(r["完了件数"]) || 0, inflow: Number(r["流入件数"]) || 0,
