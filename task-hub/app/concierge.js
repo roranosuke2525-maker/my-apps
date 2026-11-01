@@ -51,6 +51,7 @@
     else if (kind === "stage") { S.tab = "flow"; S.stage = v; }
     else if (kind === "triage") { S.tab = "triage"; S.pileKey = v === "some" ? "some" : "inbox"; }
     else if (kind === "shop") { S.tab = "shop"; S.shopSeg = v; }
+    else if (kind === "logseg") { S.tab = "log"; S.logSeg = v; }
     render();
   }
   // 上の「提案」ボタンに、急ぎの提案の数を出す

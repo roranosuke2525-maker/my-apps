@@ -6,9 +6,11 @@
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
     const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
+    const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
     ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
     try { history.replaceState(null, "", `#${S.tab}`); } catch { /* なし */ }
@@ -83,6 +85,7 @@
   });
   document.addEventListener("change", (e) => {
     if (e.target.matches?.("[data-prop]")) onPropChange(e.target);
+    if (e.target.matches?.("[data-settag]") && e.target.value) { const t = known.get(e.target.dataset.settag); if (t) setProps(t, { "分類タグ": e.target.value }, `「${short(t.name)}」の分類を ${e.target.value} にしました`); }
     if (e.target.matches?.("[data-qdate]") && e.target.value) { const host = e.target.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; if (e.target.closest("#modal") && !e.target.closest(".concierge")) closeModal(); applyQuick(t, "d:pick", e.target.value); }
   });
   document.addEventListener("click", (e) => { const a = e.target.closest("[data-newsread]"); if (a) setNews([a.dataset.newsread], "読んだ", true); }, true);

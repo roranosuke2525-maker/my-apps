@@ -303,27 +303,11 @@
 
   // ================= 記録（診断・運用ログ・目標とプロジェクト） =================
   function renderLog(view) {
-    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
-    if (S.logSeg === "diag") return renderDiag(view);
+    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["guide", "使い方"], ["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
+    if (S.logSeg === "guide") return renderGuide(view);
+    if (S.logSeg === "diag") return renderDiagAll(view);
     if (S.logSeg === "log") return renderOpsLog(view);
     return renderGoals(view);
-  }
-  function renderDiag(view) {
-    const ds = S.diag; const d = ds.at(-1);
-    if (!d) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty">${esc(S.extraErr.diag || "診断レポートはまだありません")}</div></div>`); return; }
-    const prev = ds.at(-2); const delta = prev ? Math.round((d.rate - prev.rate) * 100) : null;
-    view.insertAdjacentHTML("beforeend", `<div class="statrow"><div class="card stat"><div class="k">今日やる完了率</div><div class="n">${Math.round(d.rate * 100)}%</div><div class="s">${delta == null ? "" : `前回から ${delta >= 0 ? "+" : ""}${delta}pt`}</div></div><div class="card stat"><div class="k">完了</div><div class="n">${d.done}</div><div class="s">件</div></div><div class="card stat"><div class="k">流入</div><div class="n">${d.inflow}</div><div class="s">件</div></div><div class="card stat"><div class="k">回</div><div class="n">${d.no}</div><div class="s">${d.from ? `${md(d.from)}〜${md(d.to || d.from)}` : ""}</div></div></div>
-      <button type="button" class="card verdict" data-diag="${d.id}"><span class="mute" style="font-size:11.5px">第${d.no}回の判定</span><b>${esc(d.verdict || "—")}</b><span class="nx">次の一手：${esc(d.next || "—")}</span></button>
-      <div class="card chart" id="dchart"></div>
-      <div class="card panel"><div class="list" id="dlist"></div></div>`);
-    const W = 340, H = 118, pl = 26, pr = 26, pt = 10, pb = 18; const n = ds.length; const max = Math.max(10, ...ds.map((x) => Math.max(x.done, x.inflow)));
-    const X = (i) => pl + ((i + .5) * (W - pl - pr)) / n; const Y = (v) => pt + (1 - v / max) * (H - pt - pb); const YR = (r) => pt + (1 - r) * (H - pt - pb); const bw = Math.min(12, (W - pl - pr) / n / 3);
-    const ticks = [0, Math.round(max / 2), max];
-    $("#dchart").innerHTML = `<div class="legend"><span><i style="background:var(--s-inbox);opacity:.5"></i>流入</span><span><i style="background:var(--s-done)"></i>完了</span><span><i style="background:var(--s-today)"></i>今日やる完了率（右の目盛り）</span></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="診断の推移">
-      ${ticks.map((v) => `<line x1="${pl}" x2="${W - pr}" y1="${Y(v)}" y2="${Y(v)}" style="stroke:var(--line)"/><text x="${pl - 4}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`).join("")}${[0, .5, 1].map((r) => `<text x="${W - pr + 4}" y="${YR(r) + 3}">${r * 100}%</text>`).join("")}
-      ${ds.map((x, i) => `<rect x="${X(i) - bw - 1}" y="${Y(x.inflow)}" width="${bw}" height="${Y(0) - Y(x.inflow)}" rx="2" style="fill:var(--s-inbox);opacity:.5"/><rect x="${X(i) + 1}" y="${Y(x.done)}" width="${bw}" height="${Y(0) - Y(x.done)}" rx="2" style="fill:var(--s-done)"/><text x="${X(i)}" y="${H - 4}" text-anchor="middle">${x.no}</text>`).join("")}
-      <polyline points="${ds.map((x, i) => `${X(i)},${YR(x.rate)}`).join(" ")}" fill="none" style="stroke:var(--s-today)" stroke-width="2"/>${ds.map((x, i) => `<circle cx="${X(i)}" cy="${YR(x.rate)}" r="${i === n - 1 ? 4 : 2.5}" style="fill:var(--s-today)"/>`).join("")}</svg>`;
-    paged($("#dlist"), "diag", ds.slice().reverse(), 52, (x) => `<button type="button" class="row" data-diag="${x.id}"><span class="main"><span class="nm">第${x.no}回　${esc(x.verdict || "")}</span><span class="sub">${esc(x.next || "")}</span></span><span class="meta"><span class="num">${Math.round(x.rate * 100)}%</span><br>${x.from ? md(x.from) : ""}</span></button>`);
   }
   function renderOpsLog(view) {
     const evs = [...new Set(S.logs.map((l) => l.event).filter(Boolean))];
