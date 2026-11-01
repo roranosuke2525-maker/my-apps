@@ -2,6 +2,8 @@
 // 習慣ページの5つのタブ（習慣チェック・パーティー・ギルド・ものがたり・きろく）と、あいぼうを1画面ずつで見せる。
 import { renderPet, renderMonster, renderItem, fillStory, petLine, petName, evolveStory, SLEEP_LINES, TYPE_COLORS } from "./aibou.js";
 import { openTheater } from "./theater.js";
+import { battleStage } from "./battle-stage.js";
+import { chapterBgs } from "./theater-stage.js";
 
 const KEY_STORAGE = "habit-check:key";
 const MAX_BACK_DAYS = 6;
@@ -652,7 +654,7 @@ const WEAK_LABEL = { ちから: "ちから", かしこさ: "かしこさ", や�
 async function renderBattle() {
   const body = $("battle-body");
   if (!state.data.battle) body.replaceChildren(loadingEl());
-  const [data] = await Promise.all([loadData("battle", "/api/battle"), loadData("items", "/api/items")]);
+  const [data] = await Promise.all([loadData("battle", "/api/battle"), loadData("items", "/api/items"), loadData("party", "/api/party")]);
   if (state.view !== "battle") return;
   if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.battle || "読み込めませんでした" }));
   // ボスを倒したら、ものがたりの一覧も読み直す（次の話が開く）
@@ -682,13 +684,15 @@ function bossCard(data) {
   const left = Math.max(0, b.hp - b.damage);
   const pet = data.pet;
   const won = !!b.defeatedOn;
-  const sprite = renderMonster("boss", BOSS_COLORS[b.weak] || BOSS_COLORS.バランス, { size: 140, motion: won ? "defeated" : "idle", boss: b.name });
+  // 舞台：前に見たときから増えたダメージを、仲間の攻撃として見せる
+  const members = (state.data.party?.members || []).map((m) => m.name.replace(/（.*$/, ""));
+  const hero = state.data.party?.members?.find((m) => m.kind === "しゅじんこう")?.name || "";
+  const order = 200 + Number((b.chapter.match(/第(\d+)話/) || [])[1] || 0);
+  const stage = battleStage({ boss: b, members, hero, pet, bg: chapterBgs(order, b.chapter)[0] });
   return h("div", { class: `card boss-card${won ? " won" : ""}` },
     h("span", { class: "sub", text: b.chapter }),
-    h("h2", { class: "boss-name", text: b.name }),
-    sprite,
+    stage,
     h("div", { class: "kv" }, h("span", { text: "HP" }), h("b", { text: `${fmt(left)} / ${fmt(b.hp)}` })),
-    h("div", { class: "bar hp", style: "flex:none" }, h("span", { style: `width:${(left / b.hp) * 100}%` })),
     h("div", { class: "boss-tags" },
       h("span", { class: "pet-stage", style: `--chip:${TYPE_COLORS[b.weak] || "#a58bd0"}`, text: `じゃくてん：${WEAK_LABEL[b.weak] || b.weak || "—"}` }),
       b.petHit ? h("span", { class: "pet-stage", style: "--chip:#d9822b", text: `${pet?.name || "あいぼう"}：こうかばつぐん` }) : null,

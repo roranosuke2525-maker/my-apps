@@ -1074,7 +1074,10 @@ function fight(chapter, { habitDays, tasks }, start, petType, stats, equip = {})
   const day = (d) => (days[d] ||= { habit: 0, tasks: [] });
   for (const [date, d] of Object.entries(habitDays)) {
     if (date < start) continue;
-    day(date).habit = TYPES.reduce((a, t) => a + d.points[t] * m(t), 0) * mult;
+    // 型ごとのダメージも残す（画面で、型ごとに仲間の攻撃として見せる）
+    const byType = Object.fromEntries(TYPES.map((t) => [t, d.points[t] * m(t) * mult]));
+    day(date).habit = TYPES.reduce((a, t) => a + byType[t], 0);
+    day(date).habitTypes = byType;
   }
   for (const t of tasks) {
     if (t.date < start) continue;
@@ -1090,7 +1093,10 @@ function fight(chapter, { habitDays, tasks }, start, petType, stats, equip = {})
     const total = d.habit + d.tasks.reduce((a, t) => a + t.damage, 0);
     damage += total;
     if (date === today) todayDamage = total;
-    if (d.habit) log.push({ date, kind: "habit", damage: Math.round(d.habit) });
+    if (d.habit) {
+      const types = Object.fromEntries(Object.entries(d.habitTypes || {}).filter(([, v]) => v > 0).map(([t, v]) => [t, Math.round(v)]));
+      log.push({ date, kind: "habit", damage: Math.round(d.habit), types });
+    }
     for (const t of d.tasks) log.push({ date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
     if (!defeatedOn && damage >= chapter.hp) defeatedOn = date;
   }
