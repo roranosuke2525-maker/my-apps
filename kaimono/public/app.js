@@ -22,7 +22,7 @@ const store = {
 
 const S = {
   tab: "list", lists: [], stock: [], today: "", loadedAt: "", cur: store.get("cur"), sort: store.get("sort", "aisle"),
-  showBasket: false, edit: "", sheet: null, lpick: null, // lpick：リストで選んで消す品の id pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
+  showBasket: false, edit: "", sheet: null, over: store.json("over", {}), // over：Notion に書いたばかりの品（id → 手元の値） lpick: null, // lpick：リストで選んで消す品の id pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
   seg: store.get("seg", "usual"), templates: [], templateErr: "", planning: false, whenFor: "", openOther: "", wantList: "",
   reminders: {}, // タスク id → 何分前に知らせるか（決めていないタスクは REMIND_DEFAULT）
   plan: { counts: {}, extra: [], at: "", store: "", before: [30, 0], ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
@@ -113,6 +113,7 @@ async function load({ quiet = false } = {}) {
   try {
     const st = await api("GET", "/api/state");
     Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "", reminders: st.reminders || {} });
+    applyOver();
     if (S.wantList) { const t = listOf(S.wantList); if (t) { S.seg = kindOf(t); S.cur = t.id; S.tab = "list"; } S.wantList = ""; }
     for (const t of S.lists.filter((x) => kindOf(x) !== "other")) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
     saveSnap(); saveHist();
@@ -170,15 +171,19 @@ async function runOp(op) {
     op.temps.forEach((tid, n) => {
       const real = res.items[n]?.id;
       if (!real) return;
-      for (const t of S.lists) for (const i of t.items || []) if (i.id === tid) i.id = real;
+      for (const t of S.lists) for (const i of t.items || []) if (i.id === tid) { i.id = real; i.kind = res.items[n].kind || "todo"; }
+      if (S.over[tid]) { S.over[real] = { ...S.over[tid], item: { ...S.over[tid].item, id: real, kind: res.items[n].kind } }; delete S.over[tid]; }
       for (const q of Q) if (q.item === tid) q.item = real;
       if (S.edit === tid) S.edit = real;
     });
     render();
-  } else if (op.k === "check") await api("PATCH", `/api/items/${op.item}`, { checked: op.checked });
-  else if (op.k === "text") await api("PATCH", `/api/items/${op.item}`, { text: op.text });
-  else if (op.k === "del") await api("DELETE", `/api/items/${op.item}`);
+  } else if (op.k === "check") await api("PATCH", itemPath(op), { checked: op.checked });
+  else if (op.k === "text") await api("PATCH", itemPath(op), { text: op.text });
+  else if (op.k === "del") await api("DELETE", itemPath(op));
 }
+// 品ごとの子タスクは /api/subtasks、前からのリストの本文の ToDo は /api/items
+const itemPath = (op) => `/api/${op.kind === "task" ? "subtasks" : "items"}/${op.item}`;
+const kindOf_ = (id) => findItem(id)[1]?.kind || "todo";
 function dropTemps(op) {
   if (op.k !== "add") return;
   for (const t of S.lists) if (t.items) t.items = t.items.filter((i) => !op.temps.includes(i.id));
@@ -199,7 +204,7 @@ async function addTexts(texts) {
     try {
       setSync("busy");
       const res = await api("POST", "/api/lists", { name, items: texts });
-      S.lists.unshift(res.list);
+      S.lists.unshift(res.list); markAdded(res.list);
       if (S.seg !== "quick") { S.cur = res.list.id; store.set("cur", S.cur); }
       texts.forEach((s) => remember(A.splitQty(s).name));
       saveHist(); saveSnap(); setSync("ok"); render();
@@ -210,7 +215,8 @@ async function addTexts(texts) {
   if (S.seg !== "quick") S.cur = t.id;
   const temps = texts.map(() => `tmp${Date.now()}${tmpN++}`);
   t.items = t.items || [];
-  texts.forEach((s, n) => t.items.push({ id: temps[n], text: s, checked: false, group: "" }));
+  texts.forEach((s, n) => { const it = { id: temps[n], text: s, checked: false, group: "", kind: "task" }; t.items.push(it); S.over[temps[n]] = { add: true, list: t.id, item: it, at: Date.now() }; });
+  saveOver();
   texts.forEach((s) => remember(A.splitQty(s).name));
   saveHist();
   render();
@@ -225,38 +231,64 @@ function toggle(id) {
   const [, i] = findItem(id); if (!i) return;
   i.checked = !i.checked;
   if (navigator.vibrate) navigator.vibrate(8);
+  overWrite(id, { checked: i.checked });
   render();
-  enqueue({ k: "check", item: id, checked: i.checked });
+  enqueue({ k: "check", item: id, checked: i.checked, kind: i.kind });
+}
+// ---------- チェックが戻らないように：書いた内容は Notion が追いつくまで（3分）手元を優先 ----------
+const OVER_MS = 3 * 60e3;
+// 作ったばかりのリストの品も、Notion の検索に出てくるまで手元から出す
+function markAdded(list) { S.over[`list:${list.id}`] = { newList: { ...list, items: [] }, at: Date.now() }; for (const it of list.items || []) S.over[it.id] = { add: true, list: list.id, item: it, at: Date.now() }; saveOver(); }
+function overWrite(id, patch) { S.over[id] = { ...(S.over[id] || {}), ...patch, at: Date.now() }; saveOver(); }
+const saveOver = () => store.set("over", JSON.stringify(S.over));
+function applyOver() {
+  const now = Date.now();
+  for (const [id, o] of Object.entries(S.over)) if (now - o.at > OVER_MS && !Q.some((q) => q.item === id)) delete S.over[id];
+  for (const o of Object.values(S.over)) if (o.newList && !S.lists.some((t) => t.id === o.newList.id)) S.lists.unshift({ ...o.newList, items: [] });
+  for (const t of S.lists) {
+    if (!t.items) t.items = t.refill?.length ? undefined : [];
+    if (!t.items) continue;
+    t.items = t.items.filter((i) => !S.over[i.id]?.del);
+    for (const i of t.items) { const o = S.over[i.id]; if (!o) continue; if ("checked" in o) i.checked = o.checked; if (o.text) i.text = o.text; }
+    // 足した直後でまだ読み込みに出てこない品は手元から足す
+    for (const [id, o] of Object.entries(S.over)) if (o.add && o.list === t.id && !o.del && !t.items.some((i) => i.id === id)) t.items.push({ ...o.item, checked: "checked" in o ? o.checked : false, text: o.text || o.item.text });
+  }
+  saveOver();
 }
 function renameItem(id, text) {
   const [, i] = findItem(id); if (!i) return;
   text = text.replace(/\s+/g, " ").trim();
   S.edit = "";
   if (!text || text === i.text) { render(); return; }
-  i.text = text; render();
-  enqueue({ k: "text", item: id, text });
+  i.text = text; overWrite(id, { text }); render();
+  enqueue({ k: "text", item: id, text, kind: i.kind });
 }
 function removeItem(id) {
   const [t] = findItem(id); if (!t) return;
+  const kind = kindOf_(id);
   t.items = t.items.filter((i) => i.id !== id);
+  overWrite(id, { del: true });
   S.edit = ""; render();
-  enqueue({ k: "del", item: id });
+  enqueue({ k: "del", item: id, kind });
 }
 // 選んだ品をまとめてリストから消す（チェックの有無は問わない。圏外でも順番待ちで消す）
 function deletePicked(t) {
   const ids = [...(S.lpick || [])].filter((id) => (t.items || []).some((i) => i.id === id));
   if (!ids.length) return;
+  const kinds = Object.fromEntries(ids.map((id) => [id, kindOf_(id)]));
   t.items = t.items.filter((i) => !ids.includes(i.id));
+  ids.forEach((id) => overWrite(id, { del: true }));
   S.lpick = null; render();
-  for (const id of ids) enqueue({ k: "del", item: id });
+  for (const id of ids) enqueue({ k: "del", item: id, kind: kinds[id] });
   toast(`${ids.length}品をリストから消しました`);
 }
 function clearBasket(t) {
   const done = (t.items || []).filter((i) => i.checked);
   if (!done.length) return;
   t.items = t.items.filter((i) => !i.checked);
+  done.forEach((i) => overWrite(i.id, { del: true }));
   render();
-  for (const i of done) enqueue({ k: "del", item: i.id });
+  for (const i of done) enqueue({ k: "del", item: i.id, kind: i.kind });
   toast(`かごの ${done.length}品 をリストから消しました`);
 }
 async function finishList(t, label = "買い物おわり") {
@@ -265,6 +297,7 @@ async function finishList(t, label = "買い物おわり") {
     setSync("busy");
     await api("POST", `/api/lists/${t.id}/done`);
     S.lists = S.lists.filter((x) => x.id !== t.id);
+    delete S.over[`list:${t.id}`]; saveOver();
     for (const x of S.stock) if (x.open?.includes(t.id)) { x.open = x.open.filter((y) => y !== t.id); if (t.refill.includes(x.id)) markRestocked(x); }
     if (S.cur === t.id) S.cur = shopLists()[0]?.id || "";
     saveSnap(); setSync("ok"); render();
@@ -361,14 +394,14 @@ function planToggle(id) {
 async function createPlan(btn) {
   const texts = [...planPicked(), ...S.plan.extra];
   if (!texts.length) { toast("買うものを選んでください"); return; }
-  if (texts.length > 50) { toast("一度に作れるのは50品までです"); return; }
+  if (texts.length > 40) { toast("一度に作れるのは40品までです"); return; }
   const day = S.plan.at ? S.plan.at.slice(0, 10) : jstDay();
   const name = `🛒 ${S.plan.store || "買い物"} ${md(day)}`;
   btn.disabled = true;
   try {
     setSync("busy");
     const res = await api("POST", "/api/lists", { name, items: texts, at: S.plan.at || null });
-    S.lists.unshift(res.list);
+    S.lists.unshift(res.list); markAdded(res.list);
     S.cur = res.list.id; store.set("cur", S.cur); S.planning = false;
     texts.forEach((t) => remember(A.splitQty(t).name));
     const before = S.plan.before;
@@ -760,9 +793,10 @@ function listView(t, ph) {
     return `${when}<div class="card list">${tools}${groups(items)}</div>
       <div class="card bulkbar"><b>${S.lpick.size}品を選択中</b><div class="row-end"><button type="button" class="btn ghost sm" data-lpickall="${t.id}">${all ? "全部外す" : "全部選ぶ"}</button><button type="button" class="btn danger sm" data-lpickdel="${t.id}" ${S.lpick.size ? "" : "disabled"}>🗑 選んだ${S.lpick.size}品を消す</button></div></div>`;
   }
-  const body = todo.length ? groups(todo) : `<div class="empty small">${items.length ? "🎉 ぜんぶかごに入りました" : "上の欄から入れてください。「、」で区切るとまとめて入ります"}</div>`;
-  const bk = basket.length ? `<div class="basket"><button type="button" class="bhead" data-basket="1" aria-expanded="${S.showBasket}">🧺 かごの中 ${basket.length}品 <span>${S.showBasket ? "▲" : "▼"}</span></button>${S.showBasket ? basket.map(itemRow).join("") : ""}</div>` : "";
-  const foot = `<div class="lfoot">${basket.length ? `<button type="button" class="btn" data-clear="${t.id}">かごの${basket.length}品をリストから消す</button>` : ""}${items.length && !todo.length ? `<button type="button" class="btn ok" data-finish="${t.id}">買い物おわり（済みにする）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
+  // チェックした品は消さずに、その場で色を反転して残す（並びは変えない）
+  const body = items.length ? groups(items) : `<div class="empty small">上の欄から入れてください。「、」で区切るとまとめて入ります</div>`;
+  const bk = items.length && !todo.length ? `<div class="empty small">🎉 ぜんぶかごに入りました</div>` : "";
+  const foot = `<div class="lfoot">${basket.length ? `<button type="button" class="btn" data-clear="${t.id}">チェック済み${basket.length}品をリストから消す</button>` : ""}${items.length && !todo.length ? `<button type="button" class="btn ok" data-finish="${t.id}">買い物おわり（済みにする）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
   return `${when}${addBox(ph)}<div class="card list">${tools}${prog}${body}${bk}</div>${foot}`;
 }
 
@@ -1060,7 +1094,7 @@ function showLogin() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (!memoryKey) { showLogin(); return; }
   const snap = store.json("snap", null);
-  if (snap) Object.assign(S, snap);
+  if (snap) { Object.assign(S, snap); applyOver(); }
   render();
   if (Q.length) flush();
   load();

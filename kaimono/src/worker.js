@@ -14,7 +14,8 @@ const PER_DAYS = { 毎日: 1, 毎週: 7, 毎月: 30 };
 const WAKU_HOME = "🏠 家・外";
 const WAKU_NET = "☼ 朝";
 const ITEM_MAX = 200;
-const ADD_MAX = 50; // 1回で足せる品目
+const ADD_MAX = 40; // 1回で足せる品目（品ごとに子タスクを作るので、無料プランの1回50通信に収める）
+const CHILD_DAYS = 60; // 子タスク（買い物の品）を読む期間
 const LIST_MAX = 20; // 本文まで読むリストの数（無料プランの Worker は1回の通信が50件まで）
 const CLEAR_MAX = 40;
 const NAME_MAX = 100;
@@ -39,6 +40,7 @@ export default {
       const m = request.method;
       const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when|remind)$/i);
       const item = p.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
+      const sub = p.match(/^\/api\/subtasks\/([0-9a-f-]{32,36})$/i);
       const stock = p.match(/^\/api\/stock\/([0-9a-f-]{32,36})(?:\/(refill|restocked))?$/i);
       const jan = p.match(/^\/api\/jan\/(\d{8}|\d{12,13})$/);
 
@@ -52,6 +54,8 @@ export default {
       if (p === "/api/templates" && m === "POST") return json(await addTemplate(notion, env, await readJson(request)));
       if (item && m === "PATCH") return json(await updateItem(notion, env, item[1], await readJson(request)));
       if (item && m === "DELETE") return json(await removeItem(notion, env, item[1]));
+      if (sub && m === "PATCH") return json(await updateSubtask(notion, env, sub[1], await readJson(request)));
+      if (sub && m === "DELETE") return json(await removeSubtask(notion, env, sub[1]));
       if (p === "/api/stock" && m === "POST") return json(await addStock(notion, env, await readJson(request)));
       if (stock?.[2] === "refill" && m === "POST") return json(await refill(notion, env, stock[1]));
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1]));
@@ -179,6 +183,7 @@ function taskOf(page) {
     date: propDate(p["実行日"]),
     at: /T\d\d:\d\d/.test(p["実行日"]?.date?.start || "") ? p["実行日"].date.start : null, // 時刻つきの実行日＝買い物の時刻
     refill: relIds(p["補充対象"]),
+    parent: relIds(p["親タスク"]),
     edited: page.last_edited_time || null,
   };
 }
@@ -227,6 +232,17 @@ function itemsOf(blocks, kids = {}) {
 }
 const itemOf = (b, group) => ({ id: normalizeId(b.id), text: plain(b.to_do?.rich_text).trim() || "（空）", checked: !!b.to_do?.checked, group });
 
+// 買い物の品（子タスク）。済んだ品もかごに入れた印として出すので、最近作ったものを状態を問わず読む
+async function childTasks(notion, env, parentId) {
+  const since = new Date(Date.now() - CHILD_DAYS * 864e5).toISOString().slice(0, 10);
+  const pages = await queryAll(notion, env.TASK_DS_ID, {
+    filter: { and: [parentId ? { property: "親タスク", relation: { contains: parentId } } : { property: "親タスク", relation: { is_not_empty: true } }, { timestamp: "created_time", created_time: { on_or_after: since } }] },
+    sorts: [{ timestamp: "created_time", direction: "ascending" }],
+  });
+  return pages.map(taskOf);
+}
+const subItemOf = (k) => ({ id: k.id, text: k.name, checked: k.status === ST.done, group: "", kind: "task" });
+
 async function readItems(notion, t, budget) {
   const res = await notion("GET", `/blocks/${t.id}/children?page_size=100`);
   const blocks = res.results || [];
@@ -273,7 +289,7 @@ async function loadState(notion, env) {
   const today = todayJst();
   const [tasks, stockPages, templates] = await Promise.all([
     queryAll(notion, env.TASK_DS_ID, {
-      filter: { and: [openFilter, { or: [{ property: "分類タグ", select: { equals: "BUY" } }, { property: "補充対象", relation: { is_not_empty: true } }] }] },
+      filter: { and: [openFilter, { property: "親タスク", relation: { is_empty: true } }, { or: [{ property: "分類タグ", select: { equals: "BUY" } }, { property: "補充対象", relation: { is_not_empty: true } }] }] },
       sorts: recent,
     }),
     queryAll(notion, env.DAILY_DS_ID, {}),
@@ -286,7 +302,12 @@ async function loadState(notion, env) {
   // チェックリストとして使うのは補充タスク以外。本文の ToDo を読む
   const bodies = lists.filter((t) => !t.refill.length).slice(0, LIST_MAX);
   const budget = { n: NEST_MAX };
-  await Promise.all(bodies.map((t) => readItems(notion, t, budget)));
+  const [, kids] = await Promise.all([Promise.all(bodies.map((t) => readItems(notion, t, budget))), childTasks(notion, env)]);
+  // 品ごとの子タスクを、本文の ToDo の後ろに並べる
+  for (const t of lists.filter((x) => !x.refill.length)) {
+    const mine = kids.filter((k) => k.parent.includes(t.id)).map(subItemOf);
+    if (mine.length) t.items = [...(t.items || []), ...mine];
+  }
   const stock = stockPages.map((pg) => stockOf(pg, today));
   for (const x of stock) x.open = lists.filter((t) => t.refill.includes(x.id)).map((t) => t.id);
   return {
@@ -330,7 +351,6 @@ function clean(v, max, label) {
   return t;
 }
 const rich = (s) => [{ type: "text", text: { content: s } }];
-const todo = (s) => ({ object: "block", type: "to_do", to_do: { rich_text: rich(s), checked: false } });
 
 // タスクを作る。プレイヤーの関連に届かない（DB_プレイヤーが未接続）ときは、関連なしで作り直す
 async function createTask(notion, env, properties) {
@@ -358,9 +378,59 @@ async function createList(notion, env, body) {
     ...(at ? { "実行日": { date: { start: at } } } : {}),
   });
   const t = taskOf(page);
-  t.items = [];
-  if (texts.length) t.items = await appendItems(notion, t.id, texts);
+  t.items = texts.length ? await createSubtasks(notion, env, t.id, texts) : [];
   return { list: t };
+}
+
+// 品を1つずつ DB_タスク管理 の子タスクにする（プレイヤーなし＝EXP なし、親タスクでつなぐ）。3件ずつ並べて作り、順番は入れたとおり
+async function createSubtasks(notion, env, parentId, texts) {
+  const out = new Array(texts.length);
+  let next = 0;
+  const worker = async () => {
+    for (let k; (k = next++) < texts.length;) {
+      const page = await notion("POST", "/pages", {
+        parent: { type: "data_source_id", data_source_id: env.TASK_DS_ID },
+        properties: {
+          "名前": { title: rich(texts[k]) },
+          "ステータス": { status: { name: ST.next } },
+          "分類タグ": { select: { name: "BUY" } },
+          "重さ": { select: { name: "S" } },
+          "枠": { select: { name: WAKU_HOME } },
+          "親タスク": { relation: [{ id: parentId }] },
+        },
+      });
+      out[k] = subItemOf(taskOf(page));
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return out;
+}
+
+async function subtaskPage(notion, env, id) {
+  const page = await notion("GET", `/pages/${normalizeId(id)}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.TASK_DS_ID)) throw httpError(403, "DB_タスク管理 の行ではありません");
+  const k = taskOf(page);
+  if (!k.parent.length) throw httpError(403, "買い物の品（子タスク）ではありません");
+  await listPage(notion, env, k.parent[0]);
+  return k;
+}
+async function updateSubtask(notion, env, id, body) {
+  const k = await subtaskPage(notion, env, id);
+  const props = {};
+  if (typeof body?.checked === "boolean") props["ステータス"] = { status: { name: body.checked ? ST.done : ST.next } };
+  if (body?.text !== undefined) {
+    const s = clean(body.text, ITEM_MAX, "品目");
+    if (!s) throw httpError(400, "品目が空です");
+    props["名前"] = { title: rich(s) };
+  }
+  if (!Object.keys(props).length) throw httpError(400, "変える内容がありません");
+  const page = await notion("PATCH", `/pages/${k.id}`, { properties: props });
+  return { item: subItemOf(taskOf(page)) };
+}
+async function removeSubtask(notion, env, id) {
+  const k = await subtaskPage(notion, env, id);
+  await notion("PATCH", `/pages/${k.id}`, { in_trash: true });
+  return { removed: [k.id] };
 }
 
 function itemTexts(raw) {
@@ -368,17 +438,14 @@ function itemTexts(raw) {
   if (arr.length > ADD_MAX) throw httpError(400, `一度に足せるのは${ADD_MAX}品までです`);
   return arr;
 }
-async function appendItems(notion, pageId, texts) {
-  const res = await notion("PATCH", `/blocks/${pageId}/children`, { children: texts.map(todo) });
-  return itemsOf((res.results || []).filter((b) => b.type === "to_do"));
-}
 
 async function addItems(notion, env, id, body) {
   const texts = itemTexts(body?.items);
   if (!texts.length) throw httpError(400, "買うものを入れてください");
   const t = await listPage(notion, env, id);
   if (t.refill.length) throw httpError(403, "補充タスクには品目を足せません");
-  return { items: await appendItems(notion, t.id, texts) };
+  if (t.parent.length) throw httpError(403, "買い物の品には品目を足せません");
+  return { items: await createSubtasks(notion, env, t.id, texts) };
 }
 
 async function updateItem(notion, env, id, body) {
@@ -824,7 +891,7 @@ export async function runAlerts(env, at) {
 async function runReminders(notion, env, at, subs) {
   if (!subs.length) return 0;
   const pages = await queryAll(notion, env.TASK_DS_ID, {
-    filter: { and: [openFilter, { property: "分類タグ", select: { equals: "BUY" } }, { property: "実行日", date: { on_or_after: new Date(at - 864e5).toISOString().slice(0, 10) } }] },
+    filter: { and: [openFilter, { property: "分類タグ", select: { equals: "BUY" } }, { property: "親タスク", relation: { is_empty: true } }, { property: "実行日", date: { on_or_after: new Date(at - 864e5).toISOString().slice(0, 10) } }] },
   });
   let sent = 0;
   const vapid = await vapidOf(env);
@@ -837,6 +904,7 @@ async function runReminders(notion, env, at, subs) {
       if (await env.SUBS.get(mark)) continue;
       await env.SUBS.put(mark, "1", { expirationTtl: 3 * 86400 });
       await readItems(notion, t, { n: 3 });
+      t.items = [...(t.items || []), ...(await childTasks(notion, env, t.id)).map(subItemOf)];
       const left = (t.items || []).filter((i) => !i.checked).map((i) => i.text);
       const hm = t.at.slice(11, 16);
       const msg = {

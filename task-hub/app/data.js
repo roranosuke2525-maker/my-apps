@@ -134,6 +134,7 @@
       tag: r["分類タグ"] || null, ai: r["AIアクション"] || null, edited: r["最終更新日時"] || null, created: r.createdTime || null,
       projects: (list(r["プロジェクト"]) || []).map(idOf).filter(Boolean), link: text(r["userDefined:URL"]),
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
+      parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
     };
     known.set(t.id, t);
     return t;
@@ -189,9 +190,11 @@
     const out = await Promise.all(jobs);
     known.clear();
     const n = OPEN_STATUSES.length;
-    S.tasks = out.slice(0, n).flatMap((o) => o.results.map(toTask));
+    // かいものアプリの買い物の品（親タスクのある子タスク）は数えない・出さない
+    const own = (t) => !t.parent.length;
+    S.tasks = out.slice(0, n).flatMap((o) => o.results.map(toTask)).filter(own);
     S.more = Object.fromEntries(OPEN_STATUSES.map((s, i) => [s, out[i].more]));
-    S.doneToday = out[n].results.map(toTask);
+    S.doneToday = out[n].results.map(toTask).filter(own);
     S.refs = out[n + 1].results.map(toTask); S.refMore = out[n + 1].more;
     S.projects = out[n + 2].results.map((r) => ({
       id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", status: r["ステータス"] || "", step: text(r["次の一歩"]), now: text(r["今の状態"]),

@@ -32,7 +32,7 @@ function kv() {
 
 let env, pages, blocks, children, calls, pushes, next;
 const row = (id, ds, properties, edited = "2026-10-28T00:00:00.000Z") => ({ object: "page", id, url: `https://www.notion.so/${id}`, parent: { type: "data_source_id", data_source_id: ds }, last_edited_time: edited, properties });
-function task(id, { name, status = "⏭ NEXT", tag = "BUY", refill = [], url = null, at = null }) {
+function task(id, { name, status = "⏭ NEXT", tag = "BUY", refill = [], url = null, at = null, parent = [] }) {
   return row(id, TASK_DS, {
     名前: { type: "title", title: rt(name) },
     ステータス: { type: "status", status: { name: status } },
@@ -41,6 +41,7 @@ function task(id, { name, status = "⏭ NEXT", tag = "BUY", refill = [], url = n
     URL: { type: "url", url },
     実行日: { type: "date", date: at ? { start: at } : null },
     補充対象: { type: "relation", relation: refill.map((r) => ({ id: r })) },
+    親タスク: { type: "relation", relation: parent.map((r) => ({ id: r })) },
   });
 }
 function daily(id, { name, cat = "日用品", use = 1, freq = "毎日", size = 30, bought = null, end = null, rollup = null }) {
@@ -68,7 +69,9 @@ function match(p, f) {
   const prop = p.properties[f.property];
   if (f.status) return prop?.status?.name === f.status.equals;
   if (f.select) return prop?.select?.name === f.select.equals;
+  if (f.timestamp) return true;
   if (f.relation?.is_not_empty) return (prop?.relation || []).length > 0;
+  if (f.relation?.is_empty) return !(prop?.relation || []).length;
   if (f.relation?.contains) return (prop?.relation || []).some((r) => r.id.replace(/-/g, "") === f.relation.contains);
   if (f.checkbox) return !!prop?.checkbox === f.checkbox.equals;
   if (f.date?.on_or_after) return !!prop?.date?.start && prop.date.start.slice(0, 10) >= f.date.on_or_after;
@@ -200,26 +203,44 @@ test("読みこみ：開いている BUY タスクと補充タスク、本文の
   assert.equal(writes().length, 0);
 });
 
-test("品目：足す・チェック・名前を直す・消す。買い物タスク以外の ToDo には触らない", async () => {
+test("品目：1品ずつ子タスク（親タスクでつなぐ・プレイヤーなし）。チェック＝DONE、名前を直す、消す＝ゴミ箱", async () => {
   const add = await api("POST", `/api/lists/${L1}/items`, { items: ["卵", " ", "食パン 1袋"] });
   assert.equal(add.status, 200);
-  assert.deepEqual(add.data.items.map((i) => i.text), ["卵", "食パン 1袋"]);
+  assert.deepEqual(add.data.items.map((i) => [i.text, i.kind, i.checked]), [["卵", "task", false], ["食パン 1袋", "task", false]]);
   const egg = add.data.items[0].id;
-  assert.equal((await api("PATCH", `/api/items/${egg}`, { checked: true })).data.item.checked, true);
-  assert.equal(blocks.get(egg).to_do.checked, true);
-  assert.equal((await api("PATCH", `/api/items/${egg}`, { text: "卵 10個" })).data.item.text, "卵 10個");
-  assert.equal((await api("DELETE", `/api/items/${egg}`)).status, 200);
-  assert.ok(!blocks.has(egg));
+  const pg = pages.get(egg);
+  assert.deepEqual(pg.properties["親タスク"].relation, [{ id: L1 }]);
+  assert.equal(pg.properties["分類タグ"].select.name, "BUY");
+  assert.equal(pg.properties["ステータス"].status.name, "⏭ NEXT");
+  assert.equal(pg.properties["プレイヤー"], undefined); // EXP に数えない
+  assert.equal((await api("PATCH", `/api/subtasks/${egg}`, { checked: true })).data.item.checked, true);
+  assert.equal(pg.properties["ステータス"].status.name, "✅ DONE");
+  assert.equal((await api("PATCH", `/api/subtasks/${egg}`, { checked: false })).data.item.checked, false);
+  assert.equal((await api("PATCH", `/api/subtasks/${egg}`, { text: "卵 10個" })).data.item.text, "卵 10個");
+  assert.equal((await api("DELETE", `/api/subtasks/${egg}`)).status, 200);
+  assert.equal(pg.in_trash, true);
+  assert.equal((await api("PATCH", `/api/subtasks/${L1}`, { checked: true })).status, 403); // 親は品ではない
+  assert.equal((await api("PATCH", `/api/subtasks/${OTHER}`, { checked: true })).status, 403);
 
-  assert.equal((await api("PATCH", `/api/items/${hex(56)}`, { checked: true })).status, 200); // 入れ子の品目
+  // 本文の ToDo（前からのリスト）も今までどおり
+  assert.equal((await api("PATCH", `/api/items/${hex(56)}`, { checked: true })).status, 200);
   assert.equal(blocks.get(hex(56)).to_do.checked, true);
   assert.equal((await api("PATCH", `/api/items/${hex(54)}`, { checked: true })).status, 403);
   assert.equal((await api("POST", `/api/lists/${OTHER}/items`, { items: ["x"] })).status, 403);
   assert.equal((await api("POST", `/api/lists/${R1}/items`, { items: ["x"] })).status, 403);
   assert.equal((await api("POST", `/api/lists/${D1}/items`, { items: ["x"] })).status, 403);
-  assert.equal((await api("POST", `/api/lists/${L1}/items`, { items: Array(51).fill("a") })).status, 400);
-  assert.equal((await api("PATCH", `/api/items/${hex(51)}`, { checked: true })).status, 403); // 見出しは品目ではない
-  assert.equal(blocks.get(hex(54)).to_do.checked, false);
+  assert.equal((await api("POST", `/api/lists/${egg}/items`, { items: ["x"] })).status, 403); // 品の下には足さない
+  assert.equal((await api("POST", `/api/lists/${L1}/items`, { items: Array(41).fill("a") })).status, 400);
+});
+
+test("読みこみ：子タスクは親の品目として出し（済みはチェック済み）、リストには並べない", async () => {
+  pages.set(hex(90), task(hex(90), { name: "もやし 3袋", parent: [L1] }));
+  pages.set(hex(91), task(hex(91), { name: "鶏肉", parent: [L1], status: "✅ DONE" }));
+  pages.set(hex(92), task(hex(92), { name: "済んだ親の品", parent: [L2] }));
+  const { data } = await api("GET", "/api/state");
+  assert.ok(!data.lists.some((t) => [hex(90), hex(91), hex(92)].includes(t.id)));
+  const sup = data.lists.find((t) => t.id === L1);
+  assert.deepEqual(sup.items.slice(-2).map((i) => [i.text, i.checked, i.kind]), [["もやし 3袋", false, "task"], ["鶏肉", true, "task"]]);
 });
 
 test("かごの品を消す・買い物おわり", async () => {

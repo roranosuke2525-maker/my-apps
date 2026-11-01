@@ -138,7 +138,13 @@ a { color: var(--pri); }
 .item.on .box { background: var(--pri); }
 .item.on .box::after, .prow.on .box::after { content: "✓"; color: var(--pri-ink); font-size: 13px; font-weight: 700; }
 .tx { flex: 1; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
-.item.on .tx { text-decoration: line-through; color: var(--mute); }
+.item.on { background: var(--pri); border-radius: 10px; border-top-color: transparent; }
+.item.on + .item { border-top-color: transparent; }
+.item.on .tx { color: var(--pri-ink); font-weight: 700; }
+.item.on .box { background: var(--pri-ink); border-color: var(--pri-ink); }
+.item.on .box::after { color: var(--pri) !important; }
+.item.on .qty { background: rgba(255, 255, 255, 0.25); color: var(--pri-ink); }
+.item.on .more { color: var(--pri-ink); }
 .item.pending .tx { opacity: 0.7; }
 .qty { flex: none; font-size: 12px; font-weight: 700; color: var(--pri); background: var(--pri-soft); border-radius: 999px; padding: 2px 8px; }
 .more { flex: none; width: 36px; height: 40px; border: 0; background: transparent; color: var(--mute); font-size: 17px; cursor: pointer; display: grid; place-items: center; text-decoration: none; }
