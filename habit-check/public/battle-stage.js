@@ -50,7 +50,7 @@ export function attacksOf(log, members) {
   const out = [];
   for (const x of [...log].reverse()) {
     if (x.kind === "muscle") {
-      out.push({ who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: { name: "鍛えた肉体の一撃", fx: "smash" } });
+      out.push({ who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: { name: "鍛えた肉体の一撃", fx: "muscle" } });
     } else if (x.kind === "task") {
       const want = FAMILY_ATTACKER[x.family] || "さとし";
       out.push({ who: has(want) ? want : "さとし", damage: x.damage, what: `${x.name}${"★".repeat(x.stars || 0)}を片づけた力`, date: x.date });
@@ -136,32 +136,82 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   let cancelled = false;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms / speed));
 
+  // 1回の攻撃：カットイン（技の名前）→ 踏み込み（残像）→ 技の演出 → 命中（一瞬止まる・閃光・破片・ダメージ）→ もどる
   async function hit(a) {
     const f = fighters[a.who] || fighters.さとし;
     const move = a.move || MOVES[a.who] || MOVES.さとし;
-    caption.textContent = a.combined ? `これまでの攻撃！ ${Math.round(a.damage)} ダメージ` : `${a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who}の${move.name}！（${a.what}）`;
+    const who = a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who;
+    const kind = a.combined ? "combo" : move.fx;
+    caption.textContent = a.combined ? `これまでの攻撃！` : `${who}の${move.name}！`;
+    caption.dataset.sub = a.combined ? "" : a.what;
+
+    // カットイン
+    if (speed === 1) {
+      const portrait = f.querySelector("img")?.src;
+      const cut = h("div", { class: `bs-cutin cut-${kind}` },
+        h("div", { class: "bs-cut-lines" }),
+        portrait ? h("img", { class: "bs-cut-face", src: portrait, alt: "" }) : null,
+        h("div", { class: "bs-cut-text" }, h("span", { class: "bs-cut-who", text: a.combined ? "ALL" : who }), h("b", { text: a.combined ? "これまでの攻撃" : move.name })));
+      fx.append(cut);
+      await wait(720);
+      cut.classList.add("out");
+      setTimeout(() => cut.remove(), 300);
+    }
+
+    // 踏み込み（残像を2つ残す）
+    f.classList.add("charge");
+    await wait(160);
+    for (let k = 1; k <= 2; k++) {
+      const ghost = f.cloneNode(true);
+      ghost.classList.add("ghost");
+      ghost.style.setProperty("--k", k);
+      partyEl.append(ghost);
+      setTimeout(() => ghost.remove(), 420);
+    }
+    f.classList.remove("charge");
     f.classList.add("attack");
-    await wait(260);
-    const e = h("div", { class: `bs-effect fx-${a.combined ? "combo" : move.fx}` });
-    if (move.fx === "coins" || move.fx === "pages") for (let i = 0; i < 9; i++) {
+    await wait(200);
+
+    // 技の演出
+    const e = h("div", { class: `bs-effect fx-${kind}` });
+    if (kind === "coins" || kind === "pages") for (let i = 0; i < 12; i++) {
       const p = h("i", {});
-      p.style.setProperty("--d", `${i * 40}ms`);
-      p.style.setProperty("--y", `${-30 + Math.random() * 60}px`);
+      p.style.setProperty("--d", `${i * 35}ms`);
+      p.style.setProperty("--y", `${-40 + Math.random() * 80}px`);
       e.append(p);
     }
     fx.append(e);
-    await wait(220);
+    await wait(kind === "flame" || kind === "pages" || kind === "coins" ? 320 : 200);
+
+    // 命中：一瞬止まる → 閃光・衝撃・破片・ダメージ
+    root.classList.add("hitstop");
+    await wait(90);
+    root.classList.remove("hitstop");
+    const flash = h("div", { class: "bs-flash" });
+    const impact = h("div", { class: "bs-impact" });
+    fx.append(flash, impact);
+    for (let i = 0; i < 10; i++) {
+      const d = h("i", { class: "bs-debris" });
+      const ang = Math.random() * Math.PI * 2;
+      d.style.setProperty("--dx", `${Math.cos(ang) * (40 + Math.random() * 60)}px`);
+      d.style.setProperty("--dy", `${Math.sin(ang) * (40 + Math.random() * 60) - 20}px`);
+      impact.append(d);
+    }
     bossEl.classList.remove("hit"); void bossEl.offsetWidth; bossEl.classList.add("hit");
     const big = a.damage >= boss.hp * 0.12;
-    const num = h("span", { class: `bs-num${big ? " big" : ""}`, text: String(Math.round(a.damage)) });
+    const weak = boss.weak && (TYPE_ATTACKER[boss.weak] === a.who || boss.weak === "バランス");
+    const num = h("span", { class: `bs-num${big ? " big" : ""}` },
+      big ? h("small", { text: "CRITICAL!" }) : weak ? h("small", { text: "こうかばつぐん" }) : null,
+      String(Math.round(a.damage)));
     num.style.setProperty("--x", `${-20 + Math.random() * 40}px`);
     fx.append(num);
-    if (big) { root.classList.remove("quake"); void root.offsetWidth; root.classList.add("quake"); }
+    root.classList.remove("quake"); void root.offsetWidth; root.classList.add(big ? "quake" : "jolt");
     setHp(hp - a.damage);
-    await wait(420);
+    await wait(460);
     f.classList.remove("attack");
-    setTimeout(() => { e.remove(); num.remove(); }, 900);
-    await wait(260);
+    root.classList.remove("jolt");
+    setTimeout(() => { e.remove(); num.remove(); flash.remove(); impact.remove(); }, 900);
+    await wait(280);
   }
 
   async function play(list, from) {

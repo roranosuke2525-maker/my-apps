@@ -703,3 +703,57 @@ body.theater-open { overflow: hidden; }
 .cam-shutter { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; background: rgba(255, 255, 255, 0.85); cursor: pointer; }
 .cam-shutter:active { transform: scale(0.94); }
 #body-body .scroll > * { flex: none; }
+
+/* ---- 攻撃の演出（強化版） ---- */
+.bs-caption { font-size: 14px; }
+.bs-caption[data-sub]:not([data-sub=""])::after { content: "（" attr(data-sub) "）"; display: block; font-size: 11px; font-weight: 600; color: var(--sub); }
+/* カットイン：斜めの帯に、攻撃する人の顔と技の名前 */
+.bs-cutin { position: absolute; left: -10%; right: -10%; top: 26%; height: 46%; z-index: 50; transform: skewY(-6deg); overflow: hidden;
+  background: linear-gradient(90deg, rgba(10, 8, 20, 0.92), rgba(40, 20, 60, 0.92)); border-top: 3px solid #ffe066; border-bottom: 3px solid #ffe066;
+  animation: bs-cut-in 0.28s cubic-bezier(.2, 1.2, .4, 1); }
+.bs-cutin.out { animation: bs-cut-out 0.25s ease-in forwards; }
+.bs-cut-lines { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.12) 18px 20px); animation: bs-lines 0.3s linear infinite; }
+.bs-cut-face { position: absolute; left: 6%; top: -6%; height: 260%; object-fit: cover; object-position: top; transform: skewY(6deg); filter: drop-shadow(0 0 8px rgba(255, 230, 150, 0.8)); animation: bs-face 0.7s cubic-bezier(.2, 1, .4, 1); }
+.bs-cut-text { position: absolute; right: 12%; top: 50%; transform: translateY(-50%) skewY(6deg); text-align: right; color: #fff; animation: bs-text 0.5s cubic-bezier(.2, 1.4, .4, 1) 0.08s both; }
+.bs-cut-who { display: block; font-size: 12px; letter-spacing: 0.2em; color: #ffe066; }
+.bs-cut-text b { display: block; font-size: 28px; font-weight: 900; color: #fff; -webkit-text-stroke: 1px #2b2118; paint-order: stroke; text-shadow: 0 0 14px rgba(255, 200, 100, 0.8); }
+.cut-flame { border-color: #ff8a3c; } .cut-coins { border-color: #f2c14e; } .cut-pages { border-color: #c39be8; } .cut-smash, .cut-muscle { border-color: #ff5d4d; } .cut-tackle { border-color: #8fe6ff; }
+@keyframes bs-cut-in { from { transform: skewY(-6deg) scaleY(0); } }
+@keyframes bs-cut-out { to { transform: skewY(-6deg) scaleY(0); opacity: 0; } }
+@keyframes bs-lines { to { background-position: -20px 0; } }
+@keyframes bs-face { from { transform: skewY(6deg) translateX(-80%); opacity: 0; } }
+@keyframes bs-text { from { transform: translateY(-50%) skewY(6deg) translateX(40%); opacity: 0; } }
+
+/* ため → 踏み込み（残像） */
+.bs-fighter.charge { transform: translateX(-8%) scale(0.96); filter: drop-shadow(0 0 14px rgba(255, 230, 120, 1)) brightness(1.2); animation: none; }
+.bs-fighter.attack { transform: translateX(95%) scale(1.15); }
+.bs-fighter.ghost { opacity: 0.45; transform: translateX(calc(95% - var(--k) * 30%)) scale(1.15); filter: blur(1px) brightness(1.6) saturate(0.3); pointer-events: none; animation: bs-ghost 0.42s ease-out forwards; z-index: 19; }
+@keyframes bs-ghost { to { opacity: 0; } }
+
+/* 命中：一瞬止まる・閃光・衝撃の星・破片 */
+.bs.hitstop * { animation-play-state: paused !important; }
+.bs.jolt .bs-stage { animation: bs-jolt 0.25s ease-out; }
+@keyframes bs-jolt { 30% { transform: translate(3px, -2px); } 60% { transform: translate(-2px, 1px); } }
+.bs-flash { position: absolute; inset: 0; background: #fff; animation: bs-flash 0.35s ease-out forwards; }
+@keyframes bs-flash { from { opacity: 0.85; } to { opacity: 0; } }
+.bs-impact { position: absolute; right: 22%; top: 42%; width: 0; height: 0; }
+.bs-impact::before { content: ""; position: absolute; left: -60px; top: -60px; width: 120px; height: 120px; background: conic-gradient(from 0deg, #fff 0 4%, transparent 4% 12%, #fff 12% 16%, transparent 16% 25%, #fff 25% 29%, transparent 29% 37%, #fff 37% 41%, transparent 41% 50%, #fff 50% 54%, transparent 54% 62%, #fff 62% 66%, transparent 66% 75%, #fff 75% 79%, transparent 79% 87%, #fff 87% 91%, transparent 91%);
+  -webkit-mask: radial-gradient(circle, #000 20%, transparent 70%); mask: radial-gradient(circle, #000 20%, transparent 70%); animation: bs-star 0.45s ease-out forwards; }
+@keyframes bs-star { from { transform: scale(0.2) rotate(0); opacity: 1; } to { transform: scale(1.6) rotate(30deg); opacity: 0; } }
+.bs-debris { position: absolute; width: 6px; height: 6px; border-radius: 2px; background: #ffe9b0; box-shadow: 0 0 6px #ffcf5a; animation: bs-debris 0.6s ease-out forwards; }
+@keyframes bs-debris { to { transform: translate(var(--dx), var(--dy)) rotate(200deg); opacity: 0; } }
+.bs-boss.hit { animation: bs-hit2 0.5s cubic-bezier(.2, 1, .4, 1); }
+@keyframes bs-hit2 { 0% { transform: translateX(0); } 20% { transform: translateX(22px) rotate(5deg) scale(0.97); } 55% { transform: translateX(-6px) rotate(-1deg); } 100% { transform: none; } }
+.bs-num small { display: block; font-size: 12px; letter-spacing: 0.1em; -webkit-text-stroke: 0; color: #fff; text-shadow: 0 0 6px #ff5d4d, 0 2px 0 #7a1f1f; }
+.bs-num.big { font-size: 52px; }
+
+/* 技ごとの追加演出 */
+.fx-slash::before { --r: -35deg; } .fx-slash::after { --r: 30deg; }
+.fx-slash { filter: drop-shadow(0 0 10px #fff6c8); }
+.fx-muscle::before { content: ""; position: absolute; inset: 15%; border-radius: 50%; border: 8px solid #ff5d4d; box-shadow: 0 0 24px #ff8a3c, inset 0 0 18px #ffcf5a; animation: bs-ring 0.5s ease-out forwards; }
+.fx-muscle::after { content: "💥"; position: absolute; left: 35%; top: 30%; font-size: 72px; animation: bs-burst 0.55s ease-out forwards; }
+.fx-flame::after { content: ""; position: absolute; left: 30%; bottom: 0; width: 40%; height: 120%; border-radius: 40% 40% 10% 10%; background: linear-gradient(transparent, rgba(255, 140, 60, 0.85), #fff6c8); filter: blur(3px); transform-origin: bottom; animation: bs-pillar 0.6s ease-out forwards; }
+@keyframes bs-pillar { from { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } to { transform: scaleY(1.1); opacity: 0; } }
+.fx-tackle::after { content: ""; position: absolute; inset: 25%; border-radius: 50%; border: 5px solid #8fe6ff; animation: bs-ring 0.45s ease-out forwards; }
+.fx-pages i { animation-duration: 0.55s; }
+.fx-coins i { animation-duration: 0.5s; }
