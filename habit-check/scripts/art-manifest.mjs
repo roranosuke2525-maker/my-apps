@@ -186,12 +186,12 @@ export const CAST2 = [
   ...person("zeni", "Zeni (2026-11-01 に決定：さわやかな好青年・細い目), a likable young merchant around 24: soft light-brown hair, narrow crescent smiling eyes, a green wide-brimmed hat with a small feather, a tan travel coat open over a white shirt and green vest, a ledger and an abacus, a small sapling pin.", ["smile", "angry", "sad", "surprised", "battle"]),
   ...person("shirogane", "Shirogane (2026-11-01 に決定：鎖将), the empire's Chain General and secretly the former legendary hero: silver hair swept back, cold piercing eyes, black-and-silver general's armor with heavy chains wrapped around the arms and draped from the shoulders, a high-collared dark cape, a chain-wrapped sword.", ["smile", "angry", "sad", "surprised", "battle"]),
   ...person("rensa", "Rensa (2026-11-01 に決定：青いろうそく), Rumi's twin sister and the empress, a spirit of cold blue fire: fluffy blue hair with a blue flame burning on top of her head, a pale blue dress with frozen wax-drip trim and chains as a belt, bare feet floating, blue flame wisps, playful grin.", ["smile", "angry", "sad", "surprised"]),
-  ...person("obaasan", "Fumiyo, a kind but sharp old woman guild receptionist in her 70s, grey hair in a bun, round glasses, a shawl over a dark dress, holding a worn register book.", ["smile", "sad"]),
-  ...person("kazoe", "Kazoe, a young girl traveler with short dark hair, a simple grey travel cloak over a tunic, a metal bracelet on her wrist with a small glowing number display, shy gentle expression.", ["smile", "sad"]),
-  ...person("gou", "Gou, a stern huge imperial captain in heavy black armor with chain emblems, short grey hair, a diagonal scar across his face, a greatsword engraved with chains.", ["angry", "sad"]),
-  ...person("tsuma", "The hero's wife, a kind Japanese woman in her early 30s, shoulder-length dark hair, casual home clothes and an apron, holding a coffee mug.", ["smile", "sad"]),
-  ...person("chiisana", "The 'little hero', a 1-year-old Japanese toddler sitting, a tiny red cape over baby clothes, chubby cheeks, curious face.", ["smile"]),
-  ...person("tokijii", "Toki-jii, a thin old prisoner man with a long white beard, ragged clothes, kind tired eyes."),
+  ...person("obaasan", "Fumiyo (2026-11-01 新版), Fumi's grandmother and guild receptionist in her 70s: silver-lavender hair in a bun, round glasses, knitted shawl and cardigan over a dark long dress, a worn register book.", ["smile", "sad"]),
+  ...person("kazoe", "Kazoe (2026-11-01 新版), a young girl traveler: short dark hair with a small braid, a grey hooded travel cloak, a metal bracelet with a small glowing number display, shy but brave.", ["smile", "sad"]),
+  ...person("gou", "Gou (2026-11-01 新版), captain of the Hundred Squad in his 50s: grey crew cut, diagonal face scar, heavy black imperial armor with chain emblems and 100 on the chest, a chain-engraved greatsword.", ["angry", "sad"]),
+  ...person("tsuma", "The hero's wife (2026-11-01 新版), late 20s: dark brown hair in a low ponytail, gentle eyes, oatmeal knit top, long apron, trousers, a coffee mug, a burp cloth on her shoulder.", ["smile", "sad"]),
+  ...person("chiisana", "The little hero (2026-11-01 新版), a 1-year-old with fluffy black hair and an ahoge like his father's, a tiny green cape and a white bib like a scarf, sitting.", ["smile"]),
+  ...person("tokijii", "Toki-jii (2026-11-01 新版), a thin old former prisoner: long white beard, kind tired eyes, a patched brown robe, a walking stick, a broken shackle on one ankle."),
 ];
 
 export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS, ...CAST2];

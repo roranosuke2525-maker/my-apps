@@ -11,6 +11,8 @@ from pathlib import Path
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
+# 白に近い色の多い絵は、背景を抜くときの許し幅を小さくする（服まで抜けないように）
+TOLERANCE = {"cast2/rensa_angry": 20, "cast2/rensa": 24}
 OUT = ROOT / "public" / "img"
 SPRITE_MAX = 384
 
@@ -54,8 +56,8 @@ def remove_background(im, tol=38):
     return im
 
 
-def finish_sprite(src, dst):
-    im = remove_background(Image.open(src))
+def finish_sprite(src, dst, tol=38):
+    im = remove_background(Image.open(src), tol)
     box = im.getchannel("A").point(lambda a: 255 if a > 16 else 0).getbbox()
     if box:
         im = im.crop(box)
@@ -82,7 +84,11 @@ def main():
         if only and not any(o in str(rel) for o in only):
             continue
         dst = OUT / rel.with_suffix(".webp")
-        (finish_bg if rel.parts[0] == "bg" else finish_sprite)(src, dst)
+        if rel.parts[0] == "bg":
+            finish_bg(src, dst)
+        else:
+            tol = next((t for k, t in TOLERANCE.items() if str(rel).startswith(k)), 38)
+            finish_sprite(src, dst, tol)
         print("ok", rel)
     if not only or any("party" in o for o in only):
         for src in sorted((OUT / "party" / "gemini").glob("*.png")):
