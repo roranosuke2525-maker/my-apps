@@ -50,7 +50,7 @@ export function attacksOf(log, members) {
   const out = [];
   for (const x of [...log].reverse()) {
     if (x.kind === "muscle") {
-      out.push({ who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date });
+      out.push({ who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: { name: "鍛えた肉体の一撃", fx: "smash" } });
     } else if (x.kind === "task") {
       const want = FAMILY_ATTACKER[x.family] || "さとし";
       out.push({ who: has(want) ? want : "さとし", damage: x.damage, what: `${x.name}${"★".repeat(x.stars || 0)}を片づけた力`, date: x.date });
@@ -138,7 +138,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
 
   async function hit(a) {
     const f = fighters[a.who] || fighters.さとし;
-    const move = MOVES[a.who] || MOVES.さとし;
+    const move = a.move || MOVES[a.who] || MOVES.さとし;
     caption.textContent = a.combined ? `これまでの攻撃！ ${Math.round(a.damage)} ダメージ` : `${a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who}の${move.name}！（${a.what}）`;
     f.classList.add("attack");
     await wait(260);

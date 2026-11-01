@@ -21,3 +21,9 @@ test("まだ仲間でない人の分は、さとしが攻撃する", () => {
   assert.ok(a.every((x) => x.who === "さとし"));
   assert.equal(a.reduce((s, x) => s + x.damage, 0), 96);
 });
+
+test("からだチェックは、さとしの「鍛えた肉体の一撃」", () => {
+  const a = attacksOf([{ date: "2026-11-02", kind: "muscle", damage: 150 }], ["ムキ"]);
+  assert.equal(a[0].who, "さとし");
+  assert.equal(a[0].move.name, "鍛えた肉体の一撃");
+});
