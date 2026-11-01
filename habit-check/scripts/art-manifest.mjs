@@ -189,7 +189,8 @@ export const CAST2 = [
   ...person("obaasan", "Fumiyo (2026-11-01 新版), Fumi's grandmother and guild receptionist in her 70s: silver-lavender hair in a bun, round glasses, knitted shawl and cardigan over a dark long dress, a worn register book.", ["smile", "sad"]),
   ...person("kazoe", "Kazoe (2026-11-01 新版), a young girl traveler: short dark hair with a small braid, a grey hooded travel cloak, a metal bracelet with a small glowing number display, shy but brave.", ["smile", "sad"]),
   ...person("gou", "Gou (2026-11-01 新版), captain of the Hundred Squad in his 50s: grey crew cut, diagonal face scar, heavy black imperial armor with chain emblems and 100 on the chest, a chain-engraved greatsword.", ["angry", "sad"]),
-  ...person("tsuma", "The hero's wife (2026-11-01 新版), late 20s: short light-brown bob hair, gentle eyes, oatmeal knit top, long apron, trousers, a coffee mug, a burp cloth on her shoulder.", ["smile", "sad"]),
+  // 妻：基本は明るくユーモラス、ニヒルな笑み。ディズニーと服と甘いものが好き。変なことを言うと塩対応（angry＝冷めた目）。かかあ天下
+  ...person("tsuma", "The hero's wife (2026-11-01 決定), late 20s: short light-brown bob, a cool half-smile, a beige trench coat over a striped top, a denim midi skirt, ankle boots, a tote bag with a small cute charm.", ["smile", "angry", "sad", "surprised"]),
   ...person("chiisana", "The little hero (2026-11-01 新版), a 1-year-old with fluffy black hair and an ahoge like his father's, a tiny green cape and a white bib like a scarf, sitting.", ["smile"]),
   ...person("tokijii", "Toki-jii (2026-11-01 新版), a thin old former prisoner: long white beard, kind tired eyes, a patched brown robe, a walking stick, a broken shackle on one ankle."),
 ];

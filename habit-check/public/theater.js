@@ -36,6 +36,7 @@ const CAST = {
 // 戦いの場面（WARNING のあと）で、構えの絵に切り替わる人
 const FIGHTERS = new Set(["さとし", "ムキ", "フミ", "ゼニ", "シロガネ"]);
 const BATTLE_STEPS = 14;
+const SALTY = /^(は？|はあ？|ふーん|へえ|なにそれ|で？|知らない|いや|ちょっと|……)/;
 const HERO_KEYS = { みならい: "hero_1", かけだし: "hero_2", いちにんまえ: "hero_3", ベテラン: "hero_4", たつじん: "hero_5", でんせつ: "hero_6" };
 const EP1_HERO = { 0: "みならい", 1: "みならい", 2: "かけだし", 3: "かけだし", 4: "いちにんまえ", 5: "ベテラン", 6: "ベテラン", 7: "たつじん", 8: "たつじん", 9: "でんせつ" };
 const PET_HEIGHT = { egg: 0.26, baby: 0.28, child: 0.36, adult: 0.5 };
@@ -391,6 +392,8 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
     }
     // せりふ：立ち絵の上に吹き出し
     if (battleLeft > 0) battleLeft--;
+    // 妻は、変なことを言われたときの短い返し（「は？」「なにそれ」など）で塩対応の顔
+    if (s.who === "妻" && !s.emo && SALTY.test(s.text)) s.emo = "angry";
     const actor = bringOn(s.who, { emo: s.emo || (battleLeft > 0 && FIGHTERS.has(s.who) ? "battle" : null) });
     if (!actor) for (const x of onStage) x.el.classList.remove("speaking");
     const name = displayName(s.who);
