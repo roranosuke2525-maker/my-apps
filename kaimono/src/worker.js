@@ -64,6 +64,15 @@ export default {
       if (p === "/api/lookup" && m === "POST") return json(await lookupPage((await readJson(request))?.url));
       if (jan && m === "GET") return json(await lookupJan(env, jan[1]));
       if (p === "/api/identify" && m === "POST") return json(await identify(env, await readJson(request)));
+      if (p === "/api/search" && m === "GET") return json(await searchItems(env, url.searchParams.get("q")));
+      if (p === "/api/stores" && m === "POST") return json(await addStore(env, await readJson(request)));
+      if (p === "/api/stores" && m === "DELETE") return json(await removeStore(env, await readJson(request)));
+      if (p === "/api/prices" && m === "GET") return json(await loadPrices(notion, env));
+      if (p === "/api/prices" && m === "POST") return json(await addPrices(notion, env, await readJson(request)));
+      const price = p.match(/^\/api\/prices\/([0-9a-f-]{32,36})$/i);
+      if (price && m === "DELETE") return json(await removePrice(notion, env, price[1]));
+      if (p === "/api/receipts/read" && m === "POST") return json(await readReceipt(env, await readJson(request)));
+      if (p === "/api/receipts" && m === "POST") return json(await saveReceipt(notion, env, await readJson(request)));
       if (p === "/api/push" && m === "GET") return json(pushReady(env) ? { publicKey: (await vapidOf(env)).publicKey, ready: true } : { publicKey: "", ready: false });
       if (p === "/api/push/status" && m === "POST") return json(await pushStatus(env, await readJson(request)));
       if (p === "/api/push" && m === "PUT") return json(await pushSubscribe(env, await readJson(request)));
@@ -205,6 +214,7 @@ function stockOf(page, today, restockedOn) {
     rollup: rollupDate(p["最終補充日"]),
     jan: propText(p.JAN),
     image: imageOf(p["画像"]),
+    store: propText(p["店"]),
   };
   const formulaEnd = formulaDate(p["切れる予定日"]);
   const base = [x.bought, x.rollup, restockedOn].filter(Boolean).sort().at(-1) || null;
@@ -313,6 +323,7 @@ async function loadState(notion, env) {
   return {
     lists, stock, today, loadedAt: new Date().toISOString(),
     templates: (templates.ok || []).map(templateOf).filter((x) => x.name),
+    stores: await storeList(env, [...(templates.ok || []).map((pg) => propText(pg.properties?.["店"])), ...stockPages.map((pg) => propText(pg.properties?.["店"]))]),
     templateErr: templates.err || "",
     reminders: await remindMap(env, lists.map((t) => t.id)),
   };
@@ -596,6 +607,10 @@ function stockProps(body, { edit = false } = {}) {
     props["URL"] = { url: link || null };
   }
   if (has("memo")) props["メモ"] = { rich_text: clean(body?.memo, 1000, "メモ") ? rich(clean(body.memo, 1000, "メモ")) : [] };
+  if (has("store")) {
+    const st = clean(body?.store, 30, "店");
+    props["店"] = { select: st ? { name: st } : null };
+  }
   if (has("jan")) {
     const j = String(body?.jan || "").replace(/\D/g, "");
     if (j && !/^(\d{8}|\d{12,13})$/.test(j)) throw httpError(400, "バーコードは8桁か13桁の数字です");
@@ -754,6 +769,216 @@ JSONだけを返してください：{"name":"商品名","category":"日用品|�
   if (resp && typeof resp === "object") return resp;
   const text = String(resp);
   try { return JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}"); } catch { return { name: text.replace(/[{}"]/g, "").split("\n")[0] }; }
+}
+
+// ---------- 店 ----------
+// 店の名前は KV（"stores"）に置く。テンプレート・在庫で使っている店も足して返す。Notion の選択肢は書いたときに自動で増える
+const DEFAULT_STORES = ["ヤオコー", "ヤクルト", "ドラッグストア"];
+async function storeList(env, used = []) {
+  const saved = (env.SUBS && (await env.SUBS.get("stores", "json"))) || DEFAULT_STORES;
+  return [...new Set([...saved, ...used].filter((x) => x && x !== "その他"))];
+}
+async function addStore(env, body) {
+  needPush(env);
+  const name = clean(body?.name, 30, "店の名前");
+  if (!name) throw httpError(400, "店の名前を入れてください");
+  const list = await storeList(env);
+  if (!list.includes(name)) list.push(name);
+  await env.SUBS.put("stores", JSON.stringify(list));
+  return { stores: list };
+}
+async function removeStore(env, body) {
+  needPush(env);
+  const list = (await storeList(env)).filter((x) => x !== body?.name);
+  await env.SUBS.put("stores", JSON.stringify(list));
+  return { stores: list };
+}
+
+// ---------- 価格・レシート ----------
+function priceOf(page) {
+  const p = page.properties || {};
+  return {
+    id: normalizeId(page.id),
+    url: page.url,
+    name: propText(p["品名"]),
+    store: propText(p["店"]),
+    price: typeof p["価格"]?.number === "number" ? p["価格"].number : null,
+    qty: typeof p["数量"]?.number === "number" && p["数量"].number > 0 ? p["数量"].number : 1,
+    date: propDate(p["日付"]),
+    receipt: relIds(p["レシート"])[0] || "",
+    stock: relIds(p["在庫"])[0] || "",
+  };
+}
+function needPrices(env) {
+  if (!env.PRICE_DS_ID || !env.RECEIPT_DS_ID) throw httpError(500, "PRICE_DS_ID / RECEIPT_DS_ID が設定されていません");
+}
+async function loadPrices(notion, env) {
+  needPrices(env);
+  const [pages, receipts] = await Promise.all([
+    queryAll(notion, env.PRICE_DS_ID, { sorts: [{ property: "日付", direction: "descending" }] }),
+    queryAll(notion, env.RECEIPT_DS_ID, { sorts: [{ property: "日付", direction: "descending" }] }),
+  ]);
+  return {
+    prices: pages.map(priceOf).filter((x) => x.name && x.price != null),
+    receipts: receipts.map((pg) => ({ id: normalizeId(pg.id), url: pg.url, name: propText(pg.properties?.["名前"]), store: propText(pg.properties?.["店"]), date: propDate(pg.properties?.["日付"]), total: pg.properties?.["合計"]?.number ?? null, photo: imageOf(pg.properties?.["写真"]) })),
+  };
+}
+function priceItems(raw) {
+  const arr = (Array.isArray(raw) ? raw : []).map((x) => ({
+    name: clean(x?.name, NAME_MAX, "品名"),
+    price: Number(x?.price),
+    qty: Number(x?.qty) > 0 && Number(x?.qty) < 1000 ? Number(x.qty) : 1,
+    stock: /^[0-9a-f-]{32,36}$/i.test(String(x?.stock || "")) ? normalizeId(x.stock) : "",
+  })).filter((x) => x.name && Number.isFinite(x.price) && x.price >= 0 && x.price < 1e7);
+  if (arr.length > ADD_MAX) throw httpError(400, `一度に入れられるのは${ADD_MAX}品までです`);
+  return arr;
+}
+async function createPrices(notion, env, items, { store, date, receipt }) {
+  const out = [];
+  let next = 0;
+  const worker = async () => {
+    for (let k; (k = next++) < items.length;) {
+      const x = items[k];
+      const page = await notion("POST", "/pages", {
+        parent: { type: "data_source_id", data_source_id: env.PRICE_DS_ID },
+        properties: {
+          "品名": { title: rich(x.name) },
+          "価格": { number: x.price },
+          "数量": { number: x.qty },
+          "日付": { date: { start: date } },
+          ...(store ? { "店": { select: { name: store } } } : {}),
+          ...(receipt ? { "レシート": { relation: [{ id: receipt }] } } : {}),
+          ...(x.stock ? { "在庫": { relation: [{ id: x.stock }] } } : {}),
+        },
+      });
+      out[k] = priceOf(page);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return out;
+}
+async function addPrices(notion, env, body) {
+  needPrices(env);
+  const items = priceItems(body?.items);
+  if (!items.length) throw httpError(400, "品名と価格を入れてください");
+  return { prices: await createPrices(notion, env, items, { store: clean(body?.store, 30, "店"), date: dateOf(body?.date) || todayJst() }) };
+}
+async function removePrice(notion, env, id) {
+  needPrices(env);
+  const page = await notion("GET", `/pages/${normalizeId(id)}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.PRICE_DS_ID)) throw httpError(403, "DB_価格記録 の行ではありません");
+  await notion("PATCH", `/pages/${normalizeId(page.id)}`, { in_trash: true });
+  return { removed: normalizeId(page.id) };
+}
+
+function imageData(raw, max = 3_000_000) {
+  const m = String(raw || "").match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m || m[2].length > max) throw httpError(400, "画像が正しくないか大きすぎます");
+  return { type: m[1], b64: m[2] };
+}
+// レシートの写真を Notion に上げる（File Upload API。1枚 20MB まで）
+async function uploadToNotion(env, img, filename) {
+  const base = env.NOTION_API_BASE || NOTION_BASE;
+  const headers = { Authorization: `Bearer ${env.NOTION_TOKEN}`, "Notion-Version": NOTION_VERSION };
+  const res = await fetch(`${base}/file_uploads`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ filename, content_type: `image/${img.type}` }) });
+  const up = await res.json().catch(() => ({}));
+  if (!res.ok || !up.id) throw httpError(502, `写真を Notion に上げられませんでした（${up.code || res.status}）`);
+  const form = new FormData();
+  form.append("file", new Blob([Uint8Array.from(atob(img.b64), (c) => c.charCodeAt(0))], { type: `image/${img.type}` }), filename);
+  const sent = await fetch(`${base}/file_uploads/${up.id}/send`, { method: "POST", headers, body: form });
+  if (!sent.ok) throw httpError(502, `写真を Notion に上げられませんでした（${sent.status}）`);
+  return up.id;
+}
+
+const RECEIPT_SCHEMA = {
+  type: "object",
+  properties: {
+    store: { type: "string", description: "店の名前。店の一覧にある店ならその名前をそのまま" },
+    date: { type: "string", description: "買った日 YYYY-MM-DD。読めなければ空文字" },
+    total: { type: "number", description: "合計金額（税込・円）。読めなければ0" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "品名。略称は分かる範囲で一般的な名前に直す。在庫リストと同じ品ならその名前" },
+          price: { type: "number", description: "その行で払った金額（税込・円。値引きがあれば引いた後）" },
+          qty: { type: "number", description: "個数。書いていなければ1" },
+        },
+        required: ["name", "price", "qty"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["store", "date", "total", "items"],
+  additionalProperties: false,
+};
+// レシートの写真から店・日付・合計・品と価格を読む（Claude。キーがなければ読まない）
+async function readReceipt(env, body) {
+  const img = imageData(body?.image);
+  if (!env.ANTHROPIC_API_KEY) return { configured: false };
+  const stores = (Array.isArray(body?.stores) ? body.stores : []).map((n) => String(n).slice(0, 30)).slice(0, 50);
+  const names = (Array.isArray(body?.names) ? body.names : []).map((n) => String(n).slice(0, 60)).slice(0, 150);
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1 });
+  let res;
+  try {
+    res = await client.beta.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      output_config: { effort: "low", format: { type: "json_schema", schema: RECEIPT_SCHEMA } },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: `image/${img.type}`, data: img.b64 } },
+        { type: "text", text: `このレシートを読み取ってください。小計・合計・税・ポイント・お釣りの行は品に入れないでください。
+店の一覧：${stores.join(" / ") || "（なし）"}
+在庫リスト：${names.join(" / ") || "（なし）"}` },
+      ] }],
+    });
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw httpError(502, "Claude の API キーが正しくありません");
+    if (err instanceof Anthropic.APIError) throw httpError(502, `レシートを読めませんでした（Claude ${err.status ?? ""}）`);
+    throw httpError(502, "レシートを読めませんでした");
+  }
+  if (res.stop_reason === "refusal") throw httpError(502, "レシートを読めませんでした（断られました）");
+  let j;
+  try { j = JSON.parse(res.content.filter((x) => x.type === "text").map((x) => x.text).join("")); } catch { throw httpError(502, "レシートを読めませんでした（返事の形が違いました）"); }
+  return { configured: true, store: String(j.store || "").slice(0, 30), date: dateOf(j.date) || "", total: Number(j.total) || null, items: (j.items || []).slice(0, ADD_MAX).map((x) => ({ name: String(x.name || "").slice(0, 80), price: Number(x.price) || 0, qty: Number(x.qty) > 0 ? Number(x.qty) : 1 })) };
+}
+
+// レシートを保存：写真つきで DB_レシート に1行、品ごとの価格を DB_価格記録 に（レシートでつなぐ）
+async function saveReceipt(notion, env, body) {
+  needPrices(env);
+  const img = body?.image ? imageData(body.image) : null;
+  const store = clean(body?.store, 30, "店");
+  const date = dateOf(body?.date) || todayJst();
+  const items = priceItems(body?.items);
+  const total = Number(body?.total) > 0 ? Number(body.total) : items.reduce((n, x) => n + x.price, 0);
+  const fileId = img ? await uploadToNotion(env, img, `receipt-${date}.${img.type === "jpeg" ? "jpg" : img.type}`) : null;
+  const page = await notion("POST", "/pages", {
+    parent: { type: "data_source_id", data_source_id: env.RECEIPT_DS_ID },
+    properties: {
+      "名前": { title: rich(`${store || "レシート"} ${date.slice(5).replace("-", "/")} ¥${Math.round(total).toLocaleString("ja-JP")}`) },
+      "日付": { date: { start: date } },
+      "合計": { number: total },
+      ...(store ? { "店": { select: { name: store } } } : {}),
+      ...(fileId ? { "写真": { files: [{ type: "file_upload", file_upload: { id: fileId }, name: `receipt-${date}` }] } } : {}),
+    },
+  });
+  const receipt = normalizeId(page.id);
+  const prices = items.length ? await createPrices(notion, env, items, { store, date, receipt }) : [];
+  return { receipt: { id: receipt, url: page.url }, prices };
+}
+
+// 名前で商品を探す（Yahoo!ショッピング。Client ID がなければ Google で探す画面へ）
+async function searchItems(env, q) {
+  const query = clean(q, 100, "検索の言葉");
+  if (!query) throw httpError(400, "探す言葉を入れてください");
+  if (!env.YAHOO_APPID) return { configured: false };
+  const res = await fetch(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=${encodeURIComponent(env.YAHOO_APPID)}&query=${encodeURIComponent(query)}&results=8`);
+  if (!res.ok) throw httpError(502, `商品の検索に失敗しました（${res.status}）`);
+  const data = await res.json().catch(() => ({}));
+  return { configured: true, items: (data.hits || []).filter((h) => h.name).map((h) => ({ name: cleanItemName(h.name), image: h.exImage?.url || h.image?.medium || "", url: h.url || "", price: h.price ?? null, jan: h.janCode || "" })) };
 }
 
 // ---------- アラート ----------

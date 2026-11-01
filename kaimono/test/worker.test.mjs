@@ -7,6 +7,8 @@ import { b64u } from "../src/webpush.js";
 const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
 const DAILY_DS = "53881991-7268-41b5-8954-2bc4b2bf1971";
 const TPL_DS = "88548654-76ee-40be-a367-74ccaaa466e1";
+const RCPT_DS = "3d9030e3-35ee-40b9-bd34-441ad8f4a681";
+const PRICE_DS = "112a59f2-9003-462d-a401-a6d55dbb6ea2";
 const KEY = "test-key-0123456789";
 const hex = (n) => n.toString(16).padStart(32, "0");
 const rt = (s) => [{ plain_text: s }];
@@ -83,7 +85,7 @@ beforeEach(() => {
   calls = [];
   pushes = [];
   env = {
-    NOTION_TOKEN: "ntn_fake", APP_KEY: KEY, TASK_DS_ID: TASK_DS, DAILY_DS_ID: DAILY_DS, TEMPLATE_DS_ID: TPL_DS, PLAYER_ID: hex(99),
+    NOTION_TOKEN: "ntn_fake", APP_KEY: KEY, TASK_DS_ID: TASK_DS, DAILY_DS_ID: DAILY_DS, TEMPLATE_DS_ID: TPL_DS, RECEIPT_DS_ID: RCPT_DS, PRICE_DS_ID: PRICE_DS, PLAYER_ID: hex(99),
     NOTION_API_BASE: "https://notion.test/v1", ASSETS: { fetch: async () => new Response("asset") },
     SUBS: kv(), VAPID_SUBJECT: "https://kaimono.test",
   };
@@ -117,7 +119,14 @@ beforeEach(() => {
     if (u.hostname === "api.anthropic.com") {
       const b = JSON.parse(init.body || (await new Response(url.body ?? null).text?.()) || "{}");
       calls.push({ method: "POST", path: "anthropic", body: b, headers: init.headers });
-      return new Response(JSON.stringify({ id: "msg_1", type: "message", role: "assistant", model: b.model, stop_reason: "end_turn", content: [{ type: "text", text: '{"name":"見本シャンプー 詰替 400ml","category":"美容","match":"サプリ","jan":"4901234567894"}' }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { "content-type": "application/json" } });
+      const isReceipt = JSON.stringify(b).includes("レシート");
+      const text = isReceipt ? '{"store":"ヤオコー","date":"2026-11-01","total":456,"items":[{"name":"もやし","price":58,"qty":2},{"name":"納豆","price":98,"qty":1}]}' : '{"name":"見本シャンプー 詰替 400ml","category":"美容","match":"サプリ","jan":"4901234567894"}';
+      return new Response(JSON.stringify({ id: "msg_1", type: "message", role: "assistant", model: b.model, stop_reason: "end_turn", content: [{ type: "text", text }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (u.pathname === "/v1/file_uploads" && init.method === "POST") { calls.push({ path: "file_uploads", body: JSON.parse(init.body) }); return new Response(JSON.stringify({ id: "up_1", status: "pending" }), { status: 200 }); }
+    if (u.pathname === "/v1/file_uploads/up_1/send") { calls.push({ path: "file_send", form: init.body }); return new Response(JSON.stringify({ id: "up_1", status: "uploaded" }), { status: 200 }); }
+    if (u.hostname === "shopping.yahooapis.jp" && u.searchParams.get("query")) {
+      return new Response(JSON.stringify({ hits: [{ name: "【送料無料】見本 洗剤 詰替", exImage: { url: "https://img.test/a.jpg" }, url: "https://shop.test/a", price: 398, janCode: "4901234567894" }] }), { status: 200 });
     }
     if (u.hostname === "shopping.yahooapis.jp") {
       calls.push({ method: "GET", path: "yahoo", url: u.href });
@@ -501,4 +510,51 @@ test("知らせ方はタスクごと：前日・1時間前などを選べる。�
   for (const back of [1440, 60, 30, 0]) await runAlerts(env, t0 - back * 60e3 + 60e3);
   const titles = await Promise.all(pushes.map(async (p) => (await decrypt(new Uint8Array(p.body))).title));
   assert.deepEqual(titles, ["🛒 明日10:00 から買い物（前日のお知らせ）", "🛒 10:00 から買い物（あと1時間）", "🛒 買い物の時間です（10:00）"]); // 30分前は選んでいない・ヤオコーは知らせない
+});
+
+test("店の名前：足す・外す。テンプレート・在庫で使っている店も一覧に出る", async () => {
+  assert.deepEqual((await api("POST", "/api/stores", { name: "ベイシア" })).data.stores, ["ヤオコー", "ヤクルト", "ドラッグストア", "ベイシア"]);
+  assert.deepEqual((await api("DELETE", "/api/stores", { name: "ヤクルト" })).data.stores, ["ヤオコー", "ドラッグストア", "ベイシア"]);
+  pages.get(D1).properties["店"] = { type: "select", select: { name: "カインズ" } };
+  assert.ok((await api("GET", "/api/state")).data.stores.includes("カインズ"));
+  assert.equal((await api("POST", "/api/stores", { name: "" })).status, 400);
+  assert.equal((await api("PATCH", `/api/stock/${D1}`, { store: "ベイシア" })).data.stock.store, "ベイシア");
+});
+
+test("価格：手で入れる・一覧・消す", async () => {
+  const res = await api("POST", "/api/prices", { store: "ヤオコー", date: "2026-10-30", items: [{ name: "納豆", price: 98 }, { name: "もやし", price: 116, qty: 2, stock: D1 }, { name: "", price: 1 }] });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.data.prices.map((x) => [x.name, x.store, x.price, x.qty, x.date]), [["納豆", "ヤオコー", 98, 1, "2026-10-30"], ["もやし", "ヤオコー", 116, 2, "2026-10-30"]]);
+  assert.deepEqual(pages.get(res.data.prices[1].id).properties["在庫"].relation, [{ id: D1 }]);
+  const all = (await api("GET", "/api/prices")).data;
+  assert.equal(all.prices.length, 2);
+  assert.equal((await api("DELETE", `/api/prices/${res.data.prices[0].id}`)).status, 200);
+  assert.equal((await api("DELETE", `/api/prices/${L1}`)).status, 403);
+  assert.equal((await api("POST", "/api/prices", { items: [] })).status, 400);
+});
+
+test("レシート：Claude で読む（キーがなければ読まない）・写真つきで保存して品ごとの価格をつなぐ", async () => {
+  const img = "data:image/jpeg;base64," + Buffer.from("fakejpeg").toString("base64");
+  assert.deepEqual((await api("POST", "/api/receipts/read", { image: img })).data, { configured: false });
+  env.ANTHROPIC_API_KEY = "sk-ant-fake";
+  const read = (await api("POST", "/api/receipts/read", { image: img, stores: ["ヤオコー"], names: ["納豆"] })).data;
+  assert.deepEqual(read, { configured: true, store: "ヤオコー", date: "2026-11-01", total: 456, items: [{ name: "もやし", price: 58, qty: 2 }, { name: "納豆", price: 98, qty: 1 }] });
+  const saved = await api("POST", "/api/receipts", { image: img, store: "ヤオコー", date: "2026-11-01", total: 456, items: read.items });
+  assert.equal(saved.status, 200);
+  const r = pages.get(saved.data.receipt.id);
+  assert.equal(r.parent.data_source_id, RCPT_DS);
+  assert.equal(r.properties["写真"].files[0].file_upload.id, "up_1");
+  assert.equal(r.properties["合計"].number, 456);
+  assert.equal(calls.find((c) => c.path === "file_uploads").body.content_type, "image/jpeg");
+  assert.ok(calls.some((c) => c.path === "file_send"));
+  assert.equal(saved.data.prices.length, 2);
+  assert.deepEqual(pages.get(saved.data.prices[0].id).properties["レシート"].relation, [{ id: saved.data.receipt.id }]);
+  assert.equal((await api("POST", "/api/receipts/read", { image: "x" })).status, 400);
+});
+
+test("名前で商品を探す（Yahoo!ショッピング。Client ID がなければ使わない）", async () => {
+  assert.deepEqual((await api("GET", "/api/search?q=洗剤")).data, { configured: false });
+  env.YAHOO_APPID = "fake";
+  assert.deepEqual((await api("GET", "/api/search?q=洗剤")).data.items[0], { name: "見本 洗剤 詰替", image: "https://img.test/a.jpg", url: "https://shop.test/a", price: 398, jan: "4901234567894" });
+  assert.equal((await api("GET", "/api/search?q=")).status, 400);
 });
