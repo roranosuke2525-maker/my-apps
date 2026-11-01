@@ -18,7 +18,7 @@ const SLOTS = [
 ];
 const WEEK = "月火水木金土日";
 const CATEGORY_COLORS = { 家事: "orange", 育児: "pink", 家: "brown", お金: "green", からだ: "red", 学び: "blue", 趣味: "purple" };
-const VIEW_TITLES = { habit: "習慣チェック", aibou: "あいぼう", battle: "ぼうけん", guild: "ギルド", story: "ものがたり", me: "きろく" };
+const VIEW_TITLES = { habit: "習慣チェック", aibou: "あいぼう", battle: "ぼうけん", body: "ぼうけん", guild: "ギルド", story: "ものがたり", me: "きろく" };
 const GRAPH_DAYS = 30;
 const BAR_DAYS = 14;
 
@@ -197,13 +197,14 @@ function show() {
   $("login").hidden = true;
   $("bottom-nav").hidden = false;
   const viewId = state.view === "habit" ? state.tab : state.view;
-  for (const id of ["day", "week", "cal", "graph", "aibou", "battle", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
+  for (const id of ["day", "week", "cal", "graph", "aibou", "battle", "body", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
+  const navView = state.view === "body" ? "battle" : state.view;
   for (const b of document.querySelectorAll("#bottom-nav button")) {
-    b.setAttribute("aria-current", b.dataset.view === state.view ? "page" : "false");
+    b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false");
   }
   for (const b of document.querySelectorAll("#habit-tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
   renderHeader();
-  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, aibou: renderAibou, battle: renderBattle, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
+  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, aibou: renderAibou, battle: renderBattle, body: renderBody, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
 }
 
 function renderHeader() {
@@ -661,6 +662,7 @@ async function renderBattle() {
   if (data.boss?.defeatedOn) state.loadedAt.story = 0;
   swap(body, [h("div", { class: "scroll fill stack" },
     bossCard(data),
+    bodyEntry(),
     equipCard(data),
     h("div", { class: "card stack", style: "gap:8px" },
       h("div", { class: "kv" }, h("h3", { text: "モンスター（まだ終わっていないタスク）" }), h("b", { text: `${data.monsters.length}${data.moreMonsters ? "+" : ""}体` })),
@@ -705,8 +707,8 @@ function bossCard(data) {
         : h("p", { class: "sub", style: "margin:0", text: `きょうのダメージ ${fmt(b.today)}（${b.start.slice(5).replace("-", "/")}から たたかっている）` }),
     won && data.next ? h("button", { type: "button", class: "primary", onclick: () => { state.view = "story"; show(); } }, "つぎの話を読む") : null,
     b.log.length ? h("div", { class: "battle-log" }, b.log.map((x) => h("div", { class: "log-row" },
-      x.kind === "task" ? renderMonster(x.shape, x.colors, { size: 28 }) : h("span", { class: "log-icon", text: "✓" }),
-      h("span", { class: "log-text", text: x.kind === "task" ? `${x.name}${"★".repeat(x.stars)}（${x.title}）を たおした` : `${x.date.slice(5).replace("-", "/")} 習慣` }),
+      x.kind === "task" ? renderMonster(x.shape, x.colors, { size: 28 }) : h("span", { class: "log-icon", text: x.kind === "muscle" ? "💪" : "✓" }),
+      h("span", { class: "log-text", text: x.kind === "task" ? `${x.name}${"★".repeat(x.stars)}（${x.title}）を たおした` : x.kind === "muscle" ? `${x.date.slice(5).replace("-", "/")} からだチェック${typeof x.score === "number" ? `（${x.score}点）` : ""}` : `${x.date.slice(5).replace("-", "/")} 習慣` }),
       h("b", { text: `${fmt(x.damage)}` })))) : null,
   );
 }
@@ -1287,6 +1289,270 @@ function aibouPop(habit) {
   setTimeout(() => pop.remove(), 1900);
 }
 
+// ================= 💪 からだチェック（写真 → Claude が判定 → ボスに ちから の攻撃） =================
+const BODY_VIEWS = [["front", "正面"], ["side", "横"], ["back", "背面"]];
+const BODY_PARTS = [["chest", "胸"], ["shoulders", "肩"], ["arms", "腕"], ["abs", "腹"], ["back", "背中"], ["legs", "脚"]];
+const BODY_LONG_SIDE = 1280;
+const BODY_TIMERS = [0, 5, 10];
+state.bodyShots = {};
+state.bodySending = false;
+
+function bodyEntry() {
+  return h("button", { type: "button", class: "card body-entry", onclick: () => { state.view = "body"; show(); } },
+    h("span", { class: "body-entry-icon", text: "💪" }),
+    h("span", { class: "body-entry-text" },
+      h("b", { text: "からだチェック" }),
+      h("span", { class: "sub", text: "週1回、体の写真で ちから の攻撃。AIが筋肉のつき具合を判定" })),
+    h("span", { class: "sub", text: "›" }));
+}
+
+const mdTime = (iso) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))} ${iso.slice(11, 16)}` : "");
+const signed = (n) => (typeof n === "number" ? (n > 0 ? `+${n}` : String(n)) : "—");
+
+async function renderBody() {
+  const body = $("body-body");
+  if (!state.data.body) body.replaceChildren(loadingEl());
+  const data = await loadData("body", "/api/body");
+  if (state.view !== "body") return;
+  if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.body || "読み込めませんでした" }));
+  if (!data.configured?.notion) {
+    return body.replaceChildren(h("div", { class: "card" }, h("h2", { text: "準備がまだです" }), h("p", { class: "sub", text: "Worker に MUSCLE_DS_ID（DB_筋肉チェック）が設定されていません。README の「からだチェック」を見てください。" })));
+  }
+  swap(body, [h("div", { class: "scroll fill stack" },
+    bodyShootCard(data),
+    data.records.length ? bodyTrendCard(data.records) : null,
+    data.records.length ? bodyHistoryCard(data.records) : null,
+  )], "body");
+}
+
+function bodyShootCard(data) {
+  const shots = state.bodyShots;
+  const slots = BODY_VIEWS.map(([k, label]) => h("div", { class: "body-slot" },
+    h("div", { class: `body-thumb${shots[k] ? " has" : ""}` },
+      shots[k] ? h("img", { src: shots[k], alt: `${label}の写真` }) : h("span", { text: label + (k === "front" ? "（必須）" : "") })),
+    h("div", { class: "body-slot-btns" },
+      h("button", { type: "button", class: "chip-btn", onclick: () => openBodyCamera(k, data) }, "📷 撮る"),
+      h("button", { type: "button", class: "chip-btn", onclick: () => pickBodyFile(k) }, "🖼 選ぶ"),
+      shots[k] ? h("button", { type: "button", class: "chip-btn", "aria-label": `${label}の写真を消す`, onclick: () => { delete state.bodyShots[k]; renderBody(); } }, "×") : null),
+  ));
+  const ready = !!shots.front && data.configured.ai && !state.bodySending;
+  const cmp = data.compare;
+  return h("div", { class: "card stack", style: "gap:10px" },
+    h("div", { class: "kv" }, h("h3", { text: "きょうの写真" }),
+      h("span", { class: `pet-stage`, style: `--chip:${data.weekUsed ? "#9aa0a6" : "#c0392b"}`, text: data.weekUsed ? "今週は攻撃ずみ（記録だけ）" : `今週の攻撃 OK（${data.rules?.base ?? ""}〜）` })),
+    h("p", { class: "sub", style: "margin:0", text: cmp ? `${mdTime(cmp.at)} の写真（${cmp.score}点）と比べます。撮るときに半透明で重なります` : `比べる写真（${data.rules?.compareDays ?? 6}日以上前）がまだないので、今回はスコアだけ出します` }),
+    h("div", { class: "body-slots" }, slots),
+    !data.configured.ai ? h("p", { class: "err", style: "padding:0", text: "ANTHROPIC_API_KEY が未設定なので判定できません（README の「からだチェック」）" }) : null,
+    h("button", { type: "button", class: "primary", disabled: !ready, onclick: submitBody }, state.bodySending ? "判定中…" : "判定して こうげき！"),
+    h("details", { class: "body-tips" },
+      h("summary", { text: "うまく判定してもらうコツ" }),
+      h("ul", {},
+        h("li", { text: "毎回 同じ場所・同じ照明・同じ時間帯（朝がおすすめ）で撮る" }),
+        h("li", { text: "スマホは胸の高さ・同じ距離。前回の写真に体の線を合わせる" }),
+        h("li", { text: "力を入れすぎず、自然に立つ（毎回同じポーズで）" }),
+        h("li", { text: "ひとりで撮るときはタイマー（5秒・10秒）を使う" }))),
+    h("p", { class: "sub", style: "margin:0;font-size:11px", text: "AIの判定は写真から見える範囲の目安で、医療的な判定ではありません。写真は Notion の DB_筋肉チェック にだけ保存されます。" }),
+  );
+}
+
+function bodyTrendCard(records) {
+  const list = records.filter((r) => typeof r.score === "number").slice(0, 20).reverse();
+  if (list.length < 2) return null;
+  const W = 320, H = 110, P = 16;
+  const lo = Math.min(...list.map((r) => r.score)) - 3;
+  const hi = Math.max(...list.map((r) => r.score)) + 3;
+  const x = (i) => P + (i * (W - P * 2)) / (list.length - 1);
+  const y = (v) => H - P - ((v - lo) * (H - P * 2)) / Math.max(1, hi - lo);
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "body-trend");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `総合スコアの推移：${list.map((r) => r.score).join("、")}`);
+  const line = document.createElementNS(ns, "polyline");
+  line.setAttribute("points", list.map((r, i) => `${x(i)},${y(r.score)}`).join(" "));
+  svg.append(line);
+  list.forEach((r, i) => {
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", x(i));
+    c.setAttribute("cy", y(r.score));
+    c.setAttribute("r", r.damage > 0 ? 4 : 2.5);
+    svg.append(c);
+  });
+  const first = list[0], last = list.at(-1);
+  return h("div", { class: "card stack", style: "gap:6px" },
+    h("div", { class: "kv" }, h("h3", { text: "総合スコアの推移" }), h("b", { text: `${last.score}点（はじめから ${signed(last.score - first.score)}）` })),
+    svg,
+    h("div", { class: "kv sub" }, h("span", { text: mdTime(first.at).split(" ")[0] }), h("span", { text: mdTime(last.at).split(" ")[0] })),
+  );
+}
+
+function bodyHistoryCard(records) {
+  return h("div", { class: "card stack", style: "gap:2px" },
+    h("h3", { text: "きろく" }),
+    records.slice(0, 20).map((r) => h("button", { type: "button", class: "body-row", onclick: () => openBodyRecord(r) },
+      h("span", { text: mdTime(r.at) }),
+      h("b", { text: typeof r.score === "number" ? `${r.score}点` : "—" }),
+      h("span", { class: "sub", text: typeof r.diff === "number" ? signed(r.diff) : "" }),
+      h("span", { class: "sub", text: r.damage > 0 ? `💥${r.damage}` : "記録" }),
+    )),
+  );
+}
+
+function bodyPartsView(parts) {
+  return h("div", { class: "body-parts" }, BODY_PARTS.map(([k, label]) => h("div", { class: "progress" },
+    h("span", { style: "width:2.5em", text: label }),
+    h("div", { class: "bar" }, h("span", { style: `width:${(Number(parts?.[k]) || 0) * 10}%` })),
+    h("b", { text: parts?.[k] ?? "—" }))));
+}
+
+function openBodyRecord(r) {
+  openSheet(`からだチェック ${mdTime(r.at)}`, [
+    h("div", { class: "body-photos" }, BODY_VIEWS.filter(([k]) => r.photos?.[k]).map(([k, label]) => h("img", { src: r.photos[k], alt: `${label}の写真`, loading: "lazy" }))),
+    h("div", { class: "kv" }, h("span", { text: "総合スコア" }), h("b", { text: `${r.score ?? "—"}点（${signed(r.diff)}）` })),
+    bodyPartsView(r.parts),
+    r.comment ? h("p", { class: "body-comment", text: r.comment }) : null,
+    h("p", { class: "sub", text: [r.damage > 0 ? `ボスへのダメージ（素）${r.damage}` : "ダメージなし（記録だけ）", r.confidence && `自信度 ${r.confidence}`, r.match && `条件一致 ${r.match}`, typeof r.weight === "number" && `体重 ${r.weight}kg`, typeof r.fat === "number" && `体脂肪率 ${r.fat}%`].filter(Boolean).join("・") }),
+  ]);
+}
+
+// ---------- 写真を用意する ----------
+function shrinkToJpeg(source, w, h0, mirror = false) {
+  const scale = Math.min(1, BODY_LONG_SIDE / Math.max(w, h0));
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * scale);
+  c.height = Math.round(h0 * scale);
+  const ctx = c.getContext("2d");
+  if (mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(source, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.85);
+}
+
+function pickBodyFile(k) {
+  const input = h("input", { type: "file", accept: "image/*" });
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => createImageBitmap(file));
+      state.bodyShots[k] = shrinkToJpeg(bmp, bmp.width, bmp.height);
+      bmp.close?.();
+      renderBody();
+    } catch {
+      toast("写真を読み込めませんでした", true);
+    }
+  });
+  input.click();
+}
+
+// カメラ：前回の写真を半透明で重ね、タイマーで撮る（前面カメラは鏡のように見せ、保存は元の向き）
+async function openBodyCamera(k, data) {
+  const label = BODY_VIEWS.find(([v]) => v === k)[1];
+  if (!navigator.mediaDevices?.getUserMedia) return pickBodyFile(k);
+  let stream;
+  let facing = "user";
+  let timer = 0;
+  let ghostOn = true;
+  let counting = null;
+  const video = h("video", { playsinline: true, autoplay: true, muted: true });
+  const ghostUrl = data.compare?.photos?.[k];
+  const ghost = ghostUrl ? h("img", { class: "cam-ghost", src: ghostUrl, alt: "" }) : null;
+  const count = h("div", { class: "cam-count", hidden: true });
+  const timerBtn = h("button", { type: "button", class: "chip-btn" }, "⏱ なし");
+  const ghostBtn = ghost ? h("button", { type: "button", class: "chip-btn" }, "👻 前回 ON") : null;
+  const flipBtn = h("button", { type: "button", class: "chip-btn" }, "🔄 カメラ");
+  const shutter = h("button", { type: "button", class: "cam-shutter", "aria-label": "撮る" });
+  const close = () => { clearInterval(counting); stream?.getTracks().forEach((t) => t.stop()); overlay.remove(); };
+  const overlay = h("div", { class: "cam", role: "dialog", "aria-modal": "true", "aria-label": `${label}を撮る` },
+    h("div", { class: "cam-view" }, video, ghost, count, h("div", { class: "cam-label", text: label })),
+    h("div", { class: "cam-bar" }, ghostBtn, timerBtn, flipBtn),
+    h("div", { class: "cam-bar" },
+      h("button", { type: "button", class: "chip-btn", onclick: close }, "やめる"),
+      shutter,
+      h("button", { type: "button", class: "chip-btn", onclick: () => { close(); pickBodyFile(k); } }, "🖼 選ぶ")),
+  );
+  const mirror = () => video.classList.toggle("mirror", facing === "user");
+  async function startCam() {
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    video.srcObject = stream;
+    mirror();
+    if (ghost) ghost.classList.toggle("mirror", facing === "user");
+  }
+  const snap = () => {
+    if (!video.videoWidth) return;
+    state.bodyShots[k] = shrinkToJpeg(video, video.videoWidth, video.videoHeight);
+    close();
+    renderBody();
+  };
+  timerBtn.addEventListener("click", () => { timer = BODY_TIMERS[(BODY_TIMERS.indexOf(timer) + 1) % BODY_TIMERS.length]; timerBtn.textContent = timer ? `⏱ ${timer}秒` : "⏱ なし"; });
+  ghostBtn?.addEventListener("click", () => { ghostOn = !ghostOn; ghost.hidden = !ghostOn; ghostBtn.textContent = ghostOn ? "👻 前回 ON" : "👻 前回 OFF"; });
+  flipBtn.addEventListener("click", async () => { facing = facing === "user" ? "environment" : "user"; try { await startCam(); } catch { toast("カメラを切り替えられませんでした", true); } });
+  shutter.addEventListener("click", () => {
+    if (counting) return;
+    if (!timer) return snap();
+    let left = timer;
+    count.hidden = false;
+    count.textContent = left;
+    counting = setInterval(() => {
+      left -= 1;
+      if (left <= 0) { clearInterval(counting); counting = null; count.hidden = true; snap(); } else count.textContent = left;
+    }, 1000);
+  });
+  document.body.append(overlay);
+  try {
+    await startCam();
+  } catch {
+    close();
+    toast("カメラが使えません。写真を選んでください", true);
+    pickBodyFile(k);
+  }
+}
+
+// ---------- 判定 ----------
+async function submitBody() {
+  if (state.bodySending || !state.bodyShots.front) return;
+  state.bodySending = true;
+  renderBody();
+  openSheet("判定中…", [h("p", { class: "loading", text: "AIが写真を見ています（20〜40秒ほど）" })]);
+  try {
+    const res = await api("POST", "/api/body", { ...state.bodyShots });
+    state.bodyShots = {};
+    state.loadedAt.body = 0;
+    state.loadedAt.battle = 0;
+    showBodyResult(res);
+  } catch (err) {
+    closeSheet();
+    toast(err.message, true);
+  } finally {
+    state.bodySending = false;
+    if (state.view === "body") renderBody();
+  }
+}
+
+function showBodyResult(res) {
+  const r = res.record;
+  const b = res.boss;
+  const hitText = r.damage <= 0
+    ? "今週はもう攻撃したので、きょうは記録だけ。来週また撮ろう！"
+    : b && b.hit != null
+      ? `${b.name}に ${fmt(b.hit)} ダメージ！${b.defeatedOn ? ` ${b.name}を たおした！` : `（のこりHP ${fmt(Math.max(0, b.hp - b.damage))}）`}`
+      : b?.before
+        ? `${b.name}との戦いは あしたから。この攻撃は数えられません`
+        : `ちから の攻撃 ${fmt(r.damage)}（いま戦っているボスはいません）`;
+  openSheet("からだチェックの結果", [
+    h("div", { class: "body-score" },
+      h("b", { text: `${r.score}` }), h("span", { text: "点" }),
+      typeof r.diff === "number" ? h("span", { class: `body-diff${r.diff > 0 ? " up" : ""}`, text: `${res.compared?.slice(5, 10).replace("-", "/") || "前回"}から ${signed(r.diff)}` }) : h("span", { class: "sub", text: "（はじめての記録）" })),
+    h("p", { class: `body-hit${r.damage > 0 ? "" : " none"}`, text: `💪 ${hitText}` }),
+    bodyPartsView(r.parts),
+    r.comment ? h("p", { class: "body-comment", text: r.comment }) : null,
+    h("p", { class: "sub", text: [`自信度 ${r.confidence}`, r.match && `前回と条件の一致 ${r.match}${r.match === "低" ? "（改善ボーナスなし）" : ""}`].filter(Boolean).join("・") }),
+  ], [
+    h("button", { type: "button", class: "primary", onclick: () => { closeSheet(); state.view = "battle"; show(); } }, "ぼうけんで見る"),
+  ]);
+}
+
 // ---------- シート ----------
 let lastFocus = null;
 function openSheet(title, bodyNodes, footNodes = []) {
@@ -1349,6 +1615,7 @@ $("week-prev").addEventListener("click", () => { state.weekStart = addDays(state
 $("week-next").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); renderWeek(); });
 $("month-prev").addEventListener("click", () => { state.month = shiftMonth(state.month, -1); renderCal(); });
 $("month-next").addEventListener("click", () => { state.month = shiftMonth(state.month, 1); renderCal(); });
+$("body-back").addEventListener("click", () => { state.view = "battle"; show(); });
 $("sheet-close").addEventListener("click", closeSheet);
 $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) closeSheet(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });

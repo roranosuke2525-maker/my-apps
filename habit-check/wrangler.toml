@@ -24,7 +24,12 @@ AIBOU_DS_ID = "4dbe5d76-ff64-4141-ba01-b6e0b612d970"   # DB_あいぼう（デ�
 TASK_DS_ID = "21762844-acbe-8075-bbe6-000bcaf22801"    # DB_タスク管理（DONE のタスクEXPで育つ。読むだけ）
 # そうび（ギルドのほうこくで落ちる武器・防具）。名前やレア度の設定は src/item-config.js
 ITEM_DS_ID = "a27e4a84-1dfa-4708-956e-3f57e4e2312e"    # DB_そうび
+# 💪 からだチェック（写真を Claude が判定してボスに攻撃）。ダメージなどの設定は src/muscle-config.js
+MUSCLE_DS_ID = "6c75e86c-9ac2-4313-a2eb-c4b4ee825eac"  # DB_筋肉チェック（データベースID 413f235b7488488fb17abb34ed057a75）
+BODY_DS_ID = "1730d2d3-32fc-45e9-944e-fe9b801909a5"    # DB_体組成ログ（体重・体脂肪率を判定の参考に。読むだけ・なくても動く）
+# MUSCLE_MODEL = "claude-haiku-5-5"                    # 安くしたいとき（既定は claude-sonnet-5-5）
 
 # 秘密の値は wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
 #   APP_KEY      : アプリを開くときの合言葉（16文字以上）
+#   ANTHROPIC_API_KEY : Claude の API キー（からだチェックの判定。なければからだチェックだけ使えない）

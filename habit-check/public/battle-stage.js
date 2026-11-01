@@ -49,7 +49,9 @@ export function attacksOf(log, members) {
   const has = (who) => who === "さとし" || who === "ルミ" || members.includes(who);
   const out = [];
   for (const x of [...log].reverse()) {
-    if (x.kind === "task") {
+    if (x.kind === "muscle") {
+      out.push({ who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date });
+    } else if (x.kind === "task") {
       const want = FAMILY_ATTACKER[x.family] || "さとし";
       out.push({ who: has(want) ? want : "さとし", damage: x.damage, what: `${x.name}${"★".repeat(x.stars || 0)}を片づけた力`, date: x.date });
     } else {

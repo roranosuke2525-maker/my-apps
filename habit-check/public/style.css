@@ -661,3 +661,45 @@ body.theater-open { overflow: hidden; }
 .bs:not(.playing) .bs-skip { display: none; }
 .bs.playing .bs-replay { display: none; }
 @media (prefers-reduced-motion: reduce) { .bs * { animation: none !important; transition: none !important; } }
+
+/* 💪 からだチェック */
+.body-entry { display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; font: inherit; color: var(--text); width: 100%; }
+.body-entry-icon { font-size: 26px; flex: none; }
+.body-entry-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.body-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.body-slot { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.body-thumb { aspect-ratio: 3 / 4; border: 1.5px dashed var(--line); border-radius: 8px; display: grid; place-items: center; overflow: hidden; background: var(--accent-soft); font-size: 12px; color: var(--sub); text-align: center; padding: 4px; }
+.body-thumb.has { border-style: solid; padding: 0; }
+.body-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.body-slot-btns { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.body-slot-btns .chip-btn { padding: 0 8px; }
+.body-tips summary { font-size: 13px; color: var(--sub); cursor: pointer; }
+.body-tips ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
+.body-trend { width: 100%; height: auto; }
+.body-trend polyline { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.body-trend circle { fill: var(--card); stroke: var(--accent); stroke-width: 2; }
+.body-row { display: grid; grid-template-columns: 1fr auto 3em 4.5em; gap: 8px; align-items: center; min-height: 40px; border: 0; border-top: 1px solid var(--line2); background: none; font: inherit; font-size: 13px; color: var(--text); text-align: left; cursor: pointer; padding: 0 2px; }
+.body-row > :nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+.body-parts { display: flex; flex-direction: column; gap: 6px; }
+.body-parts .progress { font-size: 13px; gap: 8px; }
+.body-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.body-photos img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 8px; }
+.body-comment { font-size: 14px; line-height: 1.7; background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.body-score { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+.body-score b { font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
+.body-diff { font-size: 14px; font-weight: 700; color: var(--sub); margin-left: 8px; }
+.body-diff.up { color: #2e8b57; }
+.body-hit { text-align: center; font-weight: 800; color: var(--must); margin: 0; }
+.body-hit.none { color: var(--sub); font-weight: 600; }
+.cam { position: fixed; inset: 0; z-index: 50; background: #000; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 10px); }
+.cam-view { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.cam-view video, .cam-ghost { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam-ghost { opacity: 0.35; pointer-events: none; }
+.cam .mirror { transform: scaleX(-1); }
+.cam-count { position: absolute; inset: 0; display: grid; place-items: center; font-size: 120px; font-weight: 800; color: #fff; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+.cam-label { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); color: #fff; padding: 4px 14px; border-radius: 14px; font-size: 14px; }
+.cam-bar { display: flex; justify-content: center; align-items: center; gap: 14px; padding: 10px 12px 0; }
+.cam-bar .chip-btn { background: rgba(255, 255, 255, 0.15); color: #fff; border-color: rgba(255, 255, 255, 0.3); height: 34px; }
+.cam-shutter { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; background: rgba(255, 255, 255, 0.85); cursor: pointer; }
+.cam-shutter:active { transform: scale(0.94); }
+#body-body .scroll > * { flex: none; }

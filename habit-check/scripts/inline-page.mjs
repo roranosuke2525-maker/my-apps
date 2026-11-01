@@ -31,11 +31,12 @@ export async function inlinePage({ apiScript, bodyStart = "", extraCss = "" }) {
   const page = html
     .replace(/<link rel="manifest"[^>]*>\s*/, "")
     .replace(/<link rel="(?:icon|apple-touch-icon)"[^>]*>\s*/g, "")
-    .replace('<link rel="stylesheet" href="style.css">', `<style>\n${inlineCss}\n${extraCss ? `${extraCss}\n` : ""}</style>`)
-    .replace("<body>", `<body>\n  ${bodyStart}`)
+    .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${inlineCss}\n${extraCss ? `${extraCss}\n` : ""}</style>`)
+    .replace("<body>", () => `<body>\n  ${bodyStart}`)
     .replace(
       '<script src="app.js" type="module"></script>',
-      `<script>${apiScript}</script>\n  <script type="module">\n${app.replace(/if \("serviceWorker" in navigator\)[\s\S]*?\n}\n/, "")}\n  </script>`,
+      // 関数で渡す（文字列だと、コードの中の $' や $& が置き換えの記号として読まれてしまう）
+      () => `<script>${apiScript}</script>\n  <script type="module">\n${app.replace(/if \("serviceWorker" in navigator\)[\s\S]*?\n}\n/, "")}\n  </script>`,
     );
   if (page.includes('href="style.css"') || page.includes('src="app.js"') || page.includes('url("img/')) {
     throw new Error("1ファイルへの組み立てに失敗しました");

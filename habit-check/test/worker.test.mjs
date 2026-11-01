@@ -669,3 +669,21 @@ test("ギルド：最後の段階を終えたらマスター。報酬は打ち�
   assert.equal(quests[0].need, 3 + 3 * 2);
   assert.match(quests[0].board, /🏆 マスター/);
 });
+
+// ---------- からだチェック ----------
+test("ぼうけん：からだチェックのダメージ（ちから）もボスに入る。弱点がちからなら1.5倍", async () => {
+  testEnv.MUSCLE_DS_ID = "muscle-ds";
+  pages.push(ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } }, 弱点: { type: "select", select: { name: "ちから" } }, ボスHP: { type: "number", number: 1000 } }));
+  const rec = (id, at, dmg) => other(id, "muscle-ds", { 名前: { type: "title", title: text(at) }, 撮影日時: { type: "date", date: { start: at } }, 総合スコア: { type: "number", number: 62 }, 前回比: { type: "number", number: 2 }, ボスダメージ: { type: "number", number: dmg } });
+  pages.push(rec("mc1", "2026-10-21T07:00:00+09:00", 100), rec("mc0", "2026-10-10T07:00:00+09:00", 100), rec("mc2", "2026-10-22T07:00:00+09:00", 0));
+  const data = await (await req("GET", "/api/battle")).json();
+  assert.equal(data.boss.damage, 150); // ボス開始日前の記録とダメージ0の記録は数えない
+  const hit = data.boss.log.find((x) => x.kind === "muscle");
+  assert.deepEqual([hit.date, hit.damage, hit.score, hit.diff], ["2026-10-21", 150, 62, 2]);
+});
+
+test("からだチェック：DB_筋肉チェック が未設定なら configured.notion が false", async () => {
+  const data = await (await req("GET", "/api/body")).json();
+  assert.equal(data.configured.notion, false);
+  assert.deepEqual(data.records, []);
+});

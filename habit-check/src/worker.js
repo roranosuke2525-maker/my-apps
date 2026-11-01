@@ -3,6 +3,7 @@
 
 import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWeight, tagType } from "./aibou-config.js";
 import { SLOT_ORDER, slotOf, itemName, rarityOf, isCrit, RARITY_EFFECT } from "./item-config.js";
+import { getBody, postBody, muscleHits, MUSCLE_TYPE } from "./muscle.js";
 import { RANKS, WEAK_BONUS, BALANCE_BONUS, PET_BONUS, STAR_BONUS, STAT_EXP, STAT_RATE, STAT_MAX, familyOf, starsOf } from "./battle-config.js";
 
 const NOTION_BASE = "https://api.notion.com/v1";
@@ -92,6 +93,13 @@ export default {
       }
       if (url.pathname === "/api/battle" && request.method === "GET") {
         return json(await getBattle(notion, env));
+      }
+      if (url.pathname === "/api/body" && request.method === "GET") {
+        return json(await getBody(notion, env));
+      }
+      if (url.pathname === "/api/body" && request.method === "POST") {
+        const body = await readJson(request);
+        return json(await checkBody(notion, env, body));
       }
       if (url.pathname === "/api/aibou" && request.method === "GET") {
         return json(await getAibou(notion, env));
@@ -1006,18 +1014,19 @@ const OPEN_MONSTERS = 100;
 const BATTLE_LOG = 12;
 
 async function getBattle(notion, env) {
-  const [stories, all, petRow, open, equip] = await Promise.all([
+  const [stories, all, petRow, open, equip, muscle] = await Promise.all([
     loadStories(notion, env),
     loadEvents(notion, env, STATS_FROM),
     env.AIBOU_DS_ID ? petPage(notion, env) : null,
     openMonsters(notion, env),
     equipBonus(notion, env),
+    muscleHits(notion, env),
   ]);
   const pet = petRow ? summarizePet(petRow) : null;
   const petType = pet?.stage === "成長期" ? pet.childType : pet?.stage === "成体" ? pet.adultType : null;
   const stats = statsOf(all);
   const ep2 = stories.filter((c) => c.kind === EP2);
-  const current = ep2.find((c) => c.read && c.boss && typeof c.hp === "number" && !c.defeated);
+  const current = currentBoss(ep2);
   let boss = null;
   if (current) {
     // 1日のダメージは1体のボスにだけ入る：前のボスを倒した日に読んだ話は、翌日から戦う（同じ日のEXPを使い回さない）
@@ -1025,7 +1034,7 @@ async function getBattle(notion, env) {
     const read = current.bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
     const after = prev?.defeated ? addDays(prev.defeated.slice(0, 10), 1) : read;
     const start = read > after ? read : after;
-    boss = fight(current, all, start, petType, stats, equip);
+    boss = fight(current, { ...all, muscle }, start, petType, stats, equip);
     if (boss.defeatedOn) {
       await notion("PATCH", `/pages/${current.id}`, { properties: { 撃破日: { date: { start: boss.defeatedOn } } } });
       current.defeated = boss.defeatedOn;
@@ -1042,6 +1051,20 @@ async function getBattle(notion, env) {
     monsters: open.monsters,
     moreMonsters: open.more,
   };
+}
+
+function currentBoss(ep2) {
+  return ep2.find((c) => c.read && c.boss && typeof c.hp === "number" && !c.defeated) || null;
+}
+
+// 💪 からだチェック：写真を判定して DB_筋肉チェック に残し、いま戦っているボスにつなぐ。返事にぼうけんの最新を付ける
+async function checkBody(notion, env, body) {
+  const stories = await loadStories(notion, env).catch(() => []);
+  const boss = currentBoss(stories.filter((c) => c.kind === EP2));
+  const saved = await postBody(notion, env, body, { bossId: boss?.id || null });
+  const battle = await getBattle(notion, env).catch(() => null);
+  const hit = battle?.boss?.log?.find((x) => x.kind === "muscle" && x.date === saved.record.date);
+  return { ...saved, boss: battle?.boss ? { name: battle.boss.name, hp: battle.boss.hp, damage: battle.boss.damage, defeatedOn: battle.boss.defeatedOn, hit: hit?.damage ?? null, before: battle.boss.start > saved.record.date } : null };
 }
 
 function statsOf({ habitDays, tasks }) {
@@ -1064,7 +1087,7 @@ function weakened(m, type, exp) {
 }
 
 // equip：装備中のそうびの、型ごとのダメージ＋%
-function fight(chapter, { habitDays, tasks }, start, petType, stats, equip = {}) {
+function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats, equip = {}) {
   const weak = chapter.weak;
   const petHit = !!petType && petType === weak;
   const statVal = weak === "バランス" ? Math.min(...TYPES.map((t) => stats[t])) : stats[weak] || 0;
@@ -1083,6 +1106,12 @@ function fight(chapter, { habitDays, tasks }, start, petType, stats, equip = {})
     if (t.date < start) continue;
     day(t.date).tasks.push({ ...t, damage: weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult });
   }
+  // 💪 からだチェック（週1回まで・素のダメージに「ちから」の倍率を掛ける）
+  for (const x of muscle) {
+    if (x.date < start) continue;
+    day(x.date).muscle = (day(x.date).muscle || 0) + x.damage * m(MUSCLE_TYPE) * mult;
+    day(x.date).muscleInfo = x;
+  }
   let damage = 0;
   let defeatedOn = null;
   const log = [];
@@ -1090,13 +1119,14 @@ function fight(chapter, { habitDays, tasks }, start, petType, stats, equip = {})
   let todayDamage = 0;
   for (const date of Object.keys(days).sort()) {
     const d = days[date];
-    const total = d.habit + d.tasks.reduce((a, t) => a + t.damage, 0);
+    const total = d.habit + (d.muscle || 0) + d.tasks.reduce((a, t) => a + t.damage, 0);
     damage += total;
     if (date === today) todayDamage = total;
     if (d.habit) {
       const types = Object.fromEntries(Object.entries(d.habitTypes || {}).filter(([, v]) => v > 0).map(([t, v]) => [t, Math.round(v)]));
       log.push({ date, kind: "habit", damage: Math.round(d.habit), types });
     }
+    if (d.muscle) log.push({ date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
     for (const t of d.tasks) log.push({ date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
     if (!defeatedOn && damage >= chapter.hp) defeatedOn = date;
   }

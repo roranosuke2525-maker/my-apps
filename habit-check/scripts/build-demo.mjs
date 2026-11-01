@@ -123,6 +123,13 @@ const mock = `
     return { pet, exp: 5200 + t, today: t, from: 4000, next: { stage: "成体", at: 18000 }, evolved: [],
       points: { ちから: 2100, かしこさ: 1500, やさしさ: 1300, しっかり: 1600 + t }, period: { ちから: 620, かしこさ: 310, やさしさ: 280, しっかり: 400 + t } };
   };
+  // からだチェック：毎週1回の記録（写真はデモなのでなし）
+  const bodyRec = (d, score, diff, damage) => ({ id: "b" + d, title: addDays(today, -d) + " 07:00", at: addDays(today, -d) + "T07:00:00+09:00", date: addDays(today, -d), score, diff, damage,
+    parts: { chest: 5, shoulders: 6, arms: 5, abs: 4, back: 5, legs: 6 }, comment: "（デモ）全体に少し引き締まってきました。", confidence: "中", match: "高", photos: {} });
+  const bodyData = { configured: { notion: true, ai: true }, model: "claude-sonnet-5-5", weekUsed: false,
+    rules: { base: 120, weekly: 1, compareDays: 6, type: "ちから" },
+    records: [bodyRec(7, 60, 2, 170), bodyRec(14, 58, 1, 145), bodyRec(21, 57, 2, 170), bodyRec(28, 55, null, 120)] };
+  bodyData.compare = bodyData.records[0];
   const reply = (data, status = 200) => new Promise((ok) =>
     setTimeout(() => ok(new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } })), 200));
   const realFetch = window.fetch.bind(window);
@@ -159,6 +166,16 @@ const mock = `
       return reply({ report: r, drops: [drop] });
     }
     if (p === "/api/battle") return reply(battle());
+    if (p === "/api/body" && method === "GET") return reply(bodyData);
+    if (p === "/api/body") {
+      const score = 63, diff = 3, damage = bodyData.weekUsed ? 0 : 195;
+      const rec = { id: "body" + bodyData.records.length, title: today + " 07:00", at: today + "T07:00:00+09:00", date: today, score, diff, damage,
+        parts: { chest: 6, shoulders: 6, arms: 5, abs: 5, back: 6, legs: 7 }, comment: "（デモ）胸と肩の厚みが前回より少し増えて見えます。お腹まわりはまだ伸びしろ。腹筋ローラーを続けましょう。", confidence: "中", match: "高", photos: {} };
+      bodyData.records.unshift(rec);
+      bodyData.weekUsed = true;
+      return new Promise((ok) => setTimeout(() => ok(new Response(JSON.stringify({ record: rec, weekUsed: false, compared: bodyData.compare.title,
+        boss: { name: "灰のスライム", hp: 300, damage: 300, defeatedOn: null, hit: Math.round(damage * 1.02), before: false } }), { status: 200, headers: { "Content-Type": "application/json" } })), 1500));
+    }
     if (p === "/api/items") return reply({ items, drops: [], slots: [] });
     if (p.startsWith("/api/items/")) {
       const it = items.find((x) => x.id === p.split("/").pop());
