@@ -428,6 +428,17 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .card.panel { border-radius: 16px; }
 #modal .sheet::before { content: ""; display: block; width: 38px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
 
+/* ===== 検索 ===== */
+#modal .sheet.tall { height: 92%; display: flex; flex-direction: column; }
+.search { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 0; }
+.sbox { display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; height: 44px; border-radius: 12px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); }
+.sbox svg { width: 18px; height: 18px; color: var(--mute); flex: none; }
+.sbox input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; }
+.sbox button { font-size: 12.5px; padding: 6px 8px; flex: none; }
+.sres { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -14px; padding-bottom: 16px; }
+.shead2 { display: flex; justify-content: space-between; gap: 8px; padding: 2px 16px 6px; font-size: 11.5px; color: var(--mute); }
+.sres mark { background: rgba(157, 188, 176, .28); color: var(--ink); border-radius: 3px; padding: 0 1px; }
+
 /* ===== 落ち着いた仕上げ ===== */
 body { background: var(--bg); }
 #app { position: relative; z-index: 1; }
@@ -497,7 +508,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 </style>
 
 <div id="app">
-  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
+  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
@@ -2500,6 +2511,65 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const n = S.mode === "loading" ? 0 : advise().filter((x) => x.pri >= 50).length;
     b.hidden = !n; b.textContent = n;
   }
+  // ================= 検索：タスク全体（読み込み済みはすぐ、残りは Notion に聞く） =================
+  // 名前・次の一歩・分類タグで探す。読み込み済み（未完了・資料・今日の済み）はその場で、済みや古い資料も含めた全体は Notion の検索で足す
+  const SQ = { q: "", kind: "all", seq: 0, remote: [], loading: false, err: "" };
+  const norm = (s) => String(s || "").normalize("NFKC").toLowerCase();
+  const KINDS = [["all", "すべて"], ["open", "未完了"], ["done", "済み"], ["ref", "資料"]];
+  const kindOk = (t) => SQ.kind === "all" || (SQ.kind === "done" ? t.status === ST.done : SQ.kind === "ref" ? t.status === ST.ref : t.status !== ST.done && t.status !== ST.ref);
+  function localHits(q) {
+    const words = norm(q).split(/\s+/).filter(Boolean); if (!words.length) return [];
+    const seen = new Set(); const out = [];
+    for (const t of [...S.tasks, ...S.refs, ...S.doneToday]) {
+      if (seen.has(t.id)) continue; seen.add(t.id);
+      const hay = norm(`${t.name} ${t.next || ""} ${t.tag || ""} ${t.ai || ""}`);
+      if (words.every((w) => hay.includes(w))) out.push(t);
+    }
+    return out;
+  }
+  function openSearch() {
+    modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す（名前・次の一歩・分類タグ）" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
+      <div class="seg" id="skinds">${KINDS.map(([k, n]) => `<button type="button" data-skind="${k}" aria-pressed="${SQ.kind === k}">${n}</button>`).join("")}</div>
+      <div class="sres" id="sres"></div></div>`);
+    $("#modal .sheet").classList.add("tall");
+    const i = $("#sq"); setTimeout(() => i.focus(), 50);
+    i.oninput = () => { SQ.q = i.value; drawSearch(); askNotion(); };
+    drawSearch(); if (SQ.q) askNotion();
+  }
+  let askTimer;
+  function askNotion() {
+    clearTimeout(askTimer); SQ.remote = []; SQ.err = "";
+    const q = SQ.q.trim(); if (q.length < 1 || S.mode === "demo") { SQ.loading = false; drawSearch(); return; }
+    SQ.loading = true; drawSearch();
+    const my = ++SQ.seq;
+    askTimer = setTimeout(async () => {
+      const word = q.split(/\s+/).sort((a, b) => b.length - a.length)[0];
+      try {
+        const res = await call("query", { data: { mode: "rows", data_source_url: `collection://${DS.task}`, filter: { type: "group", operator: "or", filters: [
+          { type: "property", property: "名前", propertyType: "title", operator: "string_contains", value: { type: "exact", value: word } },
+          { type: "property", property: "NEXT", propertyType: "text", operator: "string_contains", value: { type: "exact", value: word } },
+        ] }, sort: [{ property: "最終更新日時", direction: "descending" }], limit: 60 } });
+        if (my !== SQ.seq) return;
+        const words = norm(q).split(/\s+/).filter(Boolean);
+        SQ.remote = (res.results || []).map((r) => known.get(idOf(r.url)) || toTask(r)).filter((t) => words.every((w) => norm(`${t.name} ${t.next || ""} ${t.tag || ""}`).includes(w)));
+      } catch (err) { if (my === SQ.seq) SQ.err = errText(err); }
+      if (my !== SQ.seq) return;
+      SQ.loading = false; drawSearch();
+    }, 350);
+  }
+  function drawSearch() {
+    const box = $("#sres"); if (!box) return;
+    const q = SQ.q.trim();
+    if (!q) { box.innerHTML = `<div class="empty">名前・次の一歩・分類タグで探せます。\n済みや古い資料も Notion から探します</div>`; return; }
+    const local = localHits(q); const ids = new Set(local.map((t) => t.id));
+    const all = [...local, ...SQ.remote.filter((t) => !ids.has(t.id))].filter(kindOk);
+    const order = { [ST.doing]: 0, [ST.next]: 1, [ST.inbox]: 2, [ST.wait]: 3, [ST.ai]: 4, [ST.some]: 5, [ST.ref]: 6, [ST.done]: 7 };
+    all.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || (b.edited || "").localeCompare(a.edited || ""));
+    const words = norm(q).split(/\s+/).filter(Boolean);
+    const mark = (s) => { let h = esc(s); for (const w of words) h = h.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `<mark>${m}</mark>`); return h; };
+    const row = (t) => `<div class="row" style="--c:${STAGES[stageOf(t)]?.c || "var(--mute)"}"><span class="dot"></span><button type="button" class="main" data-mopen="${t.id}"><span class="nm">${mark(t.name)}</span><span class="sub">${esc(STAGES[stageOf(t)]?.name || t.status)}${t.tag ? `・${esc(t.tag)}` : ""}${t.next ? `・${mark(t.next)}` : ""}</span></button><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(metaOf(t).tx)}<i aria-hidden="true">▾</i></button></div>`;
+    box.innerHTML = `<div class="shead2"><span>${all.length}件</span>${SQ.loading ? `<span class="mute">Notion を検索中…</span>` : SQ.err ? `<span class="late">${esc(SQ.err)}</span>` : S.mode === "demo" ? `<span class="mute">見本（読み込み済みだけ）</span>` : `<span class="mute">済み・資料も含む</span>`}</div>${all.map(row).join("") || (SQ.loading ? "" : `<div class="empty">見つかりませんでした</div>`)}`;
+  }
   // ================= 描画 =================
   const main = $("#main");
   function render() {
@@ -2567,11 +2637,13 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
-    if (d.quick) { openQuick(d.quick); return; }
-    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inT = !!el.closest(".tips"); if (!inT && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inT && !$("#modal").hidden) openConcierge(); }); return; }
+    if (d.quick) { openQuick.back = !!el.closest(".search"); openQuick(d.quick); return; }
+    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inT = !!el.closest(".tips"); if (!inT && el.closest("#modal")) closeModal(); const back = openQuick.back; openQuick.back = false; applyQuick(t, d.qk).then(() => { if (inT && !$("#modal").hidden) openConcierge(); else if (back) openSearch(); }); return; }
     if (d.mopen) { closeModal(); openTask(d.mopen); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
+    if (d.search) { openSearch(); return; }
+    if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
     if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
@@ -2595,6 +2667,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   document.addEventListener("keydown", (e) => {
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();
+    if (e.key === "/" && !e.target.closest?.("input, textarea, [contenteditable]") && $("#modal").hidden && $("#page").hidden) { e.preventDefault(); openSearch(); return; }
     if (e.key === "Escape") { if (document.querySelector(".menu")) closeMenus(); else if (!$("#modal").hidden) closeModal(); else if (!$("#page").hidden && !e.target.closest(".ed")) closePage(); }
   });
   document.addEventListener("focusout", (e) => { if (e.target.id === "ptitle") saveTitle(); });
@@ -2647,7 +2720,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   function useDemo() {
     S.mode = "demo"; known.clear();
     const d = TODAY(); let n = 0;
-    const id = () => (`${(++n).toString(16)}${"0".repeat(32)}`).slice(0, 32);
+    const id = () => `d${(++n).toString(16).padStart(31, "0")}`;
     const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${id()}`, 名前: `（例）${name}`, ステータス: status, NEXT: o.next || "", "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), createdTime: new Date(Date.now() - (o.made ?? (o.age || 1)) * 86400e3).toISOString(), "userDefined:URL": o.url || "", プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
     const P1 = "a".repeat(32), P2 = "b".repeat(32), P3 = "c".repeat(32);
     S.tasks = [

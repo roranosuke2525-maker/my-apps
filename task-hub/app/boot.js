@@ -65,11 +65,13 @@
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
     if (d.capgo) { submitCapture(); return; }
     if (d.mclose) { closeModal(); return; }
-    if (d.quick) { openQuick(d.quick); return; }
-    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inT = !!el.closest(".tips"); if (!inT && el.closest("#modal")) closeModal(); applyQuick(t, d.qk).then(() => { if (inT && !$("#modal").hidden) openConcierge(); }); return; }
+    if (d.quick) { openQuick.back = !!el.closest(".search"); openQuick(d.quick); return; }
+    if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inT = !!el.closest(".tips"); if (!inT && el.closest("#modal")) closeModal(); const back = openQuick.back; openQuick.back = false; applyQuick(t, d.qk).then(() => { if (inT && !$("#modal").hidden) openConcierge(); else if (back) openSearch(); }); return; }
     if (d.mopen) { closeModal(); openTask(d.mopen); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
+    if (d.search) { openSearch(); return; }
+    if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
     if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
@@ -93,6 +95,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();
+    if (e.key === "/" && !e.target.closest?.("input, textarea, [contenteditable]") && $("#modal").hidden && $("#page").hidden) { e.preventDefault(); openSearch(); return; }
     if (e.key === "Escape") { if (document.querySelector(".menu")) closeMenus(); else if (!$("#modal").hidden) closeModal(); else if (!$("#page").hidden && !e.target.closest(".ed")) closePage(); }
   });
   document.addEventListener("focusout", (e) => { if (e.target.id === "ptitle") saveTitle(); });
@@ -145,7 +148,7 @@
   function useDemo() {
     S.mode = "demo"; known.clear();
     const d = TODAY(); let n = 0;
-    const id = () => (`${(++n).toString(16)}${"0".repeat(32)}`).slice(0, 32);
+    const id = () => `d${(++n).toString(16).padStart(31, "0")}`;
     const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${id()}`, 名前: `（例）${name}`, ステータス: status, NEXT: o.next || "", "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), createdTime: new Date(Date.now() - (o.made ?? (o.age || 1)) * 86400e3).toISOString(), "userDefined:URL": o.url || "", プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
     const P1 = "a".repeat(32), P2 = "b".repeat(32), P3 = "c".repeat(32);
     S.tasks = [

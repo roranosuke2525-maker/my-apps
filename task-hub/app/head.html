@@ -428,6 +428,17 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .card.panel { border-radius: 16px; }
 #modal .sheet::before { content: ""; display: block; width: 38px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
 
+/* ===== 検索 ===== */
+#modal .sheet.tall { height: 92%; display: flex; flex-direction: column; }
+.search { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 0; }
+.sbox { display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; height: 44px; border-radius: 12px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); }
+.sbox svg { width: 18px; height: 18px; color: var(--mute); flex: none; }
+.sbox input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; }
+.sbox button { font-size: 12.5px; padding: 6px 8px; flex: none; }
+.sres { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -14px; padding-bottom: 16px; }
+.shead2 { display: flex; justify-content: space-between; gap: 8px; padding: 2px 16px 6px; font-size: 11.5px; color: var(--mute); }
+.sres mark { background: rgba(157, 188, 176, .28); color: var(--ink); border-radius: 3px; padding: 0 1px; }
+
 /* ===== 落ち着いた仕上げ ===== */
 body { background: var(--bg); }
 #app { position: relative; z-index: 1; }
@@ -497,7 +508,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 </style>
 
 <div id="app">
-  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
+  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>

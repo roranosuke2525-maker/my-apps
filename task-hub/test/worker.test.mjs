@@ -62,6 +62,11 @@ test("済みにした補充タスク：補充対象が空でない（リレー�
   assert.deepEqual(f.and[1], { property: "補充対象", relation: { is_not_empty: true } });
 });
 
+test("検索：名前か次の一歩に含む（title と rich_text の contains）", () => {
+  const f = toFilter({ type: "group", operator: "or", filters: [{ type: "property", property: "名前", propertyType: "title", operator: "string_contains", value: { type: "exact", value: "コーヒー" } }, { type: "property", property: "NEXT", propertyType: "text", operator: "string_contains", value: { type: "exact", value: "コーヒー" } }] });
+  assert.deepEqual(f, { or: [{ property: "名前", title: { contains: "コーヒー" } }, { property: "NEXT", rich_text: { contains: "コーヒー" } }] });
+});
+
 test("本文は Notion-flavored Markdown（v2）で読み、変わった所だけ置き換える", async () => {
   const s = setup();
   try {
