@@ -110,7 +110,10 @@ test("初回：比べずに判定し、基本ダメージだけで1行残す（�
   const res = await postBody(notion, env, { front: IMG, side: IMG }, { bossId: "boss1", now: NOW });
   const ai = calls.find((c) => c.path === "anthropic");
   assert.equal(ai.body.model, "claude-sonnet-5-5");
-  assert.equal(ai.body.tool_choice.name, "record_result");
+  // Sonnet 5.5 はツールの強制（tool_choice: tool）を受け付けない。auto＋strict で呼ばせる
+  assert.equal(ai.body.tool_choice.type, "auto");
+  assert.equal(ai.body.tools[0].strict, true);
+  assert.equal(ai.body.tools[0].input_schema.additionalProperties, false);
   assert.equal(ai.body.messages[0].content.filter((c) => c.type === "image").length, 2);
   assert.match(ai.body.messages[0].content.at(-1).text, /66\.2kg・体脂肪率 18\.4%/);
   assert.match(ai.body.messages[0].content.at(-1).text, /比較用の写真はありません/);

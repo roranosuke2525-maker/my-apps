@@ -185,13 +185,17 @@ const RESULT_TOOL = {
         type: "object",
         properties: Object.fromEntries(PARTS.map(([k, name]) => [k, { type: "number", description: `${name}の発達 1〜10（写っていなければ前回と同じか5）` }])),
         required: PARTS.map(([k]) => k),
+        additionalProperties: false,
       },
       confidence: { type: "string", enum: LEVEL, description: "判定の自信度" },
       match: { type: "string", enum: [...LEVEL, "比較なし"], description: "比較用の写真と照明・距離・ポーズ・時間帯がそろっているか。比較用の写真がなければ「比較なし」" },
       comment: { type: "string", description: "日本語で2〜4文。前回より良くなった点（比較があれば）と、次に鍛えるとよい部位。励ますトーンで、断定しすぎない" },
     },
     required: ["usable", "reason", "overall", "parts", "confidence", "match", "comment"],
+    additionalProperties: false,
   },
+  // 決めた形の答えだけを受け付ける（Sonnet 5.5 などは tool_choice でツールを強制できないため、auto＋strict＋指示で呼ばせる）
+  strict: true,
 };
 
 function imageBlocks(label, imgs) {
@@ -213,7 +217,7 @@ async function judge(env, current, previous, prevRecord, body) {
     prevRecord
       ? `比較用の写真は ${prevRecord.title} のもので、そのときの総合スコアは ${prevRecord.score} でした。同じ基準で採点し、見た目が変わっていなければ同じ点にしてください。`
       : "比較用の写真はありません（初回など）。match は「比較なし」にしてください。",
-    "結果は record_result で返してください。",
+    "結果は必ず record_result ツールを1回呼んで返してください。ツールを使わずに文章だけで答えないでください。",
   ].filter(Boolean);
   const content = [...imageBlocks("今回", current), ...(previous ? imageBlocks("比較用", previous) : []), { type: "text", text: lines.join("\n") }];
   let res;
@@ -221,7 +225,7 @@ async function judge(env, current, previous, prevRecord, body) {
     res = await fetch(env.ANTHROPIC_API_URL || ANTHROPIC_URL, {
       method: "POST",
       headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 2000, tools: [RESULT_TOOL], tool_choice: { type: "tool", name: RESULT_TOOL.name }, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model, max_tokens: 2000, tools: [RESULT_TOOL], tool_choice: { type: "auto" }, messages: [{ role: "user", content }] }),
     });
   } catch {
     throw httpError(502, "Claude に つながりませんでした");
@@ -229,7 +233,10 @@ async function judge(env, current, previous, prevRecord, body) {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) throw httpError(502, "Claude の API キーが正しくありません");
   if (res.status === 429) throw httpError(429, "Claude が混み合っています。少し待ってください");
-  if (!res.ok) throw httpError(502, `判定できませんでした（Claude ${data?.error?.type || res.status}）`);
+  if (!res.ok) {
+    const why = String(data?.error?.message || "").replace(/\s+/g, " ").slice(0, 140);
+    throw httpError(502, `判定できませんでした（Claude ${data?.error?.type || res.status}${why ? `：${why}` : ""}）`);
+  }
   if (data.stop_reason === "refusal") throw httpError(502, "判定できませんでした（断られました）。服や写り方を変えて撮り直してください");
   const out = (data.content || []).find((c) => c.type === "tool_use" && c.name === RESULT_TOOL.name)?.input;
   if (!out) throw httpError(502, "判定できませんでした（返事の形が違いました）");
