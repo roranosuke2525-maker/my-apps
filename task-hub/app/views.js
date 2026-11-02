@@ -55,6 +55,24 @@
     let d = TODAY(); do { d = addDays(d, 1); } while (!workday(d));
     return `${md(d)}（${WD[dow(d)]}）7:52`;
   }
+  // 今すぐ実行：AIリサーチ定時処理を待たずに1回動かす。Cloudflare版は Worker（/api/run）が定期実行の API トリガーを叩く。
+  // アーティファクト版は claude.ai の定期実行の一覧（「Run now」がある）を開く。誤タップよけに2回押しで動く
+  async function runNow(el) {
+    if (S.mode === "demo") { toast("見本では動きません"); return; }
+    if (VIA !== "api") { window.open("https://claude.ai/code/routines", "_blank", "noopener"); return; }
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "もう一度押すと実行"; setTimeout(() => { if (el.isConnected && el.dataset.armed) { delete el.dataset.armed; el.textContent = "▶ 今すぐ実行"; } }, 3000); return; }
+    delete el.dataset.armed; el.disabled = true; el.textContent = "起動中…";
+    try {
+      const r = await fetch("/api/run", { method: "POST", headers: { Authorization: `Bearer ${store.get("key") || ""}` } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      toast("AIリサーチ定時処理を起動しました（数分で反映。終わったら「↻」）");
+      el.textContent = "起動しました";
+    } catch (err) {
+      toast(String(err.message || "起動できませんでした").slice(0, 120));
+      el.disabled = false; el.textContent = "▶ 今すぐ実行";
+    }
+  }
 
   // ================= 頁送り・スワイプ =================
   function pageOf(key, items, per) {
@@ -221,7 +239,7 @@
     const me = myTurn().sort((a, b) => (a.ai === "💭" ? 0 : 1) - (b.ai === "💭" ? 0 : 1) || (b.edited || "").localeCompare(a.edited || ""));
     const ai = aiTurn().sort((a, b) => AIA.indexOf(a.ai) - AIA.indexOf(b.ai) || (a.edited || "").localeCompare(b.edited || ""));
     const c = (arr, m) => arr.filter((t) => t.ai === m).length;
-    view.insertAdjacentHTML("beforeend", `<div class="aihead"><button type="button" class="card mine" data-aiseg="me"><div class="k">あなたの番</div><div class="n">${me.length}</div><div class="s">💭 回答 ${c(me, "💭")}・🔍✅ 判定 ${c(me, "🔍✅")}</div></button><button type="button" class="card" data-aiseg="ai"><div class="k">AIの番</div><div class="n">${ai.length}</div><div class="s">🔍 ${c(ai, "🔍")}・🔬 ${c(ai, "🔬")}・💬 ${c(ai, "💬")}</div></button><div class="card"><div class="k">次の定時処理</div><div class="n" style="font-size:16px;padding:4px 0 2px">${nextRun()}</div><div class="s">平日 7:52〜17:52 毎時・祝日休み</div></div></div>
+    view.insertAdjacentHTML("beforeend", `<div class="aihead"><button type="button" class="card mine" data-aiseg="me"><div class="k">あなたの番</div><div class="n">${me.length}</div><div class="s">💭 回答 ${c(me, "💭")}・🔍✅ 判定 ${c(me, "🔍✅")}</div></button><button type="button" class="card" data-aiseg="ai"><div class="k">AIの番</div><div class="n">${ai.length}</div><div class="s">🔍 ${c(ai, "🔍")}・🔬 ${c(ai, "🔬")}・💬 ${c(ai, "💬")}</div></button><div class="card"><div class="k">次の定時処理</div><div class="n" style="font-size:16px;padding:4px 0 2px">${nextRun()}</div><div class="s">平日 7:52〜17:52 毎時・祝日休み</div><button type="button" class="btn runnow" data-runnow="1">▶ 今すぐ実行</button></div></div>
       <div class="seg">${[["me", "あなたの番", me.length], ["ai", "AIの番", ai.length], ["req", "依頼する", ""]].map(([k, n, x]) => `<button type="button" data-aiseg="${k}" aria-pressed="${S.aiSeg === k}">${n}<span class="n">${x}</span></button>`).join("")}</div>
       <div class="card panel"><div class="list" id="ailist"></div></div>`);
     const box = $("#ailist");

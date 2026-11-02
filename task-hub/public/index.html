@@ -147,6 +147,7 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .aihead .n { font-family: var(--f-num); font-size: 22px; line-height: 1.1; }
 .aihead .s { font-size: 10.5px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aihead .mine { border-left: 4px solid var(--accent); }
+.aihead .runnow { margin-top: 6px; width: 100%; height: 30px; padding: 0 6px; font-size: 11.5px; }
 .aicard { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-bottom: 1px solid var(--line); width: 100%; text-align: left; flex: none; }
 .aicard:last-child { border-bottom: 0; }
 .aicard .t { display: flex; gap: 8px; align-items: center; }
@@ -1566,6 +1567,24 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     let d = TODAY(); do { d = addDays(d, 1); } while (!workday(d));
     return `${md(d)}（${WD[dow(d)]}）7:52`;
   }
+  // 今すぐ実行：AIリサーチ定時処理を待たずに1回動かす。Cloudflare版は Worker（/api/run）が定期実行の API トリガーを叩く。
+  // アーティファクト版は claude.ai の定期実行の一覧（「Run now」がある）を開く。誤タップよけに2回押しで動く
+  async function runNow(el) {
+    if (S.mode === "demo") { toast("見本では動きません"); return; }
+    if (VIA !== "api") { window.open("https://claude.ai/code/routines", "_blank", "noopener"); return; }
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "もう一度押すと実行"; setTimeout(() => { if (el.isConnected && el.dataset.armed) { delete el.dataset.armed; el.textContent = "▶ 今すぐ実行"; } }, 3000); return; }
+    delete el.dataset.armed; el.disabled = true; el.textContent = "起動中…";
+    try {
+      const r = await fetch("/api/run", { method: "POST", headers: { Authorization: `Bearer ${store.get("key") || ""}` } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      toast("AIリサーチ定時処理を起動しました（数分で反映。終わったら「↻」）");
+      el.textContent = "起動しました";
+    } catch (err) {
+      toast(String(err.message || "起動できませんでした").slice(0, 120));
+      el.disabled = false; el.textContent = "▶ 今すぐ実行";
+    }
+  }
 
   // ================= 頁送り・スワイプ =================
   function pageOf(key, items, per) {
@@ -1732,7 +1751,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const me = myTurn().sort((a, b) => (a.ai === "💭" ? 0 : 1) - (b.ai === "💭" ? 0 : 1) || (b.edited || "").localeCompare(a.edited || ""));
     const ai = aiTurn().sort((a, b) => AIA.indexOf(a.ai) - AIA.indexOf(b.ai) || (a.edited || "").localeCompare(b.edited || ""));
     const c = (arr, m) => arr.filter((t) => t.ai === m).length;
-    view.insertAdjacentHTML("beforeend", `<div class="aihead"><button type="button" class="card mine" data-aiseg="me"><div class="k">あなたの番</div><div class="n">${me.length}</div><div class="s">💭 回答 ${c(me, "💭")}・🔍✅ 判定 ${c(me, "🔍✅")}</div></button><button type="button" class="card" data-aiseg="ai"><div class="k">AIの番</div><div class="n">${ai.length}</div><div class="s">🔍 ${c(ai, "🔍")}・🔬 ${c(ai, "🔬")}・💬 ${c(ai, "💬")}</div></button><div class="card"><div class="k">次の定時処理</div><div class="n" style="font-size:16px;padding:4px 0 2px">${nextRun()}</div><div class="s">平日 7:52〜17:52 毎時・祝日休み</div></div></div>
+    view.insertAdjacentHTML("beforeend", `<div class="aihead"><button type="button" class="card mine" data-aiseg="me"><div class="k">あなたの番</div><div class="n">${me.length}</div><div class="s">💭 回答 ${c(me, "💭")}・🔍✅ 判定 ${c(me, "🔍✅")}</div></button><button type="button" class="card" data-aiseg="ai"><div class="k">AIの番</div><div class="n">${ai.length}</div><div class="s">🔍 ${c(ai, "🔍")}・🔬 ${c(ai, "🔬")}・💬 ${c(ai, "💬")}</div></button><div class="card"><div class="k">次の定時処理</div><div class="n" style="font-size:16px;padding:4px 0 2px">${nextRun()}</div><div class="s">平日 7:52〜17:52 毎時・祝日休み</div><button type="button" class="btn runnow" data-runnow="1">▶ 今すぐ実行</button></div></div>
       <div class="seg">${[["me", "あなたの番", me.length], ["ai", "AIの番", ai.length], ["req", "依頼する", ""]].map(([k, n, x]) => `<button type="button" data-aiseg="${k}" aria-pressed="${S.aiSeg === k}">${n}<span class="n">${x}</span></button>`).join("")}</div>
       <div class="card panel"><div class="list" id="ailist"></div></div>`);
     const box = $("#ailist");
@@ -2908,6 +2927,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.done) { const t = known.get(d.done); if (!t) return; el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
+    if (d.runnow) { runNow(el); return; }
     if (d.reqmode) { reqMode = d.reqmode; if ($("#rq-app")) $("#rq-app").hidden = reqMode !== "🛠"; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
     if (d.req) { submitRequest(); return; }
     if (d.pickai) { pickForAi(); return; }

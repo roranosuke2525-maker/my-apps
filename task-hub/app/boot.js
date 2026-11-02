@@ -39,6 +39,7 @@
     if (d.done) { const t = known.get(d.done); if (!t) return; el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
+    if (d.runnow) { runNow(el); return; }
     if (d.reqmode) { reqMode = d.reqmode; if ($("#rq-app")) $("#rq-app").hidden = reqMode !== "🛠"; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
     if (d.req) { submitRequest(); return; }
     if (d.pickai) { pickForAi(); return; }

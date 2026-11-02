@@ -112,3 +112,21 @@ test("flatPage：飾り・リンク・メンション", () => {
   const p = flatPage({ id: "a".repeat(32), url: "u", properties: { n: { type: "rich_text", rich_text: [{ type: "text", plain_text: "x", href: "https://l", annotations: { italic: true } }, { type: "mention", plain_text: "P", mention: { type: "page", page: { id: "b".repeat(32) } }, annotations: {} }] } } });
   assert.equal(p.n, `<i>[x](https://l)</i><mention url="https://www.notion.so/${"b".repeat(32)}">P</mention>`);
 });
+
+test("今すぐ実行：定期実行の API トリガーを叩き、セッションURLを返す。設定が無ければ分かる言葉で断る", async () => {
+  const realFetch = globalThis.fetch; const seen = [];
+  globalThis.fetch = async (u, init) => { seen.push({ u: String(u), init }); return new Response(JSON.stringify({ type: "routine_fire", claude_code_session_id: "session_x", claude_code_session_url: "https://claude.ai/code/session_x" }), { status: 200 }); };
+  const base = { NOTION_TOKEN: "ntn_test", APP_KEY: KEY, ASSETS: { fetch: () => new Response("assets") } };
+  const run = (env, key = KEY) => worker.fetch(new Request("https://app.test/api/run", { method: "POST", headers: { Authorization: `Bearer ${key}` } }), env);
+  try {
+    assert.equal((await run({ ...base, ROUTINE_TOKEN: "t", ROUTINE_ID: "trig_abc" }, "wrong")).status, 401);
+    const none = await run(base);
+    assert.equal(none.status, 500); assert.equal((await none.json()).code, "no_routine");
+    const ok = await run({ ...base, ROUTINE_TOKEN: "sk-ant-oat01-x", ROUTINE_ID: "trig_abc" });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(await ok.json(), { ok: true, session_url: "https://claude.ai/code/session_x" });
+    assert.equal(seen.at(-1).u, "https://api.anthropic.com/v1/claude_code/routines/trig_abc/fire");
+    assert.equal(seen.at(-1).init.headers.Authorization, "Bearer sk-ant-oat01-x");
+    assert.equal(seen.at(-1).init.headers["anthropic-beta"], "experimental-cc-routine-2026-04-01");
+  } finally { globalThis.fetch = realFetch; }
+});

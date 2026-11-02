@@ -4,6 +4,10 @@ compatibility_date = "2026-10-01"
 workers_dev = true
 preview_urls = false
 
+[vars]
+# 「今すぐ実行」で起動する定期実行（Notion AIリサーチ定時処理）。ID は秘密ではない。トークンは secret の ROUTINE_TOKEN
+ROUTINE_ID = "trig_011VhxqJwREyytrHWR4Kev1z"
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
@@ -12,4 +16,5 @@ run_worker_first = ["/api/*", "/", "/index.html"]
 # 秘密の値は wrangler secret put（またはダッシュボードの「変数とシークレット」）で入れる。このファイルには書かない
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
 #   APP_KEY      : アプリを開くときの合言葉（16文字以上）
+#   ROUTINE_TOKEN: 「今すぐ実行」用。定期実行の API トリガーのトークン（sk-ant-oat01-...）。無くても他は動く
 # 読み書きするDB・ページのIDは画面（app/settings.js）に書いてある。IDだけでは読み書きできず、権限はインテグレーションの接続で決まる
