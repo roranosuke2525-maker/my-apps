@@ -52,7 +52,7 @@ function httpError(status, publicMessage, code) { return Object.assign(new Error
 async function readJson(request) { try { return await request.json(); } catch { throw httpError(400, "JSON が読めません", "bad_request"); } }
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } }); }
 
-function notionClient(env) {
+export function notionClient(env) {
   const base = env.NOTION_API_BASE || NOTION_BASE;
   return async (method, path, body, version = API_VERSION) => {
     const res = await fetch(base + path, {

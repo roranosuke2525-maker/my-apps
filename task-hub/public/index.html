@@ -162,7 +162,8 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .form label { font-size: 11.5px; color: var(--mute); }
 .form input, .form textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
 .form textarea { min-height: 70px; resize: none; }
-.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.sel { width: 100%; height: 40px; border-radius: 10px; background: var(--sunk); border: 0; padding: 0 8px; }
 .modes button { border: 1.5px solid var(--line); border-radius: 10px; padding: 7px 8px; font-size: 12px; text-align: left; }
 .modes button b { display: block; font-size: 13px; }
 .modes button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -598,6 +599,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
     news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
+    app: "01b7e064-7c8d-439e-8234-6fffad6ca4e4", // DB_アプリ（🛠 アプリ修正の対象）
   };
   const DB_PAGE = "3ed62844acbe81438bf3c88092856f8b"; // 🗄 データベース
   const PLAYER = "https://www.notion.so/3e962844acbe81b0843ff78fe19791fa"; // DB_プレイヤー（Satoshi）
@@ -605,9 +607,9 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
   const ALL_STATUSES = [ST.inbox, ST.ai, ST.next, ST.doing, ST.wait, ST.some, ST.ref, ST.done];
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
-  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅"];
-  const AI_TURN = { "🔍": "ai", "🔬": "ai", "💬": "ai", "💭": "me", "🔍✅": "me" };
-  const AI_LABEL = { "🔍": "調べて", "🔬": "徹底調査", "💬": "深掘り（質問票）", "💭": "回答待ち", "🔍✅": "調べ終わった・判定待ち" };
+  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅", "🛠", "🛠💭", "🛠✅"];
+  const AI_TURN = { "🔍": "ai", "🔬": "ai", "💬": "ai", "💭": "me", "🔍✅": "me", "🛠": "ai", "🛠💭": "me", "🛠✅": "me" };
+  const AI_LABEL = { "🔍": "調べて", "🔬": "徹底調査", "💬": "深掘り（質問票）", "💭": "回答待ち", "🔍✅": "調べ終わった・判定待ち", "🛠": "アプリを直して", "🛠💭": "アプリ修正の質問・回答待ち", "🛠✅": "アプリ修正を反映・確認待ち" };
   const WAKU = ["☼ 朝", "💻 PC", "🏠 家・外", "作業中"];
   const WEIGHTS = ["S", "M", "L", "XL"];
   const TAGS = ["HOME", "BUILD", "CHILD", "FAMILY", "MONEY", "FOOD", "HEALTH", "BEAUTY", "LEARN", "AI", "TECH", "BOOK", "MUSIC", "COFFEE", "MOVIE", "TRIP", "TOY", "CAR", "WORK", "BUY"];
@@ -856,11 +858,12 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, refills] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
       rows(DS.daily, { limit: 100 }),
+      rows(DS.app, { limit: 50 }),
       // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
     ]);
@@ -883,6 +886,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
         for (const id of (list(r["補充対象"]) || []).map(idOf)) if (d && !(S.refillDone[id] >= d)) S.refillDone[id] = d;
       }
     }
+    if (apps.status === "fulfilled") S.apps = apps.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]) || "（無題）", state: text(r["状態"]) })).sort((a, b) => a.name.localeCompare(b.name, "ja"));
     if (stock.status === "fulfilled") S.stock = stock.value.results.map(toStock); else S.extraErr.stock = errText(stock.reason);
     S.loadedAt = Date.now();
     saveSnap();
@@ -1716,7 +1720,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   }
   function summarize(t, raw) {
     const qa = qaParse(raw);
-    return { edited: t.edited, conc: conclusionOf(raw), qn: qa?.qs.length || 0, q1: qa?.qs[0]?.title || "", clarity: qa?.clarity || null };
+    return { edited: t.edited, conc: conclusionOf(raw), qn: qa?.qs.length || 0, q1: qa?.qs[0]?.title || "", clarity: qa?.clarity || null, fix: text((raw.match(/最新[：:]\s*([^\n]+)/) || [])[1] || "") };
   }
   async function fetchBody(id) {
     if (S.mode === "demo") return DEMO_BODIES[id] ?? DEMO_BODY;
@@ -1737,10 +1741,11 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (!items.length) { box.innerHTML = `<div class="empty">${S.aiSeg === "me" ? "あなたの番はありません。\nAIの返事を待っています" : "AIに預けているものはありません。\n「依頼する」から頼めます"}</div>`; return; }
     paged(box, `ai:${S.aiSeg}`, items, 88, (t) => {
       const sm = summaryOf(t);
-      const what = t.ai === "💭" ? `<span class="what ans">💭 回答する</span>` : t.ai === "🔍✅" ? `<span class="what">🔍✅ 判定する</span>` : `<span class="what">${t.ai} ${AI_LABEL[t.ai]}</span>`;
+      const what = t.ai === "💭" ? `<span class="what ans">💭 回答する</span>` : t.ai === "🔍✅" ? `<span class="what">🔍✅ 判定する</span>` : t.ai === "🛠✅" ? `<span class="what">🛠✅ 確認する</span>` : t.ai === "🛠💭" ? `<span class="what ans">🛠💭 答える</span>` : `<span class="what">${t.ai} ${AI_LABEL[t.ai]}</span>`;
       const pv = t.ai === "💭" ? (sm ? `${sm.clarity ? `<span class="clar">明確度 ${sm.clarity[0]}/${sm.clarity[1]}<i style="--p:${Math.round((sm.clarity[0] / sm.clarity[1]) * 100)}%"></i></span>　` : ""}質問 ${sm.qn}問${sm.q1 ? `：<b>${esc(short(sm.q1, 40))}</b>` : ""}` : "質問票を読みこみ中…")
         : t.ai === "🔍✅" ? (sm ? (sm.conc ? `⭐ <b>${esc(sm.conc)}</b>` : "結論の要約が見つかりません（開いて確認）") : "結論を読みこみ中…")
-        : `預けて ${ageOf(t)}日${t.ai === "🔬" ? "・1回の定時処理で1件ずつ" : ""}${t.next ? `　次の一歩：${esc(t.next)}` : ""}`;
+        : t.ai === "🛠✅" || t.ai === "🛠💭" ? (sm ? (sm.fix ? `🛠 <b>${esc(sm.fix)}</b>` : "修正の記録を開いて確認") : "修正の記録を読みこみ中…")
+        : `預けて ${ageOf(t)}日${t.ai === "🔬" ? "・1回の定時処理で1件ずつ" : t.ai === "🛠" ? "・毎時41分に直して反映" : ""}${t.next ? `　次の一歩：${esc(t.next)}` : ""}`;
       return `<button type="button" class="aicard" data-open="${t.id}" style="height:88px"><span class="t">${what}<b>${esc(t.name)}</b><span class="mute" style="font-size:11px">${ageOf(t)}日</span></span><span class="pv">${pv}</span></button>`;
     });
     if (S.aiSeg === "me") prefetchBodies();
@@ -1750,7 +1755,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     return `<div class="form" style="flex:1;min-height:0;overflow:auto"><label for="rq-name">何を調べる・決める？</label><input id="rq-name" type="text" maxlength="200" placeholder="例）食洗機 ビルトイン 45cm 比較">
       <label for="rq-url">参考URL（なくてもよい）</label><input id="rq-url" type="url" placeholder="https://">
       <label for="rq-memo">メモ（条件・気になること）</label><textarea id="rq-memo" placeholder="例）予算10万円まで。深さ45cm"></textarea>
-      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
+      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"], ["🛠", "🛠 アプリ修正", "アプリを直して反映"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
+      <div id="rq-app" ${reqMode === "🛠" ? "" : "hidden"}><label for="rq-appsel">どのアプリ？</label><select id="rq-appsel" class="sel">${(S.apps || []).length ? `<option value="">（名前とメモから判断してもらう）</option>${S.apps.map((a) => `<option value="${esc(a.url)}">${esc(a.name)}${a.state ? `　${esc(a.state)}` : ""}</option>`).join("")}` : `<option value="">（DB_アプリが読めません。名前とメモで判断）</option>`}</select><p class="mute" style="font-size:11.5px;margin:4px 0 0">毎時41分（7:41〜23:41）の定期実行が直して反映し、本文の「🛠 修正の記録」にやり取りごとのトグルで残します。</p></div>
       <div style="display:flex;gap:8px;margin-top:4px"><button type="button" class="btn pri" data-req="1" style="flex:1">AIに預ける</button><button type="button" class="btn" data-pickai="1">今あるタスクから</button></div>
       <p class="mute" style="font-size:11.5px;margin:0">ステータス「🤖 AI」で DB_タスク管理 に入ります。次の定時処理（${nextRun()}）で処理されます。</p></div>`;
   }
@@ -2078,6 +2084,17 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
         <div class="acts"><span class="mute" style="font-size:12px;align-self:center">もう一度AIへ：</span><button type="button" class="btn" data-again="🔍">🔍 再調査</button><button type="button" class="btn" data-again="🔬">🔬 徹底調査</button><button type="button" class="btn" data-again="💬">💬 深掘り</button></div></div>`;
       return;
     }
+    if (t.ai === "🛠") {
+      box.innerHTML = `<div class="aibar"><div class="h"><b>🛠 AIの番：アプリを直して反映</b><span class="mute">毎時41分（7:41〜23:41）</span></div><div class="mute" style="font-size:12.5px">直したら本文の「🛠 修正の記録」にトグルで残り、🛠✅ になります。</div><div class="acts"><button type="button" class="btn" data-aiset="">印を外す</button></div></div>`;
+      return;
+    }
+    if (t.ai === "🛠✅" || t.ai === "🛠💭") {
+      const latest = P.raw != null ? text((P.raw.match(/最新[：:]\s*([^\n]+)/) || [])[1] || "") : "";
+      box.innerHTML = `<div class="aibar"><div class="h"><b>${t.ai === "🛠✅" ? "🛠✅ 反映しました：確認する" : "🛠💭 AIから質問：答える"}</b></div>${latest ? `<div style="background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:13px">🛠 ${esc(latest)}</div>` : ""}
+        <textarea id="fixnote" placeholder="${t.ai === "🛠✅" ? "まだ直してほしいこと（例：ボタンをもう少し大きく）" : "質問への答え（例：Aで。色は今のままで）"}"></textarea>
+        <div class="acts">${t.ai === "🛠✅" ? `<button type="button" class="btn ok" data-fix="ok">OK・済みにする</button>` : ""}<button type="button" class="btn${t.ai === "🛠💭" ? " pri" : ""}" data-fix="again">${t.ai === "🛠✅" ? "直してほしい（🛠に戻す）" : "答えて🛠に戻す"}</button></div></div>`;
+      return;
+    }
     if (AI_TURN[t.ai] === "ai") {
       box.innerHTML = `<div class="aibar"><div class="h"><b>🤖 AIの番：${t.ai} ${AI_LABEL[t.ai]}</b><span class="mute">次の定時処理 ${nextRun()}</span></div>
         <div class="acts">${["🔍", "🔬", "💬"].filter((m) => m !== t.ai).map((m) => `<button type="button" class="btn" data-aiset="${m}">${m} に変える</button>`).join("")}<button type="button" class="btn" data-aiset="">印を外す</button></div></div>`;
@@ -2113,6 +2130,21 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       if (S.mode === "demo") { P.raw = raw.replace(L[h], `${L[h]}\n\n- ${line}`); DEMO_BODIES[P.id] = P.raw; return; }
       await call("update", { page_id: P.id, command: "update_content", content_updates: [{ old_str: L[h], new_str: `${L[h]}\n\n- ${line}` }], allow_async: false }, { read: false });
     } else await appendToPage(P, `## メモ\n\n- ${line}`);
+  }
+  // 🛠 アプリ修正：確認OKなら済み、追加の依頼・回答は「🛠 修正の記録」の上に書いて 🛠 に戻す
+  async function fixReply(kind) {
+    const P = PG; const t = P.task;
+    if (kind === "ok") { await move(t, "done"); $("#pprops").innerHTML = propsHtml(); drawAiBar(); return; }
+    const note = ($("#fixnote")?.value || "").trim(); if (!note) { $("#fixnote")?.focus(); toast("直してほしいこと・答えを書いてください"); return; }
+    const block = `### ✍️ 追加の依頼（検出 ${hereTime()}）\n\n${note.split("\n").map((l) => `- ${l}`).join("\n")}`;
+    try {
+      const raw = P.raw || ""; const head = raw.split("\n").find((l) => /^##\s*🛠\s*修正の記録/.test(l));
+      if (S.mode === "demo") { P.raw = head ? raw.replace(head, `${block}\n\n${head}`) : `${raw}\n\n${block}`; DEMO_BODIES[P.id] = P.raw; }
+      else if (head && raw.split(head).length === 2) await call("update", { page_id: P.id, command: "update_content", content_updates: [{ old_str: head, new_str: `${block}\n\n${head}` }], allow_async: false }, { read: false });
+      else await appendToPage(P, block);
+    } catch (err) { toast(errText(err)); return; }
+    await setProps(t, { "AIアクション": "🛠" }, "追加の依頼を書いて 🛠 に戻しました（毎時41分に処理）");
+    $("#pprops").innerHTML = propsHtml(); if (S.mode === "demo") { mountEditor($("#edbox"), P.raw, { pageId: P.id }); drawAiBar(); } else await reloadBody();
   }
   async function aiDecide(key) {
     const P = PG; const t = P.task; const note = ($("#ainote")?.value || "").trim();
@@ -2159,12 +2191,13 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-capgo="1" style="flex:1">${capKind === "ai" ? "AIに預ける" : "入れる"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
     setTimeout(() => $("#cp-name")?.focus(), 50);
   }
-  async function createTask({ name, kind, mode, url, next, memo }) {
+  async function createTask({ name, kind, mode, url, next, memo, app }) {
     const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : ST.inbox, "プレイヤー": [PLAYER] };
     if (kind === "ai") props["AIアクション"] = mode;
+    if (app) props["アプリ"] = [app];
     if (url) props["userDefined:URL"] = url;
     if (next) props.NEXT = next;
-    const content = [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
+    const content = mode === "🛠" && kind === "ai" ? `## 🛠 依頼\n\n${memo || name}\n\n## 🛠 修正の記録\n\n最新：まだありません` : [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
     const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
     if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content; return t; }
     setSync("busy");
@@ -2184,7 +2217,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   async function submitRequest() {
     const name = $("#rq-name").value.trim(); if (!name) { $("#rq-name").focus(); return; }
     const btn = $("[data-req]"); btn.disabled = true;
-    try { await createTask({ name, kind: "ai", mode: reqMode, url: $("#rq-url").value.trim(), memo: $("#rq-memo").value.trim() }); S.aiSeg = "ai"; render(); toast(`AIに預けました（次の定時処理 ${nextRun()}）`); }
+    try { await createTask({ name, kind: "ai", mode: reqMode, url: $("#rq-url").value.trim(), memo: $("#rq-memo").value.trim(), app: reqMode === "🛠" ? $("#rq-appsel")?.value : "" }); S.aiSeg = "ai"; render(); toast(reqMode === "🛠" ? "アプリ修正を頼みました（毎時41分に処理）" : `AIに預けました（次の定時処理 ${nextRun()}）`); }
     catch (err) { btn.disabled = false; toast(`預けられませんでした：${errText(err)}`); }
   }
   function pickForAi() {
@@ -2606,6 +2639,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
           <div class="g-pair"><span class="g-chip ai">🔬 徹底調査</span><span class="g-a">→</span><span class="g-chip me">🔍✅ 判定待ち</span><small>1回1件・市場を網羅</small></div>
           <div class="g-pair"><span class="g-chip ai">💬 深掘り</span><span class="g-a">⇄</span><span class="g-chip me">💭 回答待ち</span><small>明確度90%でまとめ</small></div>
           <div class="g-pair"><span class="g-chip me">🔍✅</span><span class="g-a">→</span><span class="g-chip ai">🔍 に戻す</span><small>「こうしたい」を書いて再調査</small></div>
+          <div class="g-pair"><span class="g-chip ai">🛠 アプリ修正</span><span class="g-a">→</span><span class="g-chip me">🛠✅ 確認</span><small>毎時41分に直して反映・記録はトグル</small></div>
+          <div class="g-pair"><span class="g-chip me">🛠💭 質問</span><span class="g-a">→</span><span class="g-chip ai">答えて 🛠 に戻す</span></div>
         </div>
         <div class="g-legend"><span class="g-chip ai">AIの番</span>定時処理が拾う　<span class="g-chip me">自分の番</span>AIは触らない</div></section>
 
@@ -2622,7 +2657,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
           <div><b>月</b>7:23 🩺 タスク運用診断</div>
           <div><b>火</b>19:46 ♻️ 資源ごみ（第2・4水曜の前日）</div>
           <div><b>毎月1日</b>8:10 🎯 目標の月次振り返り</div>
-          <div><b>土日祝</b>AIリサーチは休み（ジャーナル・読書辞典は動く）</div>
+          <div><b>毎日</b>7:41〜23:41 毎時 🛠 アプリ修正</div>
+          <div><b>土日祝</b>AIリサーチは休み（ジャーナル・読書辞典・アプリ修正は動く）</div>
         </div></section>
 
       <section class="g-sec"><h3>⑤ AIとの約束</h3>
@@ -2872,7 +2908,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.done) { const t = known.get(d.done); if (!t) return; el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
-    if (d.reqmode) { reqMode = d.reqmode; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
+    if (d.reqmode) { reqMode = d.reqmode; if ($("#rq-app")) $("#rq-app").hidden = reqMode !== "🛠"; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
     if (d.req) { submitRequest(); return; }
     if (d.pickai) { pickForAi(); return; }
     if (d.aipick) { const t = known.get(d.aipick); closeModal(); if (t) setProps(t, { "ステータス": ST.ai, "AIアクション": reqMode }, `AIに預けました（${reqMode}・次の定時処理 ${nextRun()}）`); return; }
@@ -2895,6 +2931,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.qa) { sendQa(d.qa === "send"); return; }
     if (d.aiset !== undefined) { const t = PG.task; const v = d.aiset || null; setProps(t, v ? { "AIアクション": v, ...(t.status === ST.ai ? {} : { "ステータス": ST.ai }) } : { "AIアクション": null }, v ? `AIアクションを ${v} にしました` : "AIの印を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); drawAiBar(); }); return; }
     if (d.mv) { aiDecide(d.mv); return; }
+    if (d.fix) { fixReply(d.fix); return; }
     if (d.again) { aiAgain(d.again); return; }
     if (d.cleardate) { setProps(PG.task, dateProps(null), "実行日を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); }); return; }
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
@@ -3039,6 +3076,9 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     DEMO_BODIES[ai[1].id] = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [ ] 比較表を見て決める\n- [ ] 設置寸法を測る\n- [ ] 見積を取る\n\n## 🔍 調査結果（最新・2026/10/22 13:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）パナソニックのミドルタイプ。45cm幅で5人分、静音で乾燥も強い\n</callout>\n\n### 📊 比較（10/22 13:52）\n\n| 候補 | 価格 | 容量 | 静音 |\n| --- | --- | --- | --- |\n| ⭐ （例）A社ミドル | 約12万円 | 5人分 | 38dB |\n| （例）B社ディープ | 約15万円 | 6人分 | 40dB |\n| （例）C社スリム | 約9万円 | 4人分 | 42dB |\n\n### ▶️ 次の手順（10/22 13:52）\n\n1. キッチンの開口寸法を測る\n2. 型番を決めて見積を取る\n3. 工事日を決める\n\n<toggle>\n詳しく（要点・注意点・参照）\n\n- 深型は入るか要確認\n- [（例）メーカー比較](https://example.com)\n</toggle>\n\n### 🗂 過去のやり取り（1件）\n\n<toggle>\n10/20 09:52 1回目 🔍 ─ 候補を広く洗い出した\n\n- 6機種を候補にした\n</toggle>\n\n## メモ\n\n- 予算は15万円まで";
     DEMO_BODIES[ai[2].id] = "## 🔍 調査結果（最新・2026/10/24 11:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）16インチ・ペダルを外せるタイプ。身長105cmならちょうど\n</callout>\n\n### ▶️ 次の手順（10/24 11:52）\n\n1. 店で跨がってみる\n2. 色を決める";
     demoNews();
+    const fx = mk("今どこ：検索に分類タグの絞り込みを足す", ST.ai, { ai: "🛠✅", tag: "AI", next: "反映を確認する（v23）", age: 0 }); S.tasks.push(fx);
+    DEMO_BODIES[fx.id] = "## 🛠 依頼\n\n検索の画面で分類タグでも絞れるようにしてほしい\n\n## 🛠 修正の記録\n\n最新：検索に分類タグのチップを追加して反映（11/02 14:41）\n\n<toggle>\n11/02 14:41 2回目 ─ 分類タグのチップを追加（v23・反映済み）\n\n- ✍️ 受け取った依頼（検出 11/02 13:20）：タグで絞りたい\n- 🛠 やったこと：検索の上に分類タグのチップを並べ、押すとそのタグだけに\n- ✅ 確認してほしいこと：虫めがね → 「コーヒー」→ COFFEE を押す\n- 🔗 コミット：（例）abc1234\n</toggle>\n\n<toggle>\n11/02 12:41 1回目 ─ どの画面か質問（質問あり）\n\n- ❓ 質問：検索の画面ですか、DBの画面ですか？\n</toggle>";
+    S.apps = [{ url: "https://www.notion.so/" + "5".repeat(32), id: "5".repeat(32), name: "（例）今どこ", state: "🛠 開発中" }, { url: "https://www.notion.so/" + "6".repeat(32), id: "6".repeat(32), name: "（例）しおり", state: "✅ 稼働" }];
     S.loadedAt = Date.now(); render(); setSync("ok");
   }
 

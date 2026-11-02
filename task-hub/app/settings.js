@@ -8,6 +8,7 @@
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
     news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
+    app: "01b7e064-7c8d-439e-8234-6fffad6ca4e4", // DB_アプリ（🛠 アプリ修正の対象）
   };
   const DB_PAGE = "3ed62844acbe81438bf3c88092856f8b"; // 🗄 データベース
   const PLAYER = "https://www.notion.so/3e962844acbe81b0843ff78fe19791fa"; // DB_プレイヤー（Satoshi）
@@ -15,9 +16,9 @@
   const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
   const ALL_STATUSES = [ST.inbox, ST.ai, ST.next, ST.doing, ST.wait, ST.some, ST.ref, ST.done];
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
-  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅"];
-  const AI_TURN = { "🔍": "ai", "🔬": "ai", "💬": "ai", "💭": "me", "🔍✅": "me" };
-  const AI_LABEL = { "🔍": "調べて", "🔬": "徹底調査", "💬": "深掘り（質問票）", "💭": "回答待ち", "🔍✅": "調べ終わった・判定待ち" };
+  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅", "🛠", "🛠💭", "🛠✅"];
+  const AI_TURN = { "🔍": "ai", "🔬": "ai", "💬": "ai", "💭": "me", "🔍✅": "me", "🛠": "ai", "🛠💭": "me", "🛠✅": "me" };
+  const AI_LABEL = { "🔍": "調べて", "🔬": "徹底調査", "💬": "深掘り（質問票）", "💭": "回答待ち", "🔍✅": "調べ終わった・判定待ち", "🛠": "アプリを直して", "🛠💭": "アプリ修正の質問・回答待ち", "🛠✅": "アプリ修正を反映・確認待ち" };
   const WAKU = ["☼ 朝", "💻 PC", "🏠 家・外", "作業中"];
   const WEIGHTS = ["S", "M", "L", "XL"];
   const TAGS = ["HOME", "BUILD", "CHILD", "FAMILY", "MONEY", "FOOD", "HEALTH", "BEAUTY", "LEARN", "AI", "TECH", "BOOK", "MUSIC", "COFFEE", "MOVIE", "TRIP", "TOY", "CAR", "WORK", "BUY"];

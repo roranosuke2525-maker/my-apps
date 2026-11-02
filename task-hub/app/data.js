@@ -201,11 +201,12 @@
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, refills] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
       rows(DS.daily, { limit: 100 }),
+      rows(DS.app, { limit: 50 }),
       // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
     ]);
@@ -228,6 +229,7 @@
         for (const id of (list(r["補充対象"]) || []).map(idOf)) if (d && !(S.refillDone[id] >= d)) S.refillDone[id] = d;
       }
     }
+    if (apps.status === "fulfilled") S.apps = apps.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]) || "（無題）", state: text(r["状態"]) })).sort((a, b) => a.name.localeCompare(b.name, "ja"));
     if (stock.status === "fulfilled") S.stock = stock.value.results.map(toStock); else S.extraErr.stock = errText(stock.reason);
     S.loadedAt = Date.now();
     saveSnap();

@@ -209,7 +209,7 @@
   }
   function summarize(t, raw) {
     const qa = qaParse(raw);
-    return { edited: t.edited, conc: conclusionOf(raw), qn: qa?.qs.length || 0, q1: qa?.qs[0]?.title || "", clarity: qa?.clarity || null };
+    return { edited: t.edited, conc: conclusionOf(raw), qn: qa?.qs.length || 0, q1: qa?.qs[0]?.title || "", clarity: qa?.clarity || null, fix: text((raw.match(/最新[：:]\s*([^\n]+)/) || [])[1] || "") };
   }
   async function fetchBody(id) {
     if (S.mode === "demo") return DEMO_BODIES[id] ?? DEMO_BODY;
@@ -230,10 +230,11 @@
     if (!items.length) { box.innerHTML = `<div class="empty">${S.aiSeg === "me" ? "あなたの番はありません。\nAIの返事を待っています" : "AIに預けているものはありません。\n「依頼する」から頼めます"}</div>`; return; }
     paged(box, `ai:${S.aiSeg}`, items, 88, (t) => {
       const sm = summaryOf(t);
-      const what = t.ai === "💭" ? `<span class="what ans">💭 回答する</span>` : t.ai === "🔍✅" ? `<span class="what">🔍✅ 判定する</span>` : `<span class="what">${t.ai} ${AI_LABEL[t.ai]}</span>`;
+      const what = t.ai === "💭" ? `<span class="what ans">💭 回答する</span>` : t.ai === "🔍✅" ? `<span class="what">🔍✅ 判定する</span>` : t.ai === "🛠✅" ? `<span class="what">🛠✅ 確認する</span>` : t.ai === "🛠💭" ? `<span class="what ans">🛠💭 答える</span>` : `<span class="what">${t.ai} ${AI_LABEL[t.ai]}</span>`;
       const pv = t.ai === "💭" ? (sm ? `${sm.clarity ? `<span class="clar">明確度 ${sm.clarity[0]}/${sm.clarity[1]}<i style="--p:${Math.round((sm.clarity[0] / sm.clarity[1]) * 100)}%"></i></span>　` : ""}質問 ${sm.qn}問${sm.q1 ? `：<b>${esc(short(sm.q1, 40))}</b>` : ""}` : "質問票を読みこみ中…")
         : t.ai === "🔍✅" ? (sm ? (sm.conc ? `⭐ <b>${esc(sm.conc)}</b>` : "結論の要約が見つかりません（開いて確認）") : "結論を読みこみ中…")
-        : `預けて ${ageOf(t)}日${t.ai === "🔬" ? "・1回の定時処理で1件ずつ" : ""}${t.next ? `　次の一歩：${esc(t.next)}` : ""}`;
+        : t.ai === "🛠✅" || t.ai === "🛠💭" ? (sm ? (sm.fix ? `🛠 <b>${esc(sm.fix)}</b>` : "修正の記録を開いて確認") : "修正の記録を読みこみ中…")
+        : `預けて ${ageOf(t)}日${t.ai === "🔬" ? "・1回の定時処理で1件ずつ" : t.ai === "🛠" ? "・毎時41分に直して反映" : ""}${t.next ? `　次の一歩：${esc(t.next)}` : ""}`;
       return `<button type="button" class="aicard" data-open="${t.id}" style="height:88px"><span class="t">${what}<b>${esc(t.name)}</b><span class="mute" style="font-size:11px">${ageOf(t)}日</span></span><span class="pv">${pv}</span></button>`;
     });
     if (S.aiSeg === "me") prefetchBodies();
@@ -243,7 +244,8 @@
     return `<div class="form" style="flex:1;min-height:0;overflow:auto"><label for="rq-name">何を調べる・決める？</label><input id="rq-name" type="text" maxlength="200" placeholder="例）食洗機 ビルトイン 45cm 比較">
       <label for="rq-url">参考URL（なくてもよい）</label><input id="rq-url" type="url" placeholder="https://">
       <label for="rq-memo">メモ（条件・気になること）</label><textarea id="rq-memo" placeholder="例）予算10万円まで。深さ45cm"></textarea>
-      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
+      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"], ["🛠", "🛠 アプリ修正", "アプリを直して反映"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
+      <div id="rq-app" ${reqMode === "🛠" ? "" : "hidden"}><label for="rq-appsel">どのアプリ？</label><select id="rq-appsel" class="sel">${(S.apps || []).length ? `<option value="">（名前とメモから判断してもらう）</option>${S.apps.map((a) => `<option value="${esc(a.url)}">${esc(a.name)}${a.state ? `　${esc(a.state)}` : ""}</option>`).join("")}` : `<option value="">（DB_アプリが読めません。名前とメモで判断）</option>`}</select><p class="mute" style="font-size:11.5px;margin:4px 0 0">毎時41分（7:41〜23:41）の定期実行が直して反映し、本文の「🛠 修正の記録」にやり取りごとのトグルで残します。</p></div>
       <div style="display:flex;gap:8px;margin-top:4px"><button type="button" class="btn pri" data-req="1" style="flex:1">AIに預ける</button><button type="button" class="btn" data-pickai="1">今あるタスクから</button></div>
       <p class="mute" style="font-size:11.5px;margin:0">ステータス「🤖 AI」で DB_タスク管理 に入ります。次の定時処理（${nextRun()}）で処理されます。</p></div>`;
   }

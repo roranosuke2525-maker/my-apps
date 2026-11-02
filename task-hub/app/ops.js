@@ -43,6 +43,8 @@
           <div class="g-pair"><span class="g-chip ai">🔬 徹底調査</span><span class="g-a">→</span><span class="g-chip me">🔍✅ 判定待ち</span><small>1回1件・市場を網羅</small></div>
           <div class="g-pair"><span class="g-chip ai">💬 深掘り</span><span class="g-a">⇄</span><span class="g-chip me">💭 回答待ち</span><small>明確度90%でまとめ</small></div>
           <div class="g-pair"><span class="g-chip me">🔍✅</span><span class="g-a">→</span><span class="g-chip ai">🔍 に戻す</span><small>「こうしたい」を書いて再調査</small></div>
+          <div class="g-pair"><span class="g-chip ai">🛠 アプリ修正</span><span class="g-a">→</span><span class="g-chip me">🛠✅ 確認</span><small>毎時41分に直して反映・記録はトグル</small></div>
+          <div class="g-pair"><span class="g-chip me">🛠💭 質問</span><span class="g-a">→</span><span class="g-chip ai">答えて 🛠 に戻す</span></div>
         </div>
         <div class="g-legend"><span class="g-chip ai">AIの番</span>定時処理が拾う　<span class="g-chip me">自分の番</span>AIは触らない</div></section>
 
@@ -59,7 +61,8 @@
           <div><b>月</b>7:23 🩺 タスク運用診断</div>
           <div><b>火</b>19:46 ♻️ 資源ごみ（第2・4水曜の前日）</div>
           <div><b>毎月1日</b>8:10 🎯 目標の月次振り返り</div>
-          <div><b>土日祝</b>AIリサーチは休み（ジャーナル・読書辞典は動く）</div>
+          <div><b>毎日</b>7:41〜23:41 毎時 🛠 アプリ修正</div>
+          <div><b>土日祝</b>AIリサーチは休み（ジャーナル・読書辞典・アプリ修正は動く）</div>
         </div></section>
 
       <section class="g-sec"><h3>⑤ AIとの約束</h3>

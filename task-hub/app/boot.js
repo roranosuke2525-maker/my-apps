@@ -39,7 +39,7 @@
     if (d.done) { const t = known.get(d.done); if (!t) return; el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
-    if (d.reqmode) { reqMode = d.reqmode; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
+    if (d.reqmode) { reqMode = d.reqmode; if ($("#rq-app")) $("#rq-app").hidden = reqMode !== "🛠"; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
     if (d.req) { submitRequest(); return; }
     if (d.pickai) { pickForAi(); return; }
     if (d.aipick) { const t = known.get(d.aipick); closeModal(); if (t) setProps(t, { "ステータス": ST.ai, "AIアクション": reqMode }, `AIに預けました（${reqMode}・次の定時処理 ${nextRun()}）`); return; }
@@ -62,6 +62,7 @@
     if (d.qa) { sendQa(d.qa === "send"); return; }
     if (d.aiset !== undefined) { const t = PG.task; const v = d.aiset || null; setProps(t, v ? { "AIアクション": v, ...(t.status === ST.ai ? {} : { "ステータス": ST.ai }) } : { "AIアクション": null }, v ? `AIアクションを ${v} にしました` : "AIの印を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); drawAiBar(); }); return; }
     if (d.mv) { aiDecide(d.mv); return; }
+    if (d.fix) { fixReply(d.fix); return; }
     if (d.again) { aiAgain(d.again); return; }
     if (d.cleardate) { setProps(PG.task, dateProps(null), "実行日を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); }); return; }
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
@@ -206,6 +207,9 @@
     DEMO_BODIES[ai[1].id] = "<table-of-contents />\n\n## ☑️ ToDo\n\n- [ ] 比較表を見て決める\n- [ ] 設置寸法を測る\n- [ ] 見積を取る\n\n## 🔍 調査結果（最新・2026/10/22 13:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）パナソニックのミドルタイプ。45cm幅で5人分、静音で乾燥も強い\n</callout>\n\n### 📊 比較（10/22 13:52）\n\n| 候補 | 価格 | 容量 | 静音 |\n| --- | --- | --- | --- |\n| ⭐ （例）A社ミドル | 約12万円 | 5人分 | 38dB |\n| （例）B社ディープ | 約15万円 | 6人分 | 40dB |\n| （例）C社スリム | 約9万円 | 4人分 | 42dB |\n\n### ▶️ 次の手順（10/22 13:52）\n\n1. キッチンの開口寸法を測る\n2. 型番を決めて見積を取る\n3. 工事日を決める\n\n<toggle>\n詳しく（要点・注意点・参照）\n\n- 深型は入るか要確認\n- [（例）メーカー比較](https://example.com)\n</toggle>\n\n### 🗂 過去のやり取り（1件）\n\n<toggle>\n10/20 09:52 1回目 🔍 ─ 候補を広く洗い出した\n\n- 6機種を候補にした\n</toggle>\n\n## メモ\n\n- 予算は15万円まで";
     DEMO_BODIES[ai[2].id] = "## 🔍 調査結果（最新・2026/10/24 11:52）\n\n<callout icon=\"⭐\" color=\"yellow_bg\">\n**これにしておけばいい**：（例）16インチ・ペダルを外せるタイプ。身長105cmならちょうど\n</callout>\n\n### ▶️ 次の手順（10/24 11:52）\n\n1. 店で跨がってみる\n2. 色を決める";
     demoNews();
+    const fx = mk("今どこ：検索に分類タグの絞り込みを足す", ST.ai, { ai: "🛠✅", tag: "AI", next: "反映を確認する（v23）", age: 0 }); S.tasks.push(fx);
+    DEMO_BODIES[fx.id] = "## 🛠 依頼\n\n検索の画面で分類タグでも絞れるようにしてほしい\n\n## 🛠 修正の記録\n\n最新：検索に分類タグのチップを追加して反映（11/02 14:41）\n\n<toggle>\n11/02 14:41 2回目 ─ 分類タグのチップを追加（v23・反映済み）\n\n- ✍️ 受け取った依頼（検出 11/02 13:20）：タグで絞りたい\n- 🛠 やったこと：検索の上に分類タグのチップを並べ、押すとそのタグだけに\n- ✅ 確認してほしいこと：虫めがね → 「コーヒー」→ COFFEE を押す\n- 🔗 コミット：（例）abc1234\n</toggle>\n\n<toggle>\n11/02 12:41 1回目 ─ どの画面か質問（質問あり）\n\n- ❓ 質問：検索の画面ですか、DBの画面ですか？\n</toggle>";
+    S.apps = [{ url: "https://www.notion.so/" + "5".repeat(32), id: "5".repeat(32), name: "（例）今どこ", state: "🛠 開発中" }, { url: "https://www.notion.so/" + "6".repeat(32), id: "6".repeat(32), name: "（例）しおり", state: "✅ 稼働" }];
     S.loadedAt = Date.now(); render(); setSync("ok");
   }
 

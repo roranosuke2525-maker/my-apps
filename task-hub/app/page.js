@@ -137,6 +137,17 @@
         <div class="acts"><span class="mute" style="font-size:12px;align-self:center">もう一度AIへ：</span><button type="button" class="btn" data-again="🔍">🔍 再調査</button><button type="button" class="btn" data-again="🔬">🔬 徹底調査</button><button type="button" class="btn" data-again="💬">💬 深掘り</button></div></div>`;
       return;
     }
+    if (t.ai === "🛠") {
+      box.innerHTML = `<div class="aibar"><div class="h"><b>🛠 AIの番：アプリを直して反映</b><span class="mute">毎時41分（7:41〜23:41）</span></div><div class="mute" style="font-size:12.5px">直したら本文の「🛠 修正の記録」にトグルで残り、🛠✅ になります。</div><div class="acts"><button type="button" class="btn" data-aiset="">印を外す</button></div></div>`;
+      return;
+    }
+    if (t.ai === "🛠✅" || t.ai === "🛠💭") {
+      const latest = P.raw != null ? text((P.raw.match(/最新[：:]\s*([^\n]+)/) || [])[1] || "") : "";
+      box.innerHTML = `<div class="aibar"><div class="h"><b>${t.ai === "🛠✅" ? "🛠✅ 反映しました：確認する" : "🛠💭 AIから質問：答える"}</b></div>${latest ? `<div style="background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:13px">🛠 ${esc(latest)}</div>` : ""}
+        <textarea id="fixnote" placeholder="${t.ai === "🛠✅" ? "まだ直してほしいこと（例：ボタンをもう少し大きく）" : "質問への答え（例：Aで。色は今のままで）"}"></textarea>
+        <div class="acts">${t.ai === "🛠✅" ? `<button type="button" class="btn ok" data-fix="ok">OK・済みにする</button>` : ""}<button type="button" class="btn${t.ai === "🛠💭" ? " pri" : ""}" data-fix="again">${t.ai === "🛠✅" ? "直してほしい（🛠に戻す）" : "答えて🛠に戻す"}</button></div></div>`;
+      return;
+    }
     if (AI_TURN[t.ai] === "ai") {
       box.innerHTML = `<div class="aibar"><div class="h"><b>🤖 AIの番：${t.ai} ${AI_LABEL[t.ai]}</b><span class="mute">次の定時処理 ${nextRun()}</span></div>
         <div class="acts">${["🔍", "🔬", "💬"].filter((m) => m !== t.ai).map((m) => `<button type="button" class="btn" data-aiset="${m}">${m} に変える</button>`).join("")}<button type="button" class="btn" data-aiset="">印を外す</button></div></div>`;
@@ -172,6 +183,21 @@
       if (S.mode === "demo") { P.raw = raw.replace(L[h], `${L[h]}\n\n- ${line}`); DEMO_BODIES[P.id] = P.raw; return; }
       await call("update", { page_id: P.id, command: "update_content", content_updates: [{ old_str: L[h], new_str: `${L[h]}\n\n- ${line}` }], allow_async: false }, { read: false });
     } else await appendToPage(P, `## メモ\n\n- ${line}`);
+  }
+  // 🛠 アプリ修正：確認OKなら済み、追加の依頼・回答は「🛠 修正の記録」の上に書いて 🛠 に戻す
+  async function fixReply(kind) {
+    const P = PG; const t = P.task;
+    if (kind === "ok") { await move(t, "done"); $("#pprops").innerHTML = propsHtml(); drawAiBar(); return; }
+    const note = ($("#fixnote")?.value || "").trim(); if (!note) { $("#fixnote")?.focus(); toast("直してほしいこと・答えを書いてください"); return; }
+    const block = `### ✍️ 追加の依頼（検出 ${hereTime()}）\n\n${note.split("\n").map((l) => `- ${l}`).join("\n")}`;
+    try {
+      const raw = P.raw || ""; const head = raw.split("\n").find((l) => /^##\s*🛠\s*修正の記録/.test(l));
+      if (S.mode === "demo") { P.raw = head ? raw.replace(head, `${block}\n\n${head}`) : `${raw}\n\n${block}`; DEMO_BODIES[P.id] = P.raw; }
+      else if (head && raw.split(head).length === 2) await call("update", { page_id: P.id, command: "update_content", content_updates: [{ old_str: head, new_str: `${block}\n\n${head}` }], allow_async: false }, { read: false });
+      else await appendToPage(P, block);
+    } catch (err) { toast(errText(err)); return; }
+    await setProps(t, { "AIアクション": "🛠" }, "追加の依頼を書いて 🛠 に戻しました（毎時41分に処理）");
+    $("#pprops").innerHTML = propsHtml(); if (S.mode === "demo") { mountEditor($("#edbox"), P.raw, { pageId: P.id }); drawAiBar(); } else await reloadBody();
   }
   async function aiDecide(key) {
     const P = PG; const t = P.task; const note = ($("#ainote")?.value || "").trim();
@@ -218,12 +244,13 @@
       <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-capgo="1" style="flex:1">${capKind === "ai" ? "AIに預ける" : "入れる"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
     setTimeout(() => $("#cp-name")?.focus(), 50);
   }
-  async function createTask({ name, kind, mode, url, next, memo }) {
+  async function createTask({ name, kind, mode, url, next, memo, app }) {
     const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : ST.inbox, "プレイヤー": [PLAYER] };
     if (kind === "ai") props["AIアクション"] = mode;
+    if (app) props["アプリ"] = [app];
     if (url) props["userDefined:URL"] = url;
     if (next) props.NEXT = next;
-    const content = [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
+    const content = mode === "🛠" && kind === "ai" ? `## 🛠 依頼\n\n${memo || name}\n\n## 🛠 修正の記録\n\n最新：まだありません` : [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
     const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
     if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content; return t; }
     setSync("busy");
@@ -243,7 +270,7 @@
   async function submitRequest() {
     const name = $("#rq-name").value.trim(); if (!name) { $("#rq-name").focus(); return; }
     const btn = $("[data-req]"); btn.disabled = true;
-    try { await createTask({ name, kind: "ai", mode: reqMode, url: $("#rq-url").value.trim(), memo: $("#rq-memo").value.trim() }); S.aiSeg = "ai"; render(); toast(`AIに預けました（次の定時処理 ${nextRun()}）`); }
+    try { await createTask({ name, kind: "ai", mode: reqMode, url: $("#rq-url").value.trim(), memo: $("#rq-memo").value.trim(), app: reqMode === "🛠" ? $("#rq-appsel")?.value : "" }); S.aiSeg = "ai"; render(); toast(reqMode === "🛠" ? "アプリ修正を頼みました（毎時41分に処理）" : `AIに預けました（次の定時処理 ${nextRun()}）`); }
     catch (err) { btn.disabled = false; toast(`預けられませんでした：${errText(err)}`); }
   }
   function pickForAi() {
