@@ -12,7 +12,7 @@
     deep: { label: "AIと深掘り（💬）", props: () => ({ "ステータス": ST.ai, "AIアクション": "💬" }) },
     thorough: { label: "AIに徹底調査（🔬）", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔬" }) },
   };
-  const FIELD = { "ステータス": "status", "AIアクション": "ai", "date:実行日:start": "date", NEXT: "next", "枠": "waku", "重さ": "weight", "分類タグ": "tag", "名前": "name" };
+  const FIELD = { "📖 すぐ読む": "read", "ステータス": "status", "AIアクション": "ai", "date:実行日:start": "date", NEXT: "next", "枠": "waku", "重さ": "weight", "分類タグ": "tag", "名前": "name" };
   function propsBefore(t, props) {
     const out = {};
     for (const k of Object.keys(props)) { if (k === "date:実行日:is_datetime") continue; const f = FIELD[k]; if (f) out[k] = t[f] ?? null; }

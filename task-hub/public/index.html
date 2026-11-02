@@ -68,7 +68,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 main { min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 0 max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
-nav.tabs { display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
+nav.tabs { display: grid; grid-template-columns: repeat(8, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
 nav.tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; border-radius: 12px; font-size: 11px; color: var(--mute); position: relative; }
 nav.tabs button svg { width: 22px; height: 22px; }
 nav.tabs button[aria-pressed="true"] { color: var(--ink); background: var(--card); box-shadow: var(--shadow); font-weight: 700; }
@@ -492,6 +492,22 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .diagall .statrow { margin-bottom: 8px; } .diagall .verdict { margin-bottom: 8px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
+/* ===== 読む ===== */
+.readhead { display: flex; align-items: center; gap: 10px; flex: none; }
+.readhead > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.readhead b { font-size: 15px; } .readhead .mute { font-size: 11.5px; }
+.readhead .btn { height: 34px; font-size: 12.5px; }
+.rcard { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+.rcard:last-child { border-bottom: 0; }
+.rmain { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; }
+.rt { font-size: 15px; font-weight: 700; line-height: 1.45; }
+.rs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
+.rs i { font-style: normal; padding: 1px 8px; border-radius: 8px; background: var(--sunk); color: var(--mute); }
+.rp { font-size: 12.5px; color: var(--mute); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ract { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.ract .qc { height: 28px; font-size: 11.5px; text-decoration: none; color: var(--ink); }
+nav.tabs button { font-size: 9.5px; }
+
 /* ===== 検索 ===== */
 #modal .sheet.tall { height: 92%; display: flex; flex-direction: column; }
 .search { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 0; }
@@ -577,6 +593,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
     <button type="button" data-tab="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg>AI<span class="badge" id="aibadge" hidden></span></button>
+    <button type="button" data-tab="read"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg>読む<span class="badge" id="readbadge" hidden></span></button>
     <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
     <button type="button" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>買う<span class="badge" id="shopbadge" hidden></span></button>
     <button type="button" data-tab="news"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg>ニュース</button>
@@ -650,7 +667,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
-    news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
+    readList: [], readTag: "", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };
@@ -793,6 +810,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       projects: (list(r["プロジェクト"]) || []).map(idOf).filter(Boolean), link: text(r["userDefined:URL"]),
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
+      read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
     };
     known.set(t.id, t);
     return t;
@@ -814,7 +832,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
-  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone });
+  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone, readList: S.readList });
 
   // 在庫（DB_Daily）の1行。切れる予定日は Notion の計算式が読めればそれ、読めなければ同じ考え方で計算する
   const dateOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
@@ -844,6 +862,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     // 今日の済み：実行日が今日か、今日更新した DONE（実行日のない行も数える）
     jobs.push(rows(DS.task, { filters: [statusFilter(ST.done), { type: "group", operator: "or", filters: [{ type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: { type: "relative", value: "today" } }, { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is", value: { type: "relative", value: "today" } }] }], limit: 50 }));
     jobs.push(rows(DS.task, { filters: [statusFilter(ST.ref)], sort: sortEdited, limit: 40 }));
+    // すぐ読む（書庫のうち印を付けたもの）
+    jobs.push(rows(DS.task, { filters: [{ type: "property", property: "📖 すぐ読む", propertyType: "checkbox", operator: "checkbox_is", value: { type: "exact", value: true } }], sort: sortEdited, limit: 100 }).catch((err) => ({ results: [], more: false, err })));
     jobs.push(rows(DS.proj, { limit: 100 }));
     const out = await Promise.all(jobs);
     known.clear();
@@ -854,7 +874,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     S.more = Object.fromEntries(OPEN_STATUSES.map((s, i) => [s, out[i].more]));
     S.doneToday = out[n].results.map(toTask).filter(own);
     S.refs = out[n + 1].results.map(toTask); S.refMore = out[n + 1].more;
-    S.projects = out[n + 2].results.map((r) => ({
+    const rd = out[n + 2]; S.readList = rd.results.map((r) => known.get(idOf(r.url)) || toTask(r)); S.extraErr.read = rd.err ? errText(rd.err) : "";
+    S.projects = out[n + 3].results.map((r) => ({
       id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", status: r["ステータス"] || "", step: text(r["次の一歩"]), now: text(r["今の状態"]),
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
@@ -1524,7 +1545,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     deep: { label: "AIと深掘り（💬）", props: () => ({ "ステータス": ST.ai, "AIアクション": "💬" }) },
     thorough: { label: "AIに徹底調査（🔬）", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔬" }) },
   };
-  const FIELD = { "ステータス": "status", "AIアクション": "ai", "date:実行日:start": "date", NEXT: "next", "枠": "waku", "重さ": "weight", "分類タグ": "tag", "名前": "name" };
+  const FIELD = { "📖 すぐ読む": "read", "ステータス": "status", "AIアクション": "ai", "date:実行日:start": "date", NEXT: "next", "枠": "waku", "重さ": "weight", "分類タグ": "tag", "名前": "name" };
   function propsBefore(t, props) {
     const out = {};
     for (const k of Object.keys(props)) { if (k === "date:実行日:is_datetime") continue; const f = FIELD[k]; if (f) out[k] = t[f] ?? null; }
@@ -2064,6 +2085,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     return `<div class="quick" data-qt="${t.id}">
       <div class="qrow"><span class="ql">日付</span>${QUICK_DATES.map(([k, n]) => `<button type="button" class="qc${t.date === quickDate(k) ? " on" : ""}" data-qk="d:${k}">${n}<small>${md(quickDate(k))}</small></button>`).join("")}<label class="qc pick">📅 選ぶ<input type="date" data-qdate="1" value="${t.date || ""}" aria-label="日付を選ぶ"></label>${t.date ? `<button type="button" class="qc" data-qk="d:none">日付なし</button>` : ""}</div>
       <div class="qrow"><span class="ql">状態</span>${QUICK_ST.filter(([, v]) => v !== t.status).map(([k, , n]) => `<button type="button" class="qc" data-qk="s:${k}" style="--c:${STAGES[k === "doing" ? "next" : k].c}">${n}</button>`).join("")}<button type="button" class="qc ok" data-qk="s:${done ? "next" : "done"}">${done ? "↩ 戻す" : "✓ 済み"}</button></div>
+      ${t.status === ST.ref || isRead(t) ? `<div class="qrow"><span class="ql">読む</span><button type="button" class="qc${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" style="--c:var(--s-ref)">${isRead(t) ? "📖 すぐ読む（外す）" : "📖 すぐ読むに入れる"}</button></div>` : ""}
       ${t.status === ST.ai ? "" : `<div class="qrow"><span class="ql">AI</span><button type="button" class="qc ai" data-qk="a:🔍">🔍 調べて</button><button type="button" class="qc ai" data-qk="a:💬">💬 一緒に分解</button><button type="button" class="qc ai" data-qk="a:🔬">🔬 徹底調査</button></div>`}
     </div>`;
   }
@@ -2483,6 +2505,58 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   }
   document.addEventListener("keydown", (e) => { if (e.target.id === "shopin" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); addItem(); } });
   document.addEventListener("change", (e) => { if (e.target.id === "shopto") S.shopTarget = e.target.value; });
+  // ================= 読む：書庫（📚 REFERENCE）のうち「📖 すぐ読む」に印を付けたものを集める =================
+  const READ_PROP = "📖 すぐ読む";
+  const isRead = (t) => t?.read === "__YES__";
+  // 印を付ける・外す（読むリストの出し入れもここで）
+  async function setRead(t, on, msg) {
+    const ok = await setProps(t, { [READ_PROP]: on ? "__YES__" : "__NO__" }, msg || (on ? `「${short(t.name)}」を「すぐ読む」に入れました` : `「${short(t.name)}」を読んだので外しました`));
+    syncReadList(t);
+    if (PG?.task === t) $("#pprops").innerHTML = propsHtml();
+    return ok;
+  }
+  function syncReadList(t) {
+    const i = S.readList.indexOf(t);
+    if (isRead(t) && i < 0) S.readList.unshift(t);
+    if (!isRead(t) && i >= 0) S.readList.splice(i, 1);
+    if (S.tab === "read") render();
+  }
+  function renderRead(view) {
+    const all = S.readList.filter(isRead);
+    const tags = [...new Set(all.map((t) => t.tag).filter(Boolean))];
+    if (S.readTag && !tags.includes(S.readTag)) S.readTag = "";
+    const items = all.filter((t) => !S.readTag || t.tag === S.readTag);
+    view.insertAdjacentHTML("beforeend", `<div class="readhead"><div><b>すぐ読む</b><span class="mute">${all.length}件・書庫から選んだもの</span></div><button type="button" class="btn pri" data-readpick="1">＋ 書庫から選ぶ</button></div>
+      ${tags.length > 1 ? `<div class="chips"><button type="button" class="chip" data-readtag="" aria-pressed="${!S.readTag}">すべて<span class="n">${all.length}</span></button>${tags.map((g) => `<button type="button" class="chip" data-readtag="${esc(g)}" aria-pressed="${S.readTag === g}">${esc(g)}<span class="n">${all.filter((t) => t.tag === g).length}</span></button>`).join("")}</div>` : ""}
+      <div class="card panel"><div class="scroll" id="readbox"></div></div>`);
+    const box = $("#readbox");
+    if (!items.length) { box.innerHTML = `<div class="empty">${S.extraErr.read ? esc(S.extraErr.read) : "すぐ読みたいものはありません。\n「＋ 書庫から選ぶ」か、資料のページの「📖 すぐ読む」で入れられます"}</div>`; return; }
+    box.innerHTML = items.map((t) => {
+      const sm = S.bodies[t.id];
+      const pv = sm?.conc ? `⭐ ${esc(short(sm.conc, 70))}` : t.next ? esc(t.next) : "";
+      return `<article class="rcard"><button type="button" class="rmain" data-open="${t.id}"><span class="rt">${esc(t.name)}</span><span class="rs">${t.tag ? `<i>${esc(t.tag)}</i>` : ""}${t.ai === "🔍✅" ? "<i>🔍 調査結果</i>" : ""}<span class="mute">書庫 ${ageOf(t)}日</span></span>${pv ? `<span class="rp">${pv}</span>` : ""}</button>
+        <div class="ract">${t.link ? `<a class="qc" href="${esc(t.link)}" target="_blank" rel="noopener">🔗 元のページ</a>` : ""}<button type="button" class="qc ok" data-readdone="${t.id}">✓ 読んだ（外す）</button></div></article>`;
+    }).join("");
+    prefetchRead(items);
+  }
+  // 結論（⭐）を先読みして一覧に出す
+  let readFetching = false;
+  async function prefetchRead(items) {
+    if (readFetching || S.mode === "loading" || S.mode === "error") return;
+    const todo = items.filter((t) => !S.bodies[t.id] || S.bodies[t.id].edited !== t.edited).slice(0, 12); if (!todo.length) return;
+    readFetching = true;
+    const worker = async () => { for (let t; (t = todo.shift());) { try { S.bodies[t.id] = summarize(t, await fetchBody(t.id)); } catch { /* 次回 */ } } };
+    await Promise.all([worker(), worker(), worker()]); readFetching = false; store.set("sums", S.bodies);
+    if (S.tab === "read" && $("#page").hidden) render();
+  }
+  // 書庫（読み込み済みの資料）から選ぶ
+  function openReadPick(q = "") {
+    const cands = S.refs.filter((t) => !isRead(t) && (!q || norm(`${t.name} ${t.tag || ""}`).includes(norm(q))));
+    modal(`<h3>書庫から選ぶ</h3><div class="form" style="padding-bottom:0"><input id="readq" type="search" placeholder="名前・分類タグで絞る" value="${esc(q)}"></div>
+      <div class="list" style="max-height:58vh;overflow:auto;padding:6px 0" id="readpicks">${cands.map((t) => `<button type="button" class="row" data-readadd="${t.id}" style="min-height:52px"><span class="dot" style="--c:var(--s-ref)"></span><span class="main"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.tag || "")}・書庫 ${ageOf(t)}日</span></span><span class="meta">＋</span></button>`).join("") || `<div class="empty">${S.refs.length ? "当てはまる資料はありません" : "書庫（📚 REFERENCE）が読み込まれていません"}</div>`}</div>
+      <div class="form"><p class="mute" style="font-size:11.5px;margin:0">最近の書庫 ${S.refs.length}件から選べます。古いものは虫めがねで探して、資料のページの「📖 すぐ読む」で入れられます。</p><button type="button" class="btn" data-mclose="1">閉じる</button></div>`);
+    const i = $("#readq"); i.oninput = () => { const pos = i.selectionStart; openReadPick(i.value); const j = $("#readq"); j.focus(); j.setSelectionRange(pos, pos); };
+  }
   // ================= ニュース：DB_ニュース を話題ごとに読む =================
   // 同じ話題は1つにまとめ、扱った社の多い順。見出しを押すと記事が開く。読んだ・📚送る（次の朝 REFERENCE になる）はその場で
   async function loadNews() {
@@ -2891,13 +2965,14 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
     const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
-    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -2963,6 +3038,11 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
     if (d.search) { openSearch(); return; }
+    if (d.readpick) { openReadPick(); return; }
+    if (d.readadd) { const t = known.get(d.readadd); if (t) { setRead(t, true); el.remove(); } return; }
+    if (d.readdone) { const t = known.get(d.readdone); if (t) setRead(t, false); return; }
+    if (d.readtoggle) { const t = known.get(d.readtoggle); if (t) setRead(t, !isRead(t)); return; }
+    if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
@@ -3002,7 +3082,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["flow", "ai", "triage", "shop", "news", "log", "db"];
+  const TABS = ["flow", "ai", "read", "triage", "shop", "news", "log", "db"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -3080,6 +3160,9 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       .map(([name, cat, use, freq, size, ago], i) => stockCalc({ id: [ST1, ST2][i] || `${"5".repeat(31)}${i + 3}`, url: `https://www.notion.so/${[ST1, ST2][i] || `${"5".repeat(31)}${i + 3}`}`, name, cat, memo: "", link: i === 1 ? "https://example.com" : "", use, freq, size, bought: ago == null ? null : addDays(d, ago), rollup: null, formulaEnd: null }));
     S.doneToday = [mk("牛乳を買う", ST.done, { w: "S", waku: "🏠 家・外" }), mk("病院の予約", ST.done, { w: "S", waku: "☼ 朝" })];
     S.refs = ["コーヒー豆の保存方法", "加湿器の掃除のしかた", "ふるさと納税の上限"].map((x, i) => mk(x, ST.ref, { ai: "🔍✅", tag: ["COFFEE", "HOME", "MONEY"][i], age: i + 2 }));
+    S.refs.push(mk("ビルトイン食洗機の比較（45cm）", ST.ref, { ai: "🔍✅", tag: "HOME", age: 12, url: "https://example.com" }));
+    for (const t of S.refs.slice(0, 2).concat(S.refs.at(-1))) t.read = "__YES__";
+    S.readList = S.refs.filter((t) => t.read === "__YES__");
     S.projects = [
       { id: P1, url: "https://www.notion.so/" + P1, name: "（例）書斎を仕上げる", status: "🔥 進行中", step: "デスク天板から画面上端までの高さを測る", now: "", total: 6 },
       { id: P2, url: "https://www.notion.so/" + P2, name: "（例）外構を整える", status: "🔥 進行中", step: "郵便受けの対策を決める", now: "", total: 9 },
@@ -3106,11 +3189,11 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   S.bodies = store.get("sums") || {};
   const snap = store.get("snap");
   if (snap?.tasks?.length) {
-    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, loadedAt: snap.at });
-    for (const t of [...S.tasks, ...S.refs, ...S.doneToday]) known.set(t.id, t);
+    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, readList: snap.readList || [], loadedAt: snap.at });
+    for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["flow", "ai", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用

@@ -68,7 +68,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 main { min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 0 max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
-nav.tabs { display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
+nav.tabs { display: grid; grid-template-columns: repeat(8, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
 nav.tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; border-radius: 12px; font-size: 11px; color: var(--mute); position: relative; }
 nav.tabs button svg { width: 22px; height: 22px; }
 nav.tabs button[aria-pressed="true"] { color: var(--ink); background: var(--card); box-shadow: var(--shadow); font-weight: 700; }
@@ -492,6 +492,22 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .diagall .statrow { margin-bottom: 8px; } .diagall .verdict { margin-bottom: 8px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
+/* ===== 読む ===== */
+.readhead { display: flex; align-items: center; gap: 10px; flex: none; }
+.readhead > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.readhead b { font-size: 15px; } .readhead .mute { font-size: 11.5px; }
+.readhead .btn { height: 34px; font-size: 12.5px; }
+.rcard { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+.rcard:last-child { border-bottom: 0; }
+.rmain { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; }
+.rt { font-size: 15px; font-weight: 700; line-height: 1.45; }
+.rs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
+.rs i { font-style: normal; padding: 1px 8px; border-radius: 8px; background: var(--sunk); color: var(--mute); }
+.rp { font-size: 12.5px; color: var(--mute); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ract { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.ract .qc { height: 28px; font-size: 11.5px; text-decoration: none; color: var(--ink); }
+nav.tabs button { font-size: 9.5px; }
+
 /* ===== 検索 ===== */
 #modal .sheet.tall { height: 92%; display: flex; flex-direction: column; }
 .search { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 0; }
@@ -577,6 +593,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
     <button type="button" data-tab="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg>AI<span class="badge" id="aibadge" hidden></span></button>
+    <button type="button" data-tab="read"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg>読む<span class="badge" id="readbadge" hidden></span></button>
     <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
     <button type="button" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>買う<span class="badge" id="shopbadge" hidden></span></button>
     <button type="button" data-tab="news"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg>ニュース</button>

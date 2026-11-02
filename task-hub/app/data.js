@@ -135,6 +135,7 @@
       projects: (list(r["プロジェクト"]) || []).map(idOf).filter(Boolean), link: text(r["userDefined:URL"]),
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
+      read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
     };
     known.set(t.id, t);
     return t;
@@ -156,7 +157,7 @@
   const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
-  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone });
+  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone, readList: S.readList });
 
   // 在庫（DB_Daily）の1行。切れる予定日は Notion の計算式が読めればそれ、読めなければ同じ考え方で計算する
   const dateOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
@@ -186,6 +187,8 @@
     // 今日の済み：実行日が今日か、今日更新した DONE（実行日のない行も数える）
     jobs.push(rows(DS.task, { filters: [statusFilter(ST.done), { type: "group", operator: "or", filters: [{ type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: { type: "relative", value: "today" } }, { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is", value: { type: "relative", value: "today" } }] }], limit: 50 }));
     jobs.push(rows(DS.task, { filters: [statusFilter(ST.ref)], sort: sortEdited, limit: 40 }));
+    // すぐ読む（書庫のうち印を付けたもの）
+    jobs.push(rows(DS.task, { filters: [{ type: "property", property: "📖 すぐ読む", propertyType: "checkbox", operator: "checkbox_is", value: { type: "exact", value: true } }], sort: sortEdited, limit: 100 }).catch((err) => ({ results: [], more: false, err })));
     jobs.push(rows(DS.proj, { limit: 100 }));
     const out = await Promise.all(jobs);
     known.clear();
@@ -196,7 +199,8 @@
     S.more = Object.fromEntries(OPEN_STATUSES.map((s, i) => [s, out[i].more]));
     S.doneToday = out[n].results.map(toTask).filter(own);
     S.refs = out[n + 1].results.map(toTask); S.refMore = out[n + 1].more;
-    S.projects = out[n + 2].results.map((r) => ({
+    const rd = out[n + 2]; S.readList = rd.results.map((r) => known.get(idOf(r.url)) || toTask(r)); S.extraErr.read = rd.err ? errText(rd.err) : "";
+    S.projects = out[n + 3].results.map((r) => ({
       id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", status: r["ステータス"] || "", step: text(r["次の一歩"]), now: text(r["今の状態"]),
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
