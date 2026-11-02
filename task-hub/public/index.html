@@ -343,6 +343,8 @@ input, textarea, select { font-size: 16px !important; }
 .sfoot { display: flex; gap: 8px; padding-top: 8px; flex-wrap: wrap; }
 .sfoot:empty { display: none; }
 .sfoot .btn { height: 34px; font-size: 12.5px; }
+.deltask { display: block; margin: 10px 0 0 auto; padding: 6px 2px; font-size: 12px; color: var(--mute); }
+.deltask[data-armed] { color: var(--late); font-weight: 500; }
 .btn.sm { height: 30px; padding: 0 10px; font-size: 12px; flex: none; }
 .stockrow .meta { min-width: 56px; }
 
@@ -762,7 +764,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       },
     };
   }
-  const TOOL = { fetch: "notion-fetch", query: "notion-query-data-sources", update: "notion-update-page", create: "notion-create-pages" };
+  const TOOL = { fetch: "notion-fetch", query: "notion-query-data-sources", update: "notion-update-page", create: "notion-create-pages", del: "notion-delete-pages", restore: "notion-restore-pages" };
   async function call(kind, input, { read = true } = {}) {
     const mcp = await getMcp();
     if (!mcp) throw Object.assign(new Error("no-mcp"), { code: "not_granted" });
@@ -1575,6 +1577,24 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     try { await call("update", { page_id: t.id, command: "update_properties", properties: props, allow_async: false }, { read: false }); saveSnap(); setSync("ok"); return true; }
     catch (err) { applyLocal(t, before); refresh(); setSync("err"); toast(`変更できませんでした：${errText(err)}`); return false; }
   }
+  // タスクを消す（Notion のゴミ箱へ）。先に本文の保存を済ませてから閉じる。「取り消す」で元の場所に戻す
+  async function deleteTask(t) {
+    await closePage();
+    const lists = [S.tasks, S.doneToday, S.refs, S.readList];
+    const places = lists.map((l) => l.indexOf(t));
+    const putBack = () => { lists.forEach((l, i) => { if (places[i] >= 0 && !l.includes(t)) l.splice(places[i], 0, t); }); known.set(t.id, t); render(); };
+    lists.forEach((l, i) => { if (places[i] >= 0) l.splice(places[i], 1); }); known.delete(t.id); render();
+    const name = short(t.name);
+    if (S.mode === "demo") { toast(`「${name}」を削除しました（見本）`, () => { putBack(); toast("元に戻しました"); }); return true; }
+    setSync("busy");
+    const sent = call("del", { page_ids: [t.id], user_confirmed: true }, { read: false });
+    toast(`「${name}」を削除しました`, async () => {
+      try { await sent; await call("restore", { page_ids: [t.id] }, { read: false }); putBack(); saveSnap(); toast("元に戻しました"); }
+      catch (err) { toast(`元に戻せませんでした：${errText(err)}。Notion のゴミ箱から戻せます`); }
+    });
+    try { await sent; saveSnap(); setSync("ok"); return true; }
+    catch (err) { putBack(); setSync("err"); toast(`削除できませんでした：${errText(err)}`); return false; }
+  }
   const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), `「${short(t.name)}」→ ${MOVES[key].label}${extra}`);
   const short = (s, n = 14) => (s.length > n ? `${s.slice(0, n)}…` : s);
   function setSync(st) { const el = $("#sync"); el.className = `sync ${st === "ok" ? "" : st}`; $("#synct").textContent = st === "busy" ? "書き込み中" : st === "err" ? "エラー" : S.mode === "demo" ? "見本" : S.loadedAt ? `${jstTime(S.loadedAt)} 更新` : ""; }
@@ -2036,7 +2056,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
         <dt>次の一歩</dt><dd><input type="text" data-prop="NEXT" value="${esc(t.next || "")}" placeholder="（空）" aria-label="次の一歩"></dd>
         <dt>枠</dt><dd>${sel("枠", WAKU, t.waku)}</dd><dt>重さ</dt><dd>${sel("重さ", WEIGHTS, t.weight)}</dd><dt>分類タグ</dt><dd>${sel("分類タグ", TAGS, t.tag)}</dd>
         ${pj.length ? `<dt>プロジェクト</dt><dd>${pj.map((p) => `<button type="button" class="pill" data-proj="${p.id}">${esc(p.name)}</button>`).join("")}</dd>` : ""}
-        ${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;overflow-wrap:anywhere">${esc(t.link.slice(0, 70))}</a></dd>` : ""}</dl>`;
+        ${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;overflow-wrap:anywhere">${esc(t.link.slice(0, 70))}</a></dd>` : ""}</dl>
+        <button type="button" class="deltask" data-deltask="1">このタスクを削除</button>`;
     }
     if (P.fields) return `<dl class="props">${P.fields.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${linky(v)}</dd>`).join("")}</dl>`;
     if (P.row) {
@@ -3026,6 +3047,12 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.qa) { sendQa(d.qa === "send"); return; }
     if (d.aiset !== undefined) { const t = PG.task; const v = d.aiset || null; setProps(t, v ? { "AIアクション": v, ...(t.status === ST.ai ? {} : { "ステータス": ST.ai }) } : { "AIアクション": null }, v ? `AIアクションを ${v} にしました` : "AIの印を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); drawAiBar(); }); return; }
     if (d.mv) { aiDecide(d.mv); return; }
+    // 誤タップよけに2回押しで削除（3秒で元に戻る）
+    if (d.deltask) {
+      const b = e.target.closest("[data-deltask]");
+      if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "もう一度押すと削除"; setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = "このタスクを削除"; } }, 3000); return; }
+      deleteTask(PG.task); return;
+    }
     if (d.fix) { fixReply(d.fix); return; }
     if (d.again) { aiAgain(d.again); return; }
     if (d.cleardate) { setProps(PG.task, dateProps(null), "実行日を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); }); return; }

@@ -49,7 +49,8 @@
         <dt>次の一歩</dt><dd><input type="text" data-prop="NEXT" value="${esc(t.next || "")}" placeholder="（空）" aria-label="次の一歩"></dd>
         <dt>枠</dt><dd>${sel("枠", WAKU, t.waku)}</dd><dt>重さ</dt><dd>${sel("重さ", WEIGHTS, t.weight)}</dd><dt>分類タグ</dt><dd>${sel("分類タグ", TAGS, t.tag)}</dd>
         ${pj.length ? `<dt>プロジェクト</dt><dd>${pj.map((p) => `<button type="button" class="pill" data-proj="${p.id}">${esc(p.name)}</button>`).join("")}</dd>` : ""}
-        ${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;overflow-wrap:anywhere">${esc(t.link.slice(0, 70))}</a></dd>` : ""}</dl>`;
+        ${t.link ? `<dt>URL</dt><dd><a href="${esc(t.link)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12.5px;overflow-wrap:anywhere">${esc(t.link.slice(0, 70))}</a></dd>` : ""}</dl>
+        <button type="button" class="deltask" data-deltask="1">このタスクを削除</button>`;
     }
     if (P.fields) return `<dl class="props">${P.fields.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${linky(v)}</dd>`).join("")}</dl>`;
     if (P.row) {

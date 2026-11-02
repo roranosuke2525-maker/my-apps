@@ -87,7 +87,7 @@
       },
     };
   }
-  const TOOL = { fetch: "notion-fetch", query: "notion-query-data-sources", update: "notion-update-page", create: "notion-create-pages" };
+  const TOOL = { fetch: "notion-fetch", query: "notion-query-data-sources", update: "notion-update-page", create: "notion-create-pages", del: "notion-delete-pages", restore: "notion-restore-pages" };
   async function call(kind, input, { read = true } = {}) {
     const mcp = await getMcp();
     if (!mcp) throw Object.assign(new Error("no-mcp"), { code: "not_granted" });

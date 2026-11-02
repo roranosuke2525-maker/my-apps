@@ -96,6 +96,22 @@ test("プロパティは列の型に合わせて書く", async () => {
   } finally { s.done(); }
 });
 
+test("削除：タスクの行だけゴミ箱へ入れ、戻せる。他のDBの行は消せない", async () => {
+  const s = setup();
+  try {
+    const id = "11111111111111111111111111111111";
+    s.fake.pages[id].parent = { type: "data_source_id", data_source_id: "21762844-acbe-8075-bbe6-000bcaf22801" };
+    assert.equal((await s.call("notion-delete-pages", { page_ids: [id], user_confirmed: true })).status, 200);
+    assert.equal(s.fake.pages[id].in_trash, true);
+    assert.equal((await s.call("notion-restore-pages", { page_ids: [id] })).status, 200);
+    assert.equal(s.fake.pages[id].in_trash, false);
+    s.fake.pages[id].parent = { type: "data_source_id", data_source_id: "01b7e064-7c8d-439e-8234-6fffad6ca4e4" };
+    assert.equal((await s.call("notion-delete-pages", { page_ids: [id] })).status, 400);
+    assert.equal(s.fake.pages[id].in_trash, false);
+    assert.equal((await s.call("notion-delete-pages", { page_ids: [id, id] })).status, 400);
+  } finally { s.done(); }
+});
+
 test("行の追加は Markdown の本文つきで作る", async () => {
   const s = setup();
   try {

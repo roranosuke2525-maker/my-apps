@@ -111,6 +111,8 @@ export async function runTool(notion, tool, input) {
   if (tool === "notion-query-data-sources") return queryTool(notion, input);
   if (tool === "notion-update-page") return updateTool(notion, input);
   if (tool === "notion-create-pages") return createTool(notion, input);
+  if (tool === "notion-delete-pages") return trashTool(notion, input, true);
+  if (tool === "notion-restore-pages") return trashTool(notion, input, false);
   throw httpError(400, "使えない操作です", "bad_request");
 }
 
@@ -244,6 +246,18 @@ export function toProps(props, schema) {
     else throw httpError(400, `列「${name}」（${type}）は書き換えられません`, "bad_request");
   }
   return out;
+}
+
+// delete / restore：DB_タスク管理の行だけゴミ箱へ入れる・戻す（Notion のゴミ箱から30日は戻せる）
+const TASK_PARENTS = ["21762844acbe8075bbe6000bcaf22801", "21762844acbe80feadcce6a3b4df3473"]; // データソース・データベース
+async function trashTool(notion, { page_ids }, inTrash) {
+  if (!Array.isArray(page_ids) || page_ids.length !== 1) throw httpError(400, "1回に1件だけ使えます", "bad_request");
+  const pid = normalizeId(page_ids[0]);
+  const page = await notion("GET", `/pages/${pid}`);
+  const parent = page.parent || {};
+  if (![parent.data_source_id, parent.database_id].some((x) => x && TASK_PARENTS.includes(normalizeId(x)))) throw httpError(400, "タスク以外は消せません", "bad_request");
+  await notion("PATCH", `/pages/${pid}`, { in_trash: inTrash });
+  return { page_ids: [pid] };
 }
 
 // create：データソースに1行ずつ作る（本文は Markdown）

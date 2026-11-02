@@ -42,6 +42,24 @@
     try { await call("update", { page_id: t.id, command: "update_properties", properties: props, allow_async: false }, { read: false }); saveSnap(); setSync("ok"); return true; }
     catch (err) { applyLocal(t, before); refresh(); setSync("err"); toast(`変更できませんでした：${errText(err)}`); return false; }
   }
+  // タスクを消す（Notion のゴミ箱へ）。先に本文の保存を済ませてから閉じる。「取り消す」で元の場所に戻す
+  async function deleteTask(t) {
+    await closePage();
+    const lists = [S.tasks, S.doneToday, S.refs, S.readList];
+    const places = lists.map((l) => l.indexOf(t));
+    const putBack = () => { lists.forEach((l, i) => { if (places[i] >= 0 && !l.includes(t)) l.splice(places[i], 0, t); }); known.set(t.id, t); render(); };
+    lists.forEach((l, i) => { if (places[i] >= 0) l.splice(places[i], 1); }); known.delete(t.id); render();
+    const name = short(t.name);
+    if (S.mode === "demo") { toast(`「${name}」を削除しました（見本）`, () => { putBack(); toast("元に戻しました"); }); return true; }
+    setSync("busy");
+    const sent = call("del", { page_ids: [t.id], user_confirmed: true }, { read: false });
+    toast(`「${name}」を削除しました`, async () => {
+      try { await sent; await call("restore", { page_ids: [t.id] }, { read: false }); putBack(); saveSnap(); toast("元に戻しました"); }
+      catch (err) { toast(`元に戻せませんでした：${errText(err)}。Notion のゴミ箱から戻せます`); }
+    });
+    try { await sent; saveSnap(); setSync("ok"); return true; }
+    catch (err) { putBack(); setSync("err"); toast(`削除できませんでした：${errText(err)}`); return false; }
+  }
   const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), `「${short(t.name)}」→ ${MOVES[key].label}${extra}`);
   const short = (s, n = 14) => (s.length > n ? `${s.slice(0, n)}…` : s);
   function setSync(st) { const el = $("#sync"); el.className = `sync ${st === "ok" ? "" : st}`; $("#synct").textContent = st === "busy" ? "書き込み中" : st === "err" ? "エラー" : S.mode === "demo" ? "見本" : S.loadedAt ? `${jstTime(S.loadedAt)} 更新` : ""; }

@@ -36,7 +36,8 @@ export function fakeNotion() {
     if ((m = path.match(/^\/pages\/(\w+)$/))) {
       const p = pages[m[1]]; if (!p) return bad("object_not_found", "no", 404);
       if (init.method === "GET") return ok(p);
-      for (const [k, v] of Object.entries(body.properties)) { if (v.status) p.properties[k] = { type: "status", status: v.status }; if ("select" in v) p.properties[k] = { type: "select", select: v.select }; if ("date" in v) p.properties[k] = { type: "date", date: v.date }; if (v.rich_text) p.properties[k] = { type: "rich_text", rich_text: v.rich_text.map((r) => ({ type: "text", plain_text: r.text.content, annotations: {} })) }; }
+      if ("in_trash" in body) p.in_trash = body.in_trash;
+      for (const [k, v] of Object.entries(body.properties || {})) { if (v.status) p.properties[k] = { type: "status", status: v.status }; if ("select" in v) p.properties[k] = { type: "select", select: v.select }; if ("date" in v) p.properties[k] = { type: "date", date: v.date }; if (v.rich_text) p.properties[k] = { type: "rich_text", rich_text: v.rich_text.map((r) => ({ type: "text", plain_text: r.text.content, annotations: {} })) }; }
       return ok(p);
     }
     if (path === "/pages" && init.method === "POST") { const id = "2".repeat(32); pages[id] = { id, url: `https://www.notion.so/${id}`, created_time: new Date().toISOString(), properties: {} }; return ok({ id, url: `https://www.notion.so/${id}` }); }

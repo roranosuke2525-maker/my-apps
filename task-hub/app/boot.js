@@ -64,6 +64,12 @@
     if (d.qa) { sendQa(d.qa === "send"); return; }
     if (d.aiset !== undefined) { const t = PG.task; const v = d.aiset || null; setProps(t, v ? { "AIアクション": v, ...(t.status === ST.ai ? {} : { "ステータス": ST.ai }) } : { "AIアクション": null }, v ? `AIアクションを ${v} にしました` : "AIの印を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); drawAiBar(); }); return; }
     if (d.mv) { aiDecide(d.mv); return; }
+    // 誤タップよけに2回押しで削除（3秒で元に戻る）
+    if (d.deltask) {
+      const b = e.target.closest("[data-deltask]");
+      if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "もう一度押すと削除"; setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = "このタスクを削除"; } }, 3000); return; }
+      deleteTask(PG.task); return;
+    }
     if (d.fix) { fixReply(d.fix); return; }
     if (d.again) { aiAgain(d.again); return; }
     if (d.cleardate) { setProps(PG.task, dateProps(null), "実行日を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); }); return; }
