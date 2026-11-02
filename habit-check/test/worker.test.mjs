@@ -346,11 +346,13 @@ test("ギルド：依頼の段階を分けて返し、ほうこくも新しい�
   assert.equal(data.quests.length, 1);
   assert.deepEqual(data.quests[0].stages, ["サブスクを1つ確認する", "通信費を見直す", "保険を見直す"]);
   assert.equal(data.quests[0].count, 1);
-  // けいじばんは正しいLv（13ではなくテストのLv）で Worker が作る：2回目は 受注Lv3＋3 = Lv6、報酬は 60×1.5
-  assert.equal(data.quests[0].need, 6);
-  assert.equal(data.quests[0].reward, 90);
+  // のぼる依頼：Cランクから1段のぼって B（受けられるLv12・報酬110）
+  assert.equal(data.quests[0].stageRank, "B");
+  assert.equal(data.quests[0].need, 12);
+  assert.equal(data.quests[0].reward, 110);
   assert.equal(data.quests[0].master, false);
-  assert.match(data.quests[0].board, /^【Cランク】 2かいめ\n▶ 通信費を見直す\nほうしゅう 90 EXP\n/);
+  assert.equal(data.quests[0].epilogues, 1);
+  assert.match(data.quests[0].board, /^【Bランク】 2段目／3\n▶ 通信費を見直す\nほうしゅう 110 EXP\n/);
   assert.equal(data.reports[0].note, "全館空調掃除");
   assert.deepEqual(data.reports[0].questIds, [QID]);
 });
@@ -660,14 +662,32 @@ test("ぼうけん：前のボスを倒した日のEXPは、次のボスに使�
   assert.equal(data.boss.defeatedOn, null);
 });
 
-test("ギルド：最後の段階を終えたらマスター。報酬は打ち止め", async () => {
+test("ギルド：最後の段階を終えたら制覇。ランクは最後の段階のまま", async () => {
   const q = pages.find((p) => p.id === QID);
   q.properties.達成回数 = formula(5);
   const { quests } = await (await req("GET", "/api/guild")).json();
   assert.equal(quests[0].master, true);
-  assert.equal(quests[0].reward, 120); // 60 × (1 + 0.5 × 2)
-  assert.equal(quests[0].need, 3 + 3 * 2);
-  assert.match(quests[0].board, /🏆 マスター/);
+  assert.equal(quests[0].stageRank, "A"); // C → B → A（3段）
+  assert.equal(quests[0].reward, 160);
+  assert.equal(quests[0].need, 20);
+  assert.equal(quests[0].epilogues, 3);
+  assert.match(quests[0].board, /🏆 制覇/);
+});
+
+test("ギルド：受付終了の依頼はけいじばんに出さない。くりかえし依頼はランク固定", async () => {
+  const q = pages.find((p) => p.id === QID);
+  q.properties.受付終了 = { type: "checkbox", checkbox: true };
+  assert.equal((await (await req("GET", "/api/guild")).json()).quests.length, 0);
+  q.properties.受付終了 = { type: "checkbox", checkbox: false };
+  q.properties.くりかえし = { type: "checkbox", checkbox: true };
+  q.properties.依頼人 = { type: "rich_text", rich_text: text("商人ギルド長") };
+  q.properties.依頼文 = { type: "rich_text", rich_text: text("鎖を1本切っておくれ") };
+  q.properties.達成回数 = formula(5);
+  const [x] = (await (await req("GET", "/api/guild")).json()).quests;
+  assert.deepEqual([x.repeat, x.stageRank, x.reward, x.stage, x.master, x.epilogues], [true, "C", 70, 0, false, 2]);
+  assert.equal(x.requester, "商人ギルド長");
+  assert.equal(x.line, "鎖を1本切っておくれ");
+  assert.equal(x.lines, undefined);
 });
 
 // ---------- からだチェック ----------

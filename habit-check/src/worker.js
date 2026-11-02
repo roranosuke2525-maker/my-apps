@@ -3,6 +3,7 @@
 
 import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWeight, tagType } from "./aibou-config.js";
 import { SLOT_ORDER, slotOf, itemName, rarityOf, isCrit, RARITY_EFFECT } from "./item-config.js";
+import { questBoard, epilogueCount } from "./guild-config.js";
 import { getBody, postBody, muscleHits, MUSCLE_TYPE } from "./muscle.js";
 import { RANKS, WEAK_BONUS, BALANCE_BONUS, PET_BONUS, STAR_BONUS, STAT_EXP, STAT_RATE, STAT_MAX, familyOf, starsOf } from "./battle-config.js";
 
@@ -488,6 +489,10 @@ const QUEST_FIELDS = {
   count: "達成回数",
   totalExp: "累計EXP",
   playerLv: "いまのLv",
+  requester: "依頼人",
+  lines: "依頼文",
+  repeat: "くりかえし",
+  closed: "受付終了",
 };
 const REPORT_LIMIT = 20;
 const REPORT_NOTE_MAX = 200;
@@ -503,13 +508,14 @@ async function getGuild(notion, env) {
     playerLevel(notion, env),
   ]);
   return {
-    quests: quests.map((p) => {
-      const q = pick(p, QUEST_FIELDS);
-      const { stagesText, ...rest } = q;
+    quests: quests.map((p) => pick(p, QUEST_FIELDS)).filter((q) => !q.closed).map((q) => {
+      const { stagesText, lines, closed, lv: _lv, exp: _exp, board: _board, ...rest } = q;
       const stages = splitStages(stagesText);
       const playerLv = lv !== null ? lv : q.playerLv;
-      return { ...rest, playerLv, stages, ...questBoard(q, stages, playerLv) };
-    }),
+      const quest = { ...q, repeat: !!q.repeat, stages };
+      const b = questBoard(quest, playerLv);
+      return { ...rest, repeat: !!q.repeat, playerLv, stages, ...b, dropSlot: slotOf(q.category).slot, epilogues: epilogueCount(quest, q.count ?? 0) };
+    }).sort((a, b) => a.need - b.need || (a.repeat ? 1 : 0) - (b.repeat ? 1 : 0)),
     reports: (reports.results || []).map(summarizeReport),
   };
 }
@@ -551,22 +557,6 @@ function reportQuestIds(body) {
 function summarizeReport(page) {
   const r = pick(page, { note: "ひとこと", questIds: "依頼" });
   return { ...r, date: page.created_time };
-}
-
-// けいじばん（DB_ギルド依頼「けいじばん」の式と同じ）。Notion API では いまのLv が先頭25件で計算されるので、正しいLvで作り直す。
-// 段階は達成回数で進み、必要Lv＝受注Lv＋3×段階。最後の段階を終えたら「マスター」で、報酬は打ち止め
-const STAGE_LV = 3;
-function questBoard(q, stages, playerLv) {
-  const n = q.count ?? 0;
-  const L = Math.max(1, stages.length);
-  const i = Math.min(n, L - 1);
-  const need = (q.lv ?? 1) + STAGE_LV * i;
-  const reward = Math.round((q.exp ?? 0) * (1 + 0.5 * Math.min(n, L - 1)));
-  const master = stages.length > 0 && n >= L;
-  const open = typeof playerLv !== "number" || playerLv >= need;
-  const board = `【${q.rank ?? "?"}ランク】 ${master ? "🏆 マスター（くりかえし）" : `${n + 1}かいめ`}\n` +
-    `▶ ${stages[i] ?? ""}\nほうしゅう ${reward} EXP\n${open ? "✅ うけられる" : `🔒 Lv${need} から`}\nたっせい ${n} かい`;
-  return { need, reward, master, board };
 }
 
 function splitStages(text) {
@@ -923,7 +913,7 @@ async function syncDrops(notion, env, fresh = []) {
       queryAll(notion, dsId(env, "ITEM_DS_ID"), {}),
     ]);
     for (const f of fresh) if (!reports.some((r) => normalizeId(r.id) === normalizeId(f.id))) reports.push(f);
-    const questById = new Map(quests.map((q) => [normalizeId(q.id), pick(q, { title: "依頼", category: "カテゴリ", rank: "ランク" })]));
+    const questById = new Map(quests.map((q) => [normalizeId(q.id), pick(q, { title: "依頼", category: "カテゴリ", rank: "ランク", repeat: "くりかえし", stagesText: "段階" })]));
     const have = new Set();
     for (const it of items.map(summarizeItem)) {
       for (const r of it.reportIds || []) for (const q of it.questIds || []) have.add(`${normalizeId(r)}|${normalizeId(q)}`);
@@ -939,7 +929,7 @@ async function syncDrops(notion, env, fresh = []) {
         if (!quest || have.has(`${normalizeId(r.id)}|${qid}`)) continue;
         const { slot, type } = slotOf(quest.category);
         const crit = isCrit(r.id);
-        const rarity = rarityOf(quest.rank, stage, crit);
+        const rarity = rarityOf({ ...quest, stages: splitStages(quest.stagesText) }, stage, crit);
         const page = await notion("POST", "/pages", {
           parent: { type: "data_source_id", data_source_id: dsId(env, "ITEM_DS_ID") },
           properties: {

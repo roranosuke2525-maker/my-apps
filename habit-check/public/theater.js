@@ -1,5 +1,6 @@
 // ものがたりを「劇」で見せる：横に流れる背景、立ち絵、吹き出し、画面効果。
-//   openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) … 全画面で開く。閉じると消える。
+//   openTheater({ chapter, blocks, labels?, bgs?, pet, hero, onRead, onUnread }) … 全画面で開く。閉じると消える。
+//   labels：せりふの話し手（theater-speakers.js の形）、bgs：背景の名前（ギルドの後日談で使う）
 // 台本は theater-script.js、話し手は theater-speakers.js、背景は theater-stage.js。
 import { toScript, subjectOf } from "./theater-script.js";
 import { SPEAKERS } from "./theater-speakers.js";
@@ -12,7 +13,7 @@ const IMG = (name) => `img/${name}.webp`;
 
 // 立ち絵：名前 → 絵と大きさ（舞台の高さに対する割合）・浮かぶかどうか
 // key があれば img/cast2/<key>.webp と、表情・構えの差分 <key>_<差分>.webp（CAST_VARIANTS にあるもの）
-const CAST = {
+const STAGE_CAST = {
   ムキ: { key: "muki", h: 0.68 },
   フミ: { key: "fumi", h: 0.62 },
   ゼニ: { key: "zeni", h: 0.64 },
@@ -56,12 +57,12 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
-export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
+export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, onRead, onUnread }) {
   const order = chapter.order ?? -1;
   const fill = (s) => fillStory(s, pet);
   const petName = fill("{あいぼう}");
-  const script = toScript(blocks, SPEAKERS[order]).map((s) => ({ ...s, text: fill(s.text) }));
-  const bgs = chapterBgs(order, chapter.title);
+  const script = toScript(blocks, labels ?? SPEAKERS[order]).map((s) => ({ ...s, text: fill(s.text) }));
+  const bgs = bgList?.length ? bgList : chapterBgs(order, chapter.title);
 
   // ---------- 画面 ----------
   const bgA = h("img", { class: "th-bg", alt: "", draggable: "false" });
@@ -201,7 +202,7 @@ export function openTheater({ chapter, blocks, pet, hero, onRead, onUnread }) {
       const size = key === "egg" ? "egg" : key === "baby" ? "baby" : key.startsWith("adult") ? "adult" : "child";
       return { img: `pet/${key}`, h: PET_HEIGHT[size], float: key === "egg" };
     }
-    if (CAST[who]) return CAST[who];
+    if (STAGE_CAST[who]) return STAGE_CAST[who];
 
     if (BOSS_IMAGES[who]) return { img: BOSS_IMAGES[who], h: 0.74, boss: true };
     return null;

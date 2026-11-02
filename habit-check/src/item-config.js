@@ -14,8 +14,9 @@ export const SLOTS = {
 export const DEFAULT_SLOT = { slot: "アクセサリー", type: "ぜんぶ" };
 export const SLOT_ORDER = ["武器", "かぶと", "たて", "よろい", "アクセサリー"];
 
-// レア度：依頼のランクが基本（D★1〜S★5）で、段階（それまでの達成回数）が1つ進むごとに＋1。最大★5
-export const RANK_RARITY = { D: 1, C: 2, B: 3, A: 4, S: 5 };
+// レア度：その回のランク（D★1〜S★5。のぼる依頼は段階でランクが上がる。guild-config.js）。最大★5
+import { RANK_RARITY, rankAt } from "./guild-config.js";
+export { RANK_RARITY };
 export const MAX_RARITY = 5;
 // 会心ドロップ：ほうこくの5件に1件くらい（ほうこくのIDで決まるので、何度読み直しても同じ）。レア＋1
 export const CRIT_EVERY = 5;
@@ -29,7 +30,12 @@ export const ITEM_NAMES = {
   体脂肪の霧を晴らせ: ["霧払いの木刀", "一パーセントの剣", "十五の大剣"],
   スタジオを仕上げる: ["選定のピック", "卓上の指輪", "六声のマイク飾り"],
   美味しいドリップを淹れる: ["一杯目のしずく", "挽き目のペンダント", "錬金術師のケトル飾り"],
+  本を読破せよ: ["栞のはちまき", "読了の帽子", "本の塔のかんむり"],
   本を1冊読みきる: ["栞のはちまき", "読了の帽子", "本の塔のかんむり"],
+  洗濯物の城: ["洗濯ばさみのたて", "定位置のたて", "手放しのたて", "衣替えのたて", "城主のたて"],
+  在庫リストの整備: ["帳面の前かけ", "目録のよろい", "番頭のよろい"],
+  読書アプリを完成させよ: ["書庫番のはちまき", "記録の帽子", "書庫の賢者のかんむり"],
+  妻へ一杯を: ["湯気の指輪", "濃いめのペンダント", "ふたりのカップ飾り"],
   固定費のみなおし: ["鎖断ちの革よろい", "解約のくさりかたびら", "見直し師の重よろい"],
   未知のトレーニング: ["片脚立ちの棒", "新しい型の槍", "一週間の斧"],
   家族のNISA: ["種まきのチョッキ", "口座守りのよろい", "未来の森のよろい"],
@@ -65,8 +71,9 @@ export function itemName(questTitle, stage, slot, rarity) {
   return stage < names.length ? names[stage] : `${names.at(-1)}＋${stage - names.length + 1}`;
 }
 
-export function rarityOf(rank, stage, crit) {
-  return Math.min(MAX_RARITY, (RANK_RARITY[rank] || 1) + stage + (crit ? 1 : 0));
+// quest：{ rank, repeat, stages }。stage：それまでの報告回数
+export function rarityOf(quest, stage, crit) {
+  return Math.min(MAX_RARITY, (RANK_RARITY[rankAt(quest, stage)] || 1) + (crit ? 1 : 0));
 }
 
 // ほうこくのIDから会心かどうかを決める（同じほうこくはいつも同じ結果）

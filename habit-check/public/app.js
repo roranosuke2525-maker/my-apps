@@ -837,7 +837,7 @@ async function renderGuild() {
     h("div", { class: "chips", role: "group", "aria-label": "カテゴリ" }, cats.map((c) => h("button", {
       type: "button", "aria-pressed": String(c === state.guildCat), onclick: () => { state.guildCat = c; renderGuild(); },
     }, c))),
-    h("div", { class: "list scroll fill" }, shown.map(questCard)),
+    h("div", { class: "list scroll fill board-cork" }, shown.map(questCard)),
   ], `guild:board:${state.guildCat}`);
 }
 
@@ -846,44 +846,162 @@ function questLocked(q) {
   return typeof need === "number" && typeof q.playerLv === "number" && q.playerLv < need;
 }
 
+// ---------- けいじばんの貼り紙 ----------
+const RANK_RARITY = { D: 1, C: 2, B: 3, A: 4, S: 5 };
+const EPILOGUE_AT = [1, 5, 10, 20, 30]; // くりかえし依頼の後日談が開く回数（src/guild-config.js と同じ）
+
+// 後日談が何話まで開いているか（src/guild-config.js の epilogueCount と同じ）
+function epilogueCountOf(q, n) {
+  if (q.repeat) return EPILOGUE_AT.filter((x) => n >= x).length;
+  return Math.min(n, Math.max(1, q.stages?.length || 1));
+}
+
+function tiltOf(id) {
+  let x = 0;
+  for (const c of String(id)) x = (x * 33 + c.charCodeAt(0)) >>> 0;
+  return ((x % 7) - 3) * 0.45;
+}
+
+function questStamp(q, locked) {
+  if (q.master) return h("span", { class: "stamp master", text: "🏆 制覇" });
+  if (locked) return h("span", { class: "stamp lock", text: `Lv${q.need}から` });
+  return h("span", { class: "stamp ok", text: "うけられる" });
+}
+
+function questProgress(q) {
+  if (q.repeat) return `🔁 くりかえし・${q.count ?? 0}回`;
+  const L = Math.max(1, q.stages.length);
+  return q.master ? `🪜 ${L}段 制覇` : `🪜 ${Math.min((q.count ?? 0) + 1, L)}段目／${L}`;
+}
+
 function questCard(q) {
   const locked = questLocked(q);
-  return h("button", { type: "button", class: `card quest${locked ? " locked" : ""}`, onclick: () => openQuest(q) },
-    h("span", { class: `rank ${q.rank || ""}`, text: q.rank || "?" }),
+  const rank = q.stageRank || q.rank || "?";
+  const task = q.stages[q.stage ?? 0] || "";
+  const el = h("button", { type: "button", class: `quest note rank-${rank}${locked ? " locked" : ""}${q.master ? " master" : ""}`, onclick: () => openQuest(q) },
+    h("span", { class: "tack", "aria-hidden": "true" }),
+    h("span", { class: `seal ${rank}`, "aria-label": `${rank}ランク`, text: rank }),
     h("span", { class: "qbody" },
+      h("span", { class: "qreq", text: `依頼人：${q.requester || "ギルド"}` }),
       h("span", { class: "qtitle", text: q.title }),
+      q.line ? h("span", { class: "qline", text: `「${q.line}」` }) : null,
+      task ? h("span", { class: "qtask", text: `▶ ${task}` }) : null,
       h("span", { class: "qmeta" },
         q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
-        h("span", { text: locked ? `Lv${q.need ?? q.lv}で受注` : `受注Lv${q.need ?? q.lv ?? "—"}` }),
-        h("span", { text: `基本${q.exp ?? "—"}EXP` }),
-        h("span", { text: `達成${q.count ?? 0}回` }),
+        h("span", { text: questProgress(q) }),
       ),
-      q.board ? h("span", { class: "board", text: q.board }) : null,
+      h("span", { class: "qreward" },
+        h("b", { text: `ほうしゅう ${fmt(q.reward)} EXP` }),
+        h("span", { text: ` ＋ ${q.dropSlot || "そうび"} ${stars(RANK_RARITY[rank] || 1)}` }),
+      ),
     ),
+    questStamp(q, locked),
   );
+  el.style.setProperty("--tilt", `${tiltOf(q.id)}deg`);
+  return el;
 }
 
 function openQuest(q) {
   const locked = questLocked(q);
   const count = typeof q.count === "number" ? q.count : 0;
+  const rank = q.stageRank || q.rank || "?";
   const note = h("textarea", { rows: "2", maxlength: "200", placeholder: "なにをしたか ひとこと", "aria-label": "ほうこくのひとこと", disabled: locked });
-  const send = h("button", { type: "button", class: "primary", disabled: true }, locked ? `Lv${q.lv}になると受注できます` : "ほうこくする");
+  const send = h("button", { type: "button", class: "primary", disabled: true }, locked ? `Lv${q.need}になると受けられます` : "ほうこくする");
   note.addEventListener("input", () => { send.disabled = locked || !note.value.trim(); });
   send.addEventListener("click", () => submitReport([q], note.value, send));
+  const ranks = ["D", "C", "B", "A", "S"];
+  const rankOfStage = (i) => ranks[Math.min(4, Math.max(0, ranks.indexOf(q.rank)) + i)];
+  const epiShown = epilogueCountOf(q, count);
+  const epiTotal = q.repeat ? EPILOGUE_AT.length : Math.max(1, q.stages.length);
   openSheet(q.title, [
-    h("div", { class: "qmeta", style: "display:flex;gap:6px;flex-wrap:wrap;align-items:center" },
-      h("span", { class: `rank ${q.rank || ""}`, text: q.rank || "?" }),
-      q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
-      h("span", { class: "sub", text: `受注Lv${q.lv ?? "—"} ・ 基本${q.exp ?? "—"}EXP ・ 累計${fmt(q.totalExp)}EXP` }),
+    h("div", { class: `quest note big rank-${rank}` },
+      h("span", { class: "tack", "aria-hidden": "true" }),
+      h("span", { class: `seal ${rank}`, text: rank }),
+      h("span", { class: "qbody" },
+        h("span", { class: "qreq", text: `依頼人：${q.requester || "ギルド"}` }),
+        q.line ? h("span", { class: "qline", text: `「${q.line}」` }) : null,
+        h("span", { class: "qmeta" },
+          q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
+          h("span", { text: questProgress(q) }),
+          h("span", { text: `累計 ${fmt(q.totalExp)} EXP` }),
+        ),
+        h("span", { class: "qreward" },
+          h("b", { text: `ほうしゅう ${fmt(q.reward)} EXP` }),
+          h("span", { text: ` ＋ ${q.dropSlot || "そうび"} ${stars(RANK_RARITY[rank] || 1)}（会心で＋1）` }),
+        ),
+      ),
+      questStamp(q, locked),
     ),
-    q.stages.length
-      ? h("div", { class: "card" }, h("h3", { text: `だんかい（${Math.min(count, q.stages.length)}/${q.stages.length}）` }),
+    q.repeat
+      ? h("div", { class: "card" }, h("h3", { text: "いらい" }),
+        h("p", { style: "margin:6px 0 0", text: `${q.stages[0] || ""}（するたびに ほうこく・${rank}ランク固定）` }))
+      : h("div", { class: "card" }, h("h3", { text: `だんかい（${Math.min(count, q.stages.length)}/${q.stages.length}）` }),
         h("ol", { class: "stages", style: "margin-top:8px" }, q.stages.map((s, i) => h("li", { class: i < count ? "done" : i === count ? "next" : "" },
-          h("span", { class: "box" }), h("span", { text: s })))))
-      : null,
-    q.board ? h("div", { class: "card" }, h("h3", { text: "けいじばん" }), h("p", { class: "pre", style: "margin:6px 0 0", text: q.board })) : null,
+          h("span", { class: "box" }), h("span", { class: `rank mini ${rankOfStage(i)}`, text: rankOfStage(i) }), h("span", { text: s }))))),
+    h("div", { class: "card" }, h("h3", { text: `後日談（${epiShown}/${epiTotal}）` }),
+      h("div", { class: "epi-list" }, Array.from({ length: epiTotal }, (_, k) => {
+        const no = k + 1;
+        const open = no <= epiShown;
+        const when = q.repeat ? `${EPILOGUE_AT[k]}回` : `${no}段目`;
+        return h("button", { type: "button", class: `epi${open ? "" : " locked"}${epiRead(q.title, no) ? " read" : ""}`, disabled: !open, onclick: () => openEpilogue(q.title, no) },
+          h("span", { class: "epi-no", text: `第${no}話` }),
+          h("span", { class: "epi-when", text: open ? (epiRead(q.title, no) ? "よんだ" : "📜 NEW") : `🔒 ${when}で ひらく` }));
+      }))),
     q.detour ? h("div", { class: "card" }, h("h3", { text: "寄り道" }), h("p", { class: "pre", style: "margin:6px 0 0", text: q.detour })) : null,
   ], [note, send]);
+}
+
+// ---------- 後日談（public/guild-epilogues.js を劇で読む） ----------
+const EPI_READ_KEY = "epilogue-read";
+function epiReadSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(EPI_READ_KEY) || "[]")); } catch { return new Set(); }
+}
+function epiRead(title, no) {
+  return epiReadSet().has(`${title}|${no}`);
+}
+function markEpiRead(title, no) {
+  const set = epiReadSet();
+  set.add(`${title}|${no}`);
+  try { localStorage.setItem(EPI_READ_KEY, JSON.stringify([...set])); } catch { /* 保存できなくても読める */ }
+}
+
+async function openEpilogue(title, no) {
+  const wait = h("div", { class: "theater-loading" }, h("span", { class: "spinner" }), h("span", { text: "舞台を じゅんび中…" }));
+  document.body.append(wait);
+  try {
+    const [{ EPILOGUES }, pet, party] = await Promise.all([import("./guild-epilogues.js"), storyPet(), loadData("party", "/api/party")]);
+    const ep = EPILOGUES[title]?.find((e) => e.no === no);
+    if (!ep) throw new Error("この後日談は まだ書かれていません");
+    const hero = party?.members?.find((m) => m.kind === "しゅじんこう")?.name || "";
+    closeSheet();
+    openTheater({
+      chapter: { title: `${title}・後日談${no}「${ep.title}」`, order: -1 },
+      blocks: ep.paras.map((text) => ({ type: "p", text })),
+      labels: ep.speakers,
+      bgs: [ep.bg],
+      pet, hero,
+      onRead: () => markEpiRead(title, no),
+    });
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    wait.remove();
+  }
+}
+
+// ほうこくで新しく開いた後日談とドロップをまとめて見せる
+function showRewards(drops, epis) {
+  if (!epis.length) return showDrops(drops);
+  openSheet("後日談が ひらいた！", [
+    ...epis.map(({ q, no }) => h("button", { type: "button", class: "epi epi-new", onclick: () => openEpilogue(q.title, no) },
+      h("span", { class: "epi-no", text: `📜 ${q.title}` }),
+      h("span", { class: "epi-when", text: `第${no}話を よむ` }))),
+    ...drops.map((it) => h("div", { class: "item-row drop" },
+      renderItem(it.slot, it.rarity, { size: 48 }),
+      h("span", { class: "item-text" },
+        h("b", { text: `${it.name} ${stars(it.rarity)}` }),
+        h("span", { class: "sub", text: `${it.crit ? "かいしんドロップ！　" : ""}「${it.quest}」から` })))),
+  ], [h("button", { type: "button", onclick: () => closeSheet() }, "あとで")]);
 }
 
 // ほうこくを送って、ギルドとLvを読み直す（依頼の画面と「＋ ほうこく」の共用）
@@ -892,10 +1010,11 @@ async function submitReport(selected, note, send) {
   try {
     const { drops = [] } = await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
     toast(`ほうこくしました：${selected.map((q) => q.title).join("、")}`);
-    if (drops.length) {
-      state.loadedAt.items = 0;
-      setTimeout(() => showDrops(drops), 1700);
-    }
+    const epis = selected
+      .map((q) => ({ q, no: epilogueCountOf(q, (q.count ?? 0) + 1) }))
+      .filter(({ q, no }) => no > epilogueCountOf(q, q.count ?? 0));
+    if (drops.length) state.loadedAt.items = 0;
+    if (drops.length || epis.length) setTimeout(() => showRewards(drops, epis), 1700);
     closeSheet();
     state.loadedAt.guild = 0;
     if (state.view === "guild") renderGuild();
@@ -976,12 +1095,12 @@ function openNewReport() {
     list.replaceChildren(...shown.map((q) => h("button", {
       type: "button", class: "card quest pick", "aria-pressed": String(selected.has(q.id)), onclick: () => toggle(q),
     },
-      h("span", { class: `rank ${q.rank || ""}`, text: q.rank || "?" }),
+      h("span", { class: `rank ${q.stageRank || q.rank || ""}`, text: q.stageRank || q.rank || "?" }),
       h("span", { class: "qbody" },
         h("span", { class: "qtitle", text: q.title }),
         h("span", { class: "qmeta" },
           q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
-          h("span", { text: `基本${q.exp ?? "—"}EXP` }),
+          h("span", { text: `${fmt(q.reward)}EXP` }),
         ),
       ),
       h("span", { class: "pick-mark", "aria-hidden": "true", text: selected.has(q.id) ? "✓" : "" }),

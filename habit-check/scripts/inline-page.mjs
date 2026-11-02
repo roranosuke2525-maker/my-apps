@@ -15,7 +15,13 @@ async function bundle(file, seen = new Set()) {
   const code = await read(`public/${file}`);
   const parts = [];
   for (const m of code.matchAll(/^import \{[^}]*\} from "\.\/([\w.-]+)";$/gm)) parts.push(await bundle(m[1], seen));
-  parts.push(code.replace(/^import \{[^}]*\} from "\.\/[\w.-]+";\n/gm, "").replace(/^export (const|function|async function) /gm, "$1 "));
+  const body = code.replace(/^import \{[^}]*\} from "\.\/[\w.-]+";\n/gm, "").replace(/^export (const|function|async function) /gm, "$1 ");
+  if (file === "app.js") parts.push(body);
+  else {
+    // 部品ごとに閉じた中で動かし、export した名前だけを外に出す（部品どうしで同じ名前の内部関数があっても ぶつからない）
+    const names = [...code.matchAll(/^export (?:const|function|async function) ([\w$]+)/gm)].map((m) => m[1]);
+    parts.push(`const { ${names.join(", ")} } = (() => {\n${body}\nreturn { ${names.join(", ")} };\n})();`);
+  }
   return parts.join("\n");
 }
 

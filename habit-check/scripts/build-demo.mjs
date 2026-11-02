@@ -55,13 +55,13 @@ const mock = `
     { id: "m3", name: "モリ（きこり）", kind: "なかま", needLv: 3, nextLv: 999, image: ${JSON.stringify(figure("#6e7b4f", "#4c5636"))} },
     { id: "m4", name: "ノア（ものしり）", kind: "なかま", needLv: 8, nextLv: 999, image: ${JSON.stringify(figure("#7a55a0", "#563c72"))} },
   ];
+  // 新しいギルド：stageRank・need・reward は src/guild-config.js の questBoard と同じ形
   const quests = [
-    { id: "q".repeat(31) + "1", title: "朝の霧を晴らせ（7時までに起きる）", category: "からだ", rank: "C", lv: 1, exp: 40, stages: ["3日つづける", "1週間つづける", "1か月つづける"], board: "★★☆　つぎ：1か月つづける", detour: "", count: 2, totalExp: 80 },
-    { id: "q".repeat(31) + "2", title: "台所の砦をととのえる", category: "家事", rank: "B", lv: 3, exp: 60, stages: ["引き出しを1つ片づける", "シンク下を片づける", "食器を半分に減らす"], board: "★☆☆　つぎ：シンク下を片づける", detour: "寄り道：調味料の期限チェック", count: 1, totalExp: 60 },
-    { id: "q".repeat(31) + "3", title: "固定費の迷宮", category: "お金", rank: "C", lv: 3, exp: 60, stages: ["サブスクを1つ確認する", "通信費を見直す", "保険を見直す"], board: "☆☆☆　つぎ：サブスクを1つ確認する", detour: "", count: 0, totalExp: 0 },
-    { id: "q".repeat(31) + "4", title: "本の塔をのぼる（月2冊）", category: "学び", rank: "A", lv: 5, exp: 100, stages: ["1冊読みきる", "2冊読みきる", "3か月つづける"], board: "★☆☆", detour: "", count: 1, totalExp: 100 },
-    { id: "q".repeat(31) + "5", title: "写真の森を手入れする", category: "趣味", rank: "D", lv: 2, exp: 20, stages: ["1か月分を選ぶ", "アルバムを1冊作る"], board: "☆☆", detour: "", count: 0, totalExp: 0 },
-    { id: "q".repeat(31) + "6", title: "伝説の大掃除", category: "家", rank: "S", lv: 99, exp: 300, stages: ["家じゅうの窓を拭く", "物置を空にする"], board: "", detour: "", count: 0, totalExp: 0 },
+    { id: "q".repeat(31) + "1", title: "換気扇の霧を晴らせ", category: "家事", rank: "D", repeat: false, requester: "宿屋のおかみ", line: "外側の油がまた光ってる。表をきゅっと磨いておくれ", stages: ["換気扇のフィルターを1枚替える", "レンジフードの外側を拭く", "換気扇を分解して洗う", "台所の壁とコンロまわりを大掃除する", "月1の台所メンテを3か月続ける"], stage: 1, stageRank: "C", need: 6, reward: 70, master: false, dropSlot: "たて", epilogues: 1, detour: "", count: 1, totalExp: 40, exp: 70 },
+    { id: "q".repeat(31) + "2", title: "ワンオペの試練", category: "育児", rank: "C", repeat: false, requester: "妻", line: "1泊。冷蔵庫に作り置きあるから。あと、寝かしつけ早めにね", stages: ["2時間ひとりで見る", "半日ワンオペを乗り切る", "1日ワンオペを乗り切る", "1泊2日のワンオペを乗り切る", "2泊3日のワンオペを乗り切る"], stage: 3, stageRank: "S", need: 30, reward: 220, master: false, dropSlot: "たて", epilogues: 3, detour: "", count: 3, totalExp: 220, exp: 220 },
+    { id: "q".repeat(31) + "3", title: "固定費のみなおし", category: "お金", rank: "C", repeat: true, requester: "コインズの商人ギルド長", line: "見えない鎖は、1本切るごとに財布が軽く……いや、重くなるのですぞ", stages: ["使っていないサブスクを1つ解約する"], stage: 0, stageRank: "C", need: 6, reward: 70, master: false, dropSlot: "よろい", epilogues: 1, detour: "", count: 2, totalExp: 140, exp: 70 },
+    { id: "q".repeat(31) + "4", title: "本を読破せよ", category: "学び", rank: "B", repeat: true, requester: "フミ", line: "最後のページまで行けたら……あの、感想、聞かせてください！", stages: ["本を1冊読みきる"], stage: 0, stageRank: "B", need: 12, reward: 110, master: false, dropSlot: "かぶと", epilogues: 2, detour: "", count: 6, totalExp: 660, exp: 110 },
+    { id: "q".repeat(31) + "5", title: "在庫リストの整備", category: "家", rank: "C", repeat: false, requester: "食料庫の小人", line: "何がいくつあって、いくつで買うか。帳面があれば、番人はもっと強くなれるでち", stages: ["補充リストを整える"], stage: 0, stageRank: "C", need: 6, reward: 70, master: true, dropSlot: "よろい", epilogues: 1, detour: "", count: 1, totalExp: 70, exp: 70 },
   ];
   const reports = [
     { id: "r1", note: "引き出しの中身を半分にした", questIds: [quests[1].id], date: addDays(today, -1) + "T11:20:00.000Z" },
