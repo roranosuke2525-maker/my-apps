@@ -576,9 +576,8 @@ test("ぼうけん：弱点・凶暴化のボーナスでHPを削り、削りき
   assert.deepEqual(data.boss.log.map((x) => [x.kind, x.damage]), [["task", 96], ["habit", 15]]);
   assert.equal(data.boss.log[0].name, "モジゴーレム");
   assert.equal(data.boss.log[0].stars, 3);
-  // 攻撃は1件ずつ key つき（習慣は習慣ごと、タスクはページごと）
-  assert.deepEqual(data.boss.log.map((x) => x.key), ["t|t1", "2026-10-20|h|◇☼ 新聞"]);
-  assert.equal(data.boss.log[1].name, "◇☼ 新聞");
+  // 攻撃は key つき（習慣は1日分、タスクはページごと）
+  assert.deepEqual(data.boss.log.map((x) => x.key), ["t|t1", "2026-10-20|h"]);
   const patch = calls.find((c) => c.method === "PATCH" && c.path === `/pages/${E1}`);
   assert.deepEqual(patch.body.properties.撃破日, { date: { start: "2026-10-21" } });
   assert.equal(data.stats.かしこさ, 1); // (10+40)/50

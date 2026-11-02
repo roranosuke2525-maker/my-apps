@@ -771,12 +771,8 @@ async function loadEvents(notion, env, from) {
     const sum = parts.reduce((a, x) => a + x.exp, 0);
     const formulaExp = propValue(page.properties?.EXP);
     const total = typeof formulaExp === "number" ? formulaExp : sum;
-    // checks：習慣ごとのEXP（ボスへの攻撃を習慣ひとつずつ見せる）
-    const d = (habitDays[date] = { exp: total, points: zeroPoints(), checks: [] });
-    if (sum > 0) for (const x of parts) {
-      addPoints(d.points, x.type, (x.exp / sum) * total);
-      d.checks.push({ name: x.name, type: x.type, exp: (x.exp / sum) * total });
-    }
+    const d = (habitDays[date] = { exp: total, points: zeroPoints() });
+    if (sum > 0) for (const x of parts) addPoints(d.points, x.type, (x.exp / sum) * total);
     else addPoints(d.points, null, total);
   }
   const tasks = [];
@@ -1005,7 +1001,7 @@ async function equipBonus(notion, env) {
 // HP を削りきった日を DB_ものがたり の「撃破日」に書くと、次の話が開く（あとでチェックを外しても戻らない）
 const STATS_FROM = "2000-01-01";
 const OPEN_MONSTERS = 100;
-const BATTLE_LOG = 40;
+const BATTLE_LOG = 20;
 
 async function getBattle(notion, env) {
   const [stories, all, petRow, open, equip, muscle] = await Promise.all([
@@ -1095,7 +1091,6 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     const byType = Object.fromEntries(TYPES.map((t) => [t, d.points[t] * m(t) * mult]));
     day(date).habit = TYPES.reduce((a, t) => a + byType[t], 0);
     day(date).habitTypes = byType;
-    day(date).checks = (d.checks || []).map((c) => ({ ...c, damage: weakened(m, c.type, c.exp) * mult }));
   }
   for (const t of tasks) {
     if (t.date < start) continue;
@@ -1118,9 +1113,8 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     damage += total;
     if (date === today) todayDamage = total;
     // 攻撃は1件ずつ（key：画面が「もう見た攻撃」を覚えるための名前）
-    if (d.checks?.length) {
-      for (const c of d.checks) if (c.damage > 0) log.push({ key: `${date}|h|${c.name}`, date, kind: "habit", name: c.name, type: c.type, damage: Math.round(c.damage), types: c.type ? { [c.type]: Math.round(c.damage) } : {} });
-    } else if (d.habit) {
+    // 習慣はその日の分をまとめて1件（型ごとに仲間が攻撃）。あとからチェックが増えたら、画面は増えた分だけ見せる
+    if (d.habit) {
       const types = Object.fromEntries(Object.entries(d.habitTypes || {}).filter(([, v]) => v > 0).map(([t, v]) => [t, Math.round(v)]));
       log.push({ key: `${date}|h`, date, kind: "habit", damage: Math.round(d.habit), types });
     }
