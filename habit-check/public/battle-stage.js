@@ -1,4 +1,5 @@
-// ぼうけん：章ボスとの戦いの舞台。前に見たときから増えたダメージを、仲間の攻撃として順に見せる。
+// ぼうけん：章ボスとの戦いの舞台。まだ見ていない攻撃（習慣1つ・タスク1件ごと）を、仲間の攻撃として順に見せる。
+// 見た攻撃は key で覚えるので、同じ攻撃は二度出ない（▶ 戦いを見る で、きょうの分は見直せる）
 //   battleStage({ boss, members, hero, pet, bg }) → 要素（画面に置くと自動で始まる）
 // ・タスク（モンスター）は種族ごとに、得意な仲間が攻撃する（コイン→ゼニ、モジ→フミ…）
 // ・習慣は型ごとに、その型の仲間が攻撃する（ちから→ムキ、かしこさ→フミ、やさしさ→ルミ、しっかり→ゼニ）
@@ -8,7 +9,8 @@ import { BOSS_IMAGES } from "./art-index.js";
 
 const IMG = (name) => `img/${name}.webp`;
 const SEEN_KEY = "battle-seen";
-const MAX_HITS = 8; // これより多いときは、古い分を「これまでの攻撃」にまとめる
+const MAX_HITS = 12;
+const SEEN_MAX = 400; // 覚えておく攻撃の数 // これより多いときは、古い分を「これまでの攻撃」にまとめる
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const HERO_KEYS = { みならい: "hero_1", かけだし: "hero_2", いちにんまえ: "hero_3", ベテラン: "hero_4", たつじん: "hero_5", でんせつ: "hero_6" };
@@ -49,11 +51,16 @@ export function attacksOf(log, members) {
   const has = (who) => who === "さとし" || who === "ルミ" || members.includes(who);
   const out = [];
   for (const x of [...log].reverse()) {
+    const key = x.key || `${x.date}|${x.kind}|${x.name || ""}`;
     if (x.kind === "muscle") {
-      out.push({ who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: { name: "鍛えた肉体の一撃", fx: "muscle" } });
+      out.push({ key, who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: { name: "鍛えた肉体の一撃", fx: "muscle" } });
     } else if (x.kind === "task") {
       const want = FAMILY_ATTACKER[x.family] || "さとし";
-      out.push({ who: has(want) ? want : "さとし", damage: x.damage, what: `${x.name}${"★".repeat(x.stars || 0)}を片づけた力`, date: x.date });
+      out.push({ key, who: has(want) ? want : "さとし", damage: x.damage, what: `${x.name}${"★".repeat(x.stars || 0)}を片づけた力`, date: x.date });
+    } else if (x.name) {
+      // 習慣ひとつ分
+      const want = TYPE_ATTACKER[x.type] || "さとし";
+      out.push({ key, who: has(want) ? want : "さとし", damage: x.damage, what: `「${String(x.name).replace(/^[^\p{L}\p{N}]+/u, "")}」の力`, date: x.date });
     } else {
       const types = x.types && Object.keys(x.types).length ? x.types : { ちから: x.damage };
       // 同じ人の分はまとめる
@@ -63,28 +70,25 @@ export function attacksOf(log, members) {
         const who = has(want) ? want : "さとし";
         byWho[who] = (byWho[who] || 0) + v;
       }
-      for (const [who, v] of Object.entries(byWho)) if (v > 0) out.push({ who, damage: v, what: "習慣の力", date: x.date });
+      for (const [who, v] of Object.entries(byWho)) if (v > 0) out.push({ key: `${key}|${who}`, who, damage: v, what: "習慣の力", date: x.date });
     }
   }
   return out;
 }
 
 export function battleStage({ boss, members = [], hero = "", pet = null, bg = "capital" }) {
-  const seen = readSeen();
-  const already = seen?.id === boss.chapterId ? Math.min(seen.damage, boss.damage) : 0;
-  let fresh = Math.max(0, boss.damage - already);
-  // 新しい分にあたる攻撃を、新しいほうから拾う
   const all = attacksOf(boss.log || [], members);
-  let pick = [];
-  let sum = 0;
-  for (let i = all.length - 1; i >= 0 && sum < fresh; i--) { pick.unshift(all[i]); sum += all[i].damage; }
-  if (sum < fresh) pick.unshift({ who: "さとし", damage: fresh - sum, what: "これまでの攻撃", combined: true });
+  const seen = readSeen();
+  const mine = seen?.id === boss.chapterId;
+  // 前の形（合計ダメージだけ覚えていた）からの切りかえ：いまある攻撃は見たことにする
+  const seenKeys = new Set(mine ? (Array.isArray(seen.keys) ? seen.keys : all.map((a) => a.key)) : []);
+  let pick = all.filter((a) => a.key && !seenKeys.has(a.key) && a.damage > 0);
   if (pick.length > MAX_HITS) {
     const rest = pick.slice(0, pick.length - MAX_HITS + 1);
     pick = [{ who: "さとし", damage: rest.reduce((a, x) => a + x.damage, 0), what: "これまでの攻撃", combined: true }, ...pick.slice(pick.length - MAX_HITS + 1)];
   }
-  // 端数の食い違いは最後の攻撃で合わせる
-  if (pick.length) pick.at(-1).damage += fresh - pick.reduce((a, x) => a + x.damage, 0);
+  const fresh = Math.min(boss.damage, pick.reduce((a, x) => a + x.damage, 0));
+  const markSeen = () => writeSeen({ id: boss.chapterId, keys: [...new Set([...seenKeys, ...all.map((a) => a.key).filter(Boolean)])].slice(-SEEN_MAX) });
 
   const startHp = Math.max(0, boss.hp - (boss.damage - fresh));
   const won = !!boss.defeatedOn;
@@ -244,7 +248,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       const total = list.reduce((a, x) => a + x.damage, 0);
       caption.textContent = list.length ? `合計 ${Math.round(total)} ダメージ！ のこり ${Math.round(end)}` : `のこりHP ${Math.round(end)}。習慣やタスクで仲間が攻撃します`;
     }
-    writeSeen({ id: boss.chapterId, damage: boss.damage });
+    markSeen();
   }
 
   skipBtn.addEventListener("click", () => { cancelled = true; speed = 8; });
@@ -261,7 +265,10 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   let tries = 0;
   const start = () => {
     if (!root.isConnected) return ++tries < 300 && requestAnimationFrame(start);
-    if (pick.length && !reduceMotion) play(pick, startHp);
+    if (pick.length && !reduceMotion) {
+      markSeen(); // 途中で画面を離れても、同じ攻撃はもう出さない
+      play(pick, startHp);
+    }
     else finishView([]);
   };
   requestAnimationFrame(start);

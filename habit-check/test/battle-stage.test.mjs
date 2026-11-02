@@ -27,3 +27,11 @@ test("からだチェックは、さとしの「鍛えた肉体の一撃」", ()
   assert.equal(a[0].who, "さとし");
   assert.equal(a[0].move.name, "鍛えた肉体の一撃");
 });
+
+test("習慣はひとつずつ、その型の仲間が攻撃する（key つき）", () => {
+  const a = attacksOf([
+    { key: "2026-11-02|h|筋トレ", date: "2026-11-02", kind: "habit", name: "筋トレ", type: "ちから", damage: 8 },
+    { key: "2026-11-02|h|読書", date: "2026-11-02", kind: "habit", name: "読書", type: "かしこさ", damage: 6 },
+  ], ["ムキ", "フミ"]);
+  assert.deepEqual(a.map((x) => [x.who, x.damage, x.what, x.key]), [["フミ", 6, "「読書」の力", "2026-11-02|h|読書"], ["ムキ", 8, "「筋トレ」の力", "2026-11-02|h|筋トレ"]]);
+});

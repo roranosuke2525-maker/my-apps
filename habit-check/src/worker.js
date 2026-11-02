@@ -771,8 +771,12 @@ async function loadEvents(notion, env, from) {
     const sum = parts.reduce((a, x) => a + x.exp, 0);
     const formulaExp = propValue(page.properties?.EXP);
     const total = typeof formulaExp === "number" ? formulaExp : sum;
-    const d = (habitDays[date] = { exp: total, points: zeroPoints() });
-    if (sum > 0) for (const x of parts) addPoints(d.points, x.type, (x.exp / sum) * total);
+    // checks：習慣ごとのEXP（ボスへの攻撃を習慣ひとつずつ見せる）
+    const d = (habitDays[date] = { exp: total, points: zeroPoints(), checks: [] });
+    if (sum > 0) for (const x of parts) {
+      addPoints(d.points, x.type, (x.exp / sum) * total);
+      d.checks.push({ name: x.name, type: x.type, exp: (x.exp / sum) * total });
+    }
     else addPoints(d.points, null, total);
   }
   const tasks = [];
@@ -813,9 +817,9 @@ function monsterOf(page, until = jstDate(new Date().toISOString())) {
 function habitParts(page) {
   const out = [];
   for (const [name, prop] of Object.entries(page.properties || {})) {
-    if (prop.type === "checkbox" && prop.checkbox) out.push({ type: habitType(name), exp: habitWeight(name) });
+    if (prop.type === "checkbox" && prop.checkbox) out.push({ name, type: habitType(name), exp: habitWeight(name) });
   }
-  if (propValue(page.properties?.[NOTE_PROPERTY])) out.push({ type: null, exp: NOTE_EXP });
+  if (propValue(page.properties?.[NOTE_PROPERTY])) out.push({ name: "ひとこと", type: null, exp: NOTE_EXP });
   return out;
 }
 
@@ -1001,7 +1005,7 @@ async function equipBonus(notion, env) {
 // HP を削りきった日を DB_ものがたり の「撃破日」に書くと、次の話が開く（あとでチェックを外しても戻らない）
 const STATS_FROM = "2000-01-01";
 const OPEN_MONSTERS = 100;
-const BATTLE_LOG = 12;
+const BATTLE_LOG = 40;
 
 async function getBattle(notion, env) {
   const [stories, all, petRow, open, equip, muscle] = await Promise.all([
@@ -1091,6 +1095,7 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     const byType = Object.fromEntries(TYPES.map((t) => [t, d.points[t] * m(t) * mult]));
     day(date).habit = TYPES.reduce((a, t) => a + byType[t], 0);
     day(date).habitTypes = byType;
+    day(date).checks = (d.checks || []).map((c) => ({ ...c, damage: weakened(m, c.type, c.exp) * mult }));
   }
   for (const t of tasks) {
     if (t.date < start) continue;
@@ -1112,12 +1117,15 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     const total = d.habit + (d.muscle || 0) + d.tasks.reduce((a, t) => a + t.damage, 0);
     damage += total;
     if (date === today) todayDamage = total;
-    if (d.habit) {
+    // 攻撃は1件ずつ（key：画面が「もう見た攻撃」を覚えるための名前）
+    if (d.checks?.length) {
+      for (const c of d.checks) if (c.damage > 0) log.push({ key: `${date}|h|${c.name}`, date, kind: "habit", name: c.name, type: c.type, damage: Math.round(c.damage), types: c.type ? { [c.type]: Math.round(c.damage) } : {} });
+    } else if (d.habit) {
       const types = Object.fromEntries(Object.entries(d.habitTypes || {}).filter(([, v]) => v > 0).map(([t, v]) => [t, Math.round(v)]));
-      log.push({ date, kind: "habit", damage: Math.round(d.habit), types });
+      log.push({ key: `${date}|h`, date, kind: "habit", damage: Math.round(d.habit), types });
     }
-    if (d.muscle) log.push({ date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
-    for (const t of d.tasks) log.push({ date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
+    if (d.muscle) log.push({ key: `${date}|m`, date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
+    for (const t of d.tasks) log.push({ key: `t|${t.id}`, date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
     if (!defeatedOn && damage >= chapter.hp) defeatedOn = date;
   }
   return {
