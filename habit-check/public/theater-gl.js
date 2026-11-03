@@ -41,11 +41,13 @@ void main() {
   p.x += u_bob * 0.012 * sin(u_t * 9.0) * body;
   // ふるえ
   p.x += u_shake * 0.008 * sin(u_t * 60.0) * up;
-  // 構え（格闘ゲームの待機）：その場で軽く弾み、体重を左右に移し、肩で息をする。大きさは変えない
-  float beat = 0.5 + 0.5 * sin(u_t * 4.4 + u_phase);
-  p.y += u_stance * 0.014 * beat * up;
-  p.x += u_stance * 0.010 * sin(u_t * 2.2 + u_phase) * body;
-  p.y -= u_stance * 0.006 * sin(u_t * 2.2 + u_phase) * body * (a_p.x - 0.5);
+  // 構え（格闘ゲームの待機）：足は地面につけたまま、ひざを曲げて体ごと沈む→戻る、をリズムよく。
+  // ひざから上は伸び縮みさせず、まとめて動かす（拡大して見えないように）
+  float knee = smoothstep(0.06, 0.34, a_p.y);
+  float beat = 0.5 - 0.5 * cos(u_t * 10.0 + u_phase);
+  p.y -= u_stance * 0.022 * beat * knee;
+  p.x += u_stance * 0.010 * beat * knee;
+  p.x += u_stance * 0.006 * sin(u_t * 5.0 + u_phase) * smoothstep(0.55, 0.9, a_p.y);
   float s = sin(u_t * 1.7 + u_phase);
   float chest = exp(-pow((p.y - 0.62) / 0.18, 2.0));
   p.x = 0.5 + (p.x - 0.5) * (1.0 + u_breath * 0.018 * s * chest);
@@ -246,8 +248,8 @@ export function createActorGL(canvas) {
       gl.uniform4f(U.u_rect, x, y, w, h);
       gl.uniform1f(U.u_t, t);
       gl.uniform1f(U.u_phase, a.phase);
-      gl.uniform1f(U.u_breath, a.boss ? 1.6 : a.float ? 1.3 : 1);
-      gl.uniform1f(U.u_sway, a.boss ? 1.4 : 1);
+      gl.uniform1f(U.u_breath, a.stance ? 0 : a.boss ? 1.6 : a.float ? 1.3 : 1);
+      gl.uniform1f(U.u_sway, a.stance ? 0 : a.boss ? 1.4 : 1);
       gl.uniform1f(U.u_flutter, a.float ? 1.6 : 1);
       gl.uniform1f(U.u_talk, a.talkAmp * (talkF ? 0.5 : 1));
       gl.uniform1f(U.u_hop, hop + Math.max(0, jump) * 0.5);

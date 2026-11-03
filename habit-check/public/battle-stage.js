@@ -81,28 +81,35 @@ export function attacksOf(log, members) {
 
 export function battleStage({ boss, members = [], hero = "", pet = null, bg = "capital" }) {
   const all = attacksOf(boss.log || [], members);
-  const seen = readSeen();
-  const mine = seen?.id === boss.chapterId;
-  // seen.hits：攻撃の key → 見たときのダメージ。前の形（合計だけ・key の一覧）からの切りかえでは、いまある攻撃を見たことにする
-  const seenHits = mine && seen.hits ? { ...seen.hits } : mine ? Object.fromEntries(all.map((a) => [a.key, a.damage])) : {};
-  // 見た攻撃が増えるのは、その日のうちに習慣が増えたときだけ見せる（そうびなどで前の日の値が少し変わっても出し直さない）
-  const today = (boss.log || [])[0]?.date;
-  let pick = all
-    .map((a) => ({ ...a, damage: a.damage - (seenHits[a.key] || 0), more: a.key in seenHits }))
-    .filter((a) => (a.more ? a.date === today && a.damage >= MIN_MORE : a.damage > 0))
-    .map((a) => (a.more ? { ...a, what: `${a.what}（つづき）` } : a));
-  if (pick.length > MAX_HITS) {
-    const rest = pick.slice(0, pick.length - MAX_HITS + 1);
-    pick = [{ who: "さとし", damage: rest.reduce((a, x) => a + x.damage, 0), what: "これまでの攻撃", combined: true }, ...pick.slice(pick.length - MAX_HITS + 1)];
+  // まだ見ていない攻撃は、舞台が画面に出たときに決める（同じ画面がすぐ作り直されても、二度は出さない）
+  let seenHits = {};
+  let pick = [];
+  let fresh = 0;
+  let startHp = Math.max(0, boss.hp - boss.damage);
+  function computePick() {
+    const seen = readSeen();
+    const mine = seen?.id === boss.chapterId;
+    // seen.hits：攻撃の key → 見たときのダメージ。前の形（合計だけ・key の一覧）からの切りかえでは、いまある攻撃を見たことにする
+    seenHits = mine && seen.hits ? { ...seen.hits } : mine ? Object.fromEntries(all.map((a) => [a.key, a.damage])) : {};
+    // 見た攻撃が増えるのは、その日のうちに習慣が増えたときだけ見せる（そうびなどで前の日の値が少し変わっても出し直さない）
+    const today = (boss.log || [])[0]?.date;
+    pick = all
+      .map((a) => ({ ...a, damage: a.damage - (seenHits[a.key] || 0), more: a.key in seenHits }))
+      .filter((a) => (a.more ? a.date === today && a.damage >= MIN_MORE : a.damage > 0))
+      .map((a) => (a.more ? { ...a, what: `${a.what}（つづき）` } : a));
+    if (pick.length > MAX_HITS) {
+      const rest = pick.slice(0, pick.length - MAX_HITS + 1);
+      pick = [{ who: "さとし", damage: rest.reduce((a, x) => a + x.damage, 0), what: "これまでの攻撃", combined: true }, ...pick.slice(pick.length - MAX_HITS + 1)];
+    }
+    fresh = Math.min(boss.damage, pick.reduce((a, x) => a + x.damage, 0));
+    startHp = Math.max(0, boss.hp - (boss.damage - fresh));
   }
-  const fresh = Math.min(boss.damage, pick.reduce((a, x) => a + x.damage, 0));
   const markSeen = () => {
     const hits = { ...seenHits };
     for (const a of all) hits[a.key] = Math.max(hits[a.key] || 0, a.damage);
     writeSeen({ id: boss.chapterId, hits: Object.fromEntries(Object.entries(hits).slice(-SEEN_MAX)) });
   };
 
-  const startHp = Math.max(0, boss.hp - (boss.damage - fresh));
   const won = !!boss.defeatedOn;
 
   // ---------- 舞台 ----------
@@ -113,16 +120,20 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     if (who === "あいぼう") return IMG(`pet/${petKey(pet.stage, pet.stage === "成長期" || pet.stage === "成体" ? pet.type : null)}`);
     return IMG(`cast2/${{ ルミ: "rumi", ムキ: "muki", フミ: "fumi", ゼニ: "zeni" }[who]}`);
   };
+  // 格闘ゲームのように 1対1：前に出ている仲間（front）だけがボスと向き合う。攻撃する人が変わると入れ替わる
   const fighters = {};
-  const partyEl = h("div", { class: "bs-party" }, party.map((who, i) => {
-    const el = h("div", { class: `bs-fighter${who === "あいぼう" ? " small" : ""}` }, h("img", { src: imgOf(who), alt: who, draggable: "false" }));
-    el.style.setProperty("--i", i);
-    el.style.setProperty("--n", party.length);
+  let front = "さとし";
+  const partyEl = h("div", { class: "bs-party" }, party.map((who) => {
+    const el = h("div", { class: `bs-fighter${who === "あいぼう" ? " small" : ""}${who === front ? " front" : " bench"}` }, h("img", { src: imgOf(who), alt: who, draggable: "false" }));
     fighters[who] = el;
     return el;
   }));
+  // 左上：仲間の顔（前に出ている人を明るく）
+  const roster = h("div", { class: "bs-roster" }, party.map((who) => h("span", { class: `bs-face${who === front ? " on" : ""}`, "data-who": who },
+    h("img", { src: imgOf(who), alt: who, draggable: "false" }))));
+  const frontName = h("b", { class: "bs-front-name", text: front });
   const bossImg = BOSS_IMAGES[boss.name] ? IMG(BOSS_IMAGES[boss.name]) : null;
-  const bossEl = h("div", { class: `bs-boss${won && !fresh ? " down" : ""}` }, bossImg ? h("img", { src: bossImg, alt: boss.name, draggable: "false" }) : null);
+  const bossEl = h("div", { class: `bs-boss${won ? " down" : ""}` }, bossImg ? h("img", { src: bossImg, alt: boss.name, draggable: "false" }) : null);
   const fx = h("div", { class: "bs-fx", "aria-hidden": "true" });
   const glCanvas = h("canvas", { class: "bs-gl", "aria-hidden": "true" });
   const pCanvas = h("canvas", { class: "bs-particles", "aria-hidden": "true" });
@@ -134,8 +145,12 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   const caption = h("p", { class: "bs-caption", "aria-live": "polite" });
   const skipBtn = h("button", { type: "button", class: "bs-skip", text: "とばす" });
   const replayBtn = h("button", { type: "button", class: "bs-replay", text: "▶ 戦いを見る" });
+  const round = Number((boss.chapter || "").match(/第(\d+)話/)?.[1] || 1);
   const stage = h("div", { class: "bs-stage" }, cam,
-    h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-name", text: boss.name }), h("span", { class: "bs-hp-bar" }, hpLag, hpFill), hpText));
+    h("div", { class: "bs-hud" },
+      h("div", { class: "bs-hud-p1" }, roster, frontName),
+      h("span", { class: "bs-vs", text: "VS" }),
+      h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-bar" }, hpLag, hpFill), h("span", { class: "bs-hp-row" }, h("span", { class: "bs-hp-name", text: boss.name }), hpText))));
   const root = h("div", { class: "bs" }, stage, h("div", { class: "bs-foot" }, caption, skipBtn, replayBtn));
 
   // 立ち絵を WebGL でなめらかに（格闘ゲームの構えのように、その場で弾む・体重を移す。大きさは変えない）。使えなければ <img> のまま
@@ -261,9 +276,24 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   let cancelled = false;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms / speed));
 
+  // 仲間の入れ替え：いまの人が左へ下がり、次の人が飛びこんでくる
+  async function tagIn(who) {
+    if (!fighters[who] || who === front) return;
+    const out = fighters[front], inn = fighters[who];
+    out.classList.remove("front"); out.classList.add("bench");
+    inn.classList.remove("bench"); inn.classList.add("front", "enter");
+    front = who;
+    for (const f of roster.children) f.classList.toggle("on", f.dataset.who === who);
+    frontName.textContent = who === "あいぼう" ? pet?.name || "あいぼう" : who;
+    glr?.walk(inn, 420);
+    await wait(380);
+    inn.classList.remove("enter");
+  }
+
   // 1回の攻撃：カットイン（技の名前）→ ため・踏み込み（残像・土ぼこり・カメラが寄る）→ 技の演出 → 命中（一瞬止まる・閃光・火花・ダメージ・カメラのゆれ）→ もどる
   async function hit(a) {
-    const f = fighters[a.who] || fighters.さとし;
+    await tagIn(fighters[a.who] ? a.who : "さとし");
+    const f = fighters[front];
     const move = a.move || MOVES[a.who] || MOVES.さとし;
     const who = a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who;
     const kind = a.combined ? "combo" : move.fx;
@@ -365,7 +395,17 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     glr?.pose(bossEl, { slump: 0 });
     setHp(from, true);
     camTo(1, 0, 0, 2);
-    await wait(500);
+    if (speed === 1) {
+      const r1 = h("div", { class: "bs-call", text: `ROUND ${round}` });
+      fx.append(r1);
+      await wait(800);
+      r1.remove();
+      const r2 = h("div", { class: "bs-call fight", text: "FIGHT!" });
+      fx.append(r2);
+      shake(0.3);
+      await wait(650);
+      r2.remove();
+    } else await wait(300);
     for (const a of list) {
       if (cancelled) break;
       await hit(a);
@@ -385,7 +425,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       const bp = posOf(bossEl);
       emit(60, { x: bp.x, y: bp.y, color: ["#ffe066", "#fff", "#ffb35c"], speed: 0.9, g: 0.6, size: 5, life: 1.4, glow: 12, drag: 1.2 });
       shake(0.8);
-      const banner = h("div", { class: "bs-win", text: "撃破！" });
+      const banner = h("div", { class: "bs-win ko", text: "K.O." });
       fx.append(banner);
       caption.textContent = `${boss.name}を たおした！`;
     } else {
@@ -409,6 +449,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   let tries = 0;
   const start = () => {
     if (!root.isConnected) return ++tries < 300 && requestAnimationFrame(start);
+    computePick();
     if (pick.length && !reduceMotion) {
       markSeen(); // 途中で画面を離れても、同じ攻撃はもう出さない
       play(pick, startHp);
