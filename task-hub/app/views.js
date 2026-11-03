@@ -112,7 +112,7 @@
   function rowHtml(t, i, { check = true } = {}) {
     const st = stageOf(t); const m = metaOf(t);
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
-    return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : `<span class="dot"></span>`}
+    return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
       <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div>`;
   }
   function stageItems(k) {

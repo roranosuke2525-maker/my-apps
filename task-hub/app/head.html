@@ -493,6 +493,26 @@ nav.tabs button svg { width: 21px; height: 21px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
 /* ===== 読む ===== */
+.bm { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--mute); flex: none; }
+.bm svg { width: 18px; height: 18px; }
+.bm.on { color: var(--s-ref); }
+.bm:active { background: var(--sunk); }
+.rhint { font-size: 11px; padding: 8px 14px 4px; }
+.rwrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.rwrap:last-child { border-bottom: 0; }
+.rwrap .rdone { position: absolute; inset: 0 0 0 auto; display: flex; align-items: center; padding: 0 18px; color: var(--bg); background: var(--ok); font-weight: 700; opacity: .55; }
+.rwrap.ready .rdone { opacity: 1; }
+.rcard { position: relative; background: var(--card); transition: transform .18s ease; touch-action: pan-y; }
+.rcard.swiping { transition: none; }
+.reader .pinner { padding-bottom: 40px; }
+.rdtitle { font-size: 22px; font-weight: 700; line-height: 1.4; margin: 8px 0 8px; }
+.rdmeta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; margin-bottom: 14px; }
+.rdmeta i { font-style: normal; padding: 1px 8px; border-radius: 8px; background: var(--sunk); color: var(--mute); }
+.rdmeta a { color: var(--accent); }
+.reader .ed { font-size: 16.5px; line-height: 1.85; }
+.rdbar { display: flex; gap: 8px; align-items: center; padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); background: var(--bg); }
+.rdbar .bm { width: 38px; height: 38px; }
+.pbtn { font-size: 12px; color: var(--mute); padding: 6px 8px; }
 .readhead { display: flex; align-items: center; gap: 10px; flex: none; }
 .readhead > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .readhead b { font-size: 15px; } .readhead .mute { font-size: 11.5px; }

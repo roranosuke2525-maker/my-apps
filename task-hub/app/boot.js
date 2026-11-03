@@ -17,7 +17,7 @@
     try { history.replaceState(null, "", `#${S.tab}`); } catch { /* なし */ }
   }
   // 画面とページ（開いていれば）を描き直す
-  function refresh() { render(); if (PG && $("#pprops") && !document.activeElement?.closest("#pprops")) { $("#pprops").innerHTML = propsHtml(); drawAiBar(); } }
+  function refresh() { const q = document.activeElement?.id === "shq" ? { v: $("#shq").value, p: $("#shq").selectionStart } : null; render(); if (q) { const i = $("#shq"); if (i) { i.focus(); i.setSelectionRange(q.p, q.p); } } if (PG && $("#pprops") && !document.activeElement?.closest("#pprops")) { $("#pprops").innerHTML = propsHtml(); drawAiBar(); } }
 
   // ================= 操作 =================
   document.addEventListener("click", (e) => {
@@ -76,10 +76,10 @@
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
     if (d.search) { openSearch(); return; }
-    if (d.readpick) { openReadPick(); return; }
-    if (d.readadd) { const t = known.get(d.readadd); if (t) { setRead(t, true); el.remove(); } return; }
-    if (d.readdone) { const t = known.get(d.readdone); if (t) setRead(t, false); return; }
-    if (d.readtoggle) { const t = known.get(d.readtoggle); if (t) setRead(t, !isRead(t)); return; }
+    if (d.readseg) { S.readSeg = d.readseg; render(); return; }
+    if (d.reader) { openReader(d.reader); return; }
+    if (d.readdone) { const t = known.get(d.readdone); if (!t) return; if (el.closest(".rdbar")) readDoneAndNext(t); else setRead(t, false); return; }
+    if (d.readtoggle) { const t = known.get(d.readtoggle); if (!t) return; const on = !isRead(t); el.classList.toggle("on", on); el.setAttribute("aria-pressed", String(on)); el.innerHTML = BM_SVG(on); setRead(t, on); return; }
     if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }

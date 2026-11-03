@@ -98,7 +98,7 @@
     return `<div class="quick" data-qt="${t.id}">
       <div class="qrow"><span class="ql">日付</span>${QUICK_DATES.map(([k, n]) => `<button type="button" class="qc${t.date === quickDate(k) ? " on" : ""}" data-qk="d:${k}">${n}<small>${md(quickDate(k))}</small></button>`).join("")}<label class="qc pick">📅 選ぶ<input type="date" data-qdate="1" value="${t.date || ""}" aria-label="日付を選ぶ"></label>${t.date ? `<button type="button" class="qc" data-qk="d:none">日付なし</button>` : ""}</div>
       <div class="qrow"><span class="ql">状態</span>${QUICK_ST.filter(([, v]) => v !== t.status).map(([k, , n]) => `<button type="button" class="qc" data-qk="s:${k}" style="--c:${STAGES[k === "doing" ? "next" : k].c}">${n}</button>`).join("")}<button type="button" class="qc ok" data-qk="s:${done ? "next" : "done"}">${done ? "↩ 戻す" : "✓ 済み"}</button></div>
-      ${t.status === ST.ref || isRead(t) ? `<div class="qrow"><span class="ql">読む</span><button type="button" class="qc${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" style="--c:var(--s-ref)">${isRead(t) ? "📖 すぐ読む（外す）" : "📖 すぐ読むに入れる"}</button></div>` : ""}
+      ${t.status === ST.ref || isRead(t) ? `<div class="qrow"><span class="ql">読む</span><button type="button" class="qc${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" style="--c:var(--s-ref)">${isRead(t) ? "📖 しおりを外す" : "📖 しおりを挟む（すぐ読む）"}</button>${t.status === ST.ref ? `<button type="button" class="qc" data-reader="${t.id}">読む画面で開く</button>` : ""}</div>` : ""}
       ${t.status === ST.ai ? "" : `<div class="qrow"><span class="ql">AI</span><button type="button" class="qc ai" data-qk="a:🔍">🔍 調べて</button><button type="button" class="qc ai" data-qk="a:💬">💬 一緒に分解</button><button type="button" class="qc ai" data-qk="a:🔬">🔬 徹底調査</button></div>`}
     </div>`;
   }

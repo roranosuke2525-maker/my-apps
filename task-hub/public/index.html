@@ -493,6 +493,26 @@ nav.tabs button svg { width: 21px; height: 21px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
 /* ===== 読む ===== */
+.bm { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--mute); flex: none; }
+.bm svg { width: 18px; height: 18px; }
+.bm.on { color: var(--s-ref); }
+.bm:active { background: var(--sunk); }
+.rhint { font-size: 11px; padding: 8px 14px 4px; }
+.rwrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.rwrap:last-child { border-bottom: 0; }
+.rwrap .rdone { position: absolute; inset: 0 0 0 auto; display: flex; align-items: center; padding: 0 18px; color: var(--bg); background: var(--ok); font-weight: 700; opacity: .55; }
+.rwrap.ready .rdone { opacity: 1; }
+.rcard { position: relative; background: var(--card); transition: transform .18s ease; touch-action: pan-y; }
+.rcard.swiping { transition: none; }
+.reader .pinner { padding-bottom: 40px; }
+.rdtitle { font-size: 22px; font-weight: 700; line-height: 1.4; margin: 8px 0 8px; }
+.rdmeta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; margin-bottom: 14px; }
+.rdmeta i { font-style: normal; padding: 1px 8px; border-radius: 8px; background: var(--sunk); color: var(--mute); }
+.rdmeta a { color: var(--accent); }
+.reader .ed { font-size: 16.5px; line-height: 1.85; }
+.rdbar { display: flex; gap: 8px; align-items: center; padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); background: var(--bg); }
+.rdbar .bm { width: 38px; height: 38px; }
+.pbtn { font-size: 12px; color: var(--mute); padding: 6px 8px; }
 .readhead { display: flex; align-items: center; gap: 10px; flex: none; }
 .readhead > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .readhead b { font-size: 15px; } .readhead .mute { font-size: 11.5px; }
@@ -667,7 +687,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
-    readList: [], readTag: "", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
+    readList: [], readTag: "", readSeg: "list", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };
@@ -1645,7 +1665,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   function rowHtml(t, i, { check = true } = {}) {
     const st = stageOf(t); const m = metaOf(t);
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
-    return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : `<span class="dot"></span>`}
+    return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
       <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div>`;
   }
   function stageItems(k) {
@@ -2085,7 +2105,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     return `<div class="quick" data-qt="${t.id}">
       <div class="qrow"><span class="ql">日付</span>${QUICK_DATES.map(([k, n]) => `<button type="button" class="qc${t.date === quickDate(k) ? " on" : ""}" data-qk="d:${k}">${n}<small>${md(quickDate(k))}</small></button>`).join("")}<label class="qc pick">📅 選ぶ<input type="date" data-qdate="1" value="${t.date || ""}" aria-label="日付を選ぶ"></label>${t.date ? `<button type="button" class="qc" data-qk="d:none">日付なし</button>` : ""}</div>
       <div class="qrow"><span class="ql">状態</span>${QUICK_ST.filter(([, v]) => v !== t.status).map(([k, , n]) => `<button type="button" class="qc" data-qk="s:${k}" style="--c:${STAGES[k === "doing" ? "next" : k].c}">${n}</button>`).join("")}<button type="button" class="qc ok" data-qk="s:${done ? "next" : "done"}">${done ? "↩ 戻す" : "✓ 済み"}</button></div>
-      ${t.status === ST.ref || isRead(t) ? `<div class="qrow"><span class="ql">読む</span><button type="button" class="qc${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" style="--c:var(--s-ref)">${isRead(t) ? "📖 すぐ読む（外す）" : "📖 すぐ読むに入れる"}</button></div>` : ""}
+      ${t.status === ST.ref || isRead(t) ? `<div class="qrow"><span class="ql">読む</span><button type="button" class="qc${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" style="--c:var(--s-ref)">${isRead(t) ? "📖 しおりを外す" : "📖 しおりを挟む（すぐ読む）"}</button>${t.status === ST.ref ? `<button type="button" class="qc" data-reader="${t.id}">読む画面で開く</button>` : ""}</div>` : ""}
       ${t.status === ST.ai ? "" : `<div class="qrow"><span class="ql">AI</span><button type="button" class="qc ai" data-qk="a:🔍">🔍 調べて</button><button type="button" class="qc ai" data-qk="a:💬">💬 一緒に分解</button><button type="button" class="qc ai" data-qk="a:🔬">🔬 徹底調査</button></div>`}
     </div>`;
   }
@@ -2505,39 +2525,68 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   }
   document.addEventListener("keydown", (e) => { if (e.target.id === "shopin" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); addItem(); } });
   document.addEventListener("change", (e) => { if (e.target.id === "shopto") S.shopTarget = e.target.value; });
-  // ================= 読む：書庫（📚 REFERENCE）のうち「📖 すぐ読む」に印を付けたものを集める =================
+  // ================= 読む：書庫（📚 REFERENCE）にしおり（📖 すぐ読む）を挟んだものを集めて、その場で読む =================
   const READ_PROP = "📖 すぐ読む";
   const isRead = (t) => t?.read === "__YES__";
-  // 印を付ける・外す（読むリストの出し入れもここで）
+  // しおりのボタン（一覧の左端。資料の行ならどこでも押せる）
+  const BM_SVG = (on) => `<svg viewBox="0 0 24 24" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>`;
+  const bmHtml = (t) => `<button type="button" class="bm${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" aria-label="${isRead(t) ? "すぐ読むから外す" : "すぐ読むに入れる"}" aria-pressed="${isRead(t)}">${BM_SVG(isRead(t))}</button>`;
+  // 行の左端：資料ならしおり、それ以外は段の色の点
+  const leadHtml = (t) => (t.status === ST.ref ? bmHtml(t) : `<span class="dot"></span>`);
+  // しおりを挟む・外す
   async function setRead(t, on, msg) {
-    const ok = await setProps(t, { [READ_PROP]: on ? "__YES__" : "__NO__" }, msg || (on ? `「${short(t.name)}」を「すぐ読む」に入れました` : `「${short(t.name)}」を読んだので外しました`));
+    const ok = await setProps(t, { [READ_PROP]: on ? "__YES__" : "__NO__" }, msg || (on ? `「${short(t.name)}」にしおりを挟みました` : `「${short(t.name)}」を読んだので外しました`));
     syncReadList(t);
-    if (PG?.task === t) $("#pprops").innerHTML = propsHtml();
+    if (PG?.task === t && $("#pprops")) $("#pprops").innerHTML = propsHtml();
     return ok;
   }
   function syncReadList(t) {
     const i = S.readList.indexOf(t);
     if (isRead(t) && i < 0) S.readList.unshift(t);
     if (!isRead(t) && i >= 0) S.readList.splice(i, 1);
-    if (S.tab === "read") render();
   }
+  const readItems = () => S.readList.filter(isRead).filter((t) => !S.readTag || t.tag === S.readTag);
+
   function renderRead(view) {
     const all = S.readList.filter(isRead);
+    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["list", "しおり", all.length], ["shelf", "書庫", S.refs.length + (S.refMore ? "+" : "")]].map(([k, n, x]) => `<button type="button" data-readseg="${k}" aria-pressed="${(S.readSeg || "list") === k}">${n}<span class="n">${x}</span></button>`).join("")}</div>`);
+    if (S.readSeg === "shelf") return renderShelf(view);
     const tags = [...new Set(all.map((t) => t.tag).filter(Boolean))];
     if (S.readTag && !tags.includes(S.readTag)) S.readTag = "";
-    const items = all.filter((t) => !S.readTag || t.tag === S.readTag);
-    view.insertAdjacentHTML("beforeend", `<div class="readhead"><div><b>すぐ読む</b><span class="mute">${all.length}件・書庫から選んだもの</span></div><button type="button" class="btn pri" data-readpick="1">＋ 書庫から選ぶ</button></div>
-      ${tags.length > 1 ? `<div class="chips"><button type="button" class="chip" data-readtag="" aria-pressed="${!S.readTag}">すべて<span class="n">${all.length}</span></button>${tags.map((g) => `<button type="button" class="chip" data-readtag="${esc(g)}" aria-pressed="${S.readTag === g}">${esc(g)}<span class="n">${all.filter((t) => t.tag === g).length}</span></button>`).join("")}</div>` : ""}
+    const items = readItems();
+    view.insertAdjacentHTML("beforeend", `${tags.length > 1 ? `<div class="chips"><button type="button" class="chip" data-readtag="" aria-pressed="${!S.readTag}">すべて<span class="n">${all.length}</span></button>${tags.map((g) => `<button type="button" class="chip" data-readtag="${esc(g)}" aria-pressed="${S.readTag === g}">${esc(g)}<span class="n">${all.filter((t) => t.tag === g).length}</span></button>`).join("")}</div>` : ""}
       <div class="card panel"><div class="scroll" id="readbox"></div></div>`);
     const box = $("#readbox");
-    if (!items.length) { box.innerHTML = `<div class="empty">${S.extraErr.read ? esc(S.extraErr.read) : "すぐ読みたいものはありません。\n「＋ 書庫から選ぶ」か、資料のページの「📖 すぐ読む」で入れられます"}</div>`; return; }
-    box.innerHTML = items.map((t) => {
-      const sm = S.bodies[t.id];
-      const pv = sm?.conc ? `⭐ ${esc(short(sm.conc, 70))}` : t.next ? esc(t.next) : "";
-      return `<article class="rcard"><button type="button" class="rmain" data-open="${t.id}"><span class="rt">${esc(t.name)}</span><span class="rs">${t.tag ? `<i>${esc(t.tag)}</i>` : ""}${t.ai === "🔍✅" ? "<i>🔍 調査結果</i>" : ""}<span class="mute">書庫 ${ageOf(t)}日</span></span>${pv ? `<span class="rp">${pv}</span>` : ""}</button>
-        <div class="ract">${t.link ? `<a class="qc" href="${esc(t.link)}" target="_blank" rel="noopener">🔗 元のページ</a>` : ""}<button type="button" class="qc ok" data-readdone="${t.id}">✓ 読んだ（外す）</button></div></article>`;
-    }).join("");
+    if (!items.length) { box.innerHTML = `<div class="empty">${S.extraErr.read ? esc(S.extraErr.read) : "しおりを挟んだ資料はありません。\n「書庫」でしおり（📖）を押すと、ここに集まります"}</div>`; return; }
+    box.innerHTML = `<div class="rhint mute">押すと読めます。左にスワイプで「読んだ」</div>` + items.map(readCard).join("");
+    attachSwipe(box);
     prefetchRead(items);
+  }
+  function readCard(t) {
+    const sm = S.bodies[t.id];
+    const pv = sm?.conc ? `⭐ ${esc(short(sm.conc, 80))}` : t.next ? esc(t.next) : "";
+    return `<div class="rwrap"><span class="rdone" aria-hidden="true">✓ 読んだ</span><article class="rcard" data-rid="${t.id}"><button type="button" class="rmain" data-reader="${t.id}"><span class="rt">${esc(t.name)}</span><span class="rs">${t.tag ? `<i>${esc(t.tag)}</i>` : ""}${t.ai === "🔍✅" ? "<i>🔍 調査結果</i>" : ""}<span class="mute">書庫 ${ageOf(t)}日</span></span>${pv ? `<span class="rp">${pv}</span>` : ""}</button></article></div>`;
+  }
+  // 左にスワイプで「読んだ」（カードが動いて、離すと外れる）
+  function attachSwipe(box) {
+    let g = null;
+    box.addEventListener("pointerdown", (e) => { const c = e.target.closest(".rcard"); if (!c || e.button > 0) return; g = { c, x: e.clientX, y: e.clientY, id: e.pointerId, dx: 0, moving: false }; });
+    box.addEventListener("pointermove", (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.moving) { if (Math.abs(dx) < 10) return; if (Math.abs(dy) > Math.abs(dx)) { g = null; return; } g.moving = true; g.c.classList.add("swiping"); g.c.setPointerCapture?.(e.pointerId); }
+      g.dx = Math.min(0, dx); g.c.style.transform = `translateX(${g.dx}px)`; g.c.parentElement.classList.toggle("ready", g.dx < -90);
+      e.preventDefault();
+    });
+    const end = (e) => {
+      if (!g || e.pointerId !== g.id) return; const G = g; g = null;
+      G.c.classList.remove("swiping");
+      if (!G.moving) return;
+      const once = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener("click", once, { capture: true, once: true }); setTimeout(() => removeEventListener("click", once, { capture: true }), 300);
+      if (G.dx < -90) { G.c.style.transform = "translateX(-110%)"; const t = known.get(G.c.dataset.rid); setTimeout(() => { if (t) setRead(t, false); render(); }, reduce ? 0 : 180); }
+      else { G.c.style.transform = ""; G.c.parentElement.classList.remove("ready"); }
+    };
+    box.addEventListener("pointerup", end); box.addEventListener("pointercancel", end);
   }
   // 結論（⭐）を先読みして一覧に出す
   let readFetching = false;
@@ -2547,15 +2596,57 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     readFetching = true;
     const worker = async () => { for (let t; (t = todo.shift());) { try { S.bodies[t.id] = summarize(t, await fetchBody(t.id)); } catch { /* 次回 */ } } };
     await Promise.all([worker(), worker(), worker()]); readFetching = false; store.set("sums", S.bodies);
-    if (S.tab === "read" && $("#page").hidden) render();
+    if (S.tab === "read" && S.readSeg !== "shelf" && $("#page").hidden) render();
   }
-  // 書庫（読み込み済みの資料）から選ぶ
-  function openReadPick(q = "") {
-    const cands = S.refs.filter((t) => !isRead(t) && (!q || norm(`${t.name} ${t.tag || ""}`).includes(norm(q))));
-    modal(`<h3>書庫から選ぶ</h3><div class="form" style="padding-bottom:0"><input id="readq" type="search" placeholder="名前・分類タグで絞る" value="${esc(q)}"></div>
-      <div class="list" style="max-height:58vh;overflow:auto;padding:6px 0" id="readpicks">${cands.map((t) => `<button type="button" class="row" data-readadd="${t.id}" style="min-height:52px"><span class="dot" style="--c:var(--s-ref)"></span><span class="main"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.tag || "")}・書庫 ${ageOf(t)}日</span></span><span class="meta">＋</span></button>`).join("") || `<div class="empty">${S.refs.length ? "当てはまる資料はありません" : "書庫（📚 REFERENCE）が読み込まれていません"}</div>`}</div>
-      <div class="form"><p class="mute" style="font-size:11.5px;margin:0">最近の書庫 ${S.refs.length}件から選べます。古いものは虫めがねで探して、資料のページの「📖 すぐ読む」で入れられます。</p><button type="button" class="btn" data-mclose="1">閉じる</button></div>`);
-    const i = $("#readq"); i.oninput = () => { const pos = i.selectionStart; openReadPick(i.value); const j = $("#readq"); j.focus(); j.setSelectionRange(pos, pos); };
+
+  // ---- 書庫：最近の資料（＋名前で探せば古いものも Notion から）。しおりを押すだけで入る ----
+  const SH = { q: "", remote: [], loading: false, seq: 0 };
+  function renderShelf(view) {
+    view.insertAdjacentHTML("beforeend", `<div class="sbox" style="flex:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="shq" type="search" placeholder="書庫を探す（古いものも）" value="${esc(SH.q)}" autocomplete="off"></div>
+      <div class="card panel"><div class="scroll" id="shelfbox"></div></div>`);
+    drawShelf();
+    const i = $("#shq"); i.oninput = () => { SH.q = i.value; drawShelf(); shelfAsk(); };
+  }
+  function drawShelf() {
+    const box = $("#shelfbox"); if (!box) return;
+    const q = norm(SH.q.trim()); const ids = new Set();
+    const local = S.refs.filter((t) => !q || norm(`${t.name} ${t.tag || ""} ${t.next || ""}`).includes(q));
+    const items = [...local, ...SH.remote.filter((t) => !local.includes(t))].filter((t) => !ids.has(t.id) && ids.add(t.id));
+    const row = (t) => `<div class="row" style="--c:var(--s-ref)">${bmHtml(t)}<button type="button" class="main" data-reader="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc([t.tag, `書庫 ${ageOf(t)}日`].filter(Boolean).join("・"))}</span></button><span class="meta mute">›</span></div>`;
+    box.innerHTML = `<div class="rhint mute">${SH.loading ? "Notion を検索中…" : q ? `${items.length}件` : `最近の書庫 ${S.refs.length}件${S.refMore ? "（古いものは名前で探せます）" : ""}`}　しおり（📖）を押すと「しおり」に入ります</div>` + (items.map(row).join("") || `<div class="empty">${SH.loading ? "" : "見つかりませんでした"}</div>`);
+  }
+  let shelfTimer;
+  function shelfAsk() {
+    clearTimeout(shelfTimer); SH.remote = [];
+    const q = SH.q.trim(); if (q.length < 2 || S.mode === "demo") { SH.loading = false; drawShelf(); return; }
+    SH.loading = true; drawShelf(); const my = ++SH.seq;
+    shelfTimer = setTimeout(async () => {
+      try {
+        const res = await call("query", { data: { mode: "rows", data_source_url: `collection://${DS.task}`, filter: { type: "group", operator: "and", filters: [statusFilter(ST.ref), { type: "property", property: "名前", propertyType: "title", operator: "string_contains", value: { type: "exact", value: q.split(/\s+/)[0] } }] }, sort: [{ property: "最終更新日時", direction: "descending" }], limit: 40 } });
+        if (my !== SH.seq) return;
+        SH.remote = (res.results || []).map((r) => known.get(idOf(r.url)) || toTask(r));
+      } catch { /* 読み込み済みだけ */ }
+      if (my !== SH.seq) return; SH.loading = false; drawShelf();
+    }, 350);
+  }
+
+  // ---- 読む画面：本文だけを大きく。下に「読んだ」と「次へ」 ----
+  function openReader(id, from = "read") {
+    const t = known.get(id); if (!t) return;
+    const P = { kind: "reader", id: t.id, url: t.url, title: t.name, task: t, from }; PG = P;
+    const el = $("#page"); el.hidden = false;
+    const list = readItems(); const i = list.indexOf(t); const next = i >= 0 ? list[i + 1] : null;
+    el.innerHTML = `<div class="pbar"><button type="button" class="iconbtn" data-close="1" aria-label="戻る">‹</button><span class="crumb">読む${i >= 0 ? `　${i + 1} / ${list.length}` : ""}</span><button type="button" class="pbtn" data-open="${t.id}">編集</button><a href="${esc(t.url)}" target="_blank" rel="noopener">Notionで開く</a></div>
+      <div class="pscroll reader" id="pscroll"><div class="pinner"><h1 class="rdtitle">${esc(t.name)}</h1><div class="rdmeta">${t.tag ? `<i>${esc(t.tag)}</i>` : ""}<span class="mute">書庫 ${ageOf(t)}日</span>${t.link ? `<a href="${esc(t.link)}" target="_blank" rel="noopener">🔗 元のページ</a>` : ""}</div><div id="edbox"><div class="mute" style="padding:8px 0">読みこみ中…</div></div></div></div>
+      <div class="rdbar">${bmHtml(t)}<button type="button" class="btn ok" data-readdone="${t.id}" style="flex:1">✓ 読んだ${next ? "・次へ" : ""}</button>${next ? `<button type="button" class="btn" data-reader="${next.id}">次へ ›</button>` : ""}</div>`;
+    fetchBody(t.id).then((raw) => { if (PG !== P) return; P.raw = raw; S.bodies[t.id] = summarize(t, raw); mountEditor($("#edbox"), raw, { pageId: t.id, readOnly: true }); $("#pscroll").scrollTop = 0; })
+      .catch((err) => { if (PG === P) $("#edbox").innerHTML = `<div class="empty">${esc(errText(err))}</div>`; });
+  }
+  // 読む画面で「読んだ」：外して、次があれば次へ、なければ一覧へ
+  async function readDoneAndNext(t) {
+    const list = readItems(); const i = list.indexOf(t); const next = i >= 0 ? list[i + 1] : null;
+    await setRead(t, false);
+    if (next) openReader(next.id); else closePage();
   }
   // ================= ニュース：DB_ニュース を話題ごとに読む =================
   // 同じ話題は1つにまとめ、扱った社の多い順。見出しを押すと記事が開く。読んだ・📚送る（次の朝 REFERENCE になる）はその場で
@@ -2957,7 +3048,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     all.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || (b.edited || "").localeCompare(a.edited || ""));
     const words = norm(q).split(/\s+/).filter(Boolean);
     const mark = (s) => { let h = esc(s); for (const w of words) h = h.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `<mark>${m}</mark>`); return h; };
-    const row = (t) => `<div class="row" style="--c:${STAGES[stageOf(t)]?.c || "var(--mute)"}"><span class="dot"></span><button type="button" class="main" data-mopen="${t.id}"><span class="nm">${mark(t.name)}</span><span class="sub">${esc(STAGES[stageOf(t)]?.name || t.status)}${t.tag ? `・${esc(t.tag)}` : ""}${t.next ? `・${mark(t.next)}` : ""}</span></button><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(metaOf(t).tx)}<i aria-hidden="true">▾</i></button></div>`;
+    const row = (t) => `<div class="row" style="--c:${STAGES[stageOf(t)]?.c || "var(--mute)"}">${leadHtml(t)}<button type="button" class="main" data-mopen="${t.id}"><span class="nm">${mark(t.name)}</span><span class="sub">${esc(STAGES[stageOf(t)]?.name || t.status)}${t.tag ? `・${esc(t.tag)}` : ""}${t.next ? `・${mark(t.next)}` : ""}</span></button><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(metaOf(t).tx)}<i aria-hidden="true">▾</i></button></div>`;
     box.innerHTML = `<div class="shead2"><span>${all.length}件</span>${SQ.loading ? `<span class="mute">Notion を検索中…</span>` : SQ.err ? `<span class="late">${esc(SQ.err)}</span>` : S.mode === "demo" ? `<span class="mute">見本（読み込み済みだけ）</span>` : `<span class="mute">済み・資料も含む</span>`}</div>${all.map(row).join("") || (SQ.loading ? "" : `<div class="empty">見つかりませんでした</div>`)}`;
   }
   // ================= 描画 =================
@@ -2979,7 +3070,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     try { history.replaceState(null, "", `#${S.tab}`); } catch { /* なし */ }
   }
   // 画面とページ（開いていれば）を描き直す
-  function refresh() { render(); if (PG && $("#pprops") && !document.activeElement?.closest("#pprops")) { $("#pprops").innerHTML = propsHtml(); drawAiBar(); } }
+  function refresh() { const q = document.activeElement?.id === "shq" ? { v: $("#shq").value, p: $("#shq").selectionStart } : null; render(); if (q) { const i = $("#shq"); if (i) { i.focus(); i.setSelectionRange(q.p, q.p); } } if (PG && $("#pprops") && !document.activeElement?.closest("#pprops")) { $("#pprops").innerHTML = propsHtml(); drawAiBar(); } }
 
   // ================= 操作 =================
   document.addEventListener("click", (e) => {
@@ -3038,10 +3129,10 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.stagestep) { stageStep(+d.stagestep); return; }
     if (d.concierge) { openConcierge(); return; }
     if (d.search) { openSearch(); return; }
-    if (d.readpick) { openReadPick(); return; }
-    if (d.readadd) { const t = known.get(d.readadd); if (t) { setRead(t, true); el.remove(); } return; }
-    if (d.readdone) { const t = known.get(d.readdone); if (t) setRead(t, false); return; }
-    if (d.readtoggle) { const t = known.get(d.readtoggle); if (t) setRead(t, !isRead(t)); return; }
+    if (d.readseg) { S.readSeg = d.readseg; render(); return; }
+    if (d.reader) { openReader(d.reader); return; }
+    if (d.readdone) { const t = known.get(d.readdone); if (!t) return; if (el.closest(".rdbar")) readDoneAndNext(t); else setRead(t, false); return; }
+    if (d.readtoggle) { const t = known.get(d.readtoggle); if (!t) return; const on = !isRead(t); el.classList.toggle("on", on); el.setAttribute("aria-pressed", String(on)); el.innerHTML = BM_SVG(on); setRead(t, on); return; }
     if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
