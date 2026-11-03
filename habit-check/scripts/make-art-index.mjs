@@ -1,6 +1,6 @@
 // 絵の一覧から、画面で使う対応表（public/art-index.js）を作る。
 //   node scripts/make-art-index.mjs
-import { writeFileSync } from "node:fs";
+import { writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { root } from "./inline-page.mjs";
 import { BOSS_FILES, FAMILY_KEYS, CAST2 } from "./art-manifest.mjs";
@@ -14,7 +14,8 @@ for (const { id } of CAST2) {
   const name = id.replace("cast2/", "");
   const key = bases.find((b) => name === b || name.startsWith(`${b}_`));
   variants[key] ||= [];
-  if (name !== key) variants[key].push(name.slice(key.length + 1));
+  // 差分は、絵が public/img/cast2 にあるものだけ（出来の悪い差分は消してよい）
+  if (name !== key && existsSync(join(root, "public", "img", "cast2", `${name}.webp`))) variants[key].push(name.slice(key.length + 1));
 }
 const out = `// scripts/make-art-index.mjs が作る。手で書き換えない。
 // 絵は public/img/<名前>.webp（scripts/gen-art.mjs → finish-art.py）
