@@ -324,14 +324,6 @@ async function createList(name) {
 }
 
 // ---------- 買い物の時刻 ----------
-// ボタン1つで決める候補（過ぎた時刻は出さない）
-function whenOptions() {
-  const today = jstDay(); const tmr = addDays(today, 1);
-  let sat = addDays(today, (6 - dow(today) + 7) % 7 || 7);
-  const opts = [["今日 17時", today, 17], ["今日 19時", today, 19], ["明日 10時", tmr, 10], ["明日 17時", tmr, 17], [`土曜 10時（${md(sat)}）`, sat, 10]];
-  return opts.map(([label, d, h]) => [label, `${d}T${String(h).padStart(2, "0")}:00:00+09:00`]).filter(([, at]) => Date.parse(at) > Date.now() + 5 * 60e3)
-    .filter(([, at], k, a) => a.findIndex(([, b]) => b === at) === k);
-}
 // ---------- 補充の品ごとの操作（補充する・リストから外す・直す・別の商品にする・ネットで買う） ----------
 function openAct(id) { S.act = { id, mode: "act", q: "", results: null, pick: null, today: true }; renderAct(); }
 function closeAct() { S.act = null; closeSheet(); }
@@ -418,16 +410,28 @@ async function addSitePrompt() {
 }
 document.addEventListener("submit", (e) => { if (e.target.id === "actsearch") { e.preventDefault(); actSearch(); } });
 
+const TIMES = Array.from({ length: 48 }, (_, k) => `${String(Math.floor(k / 2)).padStart(2, "0")}:${k % 2 ? "30" : "00"}`);
+// 日付・時刻の欄から買い物の日時を組み立てる（日付だけなら 10:00、時刻だけなら今日）
+function whenFromFields(target) {
+  const box = document.querySelector(`[data-wdate="${target}"]`)?.closest(".when"); if (!box) return;
+  const date = box.querySelector("[data-wdate]").value;
+  const time = (box.querySelector("[data-wtimefine]") || box.querySelector("[data-wtime]"))?.value || "";
+  if (!date && !time) return;
+  setWhen(target, `${date || jstDay()}T${time || "10:00"}:00+09:00`);
+}
 const remindsOf = (target) => (target === "plan" ? S.plan.before : S.reminders[target]) ?? REMIND_DEFAULT;
 const remindText = (b) => (b.length ? REMIND_CHOICES.filter(([m]) => b.includes(m)).map(([, n]) => n).join("・") : "知らせない");
 // タスクごとの「いつ買う・何分前に知らせる」の行と、開いたときの選択肢
 function whenBar(target, at, { open = S.whenFor === target, label = "" } = {}) {
   const b = remindsOf(target);
-  // 日時の欄はいつも出しておき、タップ1回で日時を入れられるようにする（候補・通知のタイミングは「🔔」で開く）
-  const head = `<div class="when"><label class="whenin">⏰ ${label}<input type="datetime-local" step="300" data-whenpick="${target}" value="${at ? at.slice(0, 16) : ""}" aria-label="買い物の日時"></label>${at ? `<small class="rem">🔔 ${esc(remindText(b))}</small>` : ""}${target === "plan" ? "" : `<button type="button" class="btn ghost sm" data-whenopen="${target}" aria-expanded="${open}">${open ? "閉じる" : "🔔 候補・通知"}</button>`}</div>`;
+  // 日付と時刻（30分刻み）の欄はいつも出す。分まで決めたいときだけ「細かく」で分単位の欄を出す。通知のタイミングは「🔔」で開く
+  const date = at ? at.slice(0, 10) : ""; const hm = at ? at.slice(11, 16) : "";
+  const fine = S.wfine === target || (hm && !TIMES.includes(hm));
+  const times = `<option value="">時刻</option>${TIMES.map((t) => `<option ${t === hm ? "selected" : ""}>${t}</option>`).join("")}`;
+  const head = `<div class="when"><span class="whenin">⏰ ${label}<input type="date" data-wdate="${target}" value="${date}" aria-label="買い物の日付">${fine ? `<input type="time" step="60" data-wtimefine="${target}" value="${hm}" aria-label="時刻（分まで）">` : `<select data-wtime="${target}" aria-label="時刻（30分刻み）">${times}</select>`}<button type="button" class="btn ghost sm" data-wfine="${target}">${fine ? "30分刻み" : "細かく"}</button></span>${target === "plan" ? "" : `<button type="button" class="btn ghost sm" data-whenopen="${target}" aria-expanded="${open}">${open ? "閉じる" : `🔔${at ? ` ${esc(remindText(b))}` : ""}`}</button>`}</div>`;
   if (!open) return head;
   const noPush = S.push && !S.push.subscribed && !S.push.unsupported;
-  return `${head}<div class="whenpanel">${whenChips(target, at)}
+  return `${head}<div class="whenpanel">${at ? `<div class="whens"><button type="button" class="chip" data-when="${target}|">時刻を外す</button></div>` : ""}
     <div class="remrow"><span class="mute">🔔 知らせる</span>${REMIND_CHOICES.map(([m, n]) => `<button type="button" class="chip${b.includes(m) ? " on" : ""}" data-remind="${target}|${m}" aria-pressed="${b.includes(m)}">${n}</button>`).join("")}</div>
     ${noPush ? `<p class="note">この端末は通知がオフです。🔔 通知タブでオンにすると届きます</p>` : ""}</div>`;
 }
@@ -439,10 +443,6 @@ async function toggleRemind(target, m) {
   S.reminders[target] = next; render();
   try { await api("PUT", `/api/lists/${target}/remind`, { before: next }); saveSnap(); toast(next.length ? `このタスクは ${remindText(next)} に知らせます` : "このタスクは知らせません"); }
   catch (err) { if (prev) S.reminders[target] = prev; else delete S.reminders[target]; render(); toast(`変えられませんでした：${err.message}`); }
-}
-function whenChips(target, cur) {
-  return `<div class="whens">${whenOptions().map(([label, at]) => `<button type="button" class="chip${cur === at ? " on" : ""}" data-when="${target}|${at}">${esc(label)}</button>`).join("")}
-    ${cur ? `<button type="button" class="chip" data-when="${target}|">時刻なし</button>` : ""}</div>`;
 }
 async function setWhen(target, at) {
   if (target === "plan") { S.plan.at = at; savePlan(); render(); return; }
@@ -1191,6 +1191,7 @@ document.addEventListener("click", (e) => {
   if (d.planclear) { S.plan.counts = {}; S.plan.extra = []; savePlan(); render(); return; }
   if (d.plancreate) { createPlan(el); return; }
   if (d.remind) { const [target, m] = d.remind.split("|"); toggleRemind(target, +m); return; }
+  if (d.wfine) { S.wfine = S.wfine === d.wfine ? "" : d.wfine; render(); return; }
   if (d.whenopen) { S.whenFor = S.whenFor === d.whenopen ? "" : d.whenopen; render(); return; }
   if (d.when !== undefined && d.when.includes("|")) { const [target, at] = d.when.split("|"); setWhen(target, at); return; }
   if (d.oopen) { S.openOther = S.openOther === d.oopen ? "" : d.oopen; render(); return; }
@@ -1263,8 +1264,8 @@ document.addEventListener("submit", (e) => {
 });
 document.addEventListener("input", (e) => { if (e.target.id === "addin") renderSuggest(); });
 document.addEventListener("change", (e) => {
-  const t = e.target.dataset?.whenpick; if (t === undefined || !e.target.value) return;
-  setWhen(t, `${e.target.value.slice(0, 16)}:00+09:00`);
+  const d = e.target.dataset || {}; const t = d.wdate ?? d.wtime ?? d.wtimefine;
+  if (t !== undefined) whenFromFields(t);
 });
 document.addEventListener("keydown", (e) => { if (e.target.id === "editin" && e.key === "Escape") { S.edit = ""; render(); } });
 $("#reload").addEventListener("click", () => load());
