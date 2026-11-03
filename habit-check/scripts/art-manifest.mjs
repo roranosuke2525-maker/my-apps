@@ -167,7 +167,18 @@ const VARIANT = {
   battle: "Change only the pose: a dynamic battle-ready combat stance, weapon raised, cape and hair swept by motion, intense focused expression.",
 };
 const HERO_FACE = "Satoshi, a shonen manga hero around 20, fluffy messy black hair with an ahoge, large earnest eyes, warm determined smile, a white towel-like scarf, a hooded green cloak and a small glowing lantern (a traveler, never wears armor)";
+// 動きの差分（口・まばたき・手ぶり）：元の絵とぴったり同じ構図で、そこだけ変える。表情の差分にも口の差分を付ける
+const MOTION = {
+  talk: "This is a frame of an animation. Reproduce the reference image EXACTLY: identical pose, expression, outfit, colors, framing and position on the canvas. The ONLY change: the mouth is open mid-sentence, as if speaking.",
+  blink: "This is a frame of an animation. Reproduce the reference image EXACTLY: identical pose, expression, outfit, colors, framing and position on the canvas. The ONLY change: both eyes are closed in a soft blink.",
+  gesture: "This is a frame of an animation. Reproduce the reference image EXACTLY: identical expression, outfit, colors, framing and position on the canvas. The ONLY change: one hand is raised to chest height in a natural, relaxed talking gesture with an open palm.",
+};
 const person = (id, desc, variants = [], { ref = null } = {}) => [
+  ...personBase(id, desc, variants, { ref }),
+  ...["talk", "blink", "gesture"].map((m) => ({ id: `cast2/${id}_${m}`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${MOTION[m]}` })),
+  ...variants.filter((v) => v !== "battle").map((v) => ({ id: `cast2/${id}_${v}_talk`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}_${v}`, prompt: `${MANGA} ${MOTION.talk}` })),
+];
+const personBase = (id, desc, variants = [], { ref = null } = {}) => [
   { id: `cast2/${id}`, kind: "sprite", ratio: "3:4", prompt: `${MANGA} ${ref ? "Same art style and same face as the reference image. " : "Same art style as the reference image. "}${desc}`, ...(ref ? { ref } : { refUrl: STYLE2_REF }) },
   ...variants.map((v) => ({ id: `cast2/${id}_${v}`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`,
     prompt: `${MANGA} The exact same character, outfit, colors and art style as the reference image. ${VARIANT[v]}` })),

@@ -6,7 +6,7 @@
 // ・習慣は型ごとに、その型の仲間が攻撃する（ちから→ムキ、かしこさ→フミ、やさしさ→ルミ、しっかり→ゼニ）
 // ・その仲間がまだパーティーにいなければ、さとしが攻撃する
 import { petKey } from "./aibou.js";
-import { BOSS_IMAGES } from "./art-index.js";
+import { BOSS_IMAGES, CAST_VARIANTS } from "./art-index.js";
 import { createActorGL } from "./theater-gl.js";
 
 const IMG = (name) => `img/${name}.webp`;
@@ -148,6 +148,9 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     for (const [who, el] of Object.entries(fighters)) {
       glr.add(el, el.firstElementChild, { float: false });
       glr.pose(el, { turn: 0.6, lean: 0.15 });
+      // まばたき（差分の絵があれば）
+      const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
+      if (key && CAST_VARIANTS[key]?.includes("blink")) glr.frames(el, { blink: IMG(`cast2/${key}_blink`) });
     }
     if (bossImg) {
       glr.add(bossEl, bossEl.firstElementChild, { boss: true });

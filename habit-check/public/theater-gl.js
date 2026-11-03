@@ -47,8 +47,8 @@ void main() {
   p.y += u_breath * 0.007 * s * up;
   p.x += u_sway * 0.013 * sin(u_t * 0.8 + u_phase) * up * up;
   float head = smoothstep(0.68, 0.95, a_p.y);
-  p.y += u_talk * 0.010 * abs(sin(u_t * 10.0)) * head;
-  p.x += u_talk * 0.004 * sin(u_t * 4.7) * head;
+  p.y += u_talk * 0.005 * abs(sin(u_t * 7.0)) * head;
+  p.x += u_talk * 0.004 * sin(u_t * 3.1) * head;
   float edge = abs(a_p.x - 0.5) * 2.0;
   p.x += u_flutter * 0.010 * sin(u_t * 2.6 + a_p.y * 7.0 + u_phase) * up * edge * edge;
   p.y += u_hop;
@@ -127,6 +127,17 @@ export function createActorGL(canvas) {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
 
   const texCache = new Map();
+  const imgCache = new Map(); // 差分の絵（口・まばたき・手ぶり）：URL → Image
+  function loadImg(url) {
+    if (!imgCache.has(url)) {
+      const im = new Image();
+      im.decoding = "async";
+      im.src = url;
+      imgCache.set(url, im);
+    }
+    return imgCache.get(url);
+  }
+  const readyImg = (im) => im && im.complete && im.naturalWidth > 0;
   function texOf(img) {
     const key = img.currentSrc || img.src;
     if (texCache.has(key)) return texCache.get(key);
@@ -174,12 +185,25 @@ export function createActorGL(canvas) {
       // 絵が変わったら（読み終わってから）、前の絵からふわっと入れ替える
       const src = img.currentSrc || img.src;
       if (ready && src !== a.src) {
-        a.prev = a.tex || texOf(img);
-        a.tex = texOf(img);
-        a.mix = a.src ? 0 : 1;
+        a.base = texOf(img);
         a.src = src;
+        a.ratio = img.naturalWidth / img.naturalHeight;
+        swapTex(a, a.base, a.tex ? 0.28 : 0);
       }
-      a.mix = Math.min(1, a.mix + dt / 0.28);
+      // 口パク・まばたき・手ぶり：差分の絵があれば、それに切り替える（短い時間でふわっと）
+      if (t > a.blinkAt + 0.13) a.blinkAt = t + 2 + Math.random() * 4;
+      const blinking = t >= a.blinkAt && t < a.blinkAt + 0.13;
+      if (t > a.mouthNext) {
+        a.mouthOpen = !a.mouthOpen;
+        a.mouthNext = t + (a.mouthOpen ? 0.08 + Math.random() * 0.1 : 0.06 + Math.random() * 0.14);
+      }
+      const fr = a.frames;
+      const talkF = readyImg(fr.talk) ? texOf(fr.talk) : null;
+      const blinkF = readyImg(fr.blink) ? texOf(fr.blink) : null;
+      const gestF = readyImg(fr.gesture) ? texOf(fr.gesture) : null;
+      const want = blinking && blinkF ? blinkF : a.talking && a.mouthOpen && talkF ? talkF : t < a.gestureUntil && gestF ? gestF : a.base;
+      if (want && want !== a.tex) swapTex(a, want, want === gestF || a.tex === gestF ? 0.22 : 0.05);
+      a.mix = Math.min(1, a.mix + dt / Math.max(0.001, a.mixDur));
       const speaking = a.el.classList.contains("speaking");
       const flashAge = t - a.flashAt;
       const fl = flashAge < 0.35 ? Math.exp(-flashAge * 9) : 0; // 命中の閃光：白く光って戻る
@@ -206,17 +230,21 @@ export function createActorGL(canvas) {
       const r = a.el.getBoundingClientRect();
       const alpha = parseFloat(getComputedStyle(a.el).opacity) || 0;
       if (alpha < 0.01) continue;
-      const x = ((r.left - box.left) / box.width) * 2 - 1;
+      // 絵の縦横比を保って、要素の四角の中に下寄せで収める（object-fit: contain; object-position: bottom と同じ）
+      let rw = r.width, rh = r.height;
+      if (a.ratio) { const sc = Math.min(r.width / a.ratio, r.height); rh = sc; rw = sc * a.ratio; }
+      const rl = r.left + (r.width - rw) / 2;
+      const x = ((rl - box.left) / box.width) * 2 - 1;
       const y = 1 - ((r.bottom - box.top) / box.height) * 2;
-      const w = (r.width / box.width) * 2;
-      const h = (r.height / box.height) * 2;
+      const w = (rw / box.width) * 2;
+      const h = (rh / box.height) * 2;
       gl.uniform4f(U.u_rect, x, y, w, h);
       gl.uniform1f(U.u_t, t);
       gl.uniform1f(U.u_phase, a.phase);
       gl.uniform1f(U.u_breath, a.boss ? 1.6 : a.float ? 1.3 : 1);
       gl.uniform1f(U.u_sway, a.boss ? 1.4 : 1);
       gl.uniform1f(U.u_flutter, a.float ? 1.6 : 1);
-      gl.uniform1f(U.u_talk, a.talkAmp);
+      gl.uniform1f(U.u_talk, a.talkAmp * (talkF ? 0.5 : 1));
       gl.uniform1f(U.u_hop, hop + Math.max(0, jump) * 0.5);
       gl.uniform1f(U.u_alpha, alpha);
       gl.uniform1f(U.u_lean, a.cur.lean);
@@ -247,14 +275,25 @@ export function createActorGL(canvas) {
   raf = requestAnimationFrame(frame);
 
   const anyone = () => [...actors.values()].some((x) => x.el.classList.contains("speaking"));
+  function swapTex(a, tex, dur) {
+    a.prev = a.tex;
+    a.tex = tex;
+    a.mix = dur > 0 ? 0 : 1;
+    a.mixDur = dur;
+  }
   const api = {
     add(el, img, { float = false, boss = false } = {}) {
       actors.set(el, {
         el, img, float, boss, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
         pose: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, cur: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, tex: null,
         idle: { lean: 0, tilt: 0 }, fidgetAt: performance.now() / 1000 + 1 + Math.random() * 3, jumpAt: -10, shakeUntil: 0, walkUntil: 0, flashAt: -10,
+        base: null, ratio: 0, mixDur: 0.28, frames: {}, blinkAt: performance.now() / 1000 + 1 + Math.random() * 3, mouthOpen: false, mouthNext: 0, gestureUntil: 0,
       });
     },
+    // 差分の絵：{ talk: url, blink: url, gesture: url }（ないものは省く）。先に読んでおく
+    frames(el, f) { const a = actors.get(el); if (a) a.frames = Object.fromEntries(Object.entries(f).filter(([, u]) => u).map(([k, u]) => [k, loadImg(u)])); },
+    preload(urls) { for (const u of urls) loadImg(u); },
+    gesture(el, ms = 1200) { const a = actors.get(el); if (a) a.gestureUntil = performance.now() / 1000 + ms / 1000; },
     // 姿勢の目標（-1〜1）：lean 前のめり(+は右へ)、tilt 首かしげ、squash つぶれ、turn 向き、slump しょんぼり
     pose(el, p) { const a = actors.get(el); if (a) Object.assign(a.pose, p); },
     // 気持ちのしぐさ：驚く（跳ねる）、怒る（ふるえる）、悲しむ（しょんぼり）、笑う（はずむ）

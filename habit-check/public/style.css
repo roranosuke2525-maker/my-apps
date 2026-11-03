@@ -820,7 +820,11 @@ body.theater-open { overflow: hidden; }
 .boss-view .boss-card { padding: 0; overflow: hidden; }
 .boss-view .boss-card > .sub:first-child { padding: 10px 14px 0; }
 .boss-view .boss-card > .bs { padding: 6px 0 0; align-self: stretch; }
-.boss-view .bs-stage { height: min(46vh, 420px); min-height: 300px; border-radius: 0; }
+.boss-view .bs-stage { height: auto; aspect-ratio: 4 / 3; max-height: 52vh; border-radius: 0; }
+.boss-view .bs-party { width: 60%; }
+.boss-view .bs-fighter { width: 44%; height: calc(86% * var(--s)); }
+.boss-view .bs-fighter.small { width: 26%; height: 36%; }
+.boss-view .bs-boss { width: 48%; height: 78%; }
 .boss-view .bs-foot { padding: 0 12px; }
 .boss-view .boss-card > .kv, .boss-view .boss-tags, .boss-view .boss-card > p, .boss-view .boss-card > .primary, .boss-view .battle-log { margin-left: 14px; margin-right: 14px; }
 .boss-view .battle-log { margin-bottom: 12px; }

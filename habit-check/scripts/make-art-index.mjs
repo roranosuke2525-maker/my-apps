@@ -9,10 +9,12 @@ import { FAMILIES, DEFAULT_FAMILY } from "../src/battle-config.js";
 const familyByColor = Object.fromEntries([...FAMILIES, DEFAULT_FAMILY].map((f) => [f.color[0], FAMILY_KEYS[f.name]]));
 // 登場人物（cast2）の差分：名前 → [差分…]
 const variants = {};
+const bases = CAST2.filter((a) => !a.ref || !a.id.startsWith(`${a.ref}_`)).map((a) => a.id.replace("cast2/", "")).sort((x, y) => y.length - x.length);
 for (const { id } of CAST2) {
-  const [key, v] = id.replace("cast2/", "").split(/_(?=[a-z]+$)/).length === 2 && !/^hero_\d$/.test(id.replace("cast2/", "")) ? id.replace("cast2/", "").split(/_(?=[a-z]+$)/) : [id.replace("cast2/", ""), null];
+  const name = id.replace("cast2/", "");
+  const key = bases.find((b) => name === b || name.startsWith(`${b}_`));
   variants[key] ||= [];
-  if (v) variants[key].push(v);
+  if (name !== key) variants[key].push(name.slice(key.length + 1));
 }
 const out = `// scripts/make-art-index.mjs が作る。手で書き換えない。
 // 絵は public/img/<名前>.webp（scripts/gen-art.mjs → finish-art.py）

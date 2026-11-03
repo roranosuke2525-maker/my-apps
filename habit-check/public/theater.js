@@ -220,9 +220,22 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
     return IMG(emo && CAST_VARIANTS[c.key]?.includes(emo) ? `cast2/${c.key}_${emo}` : `cast2/${c.key}`);
   }
 
+  // 口パク・まばたき・手ぶりの差分（あるものだけ）。表情の差分を出しているときは、その表情の口の差分
+  function framesOf(c, emo) {
+    if (!c.key) return {};
+    const has = (v) => CAST_VARIANTS[c.key]?.includes(v);
+    const face = emo && has(emo) ? `${c.key}_${emo}` : c.key;
+    return {
+      talk: has(`${face.slice(c.key.length + 1) ? `${face.slice(c.key.length + 1)}_talk` : "talk"}`) ? IMG(`cast2/${face}_talk`) : null,
+      blink: face === c.key && has("blink") ? IMG(`cast2/${c.key}_blink`) : null,
+      gesture: face === c.key && has("gesture") ? IMG(`cast2/${c.key}_gesture`) : null,
+    };
+  }
+
   function setFace(a, emo) {
     const src = imgOf(a.c, emo);
     const img = a.el.firstElementChild;
+    glr?.frames(a.el, framesOf(a.c, emo));
     if (img.getAttribute("src") === src) return;
     img.src = src;
     a.el.classList.remove("swap"); void a.el.offsetWidth; a.el.classList.add("swap");
@@ -259,6 +272,8 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
       if (glr) {
         glr.add(el, img, { float: c.float, boss: c.boss });
         glr.walk(el, c.boss ? 0 : 700); // 歩いて入ってくる
+        glr.frames(el, framesOf(c, emo));
+        if (c.key) glr.preload((CAST_VARIANTS[c.key] || []).filter((v) => /talk|blink|gesture/.test(v)).map((v) => IMG(`cast2/${c.key}_${v}`)));
       } else {
         el.classList.add("walk");
         setTimeout(() => el.classList.remove("walk"), 700);
@@ -424,6 +439,8 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
     const actor = bringOn(s.who, { emo: s.emo || (battleLeft > 0 && FIGHTERS.has(s.who) ? "battle" : null) });
     if (!actor) for (const x of onStage) x.el.classList.remove("speaking");
     gesture(actor, s.emo);
+    // 長いせりふや「！」のときは、手ぶりを交えて話す
+    if (actor && glr && (/！|!/.test(s.text) || s.text.length > 28) && Math.random() < 0.75) glr.gesture(actor.el, 900 + Math.min(1500, s.text.length * 40));
     const name = displayName(s.who);
     const bubble = h("div", { class: `th-bubble${actor ? "" : " voice"}${/！|!/.test(s.text) ? " loud" : ""}${/……|…$/.test(s.text) ? " soft" : ""}` },
       h("span", { class: "th-bubble-name", text: name }),
