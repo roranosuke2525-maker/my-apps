@@ -474,7 +474,7 @@ body.theater-open { overflow: hidden; }
 .actor.enter-right { transform: translateX(60%); }
 .actor.on { opacity: 1; transform: translateX(-50%); }
 .actor.leave { opacity: 0; transform: translateX(-50%) translateY(10%); }
-.actor.speaking { filter: none; transform: translateX(-50%) scale(1.05); z-index: 2; }
+.actor.speaking { filter: none; transform: translateX(-50%) scale(1.02); z-index: 2; }
 .actor.boss { --wmax: 74cqw; }
 .actor.float { bottom: 34%; animation: th-float 2.6s ease-in-out infinite; }
 .actor.boss.on { animation: th-boss-in 0.7s ease-out; }
