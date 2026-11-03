@@ -68,6 +68,7 @@ export default {
       if (jan && m === "GET") return json(await lookupJan(env, jan[1]));
       if (p === "/api/identify" && m === "POST") return json(await identify(env, await readJson(request)));
       if (p === "/api/search" && m === "GET") return json(await searchItems(env, url.searchParams.get("q")));
+      if (p === "/api/suggest" && m === "GET") return json(await suggestWords(url.searchParams.get("q")));
       if (p === "/api/stores" && m === "POST") return json(await addStore(env, await readJson(request)));
       if (p === "/api/stores" && m === "DELETE") return json(await removeStore(env, await readJson(request)));
       if (p === "/api/prices" && m === "GET") return json(await loadPrices(notion, env));
@@ -1026,15 +1027,65 @@ async function saveReceipt(notion, env, body) {
   return { receipt: { id: receipt, url: page.url }, prices };
 }
 
-// 名前で商品を探す（Yahoo!ショッピング。Client ID がなければ Google で探す画面へ）
+// 名前で商品を探す。Yahoo!ショッピングの Client ID があれば公式の API、なければ Amazon の検索結果のページから拾う
 async function searchItems(env, q) {
   const query = clean(q, 100, "検索の言葉");
   if (!query) throw httpError(400, "探す言葉を入れてください");
-  if (!env.YAHOO_APPID) return { configured: false };
-  const res = await fetch(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=${encodeURIComponent(env.YAHOO_APPID)}&query=${encodeURIComponent(query)}&results=8`);
-  if (!res.ok) throw httpError(502, `商品の検索に失敗しました（${res.status}）`);
-  const data = await res.json().catch(() => ({}));
-  return { configured: true, items: (data.hits || []).filter((h) => h.name).map((h) => ({ name: cleanItemName(h.name), image: h.exImage?.url || h.image?.medium || "", url: h.url || "", price: h.price ?? null, jan: h.janCode || "" })) };
+  if (env.YAHOO_APPID) {
+    const res = await fetch(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=${encodeURIComponent(env.YAHOO_APPID)}&query=${encodeURIComponent(query)}&results=10`);
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { configured: true, source: "Yahoo!ショッピング", items: (data.hits || []).filter((h) => h.name).map((h) => ({ name: cleanItemName(h.name), image: h.exImage?.url || h.image?.medium || "", url: h.url || "", price: h.price != null ? `¥${Number(h.price).toLocaleString("ja-JP")}` : "", jan: h.janCode || "" })) };
+    }
+  }
+  try {
+    return { configured: true, source: "Amazon", items: await amazonSearch(query) };
+  } catch {
+    return { configured: false };
+  }
+}
+// Amazon の検索結果のページ（1ページ目）から、商品名・画像・値段・商品ページを拾う
+export function parseAmazonSearch(html) {
+  const out = [];
+  // 結果1件ごとの開始タグ（data-asin はこのタグの中にある）から、次の結果の手前までを1件として読む
+  const starts = [...html.matchAll(/<div[^>]+data-component-type="s-search-result"[^>]*>/g)];
+  for (const [k, st] of starts.entries()) {
+    const b = html.slice(st.index, starts[k + 1]?.index ?? st.index + 60000);
+    const asin = st[0].match(/data-asin="([A-Z0-9]{10})"/)?.[1] || b.match(/\/dp\/([A-Z0-9]{10})/)?.[1];
+    const name = decodeHtml(b.match(/<h2[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/)?.[1] || "").replace(/\s+/g, " ").trim();
+    if (!asin || !name) continue;
+    const img = b.match(/class="s-image"[^>]*src="([^"]+)"/)?.[1] || b.match(/src="([^"]+)"[^>]*class="s-image"/)?.[1] || "";
+    // 値段：読み上げ用の文字 → 円の数字 → 「￥1,234」の順に探す
+    const whole = b.match(/class="a-price-whole">([\d,]+)/)?.[1];
+    const price = decodeHtml(b.match(/class="a-offscreen">([^<]+)</)?.[1] || "").trim() || (whole ? `￥${whole}` : "") || (b.match(/[￥¥]\s?[\d,]{2,}/)?.[0] || "").replace(/\s/g, "");
+    out.push({ name: cleanItemName(name), image: img.replace(/\._[^/]*_\.(jpg|png)$/, "._AC_SL500_.$1"), url: `https://www.amazon.co.jp/dp/${asin}`, price, jan: "" });
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+async function amazonSearch(query) {
+  // どこから呼んでも円・日本語で出るように通貨と言語のクッキーを付ける
+  const res = await fetch(`https://www.amazon.co.jp/s?k=${encodeURIComponent(query)}`, { headers: { "User-Agent": UA, "Accept-Language": "ja-JP,ja;q=0.9", Accept: "text/html", Cookie: "i18n-prefs=JPY; lc-acbjp=ja_JP" } });
+  if (!res.ok) throw new Error(String(res.status));
+  const items = parseAmazonSearch((await res.text()).slice(0, 2_500_000));
+  if (!items.length) throw new Error("no items");
+  return items;
+}
+// 打ちかけの言葉から検索の候補を出す（Amazon の候補。だめなら Google の候補）
+async function suggestWords(q) {
+  const query = String(q || "").trim().slice(0, 60);
+  if (!query) return { words: [] };
+  try {
+    const res = await fetch(`https://completion.amazon.co.jp/api/2017/suggestions?mid=A1VC38T7YXB528&alias=aps&prefix=${encodeURIComponent(query)}`, { headers: { "User-Agent": UA } });
+    const data = await res.json();
+    const words = (data.suggestions || []).map((x) => String(x.value || "")).filter(Boolean);
+    if (words.length) return { words: [...new Set(words)].slice(0, 8) };
+  } catch { /* 次の候補へ */ }
+  try {
+    const res = await fetch(`https://suggestqueries.google.com/complete/search?client=firefox&hl=ja&q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    return { words: (data[1] || []).slice(0, 8) };
+  } catch { return { words: [] }; }
 }
 
 // ---------- アラート ----------

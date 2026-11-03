@@ -341,11 +341,11 @@ function renderAct() {
     const pick = a.pick ? `<div class="card pickcard"><div class="sc-row">${thumb({ image: a.pick.image })}<div><b>${esc(a.pick.name)}</b><small>${esc(a.pick.link || "")}</small></div></div>
       <label class="check"><input type="checkbox" id="acttoday" ${a.today ? "checked" : ""}> 新しく買った（買った日を今日にする）</label>
       <div class="row-end"><button type="button" class="btn ghost sm" data-actpick="">選び直す</button><button type="button" class="btn pri" data-actapply="1">この商品に変える</button></div></div>` : "";
-    const res = a.results === "loading" ? `<p class="note">探しています…</p>` : Array.isArray(a.results) ? (a.results.length ? a.results.map((r, k) => `<button type="button" class="mres" data-actpick="${k}">${thumb({ image: r.image })}<span>${esc(r.name)}${r.price ? `<small>¥${esc(r.price)}</small>` : ""}</span></button>`).join("") : `<p class="note">見つかりませんでした</p>`) : "";
-    body = `${pick || `<form id="actsearch" class="maintadd"><input id="actq" value="${esc(a.q || x.name)}" placeholder="新しい商品の名前か、商品ページの URL" autocomplete="off">
-      <div class="row-end"><button type="button" class="btn ghost sm" data-actpaste="1">📋 貼り付け</button><button type="submit" class="btn pri sm">🔎 探す</button></div></form>
-      <p class="note">ネットで探す：</p><div class="glinks">${siteBtns(a.q || x.name)}</div>
-      <p class="note">買いたいページを開いたら URL をコピーして「📋 貼り付け」→ 名前と画像を拾います。</p>${res}`}
+    const res = a.results === "loading" ? `<p class="note">🔎 探しています…</p>` : Array.isArray(a.results) ? (a.results.length ? `<p class="note">${esc(a.source || "")}の候補（タップで選ぶ）</p>${a.results.map((r, k) => `<button type="button" class="mres" data-actpick="${k}">${thumb({ image: r.image })}<span>${esc(r.name)}${r.price ? `<small>${esc(r.price)}</small>` : ""}</span></button>`).join("")}` : `<p class="note">見つかりませんでした。言葉を変えてみてください</p>`) : "";
+    body = `${pick || `<form id="actsearch" class="maintadd"><input id="actq" type="search" enterkeyhint="search" value="${esc(a.q || x.name)}" placeholder="商品名で探す（URL を貼ってもよい）" autocomplete="off" data-sug="act">
+      <div class="sugs" id="sug-act"></div>
+      <div class="row-end"><button type="button" class="btn ghost sm" data-actpaste="1">📋 URL を貼る</button><button type="submit" class="btn pri sm">🔎 探す</button></div></form>${res}
+      <p class="note">ほかのサイトで見る：</p><div class="glinks">${siteBtns(a.q || x.name)}</div>`}
       <div class="row-end"><button type="button" class="btn ghost sm" data-actmode="act">戻る</button></div>`;
   } else {
     body = `<div class="actgrid">
@@ -379,8 +379,8 @@ async function actSearch() {
   S.act.results = "loading"; renderAct();
   try {
     const r = await api("GET", `/api/search?q=${encodeURIComponent(q)}`);
-    if (!r.configured) { S.act.results = null; renderAct(); toast("下のサイトのボタンで探して、商品ページの URL を貼ってください（Yahoo! の Client ID を入れるとここに候補が出ます）"); return; }
-    S.act.results = r.items.map((i) => ({ name: i.name, image: i.image, link: i.url, jan: i.jan }));
+    if (!r.configured) { S.act.results = null; renderAct(); toast("いまはアプリ内で探せませんでした。下のサイトのボタンで探して URL を貼ってください"); return; }
+    S.act.results = r.items.map((i) => ({ name: i.name, image: i.image, link: i.url, jan: i.jan, price: i.price })); S.act.source = r.source;
   } catch (err) { S.act.results = null; toast(err.message); }
   renderAct();
 }
@@ -408,7 +408,23 @@ async function addSitePrompt() {
   try { S.sites = (await api("POST", "/api/sites", { name, url })).sites; saveSnap(); toast(`「${name}」を購入サイトに登録しました`); if (S.act) renderAct(); else render(); }
   catch (err) { toast(`登録できませんでした：${err.message}`); }
 }
-document.addEventListener("submit", (e) => { if (e.target.id === "actsearch") { e.preventDefault(); actSearch(); } });
+document.addEventListener("submit", (e) => { if (e.target.id === "actsearch") { e.preventDefault(); $("#sug-act") && ($("#sug-act").innerHTML = ""); actSearch(); } });
+// 打ちかけの言葉から検索の候補を出す（0.25秒待ってから・URL のときは出さない）
+let sugTimer = 0; let sugSeq = 0;
+document.addEventListener("input", (e) => {
+  const kind = e.target.dataset?.sug; if (!kind) return;
+  clearTimeout(sugTimer);
+  const q = e.target.value.trim(); const box = $(`#sug-${kind}`); if (!box) return;
+  if (!q || /^https?:/.test(q)) { box.innerHTML = ""; return; }
+  sugTimer = setTimeout(async () => {
+    const seq = ++sugSeq;
+    try {
+      const r = await api("GET", `/api/suggest?q=${encodeURIComponent(q)}`);
+      if (seq !== sugSeq || !$(`#sug-${kind}`)) return;
+      $(`#sug-${kind}`).innerHTML = r.words.map((w) => `<button type="button" class="chip" data-sugq="${esc(w)}" data-sugfor="${kind}">🔎 ${esc(w)}</button>`).join("");
+    } catch { /* 候補が出なくても検索はできる */ }
+  }, 250);
+});
 
 const TIMES = Array.from({ length: 48 }, (_, k) => `${String(Math.floor(k / 2)).padStart(2, "0")}:${k % 2 ? "30" : "00"}`);
 // 日付・時刻の欄から買い物の日時を組み立てる（日付だけなら 10:00、時刻だけなら今日）
@@ -1046,9 +1062,9 @@ function renderMaint() {
     <td>${sel("cat", x.cat, CATS)}</td>
     <td>${storeSelect("store", x.store).replace('name="store"', 'data-mf="store"')}</td>
     <td><button type="button" class="more" data-mdel="${x.id}" aria-label="「${esc(x.name)}」を消す">🗑</button></td></tr>`).join("");
-  const res = S.msearch ? (S.msearch.loading ? `<p class="note">探しています…</p>` : S.msearch.items.length ? S.msearch.items.map((r, k) => `<div class="mres">${thumb({ image: r.image })}<span>${esc(r.name)}${r.price ? `<small>${esc(`¥${r.price}`)}</small>` : ""}</span><button type="button" class="btn sm" data-madd="${k}">＋ 追加</button></div>`).join("") : `<p class="note">見つかりませんでした</p>`) : "";
+  const res = S.msearch ? (S.msearch.loading ? `<p class="note">🔎 探しています…</p>` : S.msearch.items.length ? `<p class="note">${esc(S.msearch.source || "")}の候補</p>${S.msearch.items.map((r, k) => `<div class="mres">${thumb({ image: r.image })}<span>${esc(r.name)}${r.price ? `<small>${esc(r.price)}</small>` : ""}</span><button type="button" class="btn sm" data-madd="${k}">＋ 追加</button></div>`).join("")}` : `<p class="note">見つかりませんでした</p>`) : "";
   return `<div class="ltools"><b>🛠 補充リストの整備</b><span class="mute">${S.stock.length}品</span><button type="button" class="btn pri sm" data-maint="0">おわる</button></div>
-    <form class="card maintadd" id="maintadd"><input id="maintin" maxlength="300" placeholder="名前か、商品ページの URL を貼る" autocomplete="off" aria-label="追加する品"><div class="row-end"><button type="button" class="btn sm" data-scan="add">📷 写真・バーコード</button><button type="button" class="btn sm" data-msearch="1">🔎 Web で探す</button><button type="submit" class="btn pri sm">追加</button></div>${res}</form>
+    <form class="card maintadd" id="maintadd"><input id="maintin" maxlength="300" placeholder="商品名で探す・名前だけ入れる・URL を貼る" autocomplete="off" aria-label="追加する品" data-sug="maint"><div class="sugs" id="sug-maint"></div><div class="row-end"><button type="button" class="btn sm" data-scan="add">📷 写真・バーコード</button><button type="button" class="btn pri sm" data-msearch="1">🔎 探す</button><button type="submit" class="btn sm">名前だけで追加</button></div>${res}</form>
     <div class="card mwrap"><table class="mtable"><thead><tr><th>名前</th><th>使う数</th><th>あたり</th><th>1個の量</th><th>カテゴリ</th><th>店</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="note pad">変えたらすぐ Notion に保存します。黄色の行は使う数か1個の量が空で、切れる日が出せない品です。例：1日1粒で30粒入り → 使う数 1・毎日・量 30</p>`;
 }
@@ -1088,8 +1104,8 @@ async function maintSearch(btn) {
   S.msearch = { loading: true, items: [] }; render(); $("#maintin").value = q;
   try {
     const r = await api("GET", `/api/search?q=${encodeURIComponent(q)}`);
-    if (!r.configured) { S.msearch = null; render(); $("#maintin").value = q; window.open(googleUrl(q), "_blank", "noopener"); toast("Google で探しています。商品ページの URL を貼ると画像つきで足せます"); return; }
-    S.msearch = { loading: false, items: r.items };
+    if (!r.configured) { S.msearch = null; render(); $("#maintin").value = q; toast("いまはアプリ内で探せませんでした。商品ページの URL を貼ると画像つきで足せます"); return; }
+    S.msearch = { loading: false, items: r.items, source: r.source };
   } catch (err) { S.msearch = null; toast(err.message); }
   render(); $("#maintin").value = q;
 }
@@ -1220,7 +1236,18 @@ document.addEventListener("click", (e) => {
   if (d.act) { openAct(d.act); return; }
   if (d.actclose) { closeAct(); return; }
   if (d.actdo) { actDo(d.actdo, el); return; }
-  if (d.actmode) { S.act.mode = d.actmode; S.act.pick = null; S.act.results = null; renderAct(); return; }
+  if (d.actmode) {
+    S.act.mode = d.actmode; S.act.pick = null; S.act.results = null; renderAct();
+    // 開いたらすぐ今の品名で探して候補を並べる
+    if (d.actmode === "change") actSearch();
+    return;
+  }
+  if (d.sugq !== undefined) {
+    const i = $(d.sugfor === "act" ? "#actq" : "#maintin"); if (!i) return;
+    i.value = d.sugq; $(`#sug-${d.sugfor}`).innerHTML = "";
+    if (d.sugfor === "act") actSearch(); else maintSearch();
+    return;
+  }
   if (d.actpick !== undefined) { if (d.actpick === "") S.act.pick = null; else S.act.pick = S.act.results[+d.actpick]; renderAct(); return; }
   if (d.actapply) { actApply(el); return; }
   if (d.actpaste) { navigator.clipboard?.readText?.().then((t) => { $("#actq").value = t.trim(); actSearch(); }).catch(() => toast("貼り付けできませんでした。欄を長押しして貼ってください")); return; }

@@ -1,7 +1,7 @@
 // Worker の動作確認。Notion API と通知サービスは偽物に差し替える（値はすべて作りもの）。 npm test
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import worker, { alertOf, runAlerts, pickMeta, cleanItemName, siteTemplate } from "../src/worker.js";
+import worker, { alertOf, runAlerts, pickMeta, cleanItemName, siteTemplate, parseAmazonSearch } from "../src/worker.js";
 import { b64u } from "../src/webpush.js";
 
 const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
@@ -132,6 +132,8 @@ beforeEach(() => {
       calls.push({ method: "GET", path: "yahoo", url: u.href });
       return new Response(JSON.stringify(u.searchParams.get("jan_code") === "4901234567894" ? { hits: [{ name: "【送料無料】見本洗剤 つめかえ用 400ml", exImage: { url: "https://item-shopping.c.yimg.jp/x.jpg" }, url: "https://store.shopping.yahoo.co.jp/x" }] } : { hits: [] }), { status: 200 });
     }
+    if (u.hostname === "www.amazon.co.jp" && u.pathname === "/s") return new Response(`<div data-asin="B000000001" data-component-type="s-search-result"><img class="s-image" src="https://m.media-amazon.com/images/I/abc._AC_SX148_.jpg"><h2><a><span>見本 洗剤 詰め替え 400ml</span></a></h2><span class="a-price"><span class="a-offscreen">￥398</span></span></div>`, { status: 200 });
+    if (u.hostname === "completion.amazon.co.jp") return new Response(JSON.stringify({ suggestions: [{ value: "洗剤 詰め替え" }, { value: "洗剤 ジェルボール" }] }), { status: 200 });
     if (u.hostname === "shop.example.jp") return new Response(`<html><head><title>見本 | 店</title><meta property="og:image" content="/img/p.jpg"></head></html>`, { status: 200 });
     if (u.hostname.endsWith("push.apple.com")) { pushes.push({ url: u.href, headers: init.headers, body }); return new Response("", { status: 201 }); }
     const path = u.pathname.replace(/^\/v1/, "");
@@ -553,9 +555,14 @@ test("レシート：Claude で読む（キーがなければ読まない）・�
 });
 
 test("名前で商品を探す（Yahoo!ショッピング。Client ID がなければ使わない）", async () => {
-  assert.deepEqual((await api("GET", "/api/search?q=洗剤")).data, { configured: false });
+  // Client ID がなければ Amazon の検索結果から拾う
+  const am = (await api("GET", "/api/search?q=洗剤")).data;
+  assert.equal(am.source, "Amazon");
+  assert.deepEqual(am.items[0], { name: "見本 洗剤 詰め替え 400ml", image: "https://m.media-amazon.com/images/I/abc._AC_SL500_.jpg", url: "https://www.amazon.co.jp/dp/B000000001", price: "￥398", jan: "" });
   env.YAHOO_APPID = "fake";
-  assert.deepEqual((await api("GET", "/api/search?q=洗剤")).data.items[0], { name: "見本 洗剤 詰替", image: "https://img.test/a.jpg", url: "https://shop.test/a", price: 398, jan: "4901234567894" });
+  assert.deepEqual((await api("GET", "/api/search?q=洗剤")).data.items[0], { name: "見本 洗剤 詰替", image: "https://img.test/a.jpg", url: "https://shop.test/a", price: "¥398", jan: "4901234567894" });
+  assert.deepEqual((await api("GET", "/api/suggest?q=洗剤")).data, { words: ["洗剤 詰め替え", "洗剤 ジェルボール"] });
+  assert.deepEqual(parseAmazonSearch("<html>no results</html>"), []);
   assert.equal((await api("GET", "/api/search?q=")).status, 400);
 });
 
