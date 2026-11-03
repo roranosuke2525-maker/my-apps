@@ -1,8 +1,11 @@
 // 劇の立ち絵を WebGL の網目（メッシュ）で描いて、なめらかに動かす（Live2D 風）。
 // 息づかい・体のゆれ・髪やマントのはためき・話すときのうなずき・表情の切り替え（ふわっと入れ替え）・跳ねる動き。
+// しぐさ：前のめり（lean）・首かしげ（tilt）・つぶれ伸び（squash）・向き（turn）・歩く（walk）・ふるえ（shake）。
+// 目標の姿勢へばねのように追いつくので、動きがつながる。
 // 立ち絵の置き場所と大きさは、これまでどおり .actor の要素（CSS）が決める。ここはその四角の中を描くだけ。
 //   const gl = createActorGL(canvas)  … 使えなければ null（そのときは <img> のまま）。立ち絵の位置は canvas からの相対で測る
 //   gl.add(el, img, { float, boss }) / gl.remove(el) / gl.talk(el, on) / gl.hop(el) / gl.destroy()
+//   gl.pose(el, { lean, tilt, turn, slump }) / gl.emote(el, "surprised"|"angry"|"sad"|"smile") / gl.walk(el, ms)
 // canvas が画面から外されると、自分で片づける（あいぼう・ボスの大きな絵にも使う）
 
 const GRID_X = 18;
@@ -12,10 +15,32 @@ const VS = `
 attribute vec2 a_p;
 uniform vec4 u_rect;
 uniform float u_t, u_phase, u_breath, u_sway, u_talk, u_hop, u_flutter;
+uniform float u_lean, u_tilt, u_squash, u_turn, u_bob, u_shake, u_slump;
 varying vec2 v_uv;
 void main() {
   vec2 p = a_p;
   float up = smoothstep(0.12, 1.0, p.y);
+  // 向き：胴を少し細くして、横を向いたように見せる
+  p.x = 0.5 + (p.x - 0.5) * (1.0 - 0.10 * abs(u_turn));
+  // 前のめり・のけぞり：上にいくほど横へ。しょんぼり：肩から上を少し下げて前へ
+  float body = up * up;
+  p.x += u_lean * 0.07 * body;
+  p.y -= u_slump * 0.03 * body;
+  p.x += u_slump * 0.02 * body;
+  // 首かしげ：首から上を回す
+  float headW = smoothstep(0.66, 0.90, a_p.y);
+  vec2 piv = vec2(0.5, 0.70);
+  float ang = u_tilt * 0.14 * headW;
+  vec2 d = p - piv;
+  p = piv + vec2(d.x * cos(ang) - d.y * sin(ang), d.x * sin(ang) + d.y * cos(ang)) * headW + d * (1.0 - headW);
+  // つぶれ・伸び（足元を軸に）
+  p.y *= 1.0 + u_squash;
+  p.x = 0.5 + (p.x - 0.5) * (1.0 - u_squash * 0.6);
+  // 歩く：上下に弾み、左右の足が交互に出るように少し傾く
+  p.y += u_bob * 0.012 * abs(sin(u_t * 9.0)) * up;
+  p.x += u_bob * 0.012 * sin(u_t * 9.0) * body;
+  // ふるえ
+  p.x += u_shake * 0.008 * sin(u_t * 60.0) * up;
   float s = sin(u_t * 1.7 + u_phase);
   float chest = exp(-pow((p.y - 0.62) / 0.18, 2.0));
   p.x = 0.5 + (p.x - 0.5) * (1.0 + u_breath * 0.018 * s * chest);
@@ -70,7 +95,8 @@ export function createActorGL(canvas) {
   }
   gl.useProgram(prog);
   const U = {};
-  for (const n of ["u_rect", "u_t", "u_phase", "u_breath", "u_sway", "u_talk", "u_hop", "u_flutter", "u_a", "u_b", "u_mix", "u_bright", "u_sat", "u_alpha", "u_shadow"]) U[n] = gl.getUniformLocation(prog, n);
+  for (const n of ["u_rect", "u_t", "u_phase", "u_breath", "u_sway", "u_talk", "u_hop", "u_flutter", "u_a", "u_b", "u_mix", "u_bright", "u_sat", "u_alpha", "u_shadow",
+    "u_lean", "u_tilt", "u_squash", "u_turn", "u_bob", "u_shake", "u_slump"]) U[n] = gl.getUniformLocation(prog, n);
 
   // 網目：(GRID_X+1)×(GRID_Y+1) の点と三角形
   const pts = [];
@@ -144,22 +170,39 @@ export function createActorGL(canvas) {
     for (const a of list) {
       const img = a.img;
       const ready = img.complete && img.naturalWidth > 0;
-      if (!ready && !a.cur) continue;
+      if (!ready && !a.tex) continue;
       // 絵が変わったら（読み終わってから）、前の絵からふわっと入れ替える
       const src = img.currentSrc || img.src;
       if (ready && src !== a.src) {
-        a.prev = a.cur || texOf(img);
-        a.cur = texOf(img);
+        a.prev = a.tex || texOf(img);
+        a.tex = texOf(img);
         a.mix = a.src ? 0 : 1;
         a.src = src;
       }
       a.mix = Math.min(1, a.mix + dt / 0.28);
       const speaking = a.el.classList.contains("speaking");
-      a.bright = ease(a.bright, speaking || !a.anyone() ? 1 : 0.74, dt, 6);
-      a.sat = ease(a.sat, speaking || !a.anyone() ? 1 : 0.85, dt, 6);
+      const flashAge = t - a.flashAt;
+      const fl = flashAge < 0.35 ? Math.exp(-flashAge * 9) : 0; // 命中の閃光：白く光って戻る
+      a.bright = ease(a.bright, speaking || !a.anyone() ? 1 : 0.74, dt, 6) + fl * 2.2;
+      a.sat = ease(a.sat, speaking || !a.anyone() ? 1 : 0.85, dt, 6) * (1 - fl);
       a.talkAmp = ease(a.talkAmp, a.talking ? 1 : 0, dt, a.talking ? 12 : 5);
       const hopAge = t - a.hopAt;
       const hop = hopAge < 1.2 ? 0.05 * Math.exp(-hopAge * 4) * Math.abs(Math.sin(hopAge * 11)) : 0;
+      // しぐさ：目標へ追いつく（ばね）。ときどき体重をかけ直す・首をかしげる（じっとしていても生きて見える）
+      if (t > a.fidgetAt) {
+        a.fidgetAt = t + 2.5 + Math.random() * 4;
+        a.idle = { lean: (Math.random() - 0.5) * 0.5, tilt: (Math.random() - 0.5) * 0.5 };
+      }
+      const pose = a.pose;
+      const goal = {
+        lean: pose.lean + a.idle.lean * 0.6, tilt: pose.tilt + a.idle.tilt, squash: pose.squash, turn: pose.turn, slump: pose.slump,
+      };
+      for (const k of Object.keys(goal)) a.cur[k] = ease(a.cur[k], goal[k], dt, k === "squash" ? 16 : 5);
+      // 驚き：ぴょんとつぶれて伸びる。怒り：ふるえ。歩き：入ってくるあいだだけ
+      const jumpAge = t - a.jumpAt;
+      const jump = jumpAge < 0.6 ? Math.sin(jumpAge * 10.5) * 0.09 * Math.exp(-jumpAge * 3) : 0;
+      const shake = t < a.shakeUntil ? 1 : 0;
+      const bob = t < a.walkUntil ? 1 : 0;
       const r = a.el.getBoundingClientRect();
       const alpha = parseFloat(getComputedStyle(a.el).opacity) || 0;
       if (alpha < 0.01) continue;
@@ -174,8 +217,15 @@ export function createActorGL(canvas) {
       gl.uniform1f(U.u_sway, a.boss ? 1.4 : 1);
       gl.uniform1f(U.u_flutter, a.float ? 1.6 : 1);
       gl.uniform1f(U.u_talk, a.talkAmp);
-      gl.uniform1f(U.u_hop, hop);
+      gl.uniform1f(U.u_hop, hop + Math.max(0, jump) * 0.5);
       gl.uniform1f(U.u_alpha, alpha);
+      gl.uniform1f(U.u_lean, a.cur.lean);
+      gl.uniform1f(U.u_tilt, a.cur.tilt);
+      gl.uniform1f(U.u_squash, a.cur.squash + jump);
+      gl.uniform1f(U.u_turn, a.cur.turn);
+      gl.uniform1f(U.u_slump, a.cur.slump);
+      gl.uniform1f(U.u_bob, bob);
+      gl.uniform1f(U.u_shake, shake);
       // 足元の影（浮いている人には描かない）
       if (!a.float) {
         gl.uniform1f(U.u_shadow, 1);
@@ -188,9 +238,9 @@ export function createActorGL(canvas) {
       gl.uniform1f(U.u_bright, a.bright);
       gl.uniform1f(U.u_sat, a.sat);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, a.prev || a.cur || empty);
+      gl.bindTexture(gl.TEXTURE_2D, a.prev || a.tex || empty);
       gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, a.cur || empty);
+      gl.bindTexture(gl.TEXTURE_2D, a.tex || empty);
       gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
     }
   }
@@ -199,8 +249,27 @@ export function createActorGL(canvas) {
   const anyone = () => [...actors.values()].some((x) => x.el.classList.contains("speaking"));
   const api = {
     add(el, img, { float = false, boss = false } = {}) {
-      actors.set(el, { el, img, float, boss, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", cur: null, prev: null, anyone });
+      actors.set(el, {
+        el, img, float, boss, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
+        pose: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, cur: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, tex: null,
+        idle: { lean: 0, tilt: 0 }, fidgetAt: performance.now() / 1000 + 1 + Math.random() * 3, jumpAt: -10, shakeUntil: 0, walkUntil: 0, flashAt: -10,
+      });
     },
+    // 姿勢の目標（-1〜1）：lean 前のめり(+は右へ)、tilt 首かしげ、squash つぶれ、turn 向き、slump しょんぼり
+    pose(el, p) { const a = actors.get(el); if (a) Object.assign(a.pose, p); },
+    // 気持ちのしぐさ：驚く（跳ねる）、怒る（ふるえる）、悲しむ（しょんぼり）、笑う（はずむ）
+    emote(el, emo) {
+      const a = actors.get(el);
+      if (!a) return;
+      const now = performance.now() / 1000;
+      if (emo === "surprised") { a.jumpAt = now; a.pose.slump = 0; }
+      else if (emo === "angry") { a.shakeUntil = now + 0.5; a.pose.slump = 0; }
+      else if (emo === "sad") a.pose.slump = 1;
+      else if (emo === "smile") { a.hopAt = now; a.pose.slump = 0; }
+      else a.pose.slump = 0;
+    },
+    flash(el) { const a = actors.get(el); if (a) a.flashAt = performance.now() / 1000; },
+    walk(el, ms = 600) { const a = actors.get(el); if (a) a.walkUntil = performance.now() / 1000 + ms / 1000; },
     remove(el) { actors.delete(el); },
     talk(el, on) { const a = actors.get(el); if (a) a.talking = on; },
     talkAll(on) { for (const a of actors.values()) a.talking = on && a.el.classList.contains("speaking"); },

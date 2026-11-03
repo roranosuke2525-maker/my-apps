@@ -18,7 +18,7 @@ const SLOTS = [
 ];
 const WEEK = "月火水木金土日";
 const CATEGORY_COLORS = { 家事: "orange", 育児: "pink", 家: "brown", お金: "green", からだ: "red", 学び: "blue", 趣味: "purple" };
-const VIEW_TITLES = { habit: "習慣チェック", aibou: "あいぼう", battle: "ぼうけん", body: "ぼうけん", guild: "ギルド", story: "ものがたり", me: "きろく" };
+const VIEW_TITLES = { habit: "習慣チェック", aibou: "あいぼう", battle: "ぼうけん", boss: "バトル", body: "ぼうけん", guild: "ギルド", story: "ものがたり", me: "きろく" };
 const GRAPH_DAYS = 30;
 const BAR_DAYS = 14;
 
@@ -197,14 +197,14 @@ function show() {
   $("login").hidden = true;
   $("bottom-nav").hidden = false;
   const viewId = state.view === "habit" ? state.tab : state.view;
-  for (const id of ["day", "week", "cal", "graph", "aibou", "battle", "body", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
+  for (const id of ["day", "week", "cal", "graph", "aibou", "battle", "boss", "body", "guild", "story", "me"]) $(`view-${id}`).hidden = id !== viewId;
   const navView = state.view === "body" ? "battle" : state.view;
   for (const b of document.querySelectorAll("#bottom-nav button")) {
     b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false");
   }
   for (const b of document.querySelectorAll("#habit-tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
   renderHeader();
-  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, aibou: renderAibou, battle: renderBattle, body: renderBody, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
+  ({ day: renderDay, week: renderWeek, cal: renderCal, graph: renderGraph, aibou: renderAibou, battle: renderBattle, boss: renderBoss, body: renderBody, guild: renderGuild, story: renderStory, me: renderMe })[viewId]();
 }
 
 function renderHeader() {
@@ -661,7 +661,7 @@ async function renderBattle() {
   // ボスを倒したら、ものがたりの一覧も読み直す（次の話が開く）
   if (data.boss?.defeatedOn) state.loadedAt.story = 0;
   swap(body, [h("div", { class: "scroll fill stack" },
-    bossCard(data),
+    bossEntry(data),
     bodyEntry(),
     equipCard(data),
     h("div", { class: "card stack", style: "gap:8px" },
@@ -672,6 +672,29 @@ async function renderBattle() {
         : h("p", { class: "sub", text: "モンスターはいません" }),
     ),
   )], "battle");
+}
+
+// ---------- バトル（章ボスだけの画面） ----------
+async function renderBoss() {
+  const body = $("boss-body");
+  if (!state.data.battle) body.replaceChildren(loadingEl());
+  const [data] = await Promise.all([loadData("battle", "/api/battle"), loadData("party", "/api/party")]);
+  if (state.view !== "boss") return;
+  if (!data) return body.replaceChildren(h("p", { class: "err", text: state.errors.battle || "読み込めませんでした" }));
+  if (data.boss?.defeatedOn) state.loadedAt.story = 0;
+  swap(body, [h("div", { class: "scroll fill stack boss-view" }, bossCard(data))], "boss");
+}
+
+// ぼうけんタブから、バトルの画面へ
+function bossEntry(data) {
+  const b = data.boss;
+  const left = b ? Math.max(0, b.hp - b.damage) : 0;
+  return h("button", { type: "button", class: "card body-entry boss-entry", onclick: () => { state.view = "boss"; show(); } },
+    h("span", { class: "body-entry-icon", text: b ? (b.defeatedOn ? "🏆" : "⚔️") : "💤" }),
+    h("span", { class: "body-entry-text" },
+      h("b", { text: b ? `${b.name}との たたかい` : data.cleared ? "すべてのボスを たおした！" : "いまは しずか……" }),
+      h("span", { class: "sub", text: b ? (b.defeatedOn ? "たおした！ つぎの話が 開いています" : `のこりHP ${fmt(left)} / ${fmt(b.hp)}`) : "ものがたりを読むと、ボスが現れます" })),
+    h("span", { class: "sub", text: "›" }));
 }
 
 function bossCard(data) {
@@ -762,6 +785,7 @@ function openSlot(slot) {
       $("sheet-body").replaceChildren(...render());
       toast(on ? `${it.name} を そうびした` : `${it.name} を はずした`);
       if (state.view === "battle") renderBattle();
+      if (state.view === "boss") renderBoss();
     } catch (err) {
       toast(err.message, true);
       btn.disabled = false;
@@ -1171,7 +1195,7 @@ async function markRead(c, read) {
     state.loadedAt.battle = 0;
     // エピソード2 の話を読んだら、ボス戦へ
     if (chapter.read && chapter.kind === "エピソード2" && chapter.boss && !chapter.defeated) {
-      state.view = "battle";
+      state.view = "boss";
       show();
       return;
     }
@@ -1668,7 +1692,7 @@ function showBodyResult(res) {
     r.comment ? h("p", { class: "body-comment", text: r.comment }) : null,
     h("p", { class: "sub", text: [`自信度 ${r.confidence}`, r.match && `前回と条件の一致 ${r.match}${r.match === "低" ? "（改善ボーナスなし）" : ""}`].filter(Boolean).join("・") }),
   ], [
-    h("button", { type: "button", class: "primary", onclick: () => { closeSheet(); state.view = "battle"; show(); } }, "ぼうけんで見る"),
+    h("button", { type: "button", class: "primary", onclick: () => { closeSheet(); state.view = "boss"; show(); } }, "バトルで見る"),
   ]);
 }
 

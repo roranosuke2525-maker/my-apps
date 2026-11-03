@@ -78,7 +78,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .exp-chip b { color: #fff; font-variant-numeric: tabular-nums; }
 
 /* ---------- 下のメニュー ---------- */
-.bottom { flex: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 6px rgba(40, 22, 10, 0.25); background-position: center bottom; }
+.bottom { flex: none; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 6px rgba(40, 22, 10, 0.25); background-position: center bottom; }
 .bottom button { height: 60px; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; white-space: nowrap; color: #ead8c1; cursor: pointer; text-shadow: inherit; }
 .bottom button svg { width: 22px; height: 22px; }
 .bottom button[aria-current="page"] { color: var(--honey); font-weight: 700; }
@@ -596,8 +596,18 @@ body.theater-open { overflow: hidden; }
 
 /* ================= ぼうけん：戦いの舞台（battle-stage.js） ================= */
 .bs { display: flex; flex-direction: column; gap: 6px; }
-.bs-stage { position: relative; height: 280px; border-radius: 12px; overflow: hidden; background-size: cover; background-position: center 70%; box-shadow: inset 0 -40px 60px rgba(0, 0, 0, 0.35); }
-.bs-stage::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 55%, rgba(0, 0, 0, 0.35)); pointer-events: none; }
+.bs-stage { position: relative; height: 280px; border-radius: 12px; overflow: hidden; background: #1a1622; box-shadow: inset 0 -40px 60px rgba(0, 0, 0, 0.35); }
+.bs-stage::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 55%, rgba(0, 0, 0, 0.35)); pointer-events: none; z-index: 35; }
+/* カメラ：寄り・ゆれは JS が transform で動かす */
+.bs-cam { position: absolute; inset: 0; transform-origin: 50% 50%; will-change: transform; }
+.bs-bg { position: absolute; inset: -4%; background-size: cover; background-position: center 70%; }
+.bs-gl, .bs-particles { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.bs-gl { z-index: 3; }
+.bs-particles { z-index: 31; }
+.bs.gl .bs-fighter, .bs.gl .bs-boss { animation: none; }
+.bs.gl .bs-fighter img, .bs.gl .bs-boss img { opacity: 0; }
+.bs.gl .bs-fighter.ghost img { opacity: 0.5; }
+.bs.gl .bs-fighter.attack, .bs.gl .bs-fighter.charge { filter: none; }
 .bs.quake .bs-stage { animation: bs-quake 0.4s cubic-bezier(.36, .07, .19, .97); }
 @keyframes bs-quake { 20%, 60% { transform: translate(-5px, 2px); } 40%, 80% { transform: translate(5px, -2px); } }
 
@@ -607,7 +617,7 @@ body.theater-open { overflow: hidden; }
   transition: transform 0.26s cubic-bezier(.3, 1.4, .5, 1), filter 0.2s; animation: bs-breathe 2.4s ease-in-out calc(var(--i) * -0.4s) infinite; z-index: calc(10 - var(--i)); }
 .bs-fighter.small { width: 22%; height: 34%; }
 .bs-fighter img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45)); }
-.bs-fighter.attack { transform: translateX(70%) scale(1.12); z-index: 20; filter: drop-shadow(0 0 10px rgba(255, 230, 150, 0.9)); animation: none; }
+.bs-fighter.attack { transform: translateX(70%) scale(1.12); z-index: 20; filter: drop-shadow(0 0 10px rgba(255, 230, 150, 0.9)); animation: none; transition: transform 0.22s cubic-bezier(.2, .9, .3, 1.15), filter 0.2s; }
 @keyframes bs-breathe { 50% { transform: translateY(-2%) scaleY(1.01); } }
 
 /* ボス（右） */
@@ -805,3 +815,24 @@ body.theater-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .quest.note, .quest.note:hover { transition: none; transform: none; } .epi.epi-new { animation: none; } }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .board-cork { background-color: #6e4f2f; } }
 :root[data-theme="dark"] .board-cork { background-color: #6e4f2f; }
+
+/* バトル（章ボスだけの画面） */
+.boss-view .boss-card { padding: 0; overflow: hidden; }
+.boss-view .boss-card > .sub:first-child { padding: 10px 14px 0; }
+.boss-view .boss-card > .bs { padding: 6px 0 0; align-self: stretch; }
+.boss-view .bs-stage { height: min(46vh, 420px); min-height: 300px; border-radius: 0; }
+.boss-view .bs-foot { padding: 0 12px; }
+.boss-view .boss-card > .kv, .boss-view .boss-tags, .boss-view .boss-card > p, .boss-view .boss-card > .primary, .boss-view .battle-log { margin-left: 14px; margin-right: 14px; }
+.boss-view .battle-log { margin-bottom: 12px; }
+.boss-entry .body-entry-icon { font-size: 26px; }
+
+/* 劇：WebGL が使えないときのしぐさ（CSS） */
+.th-actors:not(.gl) .actor img { transform: scaleX(calc(1 - 0.08 * max(var(--turn, 0), var(--turn, 0) * -1))); transition: transform 0.6s ease; }
+.th-actors:not(.gl) .actor.walk img { animation: th-walk 0.18s ease-in-out 4; }
+@keyframes th-walk { 50% { transform: translateY(-2.5%) rotate(1.5deg); } }
+.th-actors:not(.gl) .actor.emo-surprised img { animation: th-jump 0.5s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes th-jump { 30% { transform: translateY(-9%) scale(0.96, 1.06); } 60% { transform: translateY(0) scale(1.04, 0.95); } }
+.th-actors:not(.gl) .actor.emo-angry img { animation: th-tremble 0.08s linear 6; }
+@keyframes th-tremble { 50% { transform: translateX(1.5%); } }
+.th-actors:not(.gl) .actor.emo-sad img { transform: translateY(2%) scaleY(0.98); transition: transform 0.8s ease; }
+.th-actors:not(.gl) .actor.emo-smile img { animation: th-hop 0.45s ease-out 2; }

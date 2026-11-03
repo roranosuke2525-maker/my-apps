@@ -7,6 +7,7 @@
 // ・その仲間がまだパーティーにいなければ、さとしが攻撃する
 import { petKey } from "./aibou.js";
 import { BOSS_IMAGES } from "./art-index.js";
+import { createActorGL } from "./theater-gl.js";
 
 const IMG = (name) => `img/${name}.webp`;
 const SEEN_KEY = "battle-seen";
@@ -123,26 +124,132 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   const bossImg = BOSS_IMAGES[boss.name] ? IMG(BOSS_IMAGES[boss.name]) : null;
   const bossEl = h("div", { class: `bs-boss${won && !fresh ? " down" : ""}` }, bossImg ? h("img", { src: bossImg, alt: boss.name, draggable: "false" }) : null);
   const fx = h("div", { class: "bs-fx", "aria-hidden": "true" });
+  const glCanvas = h("canvas", { class: "bs-gl", "aria-hidden": "true" });
+  const pCanvas = h("canvas", { class: "bs-particles", "aria-hidden": "true" });
+  const cam = h("div", { class: "bs-cam" },
+    h("div", { class: "bs-bg", style: `background-image:url(${IMG(`bg/${bg}`)})` }), partyEl, bossEl, glCanvas, pCanvas, fx);
   const hpFill = h("span", { class: "bs-hp-fill" });
   const hpLag = h("span", { class: "bs-hp-lag" });
   const hpText = h("b", { class: "bs-hp-text" });
   const caption = h("p", { class: "bs-caption", "aria-live": "polite" });
   const skipBtn = h("button", { type: "button", class: "bs-skip", text: "とばす" });
   const replayBtn = h("button", { type: "button", class: "bs-replay", text: "▶ 戦いを見る" });
-  const root = h("div", { class: "bs" },
-    h("div", { class: "bs-stage", style: `background-image:url(${IMG(`bg/${bg}`)})` }, partyEl, bossEl, fx,
-      h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-name", text: boss.name }), h("span", { class: "bs-hp-bar" }, hpLag, hpFill), hpText)),
-    h("div", { class: "bs-foot" }, caption, skipBtn, replayBtn));
+  const stage = h("div", { class: "bs-stage" }, cam,
+    h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-name", text: boss.name }), h("span", { class: "bs-hp-bar" }, hpLag, hpFill), hpText));
+  const root = h("div", { class: "bs" }, stage, h("div", { class: "bs-foot" }, caption, skipBtn, replayBtn));
+
+  // 立ち絵を WebGL でなめらかに（息づかい・かまえ・踏み込みの前のめり）。使えなければ <img> のまま
+  let glr = null;
+  if (!reduceMotion) {
+    try { glr = createActorGL(glCanvas); } catch { glr = null; }
+  }
+  if (glr) {
+    root.classList.add("gl");
+    for (const [who, el] of Object.entries(fighters)) {
+      glr.add(el, el.firstElementChild, { float: false });
+      glr.pose(el, { turn: 0.6, lean: 0.15 });
+    }
+    if (bossImg) {
+      glr.add(bossEl, bossEl.firstElementChild, { boss: true });
+      glr.pose(bossEl, { turn: -0.6 });
+    }
+  } else glCanvas.remove();
+
+  // ---------- カメラ・粒子・HP（1つの描画ループ） ----------
+  const camS = { zoom: 1, x: 0, y: 0, shake: 0, tz: 1, tx: 0, ty: 0, pace: 6 };
+  const parts = [];
+  const pctx = pCanvas.getContext("2d");
+  let hpShown = startHp;
+  let hpLagShown = startHp;
+  let hpGoal = startHp;
+  let lastT = performance.now();
+  let alive = true;
+  const lerp = (c, g, dt, k) => c + (g - c) * (1 - Math.exp(-dt * k));
+  function loop(now) {
+    if (!alive) return;
+    if (!root.isConnected && now - born > 5000) { alive = false; glr?.destroy(); return; }
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    // カメラ：目標へなめらかに。ゆれは減衰
+    camS.zoom = lerp(camS.zoom, camS.tz, dt, camS.pace);
+    camS.x = lerp(camS.x, camS.tx, dt, camS.pace);
+    camS.y = lerp(camS.y, camS.ty, dt, camS.pace);
+    camS.shake = Math.max(0, camS.shake - dt * 2.2);
+    const sh = camS.shake * camS.shake * 14;
+    const sx = (Math.random() - 0.5) * sh;
+    const sy = (Math.random() - 0.5) * sh * 0.6;
+    cam.style.transform = `translate(${camS.x + sx}px, ${camS.y + sy}px) scale(${camS.zoom})`;
+    // HP：本体は早く、うしろの帯はゆっくり追う。数字も動く
+    hpShown = lerp(hpShown, hpGoal, dt, 14);
+    hpLagShown = hpLagShown > hpShown ? lerp(hpLagShown, hpShown, dt, 2.5) : hpShown;
+    hpFill.style.width = `${(hpShown / boss.hp) * 100}%`;
+    hpLag.style.width = `${(hpLagShown / boss.hp) * 100}%`;
+    hpText.textContent = `${Math.round(hpShown).toLocaleString()} / ${boss.hp.toLocaleString()}`;
+    // 粒子
+    const box = pCanvas.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.round(box.width * dpr), H = Math.round(box.height * dpr);
+    if (W && H && (pCanvas.width !== W || pCanvas.height !== H)) { pCanvas.width = W; pCanvas.height = H; }
+    if (!W || !H) return;
+    pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    pctx.clearRect(0, 0, W, H);
+    const w = W / dpr, hh = H / dpr;
+    pctx.globalCompositeOperation = "lighter";
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.life -= dt;
+      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      p.vy += p.g * dt;
+      p.vx *= 1 - p.drag * dt;
+      p.vy *= 1 - p.drag * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vr * dt;
+      const k = p.life / p.max;
+      pctx.globalAlpha = Math.min(1, k * 1.6);
+      pctx.fillStyle = p.color;
+      pctx.shadowColor = p.color;
+      pctx.shadowBlur = p.glow;
+      pctx.save();
+      pctx.translate(p.x * w, p.y * hh);
+      pctx.rotate(p.rot);
+      if (p.shape === "dot") { pctx.beginPath(); pctx.arc(0, 0, p.size * (0.4 + k * 0.6), 0, 6.283); pctx.fill(); }
+      else if (p.shape === "streak") { pctx.fillRect(-p.size * 2, -p.size * 0.25, p.size * 4, p.size * 0.5); }
+      else pctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      pctx.restore();
+    }
+    pctx.globalAlpha = 1;
+    pctx.shadowBlur = 0;
+    pctx.globalCompositeOperation = "source-over";
+  }
+  const born = performance.now();
+  requestAnimationFrame(loop);
+
+  // 粒子を出す（x,y は舞台の割合）
+  function emit(n, { x, y, color = "#ffe9b0", speed = 0.5, spread = Math.PI * 2, dir = 0, g = 1.2, size = 4, life = 0.6, shape = "dot", glow = 8, drag = 1.5 }) {
+    if (reduceMotion) return;
+    for (let i = 0; i < n; i++) {
+      const ang = dir + (Math.random() - 0.5) * spread;
+      const v = speed * (0.4 + Math.random() * 0.9);
+      parts.push({ x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v, g, drag, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 12,
+        size: size * (0.6 + Math.random() * 0.8), life: life * (0.6 + Math.random() * 0.7), max: life, color: Array.isArray(color) ? color[i % color.length] : color, shape, glow });
+    }
+    if (parts.length > 400) parts.splice(0, parts.length - 400);
+  }
+  const camTo = (z, x, y, pace = 6) => { camS.tz = z; camS.tx = x; camS.ty = y; camS.pace = pace; };
+  const shake = (v) => { camS.shake = Math.max(camS.shake, v); };
+  // 舞台の中の位置（割合）
+  const posOf = (el) => {
+    const r = el.getBoundingClientRect(), b = pCanvas.getBoundingClientRect();
+    return { x: (r.left + r.width / 2 - b.left) / b.width, y: (r.top + r.height * 0.5 - b.top) / b.height, bottom: (r.bottom - b.top) / b.height };
+  };
 
   let hp = startHp;
   const setHp = (v, instant) => {
     hp = Math.max(0, v);
-    const pct = `${(hp / boss.hp) * 100}%`;
-    hpFill.style.transition = instant ? "none" : "";
-    hpLag.style.transition = instant ? "none" : "";
-    hpFill.style.width = pct;
-    setTimeout(() => { hpLag.style.width = pct; }, instant ? 0 : 450);
-    hpText.textContent = `${Math.round(hp).toLocaleString()} / ${boss.hp.toLocaleString()}`;
+    hpGoal = hp;
+    if (instant) { hpShown = hp; hpLagShown = hp; }
   };
   setHp(startHp, true);
 
@@ -151,7 +258,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   let cancelled = false;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms / speed));
 
-  // 1回の攻撃：カットイン（技の名前）→ 踏み込み（残像）→ 技の演出 → 命中（一瞬止まる・閃光・破片・ダメージ）→ もどる
+  // 1回の攻撃：カットイン（技の名前）→ ため・踏み込み（残像・土ぼこり・カメラが寄る）→ 技の演出 → 命中（一瞬止まる・閃光・火花・ダメージ・カメラのゆれ）→ もどる
   async function hit(a) {
     const f = fighters[a.who] || fighters.さとし;
     const move = a.move || MOVES[a.who] || MOVES.さとし;
@@ -159,9 +266,13 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     const kind = a.combined ? "combo" : move.fx;
     caption.textContent = a.combined ? `これまでの攻撃！` : `${who}の${move.name}！`;
     caption.dataset.sub = a.combined ? "" : a.what;
+    const bp = posOf(bossEl);
+    const big = a.damage >= boss.hp * 0.12;
 
-    // カットイン
+    // カットイン（カメラは攻撃する人へ少し寄る）
     if (speed === 1) {
+      const fp = posOf(f);
+      camTo(1.08, (0.5 - fp.x) * 40, (0.5 - fp.y) * 20, 5);
       const portrait = f.querySelector("img")?.src;
       const cut = h("div", { class: `bs-cutin cut-${kind}` },
         h("div", { class: "bs-cut-lines" }),
@@ -173,21 +284,26 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       setTimeout(() => cut.remove(), 300);
     }
 
-    // 踏み込み（残像を2つ残す）
+    // ため → 踏み込み（残像を残し、足元に土ぼこり。カメラはボスへ寄る）
     f.classList.add("charge");
-    await wait(160);
-    for (let k = 1; k <= 2; k++) {
+    glr?.pose(f, { lean: -0.6, squash: -0.05, turn: 0.6 });
+    await wait(170);
+    const fp0 = posOf(f);
+    emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
+    for (let k = 1; k <= 3; k++) {
       const ghost = f.cloneNode(true);
       ghost.classList.add("ghost");
       ghost.style.setProperty("--k", k);
       partyEl.append(ghost);
-      setTimeout(() => ghost.remove(), 420);
+      setTimeout(() => ghost.remove(), 460);
     }
     f.classList.remove("charge");
     f.classList.add("attack");
+    glr?.pose(f, { lean: 0.9, squash: 0.03, turn: 0.9 });
+    camTo(1.14, (0.5 - bp.x) * 90, (0.5 - bp.y) * 50, 9);
     await wait(200);
 
-    // 技の演出
+    // 技の演出（CSS）＋粒子
     const e = h("div", { class: `bs-effect fx-${kind}` });
     if (kind === "coins" || kind === "pages") for (let i = 0; i < 12; i++) {
       const p = h("i", {});
@@ -196,37 +312,44 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       e.append(p);
     }
     fx.append(e);
+    const hx = bp.x - 0.04, hy = bp.y;
+    if (kind === "slash") emit(16, { x: hx, y: hy, color: ["#fff", "#ffe9a0"], speed: 1.1, dir: -0.6, spread: 0.9, g: 0.3, size: 6, life: 0.35, shape: "streak", glow: 10, drag: 4 });
+    if (kind === "flame") emit(30, { x: hx, y: hy + 0.05, color: ["#ff5a2a", "#ffb35c", "#fff6c8"], speed: 0.35, dir: -Math.PI / 2, spread: 1.4, g: -0.5, size: 7, life: 0.7, glow: 14, drag: 1 });
+    if (kind === "smash" || kind === "muscle") emit(24, { x: hx, y: hy, color: ["#ffb35c", "#fff"], speed: 0.9, g: 1.6, size: 5, life: 0.6, glow: 10 });
+    if (kind === "coins") emit(14, { x: hx, y: hy, color: ["#ffd86a", "#fff4c0"], speed: 0.6, g: 1.4, size: 5, life: 0.7, shape: "square", glow: 6 });
+    if (kind === "pages") emit(14, { x: hx, y: hy, color: ["#fbf6ea", "#c9a2ff"], speed: 0.4, g: 0.3, size: 7, life: 0.8, shape: "square", glow: 8, drag: 2.5 });
+    if (kind === "tackle" || kind === "combo") emit(20, { x: hx, y: hy, color: ["#8fe6ff", "#fff"], speed: 0.8, g: 0.8, size: 5, life: 0.6, glow: 10 });
     await wait(kind === "flame" || kind === "pages" || kind === "coins" ? 320 : 200);
 
-    // 命中：一瞬止まる → 閃光・衝撃・破片・ダメージ
+    // 命中：一瞬止まる → 閃光・衝撃・火花・ダメージ・カメラのゆれ
     root.classList.add("hitstop");
-    await wait(90);
+    await wait(big ? 140 : 90);
     root.classList.remove("hitstop");
     const flash = h("div", { class: "bs-flash" });
     const impact = h("div", { class: "bs-impact" });
     fx.append(flash, impact);
-    for (let i = 0; i < 10; i++) {
-      const d = h("i", { class: "bs-debris" });
-      const ang = Math.random() * Math.PI * 2;
-      d.style.setProperty("--dx", `${Math.cos(ang) * (40 + Math.random() * 60)}px`);
-      d.style.setProperty("--dy", `${Math.sin(ang) * (40 + Math.random() * 60) - 20}px`);
-      impact.append(d);
-    }
+    emit(big ? 40 : 22, { x: hx, y: hy, color: ["#fff", "#ffe066", "#ffb35c"], speed: big ? 1.4 : 0.9, g: 1.8, size: 4, life: 0.7, shape: "streak", glow: 8, drag: 2 });
+    emit(10, { x: hx, y: hy, color: "#ffe9b0", speed: 0.5, g: 2.2, size: 6, life: 0.8, shape: "square", glow: 4, drag: 1 });
     bossEl.classList.remove("hit"); void bossEl.offsetWidth; bossEl.classList.add("hit");
-    const big = a.damage >= boss.hp * 0.12;
+    glr?.flash(bossEl);
+    glr?.emote(bossEl, "angry");
+    glr?.pose(bossEl, { lean: 0.5, turn: -0.6 });
+    setTimeout(() => glr?.pose(bossEl, { lean: 0, turn: -0.6 }), 350 / speed);
+    camTo(big ? 1.22 : 1.17, (0.5 - bp.x) * 110, (0.5 - bp.y) * 60, 14);
+    shake(big ? 1 : 0.65);
     const weak = boss.weak && (TYPE_ATTACKER[boss.weak] === a.who || boss.weak === "バランス");
     const num = h("span", { class: `bs-num${big ? " big" : ""}` },
       big ? h("small", { text: "CRITICAL!" }) : weak ? h("small", { text: "こうかばつぐん" }) : null,
       String(Math.round(a.damage)));
     num.style.setProperty("--x", `${-20 + Math.random() * 40}px`);
     fx.append(num);
-    root.classList.remove("quake"); void root.offsetWidth; root.classList.add(big ? "quake" : "jolt");
     setHp(hp - a.damage);
-    await wait(460);
+    await wait(big ? 560 : 460);
     f.classList.remove("attack");
-    root.classList.remove("jolt");
+    glr?.pose(f, { lean: 0.15, squash: 0, turn: 0.6 });
+    camTo(1.04, 0, 0, 4);
     setTimeout(() => { e.remove(); num.remove(); flash.remove(); impact.remove(); }, 900);
-    await wait(280);
+    await wait(300);
   }
 
   async function play(list, from) {
@@ -236,7 +359,9 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     speed = 1;
     root.classList.add("playing");
     bossEl.classList.remove("down");
+    glr?.pose(bossEl, { slump: 0 });
     setHp(from, true);
+    camTo(1.06, 0, 0, 2);
     await wait(500);
     for (const a of list) {
       if (cancelled) break;
@@ -250,8 +375,13 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     setHp(end, cancelled);
     root.classList.remove("playing");
     playing = false;
+    camTo(1, 0, 0, 3);
     if (won) {
       bossEl.classList.add("down");
+      glr?.pose(bossEl, { slump: 1, lean: 0.8 });
+      const bp = posOf(bossEl);
+      emit(60, { x: bp.x, y: bp.y, color: ["#ffe066", "#fff", "#ffb35c"], speed: 0.9, g: 0.6, size: 5, life: 1.4, glow: 12, drag: 1.2 });
+      shake(0.8);
       const banner = h("div", { class: "bs-win", text: "撃破！" });
       fx.append(banner);
       caption.textContent = `${boss.name}を たおした！`;

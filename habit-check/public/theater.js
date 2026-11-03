@@ -256,7 +256,13 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
       el.style.setProperty("--x", `${SLOTS[slot] * 100}%`);
       el.style.setProperty("--h", c.h);
       actors.append(el);
-      glr?.add(el, img, { float: c.float, boss: c.boss });
+      if (glr) {
+        glr.add(el, img, { float: c.float, boss: c.boss });
+        glr.walk(el, c.boss ? 0 : 700); // 歩いて入ってくる
+      } else {
+        el.classList.add("walk");
+        setTimeout(() => el.classList.remove("walk"), 700);
+      }
       a = { who, el, slot, last: now, c };
       onStage.push(a);
       requestAnimationFrame(() => el.classList.add("on"));
@@ -265,8 +271,27 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
     if (!quiet || emo) setFace(a, emo);
     if (!quiet) {
       for (const x of onStage) x.el.classList.toggle("speaking", x === a);
+      facing(a);
     }
     return a;
+  }
+
+  // 向きとかまえ：話す人は少し前へ乗り出し、ほかの人は話す人のほうを向く
+  function facing(speaker) {
+    for (const x of onStage) {
+      const me = SLOTS[x.slot];
+      const toward = speaker && x !== speaker ? Math.sign(SLOTS[speaker.slot] - me) || 0 : Math.sign(0.5 - me) || 0;
+      if (glr) glr.pose(x.el, { turn: toward * 0.8, lean: x === speaker ? toward * 0.5 : toward * 0.25, tilt: x === speaker ? 0 : toward * 0.15 });
+      else x.el.style.setProperty("--turn", String(toward));
+    }
+  }
+
+  // 気持ちのしぐさ（表情の差分と合わせて体も動く）
+  function gesture(a, emo) {
+    if (!a) return;
+    if (glr) return glr.emote(a.el, emo);
+    a.el.classList.remove("emo-surprised", "emo-angry", "emo-sad", "emo-smile");
+    if (emo) { void a.el.offsetWidth; a.el.classList.add(`emo-${emo}`); }
   }
 
   function clearStage() {
@@ -386,6 +411,7 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
       const who = subjectOf(s.text);
       if (who && who !== "さとし" && castOf(who)) bringOn(who, { quiet: true });
       for (const x of onStage) x.el.classList.remove("speaking");
+      facing(null);
       capName.textContent = "";
       type(capText, s.text);
       effect(s.fx, s);
@@ -397,6 +423,7 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
     if (s.who === "妻" && !s.emo && SALTY.test(s.text)) s.emo = "angry";
     const actor = bringOn(s.who, { emo: s.emo || (battleLeft > 0 && FIGHTERS.has(s.who) ? "battle" : null) });
     if (!actor) for (const x of onStage) x.el.classList.remove("speaking");
+    gesture(actor, s.emo);
     const name = displayName(s.who);
     const bubble = h("div", { class: `th-bubble${actor ? "" : " voice"}${/！|!/.test(s.text) ? " loud" : ""}${/……|…$/.test(s.text) ? " soft" : ""}` },
       h("span", { class: "th-bubble-name", text: name }),
