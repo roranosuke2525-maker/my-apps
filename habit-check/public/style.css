@@ -617,7 +617,7 @@ body.theater-open { overflow: hidden; }
   transition: transform 0.26s cubic-bezier(.3, 1.4, .5, 1), filter 0.2s; animation: bs-breathe 2.4s ease-in-out calc(var(--i) * -0.4s) infinite; z-index: calc(10 - var(--i)); }
 .bs-fighter.small { width: 22%; height: 34%; }
 .bs-fighter img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45)); }
-.bs-fighter.attack { transform: translateX(70%) scale(1.12); z-index: 20; filter: drop-shadow(0 0 10px rgba(255, 230, 150, 0.9)); animation: none; transition: transform 0.22s cubic-bezier(.2, .9, .3, 1.15), filter 0.2s; }
+.bs-fighter.attack { transform: translateX(70%); z-index: 20; filter: drop-shadow(0 0 10px rgba(255, 230, 150, 0.9)); animation: none; transition: transform 0.22s cubic-bezier(.2, .9, .3, 1.15), filter 0.2s; }
 @keyframes bs-breathe { 50% { transform: translateY(-2%) scaleY(1.01); } }
 
 /* ボス（右） */
@@ -735,9 +735,9 @@ body.theater-open { overflow: hidden; }
 @keyframes bs-text { from { transform: translateY(-50%) skewY(6deg) translateX(40%); opacity: 0; } }
 
 /* ため → 踏み込み（残像） */
-.bs-fighter.charge { transform: translateX(-8%) scale(0.96); filter: drop-shadow(0 0 14px rgba(255, 230, 120, 1)) brightness(1.2); animation: none; }
-.bs-fighter.attack { transform: translateX(95%) scale(1.15); }
-.bs-fighter.ghost { opacity: 0.45; transform: translateX(calc(95% - var(--k) * 30%)) scale(1.15); filter: blur(1px) brightness(1.6) saturate(0.3); pointer-events: none; animation: bs-ghost 0.42s ease-out forwards; z-index: 19; }
+.bs-fighter.charge { transform: translateX(-8%); filter: drop-shadow(0 0 14px rgba(255, 230, 120, 1)) brightness(1.2); animation: none; }
+.bs-fighter.attack { transform: translateX(95%); }
+.bs-fighter.ghost { opacity: 0.45; transform: translateX(calc(95% - var(--k) * 30%)); filter: blur(1px) brightness(1.6) saturate(0.3); pointer-events: none; animation: bs-ghost 0.42s ease-out forwards; z-index: 19; }
 @keyframes bs-ghost { to { opacity: 0; } }
 
 /* 命中：一瞬止まる・閃光・衝撃の星・破片 */

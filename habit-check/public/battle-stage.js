@@ -138,7 +138,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-name", text: boss.name }), h("span", { class: "bs-hp-bar" }, hpLag, hpFill), hpText));
   const root = h("div", { class: "bs" }, stage, h("div", { class: "bs-foot" }, caption, skipBtn, replayBtn));
 
-  // 立ち絵を WebGL でなめらかに（息づかい・かまえ・踏み込みの前のめり）。使えなければ <img> のまま
+  // 立ち絵を WebGL でなめらかに（格闘ゲームの構えのように、その場で弾む・体重を移す。大きさは変えない）。使えなければ <img> のまま
   let glr = null;
   if (!reduceMotion) {
     try { glr = createActorGL(glCanvas); } catch { glr = null; }
@@ -146,14 +146,14 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   if (glr) {
     root.classList.add("gl");
     for (const [who, el] of Object.entries(fighters)) {
-      glr.add(el, el.firstElementChild, { float: false });
+      glr.add(el, el.firstElementChild, { float: false, stance: true });
       glr.pose(el, { turn: 0.6, lean: 0.15 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
       if (key && CAST_VARIANTS[key]?.includes("blink")) glr.frames(el, { blink: IMG(`cast2/${key}_blink`) });
     }
     if (bossImg) {
-      glr.add(bossEl, bossEl.firstElementChild, { boss: true });
+      glr.add(bossEl, bossEl.firstElementChild, { boss: true, stance: true });
       glr.pose(bossEl, { turn: -0.6 });
     }
   } else glCanvas.remove();
@@ -275,7 +275,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     // カットイン（カメラは攻撃する人へ少し寄る）
     if (speed === 1) {
       const fp = posOf(f);
-      camTo(1.08, (0.5 - fp.x) * 40, (0.5 - fp.y) * 20, 5);
+      camTo(1, 0, 0, 5);
       const portrait = f.querySelector("img")?.src;
       const cut = h("div", { class: `bs-cutin cut-${kind}` },
         h("div", { class: "bs-cut-lines" }),
@@ -289,7 +289,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
 
     // ため → 踏み込み（残像を残し、足元に土ぼこり。カメラはボスへ寄る）
     f.classList.add("charge");
-    glr?.pose(f, { lean: -0.6, squash: -0.05, turn: 0.6 });
+    glr?.pose(f, { lean: -0.5, turn: 0.6 });
     await wait(170);
     const fp0 = posOf(f);
     emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
@@ -302,8 +302,8 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     }
     f.classList.remove("charge");
     f.classList.add("attack");
-    glr?.pose(f, { lean: 0.9, squash: 0.03, turn: 0.9 });
-    camTo(1.14, (0.5 - bp.x) * 90, (0.5 - bp.y) * 50, 9);
+    glr?.pose(f, { lean: 0.8, turn: 0.9 });
+    camTo(1, (0.5 - bp.x) * 10, 0, 9);
     await wait(200);
 
     // 技の演出（CSS）＋粒子
@@ -338,7 +338,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     glr?.emote(bossEl, "angry");
     glr?.pose(bossEl, { lean: 0.5, turn: -0.6 });
     setTimeout(() => glr?.pose(bossEl, { lean: 0, turn: -0.6 }), 350 / speed);
-    camTo(big ? 1.22 : 1.17, (0.5 - bp.x) * 110, (0.5 - bp.y) * 60, 14);
+    camTo(1, (0.5 - bp.x) * 16, 0, 14);
     shake(big ? 1 : 0.65);
     const weak = boss.weak && (TYPE_ATTACKER[boss.weak] === a.who || boss.weak === "バランス");
     const num = h("span", { class: `bs-num${big ? " big" : ""}` },
@@ -349,8 +349,8 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     setHp(hp - a.damage);
     await wait(big ? 560 : 460);
     f.classList.remove("attack");
-    glr?.pose(f, { lean: 0.15, squash: 0, turn: 0.6 });
-    camTo(1.04, 0, 0, 4);
+    glr?.pose(f, { lean: 0.15, turn: 0.6 });
+    camTo(1, 0, 0, 4);
     setTimeout(() => { e.remove(); num.remove(); flash.remove(); impact.remove(); }, 900);
     await wait(300);
   }
@@ -364,7 +364,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     bossEl.classList.remove("down");
     glr?.pose(bossEl, { slump: 0 });
     setHp(from, true);
-    camTo(1.06, 0, 0, 2);
+    camTo(1, 0, 0, 2);
     await wait(500);
     for (const a of list) {
       if (cancelled) break;

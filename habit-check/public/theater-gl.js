@@ -4,7 +4,7 @@
 // 目標の姿勢へばねのように追いつくので、動きがつながる。
 // 立ち絵の置き場所と大きさは、これまでどおり .actor の要素（CSS）が決める。ここはその四角の中を描くだけ。
 //   const gl = createActorGL(canvas)  … 使えなければ null（そのときは <img> のまま）。立ち絵の位置は canvas からの相対で測る
-//   gl.add(el, img, { float, boss }) / gl.remove(el) / gl.talk(el, on) / gl.hop(el) / gl.destroy()
+//   gl.add(el, img, { float, boss, stance }) / gl.remove(el)（stance：格闘ゲームの構えでその場に弾む） / gl.talk(el, on) / gl.hop(el) / gl.destroy()
 //   gl.pose(el, { lean, tilt, turn, slump }) / gl.emote(el, "surprised"|"angry"|"sad"|"smile") / gl.walk(el, ms)
 // canvas が画面から外されると、自分で片づける（あいぼう・ボスの大きな絵にも使う）
 
@@ -15,7 +15,7 @@ const VS = `
 attribute vec2 a_p;
 uniform vec4 u_rect;
 uniform float u_t, u_phase, u_breath, u_sway, u_talk, u_hop, u_flutter;
-uniform float u_lean, u_tilt, u_squash, u_turn, u_bob, u_shake, u_slump;
+uniform float u_lean, u_tilt, u_squash, u_turn, u_bob, u_shake, u_slump, u_stance;
 varying vec2 v_uv;
 void main() {
   vec2 p = a_p;
@@ -41,6 +41,11 @@ void main() {
   p.x += u_bob * 0.012 * sin(u_t * 9.0) * body;
   // ふるえ
   p.x += u_shake * 0.008 * sin(u_t * 60.0) * up;
+  // 構え（格闘ゲームの待機）：その場で軽く弾み、体重を左右に移し、肩で息をする。大きさは変えない
+  float beat = 0.5 + 0.5 * sin(u_t * 4.4 + u_phase);
+  p.y += u_stance * 0.014 * beat * up;
+  p.x += u_stance * 0.010 * sin(u_t * 2.2 + u_phase) * body;
+  p.y -= u_stance * 0.006 * sin(u_t * 2.2 + u_phase) * body * (a_p.x - 0.5);
   float s = sin(u_t * 1.7 + u_phase);
   float chest = exp(-pow((p.y - 0.62) / 0.18, 2.0));
   p.x = 0.5 + (p.x - 0.5) * (1.0 + u_breath * 0.018 * s * chest);
@@ -96,7 +101,7 @@ export function createActorGL(canvas) {
   gl.useProgram(prog);
   const U = {};
   for (const n of ["u_rect", "u_t", "u_phase", "u_breath", "u_sway", "u_talk", "u_hop", "u_flutter", "u_a", "u_b", "u_mix", "u_bright", "u_sat", "u_alpha", "u_shadow",
-    "u_lean", "u_tilt", "u_squash", "u_turn", "u_bob", "u_shake", "u_slump"]) U[n] = gl.getUniformLocation(prog, n);
+    "u_lean", "u_tilt", "u_squash", "u_turn", "u_bob", "u_shake", "u_slump", "u_stance"]) U[n] = gl.getUniformLocation(prog, n);
 
   // 網目：(GRID_X+1)×(GRID_Y+1) の点と三角形
   const pts = [];
@@ -254,6 +259,7 @@ export function createActorGL(canvas) {
       gl.uniform1f(U.u_slump, a.cur.slump);
       gl.uniform1f(U.u_bob, bob);
       gl.uniform1f(U.u_shake, shake);
+      gl.uniform1f(U.u_stance, a.stance ? (a.boss ? 0.7 : 1) : 0);
       // 足元の影（浮いている人には描かない）
       if (!a.float) {
         gl.uniform1f(U.u_shadow, 1);
@@ -282,9 +288,9 @@ export function createActorGL(canvas) {
     a.mixDur = dur;
   }
   const api = {
-    add(el, img, { float = false, boss = false } = {}) {
+    add(el, img, { float = false, boss = false, stance = false } = {}) {
       actors.set(el, {
-        el, img, float, boss, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
+        el, img, float, boss, stance, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
         pose: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, cur: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, tex: null,
         idle: { lean: 0, tilt: 0 }, fidgetAt: performance.now() / 1000 + 1 + Math.random() * 3, jumpAt: -10, shakeUntil: 0, walkUntil: 0, flashAt: -10,
         base: null, ratio: 0, mixDur: 0.28, frames: {}, blinkAt: performance.now() / 1000 + 1 + Math.random() * 3, mouthOpen: false, mouthNext: 0, gestureUntil: 0,
