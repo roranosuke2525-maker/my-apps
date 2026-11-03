@@ -1,7 +1,8 @@
   // ================= 描画 =================
   const main = $("#main");
   function render() {
-    for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
+    for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
+    const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -10,7 +11,7 @@
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
-    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ today: renderToday, flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -34,10 +35,14 @@
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
     if (el.id === "reload") { load(); return; }
+    if (d.tab === "more") { openMore(); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
+    if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
+    if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
+    if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
     if (d.sview) { S.stageView = d.sview; render(); return; }
-    if (d.done) { const t = known.get(d.done); if (!t) return; el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
+    if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
     if (d.runnow) { runNow(el); return; }
@@ -120,7 +125,7 @@
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["flow", "ai", "read", "triage", "shop", "news", "log", "db"];
+  const TABS = ["today", "flow", "ai", "triage"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -128,11 +133,11 @@
       if (!g || e.pointerId !== g.id) return; const G = g; g = null;
       const dx = e.clientX - G.x, dy = e.clientY - G.y; if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || performance.now() - G.t > 700) return;
       const el = G.el instanceof Element ? G.el : null; if (!el) return;
-      if (el.closest("input, textarea, select, [data-swipe], .board, .tablewrap, .tcard, .menu")) return;
+      if (el.closest("input, textarea, select, [data-swipe], .swipey, .board, .tablewrap, .tcard, .menu")) return;
       const edge = G.x < 40;
       if (!$("#modal").hidden) { if (dx > 0 && el.closest("#modal")) closeModal(); return; }
       if (!$("#page").hidden) { if (dx > 0 && (edge || !el.closest(".ed"))) { swipeGuard(); closePage(); } return; }
-      if (el.closest("nav.tabs")) { const i = TABS.indexOf(S.tab) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
+      if (el.closest("nav.tabs")) { const i = Math.max(0, TABS.indexOf(S.tab)) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
       if (S.tab === "db" && S.dbOpen && dx > 0) { swipeGuard(); S.dbOpen = null; render(); return; }
       if (S.tab === "flow" && el.closest("[data-swipestage], .pipe, .park")) { swipeGuard(); stageStep(dx < 0 ? 1 : -1); }
     }, true);
@@ -231,7 +236,7 @@
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["today", "flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用

@@ -112,8 +112,8 @@
   function rowHtml(t, i, { check = true } = {}) {
     const st = stageOf(t); const m = metaOf(t);
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
-    return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
-      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div>`;
+    return `<div class="rw"><span class="sw l" aria-hidden="true">✓ 済み</span><span class="sw r" aria-hidden="true">明日 →</span><div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
+      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
   }
   function stageItems(k) {
     const items = inStage(k).slice(); const d = TODAY();
@@ -159,7 +159,7 @@
       <div class="card panel" id="stagepanel" data-swipestage="1"></div>`);
     const st = STAGES[S.stage]; const items = stageItems(S.stage); const pos = FLOW_ORDER.indexOf(S.stage);
     const panel = $("#stagepanel");
-    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${FLOW_MAIN.includes(S.stage) ? `${pos + 1}. ` : ""}${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll" id="stagelist"></div>`;
+    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${FLOW_MAIN.includes(S.stage) ? `${pos + 1}. ` : ""}${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll swipey" id="stagelist"></div>`;
     const box = $("#stagelist");
     if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }

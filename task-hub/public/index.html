@@ -68,7 +68,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 main { min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 0 max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
-nav.tabs { display: grid; grid-template-columns: repeat(8, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
+nav.tabs { display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); gap: 4px; }
 nav.tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; border-radius: 12px; font-size: 11px; color: var(--mute); position: relative; }
 nav.tabs button svg { width: 22px; height: 22px; }
 nav.tabs button[aria-pressed="true"] { color: var(--ink); background: var(--card); box-shadow: var(--shadow); font-weight: 700; }
@@ -492,6 +492,53 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .diagall .statrow { margin-bottom: 8px; } .diagall .verdict { margin-bottom: 8px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
+/* ===== 今日（ホーム）・操作 ===== */
+.top .ttl { display: flex; flex-direction: column; line-height: 1.1; flex: 1; min-width: 0; }
+.top .ttl .date { font-size: 17px; font-weight: 700; color: var(--ink); font-family: var(--f); }
+.top .ttl h1 { font-size: 10px !important; letter-spacing: .3em !important; color: var(--mute) !important; text-shadow: none !important; font-weight: 600 !important; margin-top: 3px; }
+.fab { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 30; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); color: #11161a; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); transition: transform .15s; }
+.fab:active { transform: scale(.94); } .fab svg { width: 24px; height: 24px; }
+@media (min-width: 800px) { .fab { right: calc(50% - 380px + 16px); } }
+.hero { display: grid; grid-template-columns: 64px 1fr; gap: 6px 12px; align-items: center; padding: 12px 14px; flex: none; }
+.ring { width: 64px; height: 64px; grid-row: span 2; }
+.ring .bg { fill: none; stroke: var(--sunk); stroke-width: 5; }
+.ring .fg { fill: none; stroke: var(--ok); stroke-width: 5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .6s ease; }
+.ring text { font: 600 12px var(--f-num); fill: var(--ink); }
+.ht { display: flex; flex-direction: column; } .ht b { font-size: 17px; } .ht span { font-size: 12px; color: var(--mute); } .ht em { font-style: normal; color: var(--late); font-weight: 700; }
+.hnext { display: flex; flex-direction: column; gap: 1px; text-align: left; padding: 8px 10px; border-radius: 10px; background: var(--sunk); }
+.hnext small { font-size: 10.5px; color: var(--accent); letter-spacing: .08em; } .hnext span { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hnext small.mute { color: var(--mute); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sech { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; font-size: 11.5px; font-weight: 700; color: var(--mute); letter-spacing: .06em; }
+.sech small { font-family: var(--f-num); font-weight: 500; } .sech.late { color: var(--late); } .sech .qc { margin-left: auto; height: 26px; font-size: 11px; }
+.alldone { padding: 28px 16px; text-align: center; display: flex; flex-direction: column; gap: 4px; } .alldone b { font-size: 16px; } .alldone span { font-size: 12.5px; color: var(--mute); }
+.donebox, .nextbox { border-top: 1px solid var(--line); margin-top: 6px; }
+.donebox summary, .nextbox summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; font-size: 11.5px; font-weight: 700; color: var(--mute); letter-spacing: .06em; cursor: pointer; list-style: none; }
+.donebox summary::-webkit-details-marker, .nextbox summary::-webkit-details-marker { display: none; }
+.donebox summary::after, .nextbox summary::after { content: "▸"; margin-left: auto; transition: transform .15s; } details[open] > summary::after { transform: rotate(90deg); }
+.donebox .row .nm { color: var(--mute); text-decoration: line-through; }
+.row.pick .qc { height: 28px; font-size: 11.5px; flex: none; }
+.morelink { display: block; width: 100%; text-align: center; padding: 10px; font-size: 12.5px; color: var(--accent); }
+.ghint { text-align: center; font-size: 10.5px; padding: 14px 0 20px; }
+/* スワイプ：行の下に「済み」「明日」の面 */
+.rw { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.rw:last-child, .rw:last-of-type { border-bottom: 0; } .rw .row { border-bottom: 0; }
+.rw .sw { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; font-weight: 700; font-size: 13px; color: var(--bg); opacity: 0; padding: 0 16px; }
+.rw .sw.l { left: 0; right: 0; justify-content: flex-start; background: var(--ok); } .rw .sw.r { left: 0; right: 0; justify-content: flex-end; background: var(--s-today); }
+.rw.r .sw.l, .rw.l .sw.r { opacity: .55; } .rw.ready.r .sw.l, .rw.ready.l .sw.r { opacity: 1; }
+.swipey .row { position: relative; background: var(--card); transition: transform .18s ease, background .15s; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.swipey .row.swiping { transition: none; }
+.swipey .row.pressing { background: var(--sunk); }
+.row.gone { animation: none; opacity: .5; }
+/* もっと */
+.mh { margin: 0; padding: 14px 16px 4px; font-size: 16px; }
+.moregrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 14px 6px; }
+.moregrid button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 14px 6px 10px; border-radius: 14px; background: var(--sunk); text-align: center; }
+.moregrid button[aria-pressed="true"] { box-shadow: 0 0 0 1.5px var(--accent); }
+.moregrid svg { width: 24px; height: 24px; color: var(--ink); } .moregrid b { font-size: 13px; } .moregrid small { font-size: 10px; color: var(--mute); }
+.moregrid .badge { position: absolute; top: 8px; right: 10px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent); color: var(--bg); font: 600 10.5px/18px var(--f-num); text-align: center; padding: 0 5px; font-style: normal; }
+nav.tabs .badge.dotb { min-width: 8px; width: 8px; height: 8px; padding: 0; right: calc(50% - 16px); top: 5px; }
+nav.tabs button { font-size: 10px !important; align-self: start; }
+#readbadge, #shopbadge { display: none !important; }
+
 /* ===== 読む ===== */
 .bm { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--mute); flex: none; }
 .bm svg { width: 18px; height: 18px; }
@@ -608,18 +655,16 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 </style>
 
 <div id="app">
-  <header class="top"><h1>今どこ<small>IMADOKO</small></h1><span class="date" id="date"></span><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button><button type="button" class="iconbtn" id="add" aria-label="新しく入れる">＋</button></header>
+  <header class="top"><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
+    <button type="button" data-tab="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
     <button type="button" data-tab="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg>AI<span class="badge" id="aibadge" hidden></span></button>
-    <button type="button" data-tab="read"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg>読む<span class="badge" id="readbadge" hidden></span></button>
     <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
-    <button type="button" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>買う<span class="badge" id="shopbadge" hidden></span></button>
-    <button type="button" data-tab="news"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg>ニュース</button>
-    <button type="button" data-tab="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>運用</button>
-    <button type="button" data-tab="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>DB</button>
+    <button type="button" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>もっと<span class="badge dotb" id="morebadge" hidden></span><span id="readbadge" hidden></span><span id="shopbadge" hidden></span></button>
   </nav>
+  <button type="button" class="fab" id="add" aria-label="新しく入れる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
 <div id="page" hidden></div>
 <div id="modal" hidden></div>
@@ -683,7 +728,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 
   // ================= 状態 =================
   const S = {
-    mode: "loading", tab: "flow", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
+    mode: "loading", tab: "today", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
@@ -1665,8 +1710,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   function rowHtml(t, i, { check = true } = {}) {
     const st = stageOf(t); const m = metaOf(t);
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
-    return `<div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
-      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div>`;
+    return `<div class="rw"><span class="sw l" aria-hidden="true">✓ 済み</span><span class="sw r" aria-hidden="true">明日 →</span><div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
+      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
   }
   function stageItems(k) {
     const items = inStage(k).slice(); const d = TODAY();
@@ -1712,7 +1757,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       <div class="card panel" id="stagepanel" data-swipestage="1"></div>`);
     const st = STAGES[S.stage]; const items = stageItems(S.stage); const pos = FLOW_ORDER.indexOf(S.stage);
     const panel = $("#stagepanel");
-    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${FLOW_MAIN.includes(S.stage) ? `${pos + 1}. ` : ""}${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll" id="stagelist"></div>`;
+    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${FLOW_MAIN.includes(S.stage) ? `${pos + 1}. ` : ""}${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll swipey" id="stagelist"></div>`;
     const box = $("#stagelist");
     if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
@@ -2005,6 +2050,83 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     paged(box, "db", items, 52, (r) => `<button type="button" class="row" data-dbrow="${S.dbRows.indexOf(r)}"><span class="main"><span class="nm">${esc(text(r[title]) || "（無題）")}</span><span class="sub">${esc(shown.map((p) => cell(r, p)).filter(Boolean).slice(0, 3).join("・"))}</span></span><span class="meta">›</span></button>`);
   }
 
+  // ================= 今日：片づけることに絞ったホーム（残り・遅れ・枠ごとの一覧・済み・次にやるから足す） =================
+  const buzz = (ms = 10) => { try { navigator.vibrate?.(ms); } catch { /* 無ければ何もしない */ } };
+  function renderToday(view) {
+    const d = TODAY(); const today = stageItems("today"); const late = today.filter((t) => t.date < d); const rest = today.filter((t) => t.date >= d);
+    const done = S.doneToday.length; const total = today.length + done; const pct = total ? Math.round((done / total) * 100) : 0;
+    const loading = S.mode === "loading" && !S.tasks.length;
+    const first = late[0] || rest[0];
+    const tip = adviceTop();
+    // 進み具合の輪
+    const R = 24, C = 2 * Math.PI * R;
+    view.insertAdjacentHTML("beforeend", `<div class="hero card">
+        <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${R}" class="bg"/><circle cx="30" cy="30" r="${R}" class="fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct / 100)}"/><text x="30" y="34" text-anchor="middle">${loading ? "…" : `${pct}%`}</text></svg>
+        <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>のこり ${today.length}件</b><span>${done ? `${done}件 終わった` : "まだ手つかず"}${late.length ? `・<em>遅れ ${late.length}</em>` : ""}</span>` : `<b>今日は全部終わり ✨</b><span>${done ? `${done}件 片づけた` : "何もありません"}</span>`}</div>
+        ${first ? `<button type="button" class="hnext" data-open="${first.id}"><small>まず これ</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button>` : ""}
+      </div>
+      ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>提案</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
+      <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
+    const box = $("#todaylist");
+    const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i)).join("")}` : "");
+    let html = "";
+    if (late.length) html += `<div class="sech late"><span>遅れ</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">全部 今日に</button></div>${late.map((t, i) => rowHtml(t, i)).join("")}`;
+    const groups = new Map(); for (const t of rest) { const k = t.waku || "枠なし"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
+    for (const k of [...WAKU, "枠なし"]) if (groups.has(k)) html += sec(k, groups.get(k));
+    if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "おつかれさまでした" : "今日の予定はありません"}</b><span>次にやるから1つ選んで、今日に入れてみましょう</span></div>`;
+    // 済み（たたむ）
+    if (done) html += `<details class="donebox"${!today.length ? " open" : ""}><summary><span>済み</span><small>${done}</small></summary>${S.doneToday.map((t, i) => rowHtml(t, i, { check: false })).join("")}</details>`;
+    // 次にやる から足す
+    const next = stageItems("next").slice(0, 8);
+    if (next.length) html += `<details class="nextbox"${!today.length ? " open" : ""}><summary><span>次にやる から足す</span><small>${inStage("next").length}</small></summary>${next.map((t) => `<div class="row pick" data-id="${t.id}" style="--c:var(--s-next)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || t.tag || `${ageOf(t)}日`)}</span></button><button type="button" class="qc" data-pulltoday="${t.id}">今日</button></div>`).join("")}${inStage("next").length > 8 ? `<button type="button" class="morelink" data-gostage="next">すべて見る ›</button>` : ""}</details>`;
+    box.innerHTML = html || `<div class="empty">読みこみ中…</div>`;
+    box.insertAdjacentHTML("beforeend", `<div class="ghint mute">→ 右にスワイプで済み　← 左で明日　長押しで日付・状態</div>`);
+  }
+
+  // ================= 行の操作：スワイプ（右＝済み・左＝明日）と長押し（日付・状態の変更） =================
+  (() => {
+    let g = null, lpTimer = 0; const THR = 84;
+    const guard = () => { const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener("click", stop, { capture: true, once: true }); setTimeout(() => removeEventListener("click", stop, { capture: true }), 350); };
+    const cancel = () => { clearTimeout(lpTimer); if (g?.row) g.row.classList.remove("pressing"); g = null; };
+    document.addEventListener("pointerdown", (e) => {
+      const row = e.target.closest(".swipey .row[data-id]"); if (!row || e.button > 0 || e.target.closest("a")) return;
+      const t = known.get(row.dataset.id); if (!t) return;
+      g = { row, t, x: e.clientX, y: e.clientY, id: e.pointerId, dx: 0, moving: false, wrap: row.closest(".rw") };
+      row.classList.add("pressing");
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => { if (!g || g.moving) return; const id = g.t.id; buzz(15); g.row.classList.remove("pressing"); g = null; guard(); openQuick(id); }, 450);
+    }, { passive: true });
+    document.addEventListener("pointermove", (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.moving) { if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; clearTimeout(lpTimer); g.row.classList.remove("pressing"); if (Math.abs(dy) > Math.abs(dx)) { g = null; return; } g.moving = true; g.row.classList.add("swiping"); try { g.row.setPointerCapture(e.pointerId); } catch { /* 無視 */ } }
+      const canDone = g.t.status !== ST.done; g.dx = canDone ? dx : Math.min(0, dx);
+      g.row.style.transform = `translateX(${g.dx}px)`;
+      const w = g.wrap; if (w) { w.classList.toggle("r", g.dx > 0); w.classList.toggle("l", g.dx < 0); w.classList.toggle("ready", Math.abs(g.dx) > THR); }
+      if (Math.abs(g.dx) > THR && !g.buzzed) { g.buzzed = true; buzz(8); } if (Math.abs(g.dx) <= THR) g.buzzed = false;
+    });
+    const end = (e) => {
+      if (!g || e.pointerId !== g.id) return; const G = g; cancel();
+      G.row.classList.remove("swiping");
+      if (!G.moving) return;
+      guard();
+      const w = G.wrap;
+      if (G.dx > THR) { G.row.style.transform = "translateX(110%)"; G.row.classList.add("gone"); setTimeout(() => move(G.t, "done"), reduce ? 0 : 200); }
+      else if (G.dx < -THR) { G.row.style.transform = "translateX(-110%)"; G.row.classList.add("gone"); setTimeout(() => move(G.t, G.t.status === ST.done ? "next" : "tomorrow"), reduce ? 0 : 200); }
+      else { G.row.style.transform = ""; w?.classList.remove("r", "l", "ready"); }
+    };
+    document.addEventListener("pointerup", end); document.addEventListener("pointercancel", (e) => { if (g && e.pointerId === g.id) { g.row.style.transform = ""; g.wrap?.classList.remove("r", "l", "ready"); cancel(); } });
+    // 長押し中にスクロールしたら取り消し
+    document.addEventListener("scroll", cancel, true);
+  })();
+
+  // ================= もっと（読む・買う・ニュース・運用・DB） =================
+  const MORE = [["read", "読む", "しおりを挟んだ資料", () => S.readList.filter(isRead).length], ["shop", "買う", "買い物リストと在庫", () => stockSoon().length], ["news", "ニュース", "今朝の見出し", () => 0], ["log", "運用", "使い方と診断", () => 0], ["db", "DB", "すべてのデータベース", () => 0]];
+  const MORE_ICON = { read: `<path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/>`, shop: `<path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/>`, news: `<path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/>`, log: `<circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`, db: `<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>` };
+  const inMore = (tab) => MORE.some(([k]) => k === tab);
+  function openMore() {
+    modal(`<h3 class="mh">もっと</h3><div class="moregrid">${MORE.map(([k, n, d, badge]) => { const b = badge(); return `<button type="button" data-gotab="${k}" aria-pressed="${S.tab === k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${MORE_ICON[k]}</svg><b>${n}</b><small>${d}</small>${b ? `<i class="badge">${b}</i>` : ""}</button>`; }).join("")}</div><div class="form" style="padding-top:0"><button type="button" class="btn" data-mclose="1">閉じる</button></div>`);
+  }
   // ================= ページ（詳細）：プロパティ・AIとのやり取り・本文 =================
   let PG = null; // { kind, id, url, title, titleProp, task, props, raw, qa }
   const hereTime = () => { const n = new Date(Date.now() + 9 * 3600e3).toISOString(); return `${+n.slice(5, 7)}/${+n.slice(8, 10)} ${n.slice(11, 16)}`; };
@@ -3054,7 +3176,8 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   // ================= 描画 =================
   const main = $("#main");
   function render() {
-    for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab));
+    for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
+    const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -3063,7 +3186,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
-    ({ flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ today: renderToday, flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -3087,10 +3210,14 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
     if (el.id === "reload") { load(); return; }
+    if (d.tab === "more") { openMore(); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
+    if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
+    if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
+    if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
     if (d.sview) { S.stageView = d.sview; render(); return; }
-    if (d.done) { const t = known.get(d.done); if (!t) return; el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
+    if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
     if (d.runnow) { runNow(el); return; }
@@ -3173,7 +3300,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["flow", "ai", "read", "triage", "shop", "news", "log", "db"];
+  const TABS = ["today", "flow", "ai", "triage"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -3181,11 +3308,11 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
       if (!g || e.pointerId !== g.id) return; const G = g; g = null;
       const dx = e.clientX - G.x, dy = e.clientY - G.y; if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || performance.now() - G.t > 700) return;
       const el = G.el instanceof Element ? G.el : null; if (!el) return;
-      if (el.closest("input, textarea, select, [data-swipe], .board, .tablewrap, .tcard, .menu")) return;
+      if (el.closest("input, textarea, select, [data-swipe], .swipey, .board, .tablewrap, .tcard, .menu")) return;
       const edge = G.x < 40;
       if (!$("#modal").hidden) { if (dx > 0 && el.closest("#modal")) closeModal(); return; }
       if (!$("#page").hidden) { if (dx > 0 && (edge || !el.closest(".ed"))) { swipeGuard(); closePage(); } return; }
-      if (el.closest("nav.tabs")) { const i = TABS.indexOf(S.tab) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
+      if (el.closest("nav.tabs")) { const i = Math.max(0, TABS.indexOf(S.tab)) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
       if (S.tab === "db" && S.dbOpen && dx > 0) { swipeGuard(); S.dbOpen = null; render(); return; }
       if (S.tab === "flow" && el.closest("[data-swipestage], .pipe, .park")) { swipeGuard(); stageStep(dx < 0 ? 1 : -1); }
     }, true);
@@ -3284,7 +3411,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["today", "flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
   window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用

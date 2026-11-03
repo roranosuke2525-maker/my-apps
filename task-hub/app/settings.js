@@ -54,7 +54,7 @@
 
   // ================= 状態 =================
   const S = {
-    mode: "loading", tab: "flow", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
+    mode: "loading", tab: "today", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
