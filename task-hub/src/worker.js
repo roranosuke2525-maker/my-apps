@@ -10,7 +10,7 @@ const MD_VERSION = "2026-03-11"; // 本文の Markdown（Notion-flavored Markdow
 // 画面（HTML）は端のキャッシュに残らないようにして配る（更新したらすぐ新しい画面になるように）
 async function page(request, env, url) {
   const res = await env.ASSETS.fetch(request);
-  if (url.pathname !== "/" && url.pathname !== "/index.html") return res;
+  if (url.pathname !== "/" && url.pathname !== "/index.html" && url.pathname !== "/sw.js") return res;
   const h = new Headers(res.headers); h.set("Cache-Control", "no-store"); h.delete("ETag");
   return new Response(res.body, { status: res.status, headers: h });
 }

@@ -236,23 +236,24 @@
     const ok = () => { const v = i.value; closeModal(); done(v); };
     $("#askok").onclick = ok; i.onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) ok(); };
   }
-  let capKind = "inbox";
+  let capKind = "inbox", capToday = false;
   function openCapture() {
     modal(`<h3>新しく入れる</h3><div class="form"><div class="seg">${[["inbox", "📥 収集箱へ"], ["ai", "🤖 AIに頼む"]].map(([k, n]) => `<button type="button" data-cap="${k}" aria-pressed="${capKind === k}">${n}</button>`).join("")}</div>
       <label for="cp-name">名前</label><input id="cp-name" type="text" maxlength="200" placeholder="${capKind === "ai" ? "例）食洗機 ビルトイン 比較" : "例）郵便受けの対策を決める"}">
-      ${capKind === "ai" ? `<label for="cp-url">参考URL</label><input id="cp-url" type="url" placeholder="https://"><label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて"], ["🔬", "🔬 徹底調査"], ["💬", "💬 深掘り"]].map(([k, n]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b></button>`).join("")}</div>` : `<label for="cp-next">次の一歩（なくてもよい）</label><input id="cp-next" type="text" maxlength="200">`}
+      ${capKind === "ai" ? `<label for="cp-url">参考URL</label><input id="cp-url" type="url" placeholder="https://"><label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて"], ["🔬", "🔬 徹底調査"], ["💬", "💬 深掘り"]].map(([k, n]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b></button>`).join("")}</div>` : `<label for="cp-next">次の一歩（なくてもよい）</label><input id="cp-next" type="text" maxlength="200"><label class="tgl"><input type="checkbox" id="cp-today" ${capToday ? "checked" : ""}><span>今日やる（⏭ NEXT・実行日＝今日）</span></label>`}
       <label for="cp-memo">メモ（本文に入る）</label><textarea id="cp-memo"></textarea>
       <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-capgo="1" style="flex:1">${capKind === "ai" ? "AIに預ける" : "入れる"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
     setTimeout(() => $("#cp-name")?.focus(), 50);
   }
-  async function createTask({ name, kind, mode, url, next, memo, app }) {
-    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : ST.inbox, "プレイヤー": [PLAYER] };
+  async function createTask({ name, kind, mode, url, next, memo, app, today }) {
+    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : today ? ST.next : ST.inbox, "プレイヤー": [PLAYER] };
+    if (today && kind !== "ai") { props["date:実行日:start"] = TODAY(); props["date:実行日:is_datetime"] = 0; }
     if (kind === "ai") props["AIアクション"] = mode;
     if (app) props["アプリ"] = [app];
     if (url) props["userDefined:URL"] = url;
     if (next) props.NEXT = next;
     const content = mode === "🛠" && kind === "ai" ? `## 🛠 依頼\n\n${memo || name}\n\n## 🛠 修正の記録\n\n最新：まだありません` : [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
-    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
+    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
     if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content; return t; }
     setSync("busy");
     try {
@@ -264,8 +265,9 @@
     const name = $("#cp-name").value.trim(); if (!name) { $("#cp-name").focus(); return; }
     const btn = $("[data-capgo]"); btn.disabled = true;
     try {
-      await createTask({ name, kind: capKind, mode: reqMode, url: $("#cp-url")?.value.trim(), next: $("#cp-next")?.value.trim(), memo: $("#cp-memo").value.trim() });
-      closeModal(); refresh(); toast(capKind === "ai" ? `AIに預けました（次の定時処理 ${nextRun()}）` : "収集箱に入れました");
+      capToday = !!$("#cp-today")?.checked;
+      await createTask({ name, kind: capKind, mode: reqMode, url: $("#cp-url")?.value.trim(), next: $("#cp-next")?.value.trim(), memo: $("#cp-memo").value.trim(), today: capToday });
+      closeModal(); refresh(); toast(capKind === "ai" ? `AIに預けました（次の定時処理 ${nextRun()}）` : capToday ? "今日やるに入れました" : "収集箱に入れました");
     } catch (err) { btn.disabled = false; toast(err?.code === "server_unavailable" ? "返事がありません。重ならないよう ↻ で確かめてから入れ直してください" : `入れられませんでした：${errText(err)}`); }
   }
   async function submitRequest() {

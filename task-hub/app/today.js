@@ -4,21 +4,23 @@
     const d = TODAY(); const today = stageItems("today"); const late = today.filter((t) => t.date < d); const rest = today.filter((t) => t.date >= d);
     const done = S.doneToday.length; const total = today.length + done; const pct = total ? Math.round((done / total) * 100) : 0;
     const loading = S.mode === "loading" && !S.tasks.length;
-    const first = late[0] || rest[0];
+    if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>読み込めませんでした</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一度</button></div></div>`); return; }
+    const doing = today.find((t) => t.status === ST.doing); const first = doing || late[0] || rest[0];
     const tip = adviceTop();
     // 進み具合の輪
     const R = 24, C = 2 * Math.PI * R;
     view.insertAdjacentHTML("beforeend", `<div class="hero card">
         <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${R}" class="bg"/><circle cx="30" cy="30" r="${R}" class="fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct / 100)}"/><text x="30" y="34" text-anchor="middle">${loading ? "…" : `${pct}%`}</text></svg>
         <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>のこり ${today.length}件</b><span>${done ? `${done}件 終わった` : "まだ手つかず"}${late.length ? `・<em>遅れ ${late.length}</em>` : ""}</span>` : `<b>今日は全部終わり ✨</b><span>${done ? `${done}件 片づけた` : "何もありません"}</span>`}</div>
-        ${first ? `<button type="button" class="hnext" data-open="${first.id}"><small>まず これ</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button>` : ""}
+        ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま やっている" : "まず これ"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
       </div>
+      ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 更新できていません（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示）　↻ もう一度</button>` : ""}
       ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>提案</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");
-    const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i)).join("")}` : "");
+    const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}` : "");
     let html = "";
-    if (late.length) html += `<div class="sech late"><span>遅れ</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">全部 今日に</button></div>${late.map((t, i) => rowHtml(t, i)).join("")}`;
+    if (late.length) html += `<div class="sech late"><span>遅れ</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">全部 今日に</button></div>${late.map((t, i) => rowHtml(t, i, { meta: "late" })).join("")}`;
     const groups = new Map(); for (const t of rest) { const k = t.waku || "枠なし"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
     for (const k of [...WAKU, "枠なし"]) if (groups.has(k)) html += sec(k, groups.get(k));
     if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "おつかれさまでした" : "今日の予定はありません"}</b><span>次にやるから1つ選んで、今日に入れてみましょう</span></div>`;

@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今どこ">
 <meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -492,6 +493,33 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .diagall .statrow { margin-bottom: 8px; } .diagall .verdict { margin-bottom: 8px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
+/* ===== 押しやすさ・PWA ===== */
+.top { padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important; }
+.iconbtn { width: 40px; height: 40px; }
+.check { width: 40px; height: 40px; border: 0 !important; position: relative; color: transparent; background: none !important; }
+.check::before { content: ""; width: 23px; height: 23px; border-radius: 50%; border: 1.5px solid var(--c, var(--line)); transition: background .15s, border-color .15s; }
+.check.on::before { background: var(--ok); border-color: var(--ok); }
+.check.on { color: var(--bg); }
+.check > * { position: absolute; }
+.check { font-size: 13px; }
+.check:not(.on):active::before { background: color-mix(in srgb, var(--c) 18%, transparent); }
+.check.big { width: 48px; height: 48px; } .check.big::before { width: 30px; height: 30px; border-color: var(--ok); } .check.big { font-size: 16px; }
+.row { gap: 4px; padding: 4px 8px 4px 4px; min-height: 56px; }
+.row .qbtn { min-height: 40px; padding: 6px 6px 6px 10px; }
+.qc { height: 34px; }
+.sech .qc { height: 30px; }
+.scroll, .shop { padding-bottom: 84px; }
+.errbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; } .errbox b { font-size: 15px; color: var(--ink); } .errbox span { font-size: 12.5px; }
+.stale { flex: none; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--s-today) 18%, var(--card)); color: var(--s-today); font-size: 12px; text-align: left; }
+#ptr { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 50%; transform: translate(-50%, -40px); z-index: 25; padding: 6px 14px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); font-size: 12px; color: var(--mute); opacity: 0; transition: opacity .15s; pointer-events: none; }
+#ptr.show { opacity: 1; } #ptr.ready { color: var(--accent); }
+.tgl { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; } .tgl input { width: 20px; height: 20px; accent-color: var(--accent); }
+.doing { font-style: normal; color: var(--s-next); margin-right: 4px; font-size: 11px; }
+.hnext { display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; }
+.hopen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; -webkit-touch-callout: none; }
+.hopen small { font-size: 10.5px; color: var(--accent); letter-spacing: .08em; } .hopen span { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hopen small.mute { color: var(--mute); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmain, .main { -webkit-touch-callout: none; }
+
 /* ===== 今日（ホーム）・操作 ===== */
 .top .ttl { display: flex; flex-direction: column; line-height: 1.1; flex: 1; min-width: 0; }
 .top .ttl .date { font-size: 17px; font-weight: 700; color: var(--ink); font-family: var(--f); }
@@ -505,17 +533,17 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .ring .fg { fill: none; stroke: var(--ok); stroke-width: 5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .6s ease; }
 .ring text { font: 600 12px var(--f-num); fill: var(--ink); }
 .ht { display: flex; flex-direction: column; } .ht b { font-size: 17px; } .ht span { font-size: 12px; color: var(--mute); } .ht em { font-style: normal; color: var(--late); font-weight: 700; }
-.hnext { display: flex; flex-direction: column; gap: 1px; text-align: left; padding: 8px 10px; border-radius: 10px; background: var(--sunk); }
+.hnext { display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 10px; background: var(--sunk); }
 .hnext small { font-size: 10.5px; color: var(--accent); letter-spacing: .08em; } .hnext span { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hnext small.mute { color: var(--mute); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sech { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; font-size: 11.5px; font-weight: 700; color: var(--mute); letter-spacing: .06em; }
-.sech small { font-family: var(--f-num); font-weight: 500; } .sech.late { color: var(--late); } .sech .qc { margin-left: auto; height: 26px; font-size: 11px; }
+.sech small { font-family: var(--f-num); font-weight: 500; } .sech.late { color: var(--late); } .sech .qc { margin-left: auto; height: 34px; font-size: 11.5px; }
 .alldone { padding: 28px 16px; text-align: center; display: flex; flex-direction: column; gap: 4px; } .alldone b { font-size: 16px; } .alldone span { font-size: 12.5px; color: var(--mute); }
 .donebox, .nextbox { border-top: 1px solid var(--line); margin-top: 6px; }
 .donebox summary, .nextbox summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; font-size: 11.5px; font-weight: 700; color: var(--mute); letter-spacing: .06em; cursor: pointer; list-style: none; }
 .donebox summary::-webkit-details-marker, .nextbox summary::-webkit-details-marker { display: none; }
 .donebox summary::after, .nextbox summary::after { content: "▸"; margin-left: auto; transition: transform .15s; } details[open] > summary::after { transform: rotate(90deg); }
 .donebox .row .nm { color: var(--mute); text-decoration: line-through; }
-.row.pick .qc { height: 28px; font-size: 11.5px; flex: none; }
+.row.pick .qc { height: 34px; font-size: 11.5px; flex: none; }
 .morelink { display: block; width: 100%; text-align: center; padding: 10px; font-size: 12.5px; color: var(--accent); }
 .ghint { text-align: center; font-size: 10.5px; padding: 14px 0 20px; }
 /* スワイプ：行の下に「済み」「明日」の面 */

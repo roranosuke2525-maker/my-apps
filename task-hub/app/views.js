@@ -109,15 +109,18 @@
     if (t.date) return t.date < d && t.status !== ST.done ? { tx: `遅れ ${diffDays(t.date, d)}日`, late: true } : { tx: t.date === d ? "今日" : `${md(t.date)}（${WD[dow(t.date)]}）` };
     return { tx: `${ageOf(t)}日` };
   }
-  function rowHtml(t, i, { check = true } = {}) {
+  function rowHtml(t, i, { check = true, meta = "" } = {}) {
     const st = stageOf(t); const m = metaOf(t);
+    // 今日の一覧では「今日」の代わりに重さ（S/M/L/XL）を出す
+    if (meta === "weight") m.tx = t.weight || "";
+    const nmPre = t.status === ST.doing ? `<i class="doing" aria-label="作業中">▶</i>` : "";
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
     return `<div class="rw"><span class="sw l" aria-hidden="true">✓ 済み</span><span class="sw r" aria-hidden="true">明日 →</span><div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
-      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
+      <button type="button" class="main" data-open="${t.id}"><span class="nm">${nmPre}${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
   }
   function stageItems(k) {
     const items = inStage(k).slice(); const d = TODAY();
-    if (k === "today") return items.sort((a, b) => (b.date < d) - (a.date < d) || WAKU.indexOf(a.waku) - WAKU.indexOf(b.waku));
+    if (k === "today") return items.sort((a, b) => (b.status === ST.doing) - (a.status === ST.doing) || (b.date < d) - (a.date < d) || WAKU.indexOf(a.waku) - WAKU.indexOf(b.waku));
     if (k === "plan") return items.sort((a, b) => a.date.localeCompare(b.date));
     if (k === "next" || k === "wait") return items.sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
     if (k === "ai") return items.sort((a, b) => (AI_TURN[b.ai] === "me") - (AI_TURN[a.ai] === "me") || (b.edited || "").localeCompare(a.edited || ""));

@@ -34,7 +34,7 @@
     const el = e.target.closest("button, tr[data-open], tr[data-dbrow], [data-open]"); if (!el) return;
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
-    if (el.id === "reload") { load(); return; }
+    if (el.id === "reload" || el.id === "retry") { load(); return; }
     if (d.tab === "more") { openMore(); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
     if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
@@ -112,6 +112,7 @@
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();
     if (e.key === "/" && !e.target.closest?.("input, textarea, [contenteditable]") && $("#modal").hidden && $("#page").hidden) { e.preventDefault(); openSearch(); return; }
+    if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.target.closest?.("input, textarea, [contenteditable]") && $("#modal").hidden && $("#page").hidden) { e.preventDefault(); openCapture(); return; }
     if (e.key === "Escape") { if (document.querySelector(".menu")) closeMenus(); else if (!$("#modal").hidden) closeModal(); else if (!$("#page").hidden && !e.target.closest(".ed")) closePage(); }
   });
   document.addEventListener("focusout", (e) => { if (e.target.id === "ptitle") saveTitle(); });
@@ -122,6 +123,15 @@
   });
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (!document.activeElement?.matches("input, textarea")) render(); }, 150); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.mode === "live" && Date.now() - (S.loadedAt || 0) > 10 * 60e3 && $("#page").hidden) load(); });
+
+  // ================= 引っぱって更新（一覧の一番上で下に引く） =================
+  (() => {
+    let g = null; const ind = Object.assign(document.createElement("div"), { id: "ptr", textContent: "↓ 引っぱって更新" }); document.body.append(ind);
+    main.addEventListener("pointerdown", (e) => { const sc = e.target.closest(".scroll, .list"); if (!sc || sc.scrollTop > 0 || e.target.closest(".row, .rcard, input, textarea")) return; g = { y: e.clientY, x: e.clientX, id: e.pointerId, d: 0 }; }, { passive: true });
+    main.addEventListener("pointermove", (e) => { if (!g || e.pointerId !== g.id) return; const dy = e.clientY - g.y; if (dy < 8 || Math.abs(e.clientX - g.x) > Math.abs(dy)) return; g.d = Math.min(dy, 110); ind.style.transform = `translate(-50%, ${g.d - 40}px)`; ind.classList.toggle("ready", g.d >= 70); ind.textContent = g.d >= 70 ? "↻ 離すと更新" : "↓ 引っぱって更新"; ind.classList.add("show"); });
+    const end = (e) => { if (!g || e.pointerId !== g.id) return; const d = g.d; g = null; ind.classList.remove("show", "ready"); ind.style.transform = ""; if (d >= 70 && S.mode !== "loading") { buzz(); load(); } };
+    main.addEventListener("pointerup", end); main.addEventListener("pointercancel", end);
+  })();
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
@@ -150,6 +160,7 @@
     const mcp = await getMcp();
     if (!mcp) { useDemo(); return; }
     if (VIA === "api" && !store.get("key")) await askKey(false);
+    if (VIA === "api" && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("/sw.js").catch(() => { /* 無くても動く */ });
     try { await loadLive(); S.mode = "live"; S.error = null; setSync("ok"); }
     catch (err) { S.error = errText(err); S.mode = S.tasks.length ? "live" : "error"; setSync("err"); toast(S.error); }
     render();
@@ -239,6 +250,6 @@
   try { const h = location.hash.slice(1); if (["today", "flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
-  window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
+  window.__imadoko = { S, ST, stageOf, render, parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
 })();
 </script>

@@ -62,6 +62,12 @@ test("済みにした補充タスク：補充対象が空でない（リレー�
   assert.deepEqual(f.and[1], { property: "補充対象", relation: { is_not_empty: true } });
 });
 
+test("画面と sw.js は端に残さない（no-store）、ほかの部品はそのまま", async () => {
+  const env = { ASSETS: { fetch: () => new Response("x", { headers: { "Cache-Control": "public, max-age=0", ETag: "abc" } }) } };
+  for (const path of ["/", "/sw.js"]) { const r = await worker.fetch(new Request(`https://app.test${path}`), env); assert.equal(r.headers.get("Cache-Control"), "no-store"); assert.equal(r.headers.get("ETag"), null); }
+  const r = await worker.fetch(new Request("https://app.test/icons/x.png"), env); assert.equal(r.headers.get("ETag"), "abc");
+});
+
 test("検索：名前か次の一歩に含む（title と rich_text の contains）", () => {
   const f = toFilter({ type: "group", operator: "or", filters: [{ type: "property", property: "名前", propertyType: "title", operator: "string_contains", value: { type: "exact", value: "コーヒー" } }, { type: "property", property: "NEXT", propertyType: "text", operator: "string_contains", value: { type: "exact", value: "コーヒー" } }] });
   assert.deepEqual(f, { or: [{ property: "名前", title: { contains: "コーヒー" } }, { property: "NEXT", rich_text: { contains: "コーヒー" } }] });

@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今どこ">
 <meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -492,6 +493,33 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .diagall .statrow { margin-bottom: 8px; } .diagall .verdict { margin-bottom: 8px; }
 @media (max-width: 380px) { .g-roles { grid-template-columns: 1fr; } .g-branch { grid-template-columns: 1fr 1fr; } }
 
+/* ===== 押しやすさ・PWA ===== */
+.top { padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important; }
+.iconbtn { width: 40px; height: 40px; }
+.check { width: 40px; height: 40px; border: 0 !important; position: relative; color: transparent; background: none !important; }
+.check::before { content: ""; width: 23px; height: 23px; border-radius: 50%; border: 1.5px solid var(--c, var(--line)); transition: background .15s, border-color .15s; }
+.check.on::before { background: var(--ok); border-color: var(--ok); }
+.check.on { color: var(--bg); }
+.check > * { position: absolute; }
+.check { font-size: 13px; }
+.check:not(.on):active::before { background: color-mix(in srgb, var(--c) 18%, transparent); }
+.check.big { width: 48px; height: 48px; } .check.big::before { width: 30px; height: 30px; border-color: var(--ok); } .check.big { font-size: 16px; }
+.row { gap: 4px; padding: 4px 8px 4px 4px; min-height: 56px; }
+.row .qbtn { min-height: 40px; padding: 6px 6px 6px 10px; }
+.qc { height: 34px; }
+.sech .qc { height: 30px; }
+.scroll, .shop { padding-bottom: 84px; }
+.errbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; } .errbox b { font-size: 15px; color: var(--ink); } .errbox span { font-size: 12.5px; }
+.stale { flex: none; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--s-today) 18%, var(--card)); color: var(--s-today); font-size: 12px; text-align: left; }
+#ptr { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 50%; transform: translate(-50%, -40px); z-index: 25; padding: 6px 14px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); font-size: 12px; color: var(--mute); opacity: 0; transition: opacity .15s; pointer-events: none; }
+#ptr.show { opacity: 1; } #ptr.ready { color: var(--accent); }
+.tgl { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; } .tgl input { width: 20px; height: 20px; accent-color: var(--accent); }
+.doing { font-style: normal; color: var(--s-next); margin-right: 4px; font-size: 11px; }
+.hnext { display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; }
+.hopen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; -webkit-touch-callout: none; }
+.hopen small { font-size: 10.5px; color: var(--accent); letter-spacing: .08em; } .hopen span { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hopen small.mute { color: var(--mute); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmain, .main { -webkit-touch-callout: none; }
+
 /* ===== 今日（ホーム）・操作 ===== */
 .top .ttl { display: flex; flex-direction: column; line-height: 1.1; flex: 1; min-width: 0; }
 .top .ttl .date { font-size: 17px; font-weight: 700; color: var(--ink); font-family: var(--f); }
@@ -505,17 +533,17 @@ nav.tabs button svg { width: 21px; height: 21px; }
 .ring .fg { fill: none; stroke: var(--ok); stroke-width: 5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .6s ease; }
 .ring text { font: 600 12px var(--f-num); fill: var(--ink); }
 .ht { display: flex; flex-direction: column; } .ht b { font-size: 17px; } .ht span { font-size: 12px; color: var(--mute); } .ht em { font-style: normal; color: var(--late); font-weight: 700; }
-.hnext { display: flex; flex-direction: column; gap: 1px; text-align: left; padding: 8px 10px; border-radius: 10px; background: var(--sunk); }
+.hnext { display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 10px; background: var(--sunk); }
 .hnext small { font-size: 10.5px; color: var(--accent); letter-spacing: .08em; } .hnext span { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hnext small.mute { color: var(--mute); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sech { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; font-size: 11.5px; font-weight: 700; color: var(--mute); letter-spacing: .06em; }
-.sech small { font-family: var(--f-num); font-weight: 500; } .sech.late { color: var(--late); } .sech .qc { margin-left: auto; height: 26px; font-size: 11px; }
+.sech small { font-family: var(--f-num); font-weight: 500; } .sech.late { color: var(--late); } .sech .qc { margin-left: auto; height: 34px; font-size: 11.5px; }
 .alldone { padding: 28px 16px; text-align: center; display: flex; flex-direction: column; gap: 4px; } .alldone b { font-size: 16px; } .alldone span { font-size: 12.5px; color: var(--mute); }
 .donebox, .nextbox { border-top: 1px solid var(--line); margin-top: 6px; }
 .donebox summary, .nextbox summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; font-size: 11.5px; font-weight: 700; color: var(--mute); letter-spacing: .06em; cursor: pointer; list-style: none; }
 .donebox summary::-webkit-details-marker, .nextbox summary::-webkit-details-marker { display: none; }
 .donebox summary::after, .nextbox summary::after { content: "▸"; margin-left: auto; transition: transform .15s; } details[open] > summary::after { transform: rotate(90deg); }
 .donebox .row .nm { color: var(--mute); text-decoration: line-through; }
-.row.pick .qc { height: 28px; font-size: 11.5px; flex: none; }
+.row.pick .qc { height: 34px; font-size: 11.5px; flex: none; }
 .morelink { display: block; width: 100%; text-align: center; padding: 10px; font-size: 12.5px; color: var(--accent); }
 .ghint { text-align: center; font-size: 10.5px; padding: 14px 0 20px; }
 /* スワイプ：行の下に「済み」「明日」の面 */
@@ -1707,15 +1735,18 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (t.date) return t.date < d && t.status !== ST.done ? { tx: `遅れ ${diffDays(t.date, d)}日`, late: true } : { tx: t.date === d ? "今日" : `${md(t.date)}（${WD[dow(t.date)]}）` };
     return { tx: `${ageOf(t)}日` };
   }
-  function rowHtml(t, i, { check = true } = {}) {
+  function rowHtml(t, i, { check = true, meta = "" } = {}) {
     const st = stageOf(t); const m = metaOf(t);
+    // 今日の一覧では「今日」の代わりに重さ（S/M/L/XL）を出す
+    if (meta === "weight") m.tx = t.weight || "";
+    const nmPre = t.status === ST.doing ? `<i class="doing" aria-label="作業中">▶</i>` : "";
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
     return `<div class="rw"><span class="sw l" aria-hidden="true">✓ 済み</span><span class="sw r" aria-hidden="true">明日 →</span><div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
-      <button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
+      <button type="button" class="main" data-open="${t.id}"><span class="nm">${nmPre}${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
   }
   function stageItems(k) {
     const items = inStage(k).slice(); const d = TODAY();
-    if (k === "today") return items.sort((a, b) => (b.date < d) - (a.date < d) || WAKU.indexOf(a.waku) - WAKU.indexOf(b.waku));
+    if (k === "today") return items.sort((a, b) => (b.status === ST.doing) - (a.status === ST.doing) || (b.date < d) - (a.date < d) || WAKU.indexOf(a.waku) - WAKU.indexOf(b.waku));
     if (k === "plan") return items.sort((a, b) => a.date.localeCompare(b.date));
     if (k === "next" || k === "wait") return items.sort((a, b) => (a.edited || "").localeCompare(b.edited || ""));
     if (k === "ai") return items.sort((a, b) => (AI_TURN[b.ai] === "me") - (AI_TURN[a.ai] === "me") || (b.edited || "").localeCompare(a.edited || ""));
@@ -2056,21 +2087,23 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const d = TODAY(); const today = stageItems("today"); const late = today.filter((t) => t.date < d); const rest = today.filter((t) => t.date >= d);
     const done = S.doneToday.length; const total = today.length + done; const pct = total ? Math.round((done / total) * 100) : 0;
     const loading = S.mode === "loading" && !S.tasks.length;
-    const first = late[0] || rest[0];
+    if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>読み込めませんでした</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一度</button></div></div>`); return; }
+    const doing = today.find((t) => t.status === ST.doing); const first = doing || late[0] || rest[0];
     const tip = adviceTop();
     // 進み具合の輪
     const R = 24, C = 2 * Math.PI * R;
     view.insertAdjacentHTML("beforeend", `<div class="hero card">
         <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${R}" class="bg"/><circle cx="30" cy="30" r="${R}" class="fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct / 100)}"/><text x="30" y="34" text-anchor="middle">${loading ? "…" : `${pct}%`}</text></svg>
         <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>のこり ${today.length}件</b><span>${done ? `${done}件 終わった` : "まだ手つかず"}${late.length ? `・<em>遅れ ${late.length}</em>` : ""}</span>` : `<b>今日は全部終わり ✨</b><span>${done ? `${done}件 片づけた` : "何もありません"}</span>`}</div>
-        ${first ? `<button type="button" class="hnext" data-open="${first.id}"><small>まず これ</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button>` : ""}
+        ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま やっている" : "まず これ"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
       </div>
+      ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 更新できていません（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示）　↻ もう一度</button>` : ""}
       ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>提案</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");
-    const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i)).join("")}` : "");
+    const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}` : "");
     let html = "";
-    if (late.length) html += `<div class="sech late"><span>遅れ</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">全部 今日に</button></div>${late.map((t, i) => rowHtml(t, i)).join("")}`;
+    if (late.length) html += `<div class="sech late"><span>遅れ</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">全部 今日に</button></div>${late.map((t, i) => rowHtml(t, i, { meta: "late" })).join("")}`;
     const groups = new Map(); for (const t of rest) { const k = t.waku || "枠なし"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
     for (const k of [...WAKU, "枠なし"]) if (groups.has(k)) html += sec(k, groups.get(k));
     if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "おつかれさまでした" : "今日の予定はありません"}</b><span>次にやるから1つ選んで、今日に入れてみましょう</span></div>`;
@@ -2365,23 +2398,24 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const ok = () => { const v = i.value; closeModal(); done(v); };
     $("#askok").onclick = ok; i.onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) ok(); };
   }
-  let capKind = "inbox";
+  let capKind = "inbox", capToday = false;
   function openCapture() {
     modal(`<h3>新しく入れる</h3><div class="form"><div class="seg">${[["inbox", "📥 収集箱へ"], ["ai", "🤖 AIに頼む"]].map(([k, n]) => `<button type="button" data-cap="${k}" aria-pressed="${capKind === k}">${n}</button>`).join("")}</div>
       <label for="cp-name">名前</label><input id="cp-name" type="text" maxlength="200" placeholder="${capKind === "ai" ? "例）食洗機 ビルトイン 比較" : "例）郵便受けの対策を決める"}">
-      ${capKind === "ai" ? `<label for="cp-url">参考URL</label><input id="cp-url" type="url" placeholder="https://"><label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて"], ["🔬", "🔬 徹底調査"], ["💬", "💬 深掘り"]].map(([k, n]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b></button>`).join("")}</div>` : `<label for="cp-next">次の一歩（なくてもよい）</label><input id="cp-next" type="text" maxlength="200">`}
+      ${capKind === "ai" ? `<label for="cp-url">参考URL</label><input id="cp-url" type="url" placeholder="https://"><label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて"], ["🔬", "🔬 徹底調査"], ["💬", "💬 深掘り"]].map(([k, n]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b></button>`).join("")}</div>` : `<label for="cp-next">次の一歩（なくてもよい）</label><input id="cp-next" type="text" maxlength="200"><label class="tgl"><input type="checkbox" id="cp-today" ${capToday ? "checked" : ""}><span>今日やる（⏭ NEXT・実行日＝今日）</span></label>`}
       <label for="cp-memo">メモ（本文に入る）</label><textarea id="cp-memo"></textarea>
       <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-capgo="1" style="flex:1">${capKind === "ai" ? "AIに預ける" : "入れる"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
     setTimeout(() => $("#cp-name")?.focus(), 50);
   }
-  async function createTask({ name, kind, mode, url, next, memo, app }) {
-    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : ST.inbox, "プレイヤー": [PLAYER] };
+  async function createTask({ name, kind, mode, url, next, memo, app, today }) {
+    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : today ? ST.next : ST.inbox, "プレイヤー": [PLAYER] };
+    if (today && kind !== "ai") { props["date:実行日:start"] = TODAY(); props["date:実行日:is_datetime"] = 0; }
     if (kind === "ai") props["AIアクション"] = mode;
     if (app) props["アプリ"] = [app];
     if (url) props["userDefined:URL"] = url;
     if (next) props.NEXT = next;
     const content = mode === "🛠" && kind === "ai" ? `## 🛠 依頼\n\n${memo || name}\n\n## 🛠 修正の記録\n\n最新：まだありません` : [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
-    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
+    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
     if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content; return t; }
     setSync("busy");
     try {
@@ -2393,8 +2427,9 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const name = $("#cp-name").value.trim(); if (!name) { $("#cp-name").focus(); return; }
     const btn = $("[data-capgo]"); btn.disabled = true;
     try {
-      await createTask({ name, kind: capKind, mode: reqMode, url: $("#cp-url")?.value.trim(), next: $("#cp-next")?.value.trim(), memo: $("#cp-memo").value.trim() });
-      closeModal(); refresh(); toast(capKind === "ai" ? `AIに預けました（次の定時処理 ${nextRun()}）` : "収集箱に入れました");
+      capToday = !!$("#cp-today")?.checked;
+      await createTask({ name, kind: capKind, mode: reqMode, url: $("#cp-url")?.value.trim(), next: $("#cp-next")?.value.trim(), memo: $("#cp-memo").value.trim(), today: capToday });
+      closeModal(); refresh(); toast(capKind === "ai" ? `AIに預けました（次の定時処理 ${nextRun()}）` : capToday ? "今日やるに入れました" : "収集箱に入れました");
     } catch (err) { btn.disabled = false; toast(err?.code === "server_unavailable" ? "返事がありません。重ならないよう ↻ で確かめてから入れ直してください" : `入れられませんでした：${errText(err)}`); }
   }
   async function submitRequest() {
@@ -3209,7 +3244,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const el = e.target.closest("button, tr[data-open], tr[data-dbrow], [data-open]"); if (!el) return;
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
-    if (el.id === "reload") { load(); return; }
+    if (el.id === "reload" || el.id === "retry") { load(); return; }
     if (d.tab === "more") { openMore(); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
     if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
@@ -3287,6 +3322,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (e.target.id === "ptitle" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); e.target.blur(); }
     if (e.target.matches?.('input[data-prop="NEXT"]') && e.key === "Enter" && !e.isComposing) e.target.blur();
     if (e.key === "/" && !e.target.closest?.("input, textarea, [contenteditable]") && $("#modal").hidden && $("#page").hidden) { e.preventDefault(); openSearch(); return; }
+    if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.target.closest?.("input, textarea, [contenteditable]") && $("#modal").hidden && $("#page").hidden) { e.preventDefault(); openCapture(); return; }
     if (e.key === "Escape") { if (document.querySelector(".menu")) closeMenus(); else if (!$("#modal").hidden) closeModal(); else if (!$("#page").hidden && !e.target.closest(".ed")) closePage(); }
   });
   document.addEventListener("focusout", (e) => { if (e.target.id === "ptitle") saveTitle(); });
@@ -3297,6 +3333,15 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   });
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (!document.activeElement?.matches("input, textarea")) render(); }, 150); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.mode === "live" && Date.now() - (S.loadedAt || 0) > 10 * 60e3 && $("#page").hidden) load(); });
+
+  // ================= 引っぱって更新（一覧の一番上で下に引く） =================
+  (() => {
+    let g = null; const ind = Object.assign(document.createElement("div"), { id: "ptr", textContent: "↓ 引っぱって更新" }); document.body.append(ind);
+    main.addEventListener("pointerdown", (e) => { const sc = e.target.closest(".scroll, .list"); if (!sc || sc.scrollTop > 0 || e.target.closest(".row, .rcard, input, textarea")) return; g = { y: e.clientY, x: e.clientX, id: e.pointerId, d: 0 }; }, { passive: true });
+    main.addEventListener("pointermove", (e) => { if (!g || e.pointerId !== g.id) return; const dy = e.clientY - g.y; if (dy < 8 || Math.abs(e.clientX - g.x) > Math.abs(dy)) return; g.d = Math.min(dy, 110); ind.style.transform = `translate(-50%, ${g.d - 40}px)`; ind.classList.toggle("ready", g.d >= 70); ind.textContent = g.d >= 70 ? "↻ 離すと更新" : "↓ 引っぱって更新"; ind.classList.add("show"); });
+    const end = (e) => { if (!g || e.pointerId !== g.id) return; const d = g.d; g = null; ind.classList.remove("show", "ready"); ind.style.transform = ""; if (d >= 70 && S.mode !== "loading") { buzz(); load(); } };
+    main.addEventListener("pointerup", end); main.addEventListener("pointercancel", end);
+  })();
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
@@ -3325,6 +3370,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     const mcp = await getMcp();
     if (!mcp) { useDemo(); return; }
     if (VIA === "api" && !store.get("key")) await askKey(false);
+    if (VIA === "api" && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("/sw.js").catch(() => { /* 無くても動く */ });
     try { await loadLive(); S.mode = "live"; S.error = null; setSync("ok"); }
     catch (err) { S.error = errText(err); S.mode = S.tasks.length ? "live" : "error"; setSync("err"); toast(S.error); }
     render();
@@ -3414,6 +3460,6 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   try { const h = location.hash.slice(1); if (["today", "flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   render();
   load();
-  window.__imadoko = { parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
+  window.__imadoko = { S, ST, stageOf, render, parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
 })();
 </script>

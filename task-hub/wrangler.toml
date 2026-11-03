@@ -11,7 +11,7 @@ ROUTINE_ID = "trig_011VhxqJwREyytrHWR4Kev1z"
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/api/*", "/", "/index.html"]
+run_worker_first = ["/api/*", "/", "/index.html", "/sw.js"]
 
 # 秘密の値は wrangler secret put（またはダッシュボードの「変数とシークレット」）で入れる。このファイルには書かない
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
