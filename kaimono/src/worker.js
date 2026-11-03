@@ -38,7 +38,7 @@ export default {
       const notion = notionClient(env);
       const p = url.pathname;
       const m = request.method;
-      const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when|remind)$/i);
+      const list = p.match(/^\/api\/lists\/([0-9a-f-]{32,36})\/(items|clear|done|when|remind|cancel)$/i);
       const item = p.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
       const sub = p.match(/^\/api\/subtasks\/([0-9a-f-]{32,36})$/i);
       const stock = p.match(/^\/api\/stock\/([0-9a-f-]{32,36})(?:\/(refill|restocked))?$/i);
@@ -49,6 +49,9 @@ export default {
       if (list?.[2] === "items" && m === "POST") return json(await addItems(notion, env, list[1], await readJson(request)));
       if (list?.[2] === "clear" && m === "POST") return json(await clearChecked(notion, env, list[1]));
       if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1]));
+      if (list?.[2] === "cancel" && m === "POST") return json(await cancelRefill(notion, env, list[1]));
+      if (p === "/api/sites" && m === "POST") return json(await addSite(env, await readJson(request)));
+      if (p === "/api/sites" && m === "DELETE") return json(await removeSite(env, await readJson(request)));
       if (list?.[2] === "when" && m === "PATCH") return json(await setWhen(notion, env, list[1], await readJson(request)));
       if (list?.[2] === "remind" && m === "PUT") return json(await setRemind(notion, env, list[1], await readJson(request)));
       if (p === "/api/templates" && m === "POST") return json(await addTemplate(notion, env, await readJson(request)));
@@ -323,6 +326,7 @@ async function loadState(notion, env) {
   return {
     lists, stock, today, loadedAt: new Date().toISOString(),
     templates: (templates.ok || []).map(templateOf).filter((x) => x.name),
+    sites: await siteList(env),
     stores: await storeList(env, [...(templates.ok || []).map((pg) => propText(pg.properties?.["店"])), ...stockPages.map((pg) => propText(pg.properties?.["店"]))]),
     templateErr: templates.err || "",
     reminders: await remindMap(env, lists.map((t) => t.id)),
@@ -640,7 +644,25 @@ async function editStock(notion, env, id, body) {
   const props = stockProps(body, { edit: true });
   if (!Object.keys(props).length) throw httpError(400, "変える内容がありません");
   const after = await notion("PATCH", `/pages/${normalizeId(page.id)}`, { properties: props });
-  return { stock: stockOf(after, todayJst()) };
+  const x = stockOf(after, todayJst());
+  // 名前・注文ページが変わったら、開いている補充タスクの名前と URL も合わせる
+  const renamed = [];
+  if (props["名前"] || props.URL) {
+    for (const t of await openRefills(notion, env, x.id)) {
+      const tp = { "名前": { title: rich(`補充:${x.name}`) }, ...(props.URL ? { "URL": { url: x.link || null } } : {}) };
+      await notion("PATCH", `/pages/${t.id}`, { properties: tp });
+      renamed.push({ id: t.id, name: `補充:${x.name}`, link: x.link });
+    }
+  }
+  return { stock: x, renamed };
+}
+
+// 補充リストから外す：補充タスクをゴミ箱へ（在庫の品はそのまま。最終補充日も変えない）
+async function cancelRefill(notion, env, id) {
+  const t = await listPage(notion, env, id);
+  if (!t.refill.length) throw httpError(403, "補充タスクではありません");
+  await notion("PATCH", `/pages/${t.id}`, { in_trash: true });
+  return { cancelled: t.id };
 }
 
 // 在庫の品を消す（Notion のゴミ箱へ。30日はゴミ箱から戻せる）。開いている補充タスクは残す
@@ -792,6 +814,40 @@ async function removeStore(env, body) {
   const list = (await storeList(env)).filter((x) => x !== body?.name);
   await env.SUBS.put("stores", JSON.stringify(list));
   return { stores: list };
+}
+
+// ---------- 購入サイト（名前と検索 URL。{q} に品名が入る）----------
+const DEFAULT_SITES = [
+  { name: "Amazon", url: "https://www.amazon.co.jp/s?k={q}" },
+  { name: "楽天", url: "https://search.rakuten.co.jp/search/mall/{q}/" },
+  { name: "Yahoo!", url: "https://shopping.yahoo.co.jp/search?p={q}" },
+  { name: "LOHACO", url: "https://lohaco.yahoo.co.jp/search/?p={q}" },
+];
+const siteList = async (env) => (env.SUBS && (await env.SUBS.get("sites", "json"))) || DEFAULT_SITES;
+// 検索したページの URL を貼るだけで登録できるように、検索語の所を {q} にする
+export function siteTemplate(raw) {
+  const u = publicHttps(raw);
+  if (u.href.includes("{q}") || u.href.includes("%7Bq%7D")) return u.href.replace("%7Bq%7D", "{q}");
+  for (const k of ["k", "q", "p", "keyword", "keywords", "query", "search", "word", "kw", "sitesearch", "searchWord"]) {
+    if (u.searchParams.has(k)) { u.searchParams.set(k, "QQQ"); return u.href.replace("QQQ", "{q}"); }
+  }
+  return u.href;
+}
+async function addSite(env, body) {
+  needPush(env);
+  const name = clean(body?.name, 30, "サイトの名前");
+  if (!name) throw httpError(400, "サイトの名前を入れてください");
+  const url = siteTemplate(body?.url);
+  const list = (await siteList(env)).filter((x) => x.name !== name);
+  list.push({ name, url });
+  await env.SUBS.put("sites", JSON.stringify(list));
+  return { sites: list };
+}
+async function removeSite(env, body) {
+  needPush(env);
+  const list = (await siteList(env)).filter((x) => x.name !== body?.name);
+  await env.SUBS.put("sites", JSON.stringify(list));
+  return { sites: list };
 }
 
 // ---------- 価格・レシート ----------

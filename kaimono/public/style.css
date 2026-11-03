@@ -340,4 +340,16 @@ body.modal { overflow: hidden; }
 .ditem { display: grid; grid-template-columns: 1fr 84px 52px 32px; gap: 4px; align-items: center; }
 .ditem .more { width: 32px; height: 34px; }
 
+.whenin { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; font-size: 13px; }
+.whenin input { flex: 1; min-width: 0; max-width: 220px; border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; min-height: 34px; background: var(--card); font-size: 16px; color: var(--ink); }
+.when .rem { margin-left: 0; white-space: nowrap; }
+.actgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actgrid .btn { flex-direction: column; min-height: 64px; gap: 2px; }
+.actgrid .btn small { font-size: 10px; font-weight: 400; opacity: 0.8; }
+.pickcard { background: var(--bg); }
+button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left; cursor: pointer; }
+.item .rname { padding-left: 0; }
+.item .rname .thumb { width: 30px; height: 30px; }
+.ritem > .tick:first-child { flex: none; }
+
 [hidden] { display: none !important; }

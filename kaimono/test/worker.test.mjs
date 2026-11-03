@@ -1,7 +1,7 @@
 // Worker の動作確認。Notion API と通知サービスは偽物に差し替える（値はすべて作りもの）。 npm test
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import worker, { alertOf, runAlerts, pickMeta, cleanItemName } from "../src/worker.js";
+import worker, { alertOf, runAlerts, pickMeta, cleanItemName, siteTemplate } from "../src/worker.js";
 import { b64u } from "../src/webpush.js";
 
 const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
@@ -557,4 +557,26 @@ test("名前で商品を探す（Yahoo!ショッピング。Client ID がなけ�
   env.YAHOO_APPID = "fake";
   assert.deepEqual((await api("GET", "/api/search?q=洗剤")).data.items[0], { name: "見本 洗剤 詰替", image: "https://img.test/a.jpg", url: "https://shop.test/a", price: 398, jan: "4901234567894" });
   assert.equal((await api("GET", "/api/search?q=")).status, 400);
+});
+
+test("補充リストから外す（補充タスクだけ・ゴミ箱へ）。品を変えたら開いている補充タスクの名前と URL も合わせる", async () => {
+  const r = await api("PATCH", `/api/stock/${D2}`, { name: "新しい洗剤", link: "https://shop.test/new" });
+  assert.deepEqual(r.data.renamed, [{ id: R1, name: "補充:新しい洗剤", link: "https://shop.test/new" }]);
+  assert.equal(pages.get(R1).properties["名前"].title[0].text.content, "補充:新しい洗剤");
+  assert.equal(pages.get(R1).properties.URL.url, "https://shop.test/new");
+  assert.equal((await api("POST", `/api/lists/${L1}/cancel`)).status, 403); // 補充タスクではない
+  assert.equal((await api("POST", `/api/lists/${R1}/cancel`)).status, 200);
+  assert.equal(pages.get(R1).in_trash, true);
+});
+
+test("購入サイト：検索ページの URL を貼るだけで登録（検索語を {q} に）・外す", async () => {
+  assert.equal(siteTemplate("https://www.amazon.co.jp/s?k=%E6%B4%97%E5%89%A4&ref=nb"), "https://www.amazon.co.jp/s?k={q}&ref=nb");
+  assert.equal(siteTemplate("https://www.kusuri-aoki.co.jp/search?keyword=x"), "https://www.kusuri-aoki.co.jp/search?keyword={q}");
+  assert.equal(siteTemplate("https://shop.test/"), "https://shop.test/");
+  const st = (await api("GET", "/api/state")).data;
+  assert.equal(st.sites[0].name, "Amazon");
+  const add = await api("POST", "/api/sites", { name: "アオキ", url: "https://www.kusuri-aoki.co.jp/search?keyword=洗剤" });
+  assert.equal(add.data.sites.at(-1).url, "https://www.kusuri-aoki.co.jp/search?keyword={q}");
+  assert.ok(!(await api("DELETE", "/api/sites", { name: "Amazon" })).data.sites.some((x) => x.name === "Amazon"));
+  assert.equal((await api("POST", "/api/sites", { name: "x", url: "http://bad" })).status, 400);
 });
