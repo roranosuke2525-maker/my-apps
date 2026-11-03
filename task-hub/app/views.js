@@ -271,57 +271,53 @@
       <p class="mute" style="font-size:11.5px;margin:0">ステータス「🤖 AI」で DB_タスク管理 に入ります。次の定時処理（${nextRun()}）で処理されます。</p></div>`;
   }
 
-  // ================= 仕分け =================
+  // ================= 仕分け：真ん中の丸いタスクを、まわりの行き先に振る =================
+  // 行き先は上から時計回りに6つ。押すか、丸をその方向へ引っぱって離す
   const PILES = {
-    inbox: { name: "収集", c: "var(--s-inbox)", items: () => inStage("inbox").sort((a, b) => (a.created || a.edited || "").localeCompare(b.created || b.edited || "")), dirs: { r: "next", l: "some", u: "ai", d: "ref" } },
-    judge: { name: "判定待ち", c: "var(--s-ai)", items: () => S.tasks.filter((t) => t.status === ST.ai && t.ai === "🔍✅").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dirs: { r: "next", l: "some", u: "ai", d: "ref" } },
-    next: { name: "次にやる", c: "var(--s-next)", items: () => stageItems("next"), dirs: { r: "today", l: "some", u: "ai", d: "wait" } },
-    wait: { name: "待ち", c: "var(--s-wait)", items: () => stageItems("wait"), dirs: { r: "next", l: "some", u: "today", d: "done" } },
-    some: { name: "いつか", c: "var(--s-some)", items: () => inStage("some").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dirs: { r: "next", l: "skip", u: "ai", d: "ref" } },
+    inbox: { name: "収集", c: "var(--s-inbox)", items: () => inStage("inbox").sort((a, b) => (a.created || a.edited || "").localeCompare(b.created || b.edited || "")), dests: ["today", "next", "ai", "ref", "some", "wait"] },
+    judge: { name: "判定待ち", c: "var(--s-ai)", items: () => S.tasks.filter((t) => t.status === ST.ai && t.ai === "🔍✅").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dests: ["today", "next", "again", "ref", "some", "wait"] },
+    next: { name: "次にやる", c: "var(--s-next)", items: () => stageItems("next"), dests: ["today", "done", "ai", "ref", "some", "wait"] },
+    wait: { name: "待ち", c: "var(--s-wait)", items: () => stageItems("wait"), dests: ["today", "next", "done", "ref", "some", "ai"] },
+    some: { name: "いつか", c: "var(--s-some)", items: () => inStage("some").sort((a, b) => (a.edited || "").localeCompare(b.edited || "")), dests: ["today", "next", "ai", "ref", "wait", "skip"] },
+  };
+  const DEST = {
+    today: { label: "今日やる", ic: "☀️", c: "var(--s-today)" }, next: { label: "次にやる", ic: "⏭", c: "var(--s-next)" }, done: { label: "済み", ic: "✓", c: "var(--s-done)" },
+    ai: { label: "AIに調べて", ic: "🔍", c: "var(--s-ai)" }, again: { label: "もう一度調べて", ic: "🔁", c: "var(--s-ai)", mv: "ai" }, ref: { label: "資料", ic: "📚", c: "var(--s-ref)" },
+    some: { label: "いつか", ic: "🕰", c: "var(--s-some)" }, wait: { label: "待ち", ic: "⏳", c: "var(--s-wait)" }, skip: { label: "まだ置く", ic: "⏸", c: "var(--mute)" },
   };
   const skipped = new Set();
-  const DIR_LABEL = (k) => (k === "skip" ? "まだ置く" : k === "ai" ? "AIに調べて" : MOVES[k].label);
   function renderTriage(view) {
     const P = PILES[S.pileKey];
-    const items = P.items().sort((a, b) => skipped.has(a.id) - skipped.has(b.id));
+    const items = P.items().sort((a, b) => skipped.has(a.id) - skipped.has(b.id)); const t = items[0];
     view.insertAdjacentHTML("beforeend", `<div class="chips">${Object.entries(PILES).map(([k, p]) => `<button type="button" class="chip" data-pile="${k}" aria-pressed="${S.pileKey === k}">${p.name}<span class="n">${p.items().length}</span></button>`).join("")}</div>
-      <div class="pile" id="pile"></div>
-      <div class="dirs">${[["l", "←"], ["d", "↓"], ["u", "↑"], ["r", "→"]].map(([d, a]) => `<button type="button" data-dir="${d}" style="--c:${d === "r" ? "var(--s-next)" : d === "u" ? "var(--s-ai)" : d === "d" ? "var(--s-ref)" : "var(--s-some)"}"><b>${a}</b>${DIR_LABEL(P.dirs[d])}</button>`).join("")}</div>
-      <div class="subacts"><button type="button" data-sub="open">開く</button><button type="button" data-sub="today">今日やる</button><button type="button" data-sub="done">済み</button><button type="button" data-sub="skip">あとで</button></div>`);
-    const pile = $("#pile");
-    if (!items.length) { pile.innerHTML = `<div class="empty">「${P.name}」の山は空です${S.pileKey === "inbox" ? "\n収集箱がからっぽ。いい状態です" : ""}</div>`; return; }
-    items.slice(0, 3).reverse().forEach((t, ri, arr) => {
-      const i = arr.length - 1 - ri; const sm = summaryOf(t); const m = metaOf(t);
-      pile.insertAdjacentHTML("beforeend", `<div class="tcard ${i === 1 ? "b1" : i === 2 ? "b2" : "top"}" data-card="${t.id}" style="--c:${P.c}">
-        <div style="display:flex;gap:6px;align-items:center">${t.tag ? `<span class="tag">${esc(t.tag)}</span>` : ""}${t.ai && t.status === ST.ai ? `<span class="tag">${t.ai} ${AI_LABEL[t.ai]}</span>` : ""}<span class="mute" style="margin-left:auto;font-size:11.5px">${items.length}枚中 1枚目</span></div>
-        <h3>${esc(t.name)}</h3>${t.next ? `<div class="nx">次の一歩：<b>${esc(t.next)}</b></div>` : ""}
-        ${S.pileKey === "judge" ? `<div class="pv">${sm ? (sm.conc ? `⭐ ${esc(sm.conc)}` : "（結論の要約なし。開いて確認）") : "結論を読みこみ中…"}</div>` : ""}
-        <div class="meta"><span class="${m.late ? "late" : ""}">${t.date ? m.tx : `${ageOf(t)}日前から`}</span>${t.weight ? `<span>重さ ${t.weight}</span>` : ""}${t.waku ? `<span>${esc(t.waku)}</span>` : ""}${t.link ? `<span>🔗 URLあり</span>` : ""}</div>
-        ${["r", "l", "u", "d"].map((d) => `<span class="stamp ${d}">${DIR_LABEL(P.dirs[d])}</span>`).join("")}</div>`);
-    });
-    const top = $(".tcard.top", pile); if (top) dragCard(top);
+      <div class="radial" id="radial">${t ? `<div class="ringwrap" id="ringwrap">
+        ${P.dests.map((k, i) => `<button type="button" class="dest" data-rdest="${k}" style="--a:${i * 60}deg;--c:${DEST[k].c}"><i>${DEST[k].ic}</i><span>${esc(DEST[k].label)}</span></button>`).join("")}
+        <div class="orb" id="orb" data-card="${t.id}" style="--c:${P.c}"><span class="otag">${t.tag ? esc(t.tag) : ""}${t.ai && t.status === ST.ai ? ` ${t.ai}` : ""}</span><b class="onm">${esc(t.name)}</b><span class="onx">${t.next ? `次の一歩：${esc(short(t.next, 28))}` : S.pileKey === "judge" ? (summaryOf(t)?.conc ? `⭐ ${esc(short(summaryOf(t).conc, 40))}` : "結論を読みこみ中…") : ""}</span><span class="ometa">${t.date ? esc(metaOf(t).tx) : `${ageOf(t)}日前から`}${t.weight ? `・${t.weight}` : ""}</span></div>
+      </div>
+      <div class="rfoot"><span class="mute">${items.length}件・1件目</span><button type="button" class="qc" data-sub="open">開く</button><button type="button" class="qc" data-sub="skip">あとで</button></div>` : `<div class="empty">「${P.name}」の山は空です${S.pileKey === "inbox" ? "\n収集箱がからっぽ。いい状態です" : ""}</div>`}</div>`);
+    const orb = $("#orb"); if (orb) dragOrb(orb, P);
     if (S.pileKey === "judge") prefetchBodies();
   }
-  function fling(card, d) {
-    const t = known.get(card.dataset.card); const key = PILES[S.pileKey].dirs[d];
-    card.style.transition = "transform .3s ease-in, opacity .3s"; card.style.transform = { r: "translate(130%,20px) rotate(16deg)", l: "translate(-130%,20px) rotate(-16deg)", u: "translate(0,-120%)", d: "translate(0,120%)" }[d]; card.style.opacity = "0";
-    setTimeout(() => { if (key === "skip") { skipped.add(t.id); render(); toast(`「${short(t.name)}」はまだ置いておきます`); } else move(t, key); }, reduce ? 0 : 260);
+  // 行き先へ送る（丸がその方向へ飛んでから、次の1件が出る）
+  function sendTo(key) {
+    const orb = $("#orb"); if (!orb) return; const t = known.get(orb.dataset.card); if (!t) return;
+    const P = PILES[S.pileKey]; const i = P.dests.indexOf(key); const btn = $(`.dest[data-rdest="${key}"]`);
+    btn?.classList.add("hit"); buzz(12);
+    if (i >= 0 && !reduce) { const a = (i * 60 - 90) * Math.PI / 180; orb.style.transition = "transform .28s ease-in, opacity .28s"; orb.style.transform = `translate(${Math.cos(a) * 180}px, ${Math.sin(a) * 180}px) scale(.3)`; orb.style.opacity = "0"; }
+    setTimeout(() => { if (key === "skip") { skipped.add(t.id); render(); toast(`「${short(t.name)}」はまだ置いておきます`); } else move(t, DEST[key].mv || key); }, reduce ? 0 : 260);
   }
-  function dragCard(card) {
-    let x0, y0, on = false;
-    card.addEventListener("pointerdown", (e) => { if (e.target.closest("button")) return; x0 = e.clientX; y0 = e.clientY; on = true; card.setPointerCapture(e.pointerId); card.style.transition = "none"; });
-    card.addEventListener("pointermove", (e) => {
-      if (!on) return; const dx = e.clientX - x0, dy = e.clientY - y0;
-      card.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 16}deg)`;
-      const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "r" : "l") : dy < 0 ? "u" : "d";
-      for (const s of card.querySelectorAll(".stamp")) s.style.opacity = s.classList.contains(d) ? Math.min(1, Math.hypot(dx, dy) / 90) : 0;
-    });
-    card.addEventListener("pointerup", (e) => {
-      if (!on) return; on = false; const dx = e.clientX - x0, dy = e.clientY - y0;
-      if (Math.hypot(dx, dy) > 90) { fling(card, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "r" : "l") : dy < 0 ? "u" : "d"); return; }
-      card.style.transition = ""; card.style.transform = ""; for (const s of card.querySelectorAll(".stamp")) s.style.opacity = 0;
-      if (Math.hypot(dx, dy) < 6) openTask(card.dataset.card);
-    });
+  // 丸を引っぱると、その方向の行き先が光る。離すとそこへ
+  function dragOrb(orb, P) {
+    let x0, y0, on = false, cur = null;
+    const pick = (dx, dy) => { if (Math.hypot(dx, dy) < 40) return null; const deg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 90 + 360 + 30) % 360; return P.dests[Math.floor(deg / 60)]; };
+    const mark = (k) => { if (k === cur) return; cur = k; for (const b of document.querySelectorAll(".dest")) b.classList.toggle("near", b.dataset.rdest === k); if (k) buzz(6); };
+    orb.addEventListener("pointerdown", (e) => { if (e.button > 0) return; x0 = e.clientX; y0 = e.clientY; on = true; orb.setPointerCapture(e.pointerId); orb.style.transition = "none"; });
+    orb.addEventListener("pointermove", (e) => { if (!on) return; const dx = e.clientX - x0, dy = e.clientY - y0; const d = Math.hypot(dx, dy); const k = Math.min(1, 90 / Math.max(90, d)); orb.style.transform = `translate(${dx * k}px,${dy * k}px) scale(${1 - Math.min(.1, d / 900)})`; mark(pick(dx, dy)); });
+    const up = (e) => { if (!on) return; on = false; const dx = e.clientX - x0, dy = e.clientY - y0; const k = pick(dx, dy); mark(null);
+      if (k && Math.hypot(dx, dy) > 70) { sendTo(k); return; }
+      orb.style.transition = ""; orb.style.transform = "";
+      if (Math.hypot(dx, dy) < 6) openTask(orb.dataset.card); };
+    orb.addEventListener("pointerup", up); orb.addEventListener("pointercancel", () => { on = false; mark(null); orb.style.transition = ""; orb.style.transform = ""; });
   }
 
   // ================= 記録（診断・運用ログ・目標とプロジェクト） =================

@@ -51,8 +51,8 @@
     if (d.pickai) { pickForAi(); return; }
     if (d.aipick) { const t = known.get(d.aipick); closeModal(); if (t) setProps(t, { "ステータス": ST.ai, "AIアクション": reqMode }, `AIに預けました（${reqMode}・次の定時処理 ${nextRun()}）`); return; }
     if (d.pile) { S.pileKey = d.pile; render(); return; }
-    if (d.dir) { const c = $(".tcard.top"); if (c) fling(c, d.dir); return; }
-    if (d.sub) { const c = $(".tcard.top"); if (!c) return; const t = known.get(c.dataset.card); if (d.sub === "open") openTask(t.id); else if (d.sub === "skip") { skipped.add(t.id); render(); } else move(t, d.sub); return; }
+    if (d.rdest) { sendTo(d.rdest); return; }
+    if (d.sub) { const o = $("#orb"); if (!o) return; const t = known.get(o.dataset.card); if (d.sub === "open") openTask(t.id); else sendTo("skip"); return; }
     if (d.logseg) { S.logSeg = d.logseg; render(); return; }
     if (d.ev !== undefined && el.classList.contains("chip")) { S.logEvent = d.ev; render(); return; }
     if (d.diag) { openRecord("diag", d.diag); return; }
