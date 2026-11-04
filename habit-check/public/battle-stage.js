@@ -202,7 +202,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     root.classList.add("gl");
     for (const [who, el] of Object.entries(fighters)) {
       // 関節で動かす（あいぼうは体のつくりがちがうので関節なし）。フミは胸が揺れる
-      glr.add(el, el.firstElementChild, { float: false, stance: false, rig: false, chest: who === "フミ" ? [0.5, 0.67] : null, persona: PERSONA[who] });
+      glr.add(el, el.firstElementChild, { float: false, stance: false, rig: false, still: who === "あいぼう", chest: who === "フミ" ? [0.5, 0.67] : null, persona: PERSONA[who] });
       glr.pose(el, { turn: 0.5, lean: 0.1 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];

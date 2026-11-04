@@ -391,10 +391,11 @@ export function createActorGL(canvas) {
       gl.uniform4f(U.u_rect, x, y, w, h);
       gl.uniform1f(U.u_t, t);
       gl.uniform1f(U.u_phase, a.phase);
-      gl.uniform1f(U.u_breath, a.stance ? 0 : a.boss ? 1.6 : a.float ? 1.3 : 1);
-      gl.uniform1f(U.u_sway, a.stance ? 0 : a.boss ? 1.4 : 1);
-      gl.uniform1f(U.u_flutter, a.float ? 1.6 : 1);
-      gl.uniform1f(U.u_talk, a.talkAmp * (talkF ? 0.5 : 1));
+      // still：絵を曲げない（あいぼう）。上下の移動（hop）だけ
+      gl.uniform1f(U.u_breath, a.still || a.stance ? 0 : a.boss ? 1.6 : a.float ? 1.3 : 1);
+      gl.uniform1f(U.u_sway, a.still || a.stance ? 0 : a.boss ? 1.4 : 1);
+      gl.uniform1f(U.u_flutter, a.still ? 0 : a.float ? 1.6 : 1);
+      gl.uniform1f(U.u_talk, a.still ? 0 : a.talkAmp * (talkF ? 0.5 : 1));
       gl.uniform1f(U.u_hop, hop + Math.max(0, jump) * 0.5);
       gl.uniform1f(U.u_alpha, alpha);
       gl.uniform1f(U.u_lean, a.cur.lean);
@@ -405,6 +406,7 @@ export function createActorGL(canvas) {
       gl.uniform1f(U.u_bob, bob);
       gl.uniform1f(U.u_shake, shake);
       gl.uniform1f(U.u_stance, a.stance ? (a.boss ? 0.7 : 1) : 0);
+      if (a.still) for (const n of ["u_lean", "u_tilt", "u_squash", "u_turn", "u_slump", "u_bob", "u_shake"]) gl.uniform1f(U[n], 0);
       const fg = a.fig || [0, 0, 1, 1];
       gl.uniform4f(U.u_fig, fg[0], fg[1], fg[2], fg[3]);
       gl.uniform1f(U.u_rig, a.rig && a.fig ? 1 : 0);
@@ -443,10 +445,10 @@ export function createActorGL(canvas) {
     a.mixDur = dur;
   }
   const api = {
-    add(el, img, { float = false, boss = false, stance = false, rig = !boss && !float, chest = null, persona = null } = {}) {
+    add(el, img, { float = false, boss = false, stance = false, rig = !boss && !float, chest = null, persona = null, still = false } = {}) {
       const zero = () => Object.fromEntries(JOINTS.map((j) => [j, 0]));
       actors.set(el, {
-        el, img, float, boss, stance, rig, chest, j: zero(), jv: zero(), act: { mode: "idle", t0: performance.now() / 1000 }, fig: null,
+        el, img, float, boss, stance, rig, chest, still, j: zero(), jv: zero(), act: { mode: "idle", t0: performance.now() / 1000 }, fig: null,
         jig: { x: 0, y: 0 }, jigV: { x: 0, y: 0 }, prevBy: null,
         persona: { ...PERSONA0, ...(persona || {}), ...(boss ? { tempo: 3.5, bounce: 0.9, shift: 0.4 } : {}) }, fidgetJ: FID0, fidgetEnd: 0, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
         pose: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, cur: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, tex: null,

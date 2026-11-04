@@ -327,8 +327,8 @@ textarea { resize: none; }
 .pet[data-motion="hatch"] .pet-body { animation: egg-shake 0.12s linear infinite; }
 .pet[data-motion="evolve"] .pet-body { animation: pet-glow 1.5s ease-in forwards; }
 @keyframes pet-bob { from { transform: translateY(0); } to { transform: translateY(-4%); } }
-@keyframes pet-jump { 0% { transform: translateY(0) scale(1.06, 0.92); } 40% { transform: translateY(-22%) scale(0.95, 1.06); } 100% { transform: translateY(0); } }
-@keyframes pet-breathe { 50% { transform: scale(1.03, 0.97); } }
+@keyframes pet-jump { 0% { transform: translateY(0); } 40% { transform: translateY(-16%); } 100% { transform: translateY(0); } }
+@keyframes pet-breathe { 50% { transform: translateY(1.5%); } }
 @keyframes egg-wobble { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-7deg); } 80% { transform: rotate(6deg); } 90% { transform: rotate(-3deg); } }
 @keyframes egg-shake { 0% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } 100% { transform: rotate(-5deg); } }
 @keyframes pet-glow { to { filter: brightness(3) saturate(0); transform: scale(1.08); } }
@@ -571,7 +571,7 @@ body.theater-open { overflow: hidden; }
 .art-host .art { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.25)); }
 .art-host.has-art svg { display: none; }
 .art-host.has-art:not([data-kind="egg"])[data-motion="idle"] .pet-body { animation-timing-function: ease-in-out; animation-name: pet-float; animation-duration: 2.2s; }
-@keyframes pet-float { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-4%) scale(1.015, 0.99); } }
+@keyframes pet-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3%); } }
 .art-host .pet-body { position: relative; }
 .art-gl { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .art-host.gl .art { opacity: 0; }

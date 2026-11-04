@@ -93,7 +93,7 @@ export function renderPet(stage, type, motion = "idle", { crack = 0, size = 160 
     `<g class="f-idle">${frameSvg(sp.palette, frames.idle)}</g><g class="f-blink">${frameSvg(sp.palette, frames.blink)}</g></svg></div>` +
     `<div class="pet-fx" aria-hidden="true"></div>`;
   el.dataset.kind = key === "egg" ? "egg" : "pet";
-  smooth(el, size, { float: false, boss: false });
+  // あいぼうは絵を曲げずに、上下にふわっと動くだけ（WebGL の息づかいは使わない）
 
   let timer = null;
   const blink = () => {
