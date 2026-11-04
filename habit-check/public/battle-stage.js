@@ -202,7 +202,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     root.classList.add("gl");
     for (const [who, el] of Object.entries(fighters)) {
       // 関節で動かす（あいぼうは体のつくりがちがうので関節なし）。フミは胸が揺れる
-      glr.add(el, el.firstElementChild, { float: false, stance: true, rig: who !== "あいぼう", chest: who === "フミ" ? [0.5, 0.67] : null, persona: PERSONA[who] });
+      glr.add(el, el.firstElementChild, { float: false, stance: false, rig: false, chest: who === "フミ" ? [0.5, 0.67] : null, persona: PERSONA[who] });
       glr.pose(el, { turn: 0.5, lean: 0.1 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
@@ -210,7 +210,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       glr.frames(el, { blink: has("blink") ? IMG(`cast2/${key}_blink`) : null, gesture: has("gesture") ? IMG(`cast2/${key}_gesture`) : null });
     }
     if (bossImg) {
-      glr.add(bossEl, bossEl.firstElementChild, { boss: true, stance: true });
+      glr.add(bossEl, bossEl.firstElementChild, { boss: true, stance: false });
       glr.pose(bossEl, { turn: -0.6 });
     }
   } else glCanvas.remove();
@@ -415,206 +415,80 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     orb.remove();
   }
 
-  // 1回の攻撃：前に出る → 技の名前 → 動き（技ごとにちがう。関節も動く）→ 命中（アップ）→ もとの場所へ
+  // 必殺技の一枚絵（img/splash）。さとしは今の姿の絵
+  const splashKey = (who) => who === "さとし" ? HERO_KEYS[(hero.match(/（(.+)）/) || [])[1]] || "hero_6" : { ルミ: "rumi", ムキ: "muki", フミ: "fumi", ゼニ: "zeni" }[who] || null;
+  const shownSplash = new Set();
+  const SPLASH_COLOR = { さとし: "#ffd45a", ルミ: "#ff8a3c", ムキ: "#ff5a3a", フミ: "#b98cff", ゼニ: "#4fd6a0" };
+
+  // 一枚絵のカットイン：黒い帯が入り、絵が横から差しこまれて、技の名前が出る → 白く光って命中へ
+  async function splash(key, name, who, color) {
+    const el = h("div", { class: "bs-splash" },
+      h("div", { class: "bs-splash-img", style: `background-image:url(${IMG(`splash/${key}`)})` }),
+      h("div", { class: "bs-splash-shine" }),
+      h("div", { class: "bs-splash-text" }, h("span", { text: who }), h("b", { text: name })));
+    el.style.setProperty("--c", color || "#ffd45a");
+    stage.append(el);
+    shake(0.25);
+    await wait(1150);
+    el.classList.add("out");
+    await wait(200);
+    el.remove();
+    const flash = h("div", { class: "bs-flash" });
+    fx.append(flash);
+    setTimeout(() => flash.remove(), 500);
+  }
+
+  // 1回の攻撃：一歩前へ → （はじめての人・大技は）一枚絵のカットイン → 命中（ボスのアップ）→ もどる
   async function hit(a) {
     const f = fighters[a.who] || fighters.さとし;
     const big = a.damage >= boss.hp * 0.12;
-    const mv = a.combined ? { name: "みんなの こうげき", motion: "rush", fx: "combo" } : a.move || pickMove(a.who, big, a.key || a.what);
+    const mv = a.combined ? { name: "みんなの こうげき", fx: "combo" } : a.move || pickMove(a.who, big, a.key || a.what);
     const who = a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who;
     caption.textContent = a.combined ? "これまでの攻撃！" : `${who}の${mv.name}！`;
     caption.dataset.sub = a.combined ? "" : a.what;
     say(a.combined ? "なかまたちの こうげき！" : `${who}の ${mv.name}！`);
     skillTag.textContent = mv.name;
     skillTag.classList.remove("on"); void skillTag.offsetWidth; skillTag.classList.add("on");
-    f.classList.add("active");
     const kind = mv.fx;
-    const base = "translate(0, 0) rotate(0deg)";
+    const base = "translate(0, 0)";
     const hitLine = () => say(msg.children[0].textContent, `${boss.name}に ${Math.round(a.damage)}の ダメージ！`);
-    const act = (m, ms) => glr?.act(f, m, ms);
-    // 列から前へ出る：ボスのほうへ大きく歩み出て、手前（画面の下）に立つ。ほかの仲間は少し暗くなる
-    act("run");
-    const sw = stage.clientWidth, sh = stage.clientHeight;
-    const SX = Math.min(reach(f) * 0.45, sw * 0.26), SY = sh * 0.05;
-    // 前に出た人とボスだけを明るく（ほかの仲間は少し暗く）
-    f.classList.add("speaking");
+    const bp = posOf(bossEl);
+
+    // 一歩前へ（前に出た人とボスだけ明るく）
+    f.classList.add("active", "speaking");
     bossEl.classList.add("speaking");
     f.style.zIndex = "25";
-    const stepOut = f.animate([{ translate: "0px 0px" }, { translate: `${SX}px ${SY}px` }], { duration: 420 / speed, easing: "cubic-bezier(.3, .7, .3, 1)", fill: "forwards" });
-    await stepOut.finished.catch(() => {});
-    act("idle");
-    glr?.pose(f, { lean: 0.3, turn: 0.8 });
-    const D = reach(f);
-    const bp = posOf(bossEl);
+    const step = `translate(${stage.clientWidth * 0.07}px, ${stage.clientHeight * 0.03}px)`;
+    await move(f, [{ transform: base }, { transform: step }], 260);
     const fp = posOf(f);
-    // 命中のアップ：攻撃する人とボスのあいだ（ボス寄り）へ寄る
-    const closeUp = (z = 1.5) => focus(bp.x - 0.12, bp.y + 0.02, z, 9);
-    focus(fp.x + 0.1, fp.y, 1.22, 5);
-    await wait(160);
-    const fromStep = base;
+    // 光が集まる
+    emit(16, { x: fp.x, y: fp.y, color: [SPLASH_COLOR[a.who] || "#ffe066", "#fff"], speed: 0.35, g: -0.3, size: 4, life: 0.6, glow: 12 });
+    f.classList.add("aura");
+    await wait(280);
+    f.classList.remove("aura");
 
-    if (mv.motion === "dash" || mv.motion === "combo" || mv.motion === "rush") {
-      // ふりかぶる（腕を後ろへ、体をひねる）
-      act("windup");
-      glr?.pose(f, { lean: -0.4, turn: 0.6 });
-      await move(f, [{ transform: fromStep }, { transform: "translate(6px, 4px) rotate(-3deg)" }], 220);
-      // 走る（足と腕を交互に振る）
-      const fp0 = posOf(f);
-      emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
-      act("run");
-      glr?.pose(f, { lean: 0.7, turn: 0.9 });
-      ghosts(f);
-      closeUp(1.3);
-      await move(f, [
-        { transform: "translate(6px, 4px) rotate(-3deg)" },
-        { transform: `translate(${D * 0.35}px, -8px) rotate(3deg)` },
-        { transform: `translate(${D * 0.7}px, 0px) rotate(4deg)` },
-        { transform: `translate(${D}px, -4px) rotate(5deg)` },
-      ], 320, "cubic-bezier(.5, 0, .7, 1)");
-      if (mv.motion === "dash") {
-        // ふりあげて → 振りおろす（腕と腰が先に動き、体があとからついてくる）
-        act("windup");
-        await move(f, [{ transform: `translate(${D}px, -4px) rotate(5deg)` }, { transform: `translate(${D + 4}px, -16px) rotate(-6deg)` }], 150);
-        act("strike");
-        closeUp(1.55);
-        await move(f, [{ transform: `translate(${D + 4}px, -16px) rotate(-6deg)` }, { transform: `translate(${D + 16}px, 2px) rotate(8deg)` }], 90, "ease-in");
-        await impact(a, kind, a.damage, { big });
-        hitLine();
-        await wait(220);
-        act("jump", 300);
-        await move(f, [{ transform: `translate(${D + 16}px, 2px) rotate(8deg)` }, { transform: `translate(${D - 30}px, -26px) rotate(-6deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 320);
-      } else {
-        // 3連撃：右・左・とどめは跳んで
-        const parts = [0.3, 0.3, 0.4];
-        let at = `translate(${D}px, -4px) rotate(5deg)`;
-        const hits = [`translate(${D + 12}px, 0px) rotate(7deg)`, `translate(${D + 6}px, -10px) rotate(-6deg)`, `translate(${D + 18}px, 2px) rotate(9deg)`];
-        closeUp(1.55);
-        for (let k = 0; k < 3; k++) {
-          act("windup");
-          if (k === 2) {
-            act("jump");
-            await move(f, [{ transform: at }, { transform: `translate(${D}px, -46px) rotate(-8deg)` }], 170);
-            at = `translate(${D}px, -46px) rotate(-8deg)`;
-            act("windup");
-            await wait(60);
-          } else await wait(90);
-          act("strike");
-          await move(f, [{ transform: at }, { transform: hits[k] }], k === 2 ? 100 : 80, "ease-in");
-          at = hits[k];
-          await impact(a, kind, a.damage * parts[k], { big: big && k === 2, n: k });
-          await wait(80);
-        }
-        hitLine();
-        await wait(160);
-        act("jump", 300);
-        await move(f, [{ transform: at }, { transform: `translate(${D - 30}px, -20px) rotate(-4deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 320);
-      }
-      // 戻る（走って）
-      camTo(1, 0, 0, 3);
-      act("run");
-      glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      await move(f, [{ transform: `translate(${D - 40}px, 0)` }, { transform: `translate(${(D - 40) * 0.5}px, -8px)` }, { transform: base }], 420, "cubic-bezier(.3, .6, .3, 1)");
-    } else if (mv.motion === "leap") {
-      // かがんで → 高く跳ぶ（ひざをかかえる）→ 空中でふりかぶる → 振りおろしながら着地
-      act("windup");
-      glr?.pose(f, { lean: -0.3, turn: 0.6 });
-      await move(f, [{ transform: fromStep }, { transform: "translate(10px, 10px) rotate(-3deg)" }], 200);
-      const H = stage.clientHeight * 0.42 / camS.zoom;
-      act("jump");
-      ghosts(f);
-      focus((fp.x + bp.x) / 2, 0.35, 1.25, 4);
-      await move(f, [
-        { transform: "translate(10px, 10px) rotate(-3deg)", offset: 0 },
-        { transform: `translate(${D * 0.3}px, ${-H * 0.85}px) rotate(-8deg)`, offset: 0.35 },
-        { transform: `translate(${D * 0.6}px, ${-H}px) rotate(-12deg)`, offset: 0.6 },
-        { transform: `translate(${D}px, ${-H * 0.15}px) rotate(8deg)`, offset: 1 },
-      ], 600, "cubic-bezier(.3, .5, .6, 1)");
-      act("windup");
-      await wait(60);
-      act("strike");
-      closeUp(1.6);
-      await move(f, [{ transform: `translate(${D}px, ${-H * 0.15}px) rotate(8deg)` }, { transform: `translate(${D}px, 0) rotate(3deg)` }], 90, "ease-in");
-      await impact(a, kind, a.damage, { big: true });
-      hitLine();
-      await wait(320);
-      camTo(1, 0, 0, 3);
-      act("jump", 400);
-      glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      await move(f, [{ transform: `translate(${D}px, 0) rotate(3deg)` }, { transform: `translate(${D * 0.5}px, ${-H * 0.25}px) rotate(-4deg)`, offset: 0.5 }, { transform: base }], 460);
-    } else if (mv.motion === "charge") {
-      // 力をためる（腕を引いて腰を落とす。足元に光が集まる）→ 一気に突進
-      f.classList.add("aura");
-      act("windup");
-      glr?.pose(f, { lean: -0.4, turn: 0.6, slump: 0.3 });
-      focus(fp.x + 0.05, fp.y, 1.4, 4);
-      const fp0 = posOf(f);
-      for (let k = 0; k < 5; k++) {
-        emit(6, { x: fp0.x + (Math.random() - 0.5) * 0.1, y: fp0.bottom - 0.02, color: ["#ffe066", "#fff"], speed: 0.25, dir: -Math.PI / 2, spread: 0.6, g: -0.6, size: 4, life: 0.6, glow: 10 });
-        await wait(120);
-      }
-      f.classList.remove("aura");
-      act("run");
-      glr?.pose(f, { lean: 0.95, turn: 0.9, slump: 0 });
-      ghosts(f);
-      closeUp(1.5);
-      await move(f, [{ transform: fromStep }, { transform: `translate(${D + 10}px, 0) rotate(4deg)` }], 190, "cubic-bezier(.6, 0, .8, 1)");
-      act("strike");
-      await impact(a, kind, a.damage, { big: true });
-      hitLine();
-      await wait(380);
-      camTo(1, 0, 0, 3);
-      act("run");
-      glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      await move(f, [{ transform: `translate(${D + 10}px, 0) rotate(4deg)` }, { transform: base }], 420);
+    const key = a.combined ? splashKey("さとし") : splashKey(a.who);
+    if (key && (a.combined || big || !shownSplash.has(a.who)) && speed === 1) {
+      shownSplash.add(a.who);
+      await splash(key, mv.name, a.combined ? "ALL" : who, SPLASH_COLOR[a.who]);
+    } else if (mv.orb) {
+      await shoot(f, mv.orb, 360);
     } else {
-      // cast / rain：構える → 小さく跳んで力をこめる → 腕をふりだして放つ
-      act("windup");
-      glr?.pose(f, { lean: -0.3, turn: 0.6 });
-      glr?.gesture(f, 900);
-      focus(fp.x + 0.08, fp.y, 1.35, 5);
-      const fp0 = posOf(f);
-      emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
-      act("jump", 260);
-      await move(f, [{ transform: fromStep }, { transform: "translate(0px, -24px) rotate(-3deg)" }, { transform: "translate(4px, 0) rotate(2deg)" }], 380, "cubic-bezier(.3, .7, .4, 1)");
-      act("cast");
-      glr?.pose(f, { lean: 0.5, turn: 0.8 });
-      if (mv.motion === "cast") {
-        move(f, [{ transform: "translate(4px, 0) rotate(2deg)" }, { transform: "translate(14px, -4px) rotate(5deg)" }, { transform: "translate(4px, 0) rotate(0deg)" }], 420);
-        focus((fp.x + bp.x) / 2, (fp.y + bp.y) / 2, 1.15, 5);
-        await shoot(f, mv.orb || "#ffe066", 380);
-        closeUp(1.5);
-        await impact(a, kind, a.damage, { big });
-      } else {
-        // 頭上から降らせる（3回に分けて当たる）
-        focus(bp.x - 0.05, 0.4, 1.3, 5);
-        for (let k = 0; k < 3; k++) {
-          emit(14, { x: bp.x + (Math.random() - 0.5) * 0.2, y: 0.05, color: kind === "coins" ? ["#ffd86a", "#fff4c0"] : kind === "flame" ? ["#ff5a2a", "#ffb35c"] : ["#fbf6ea", "#c9a2ff"], speed: 0.9, dir: Math.PI / 2, spread: 0.4, g: 2.4, size: 6, life: 0.6, shape: kind === "coins" ? "dot" : "square", glow: 8, drag: 0.5 });
-          await wait(160);
-          if (k === 2) closeUp(1.5);
-          await impact(a, kind, a.damage / 3, { big: k === 2, n: k });
-        }
-      }
-      hitLine();
-      await wait(380);
-      camTo(1, 0, 0, 3);
-      act("idle");
-      glr?.pose(f, { lean: 0.1, turn: 0.5 });
-      await move(f, [{ transform: "translate(4px, 0)" }, { transform: base }], 240);
+      await wait(120);
     }
-    // 列にもどる
-    act("run");
-    glr?.pose(f, { lean: -0.2, turn: 0.5 });
-    camTo(1, 0, 0, 3);
-    const back = f.animate([{ translate: `${SX}px ${SY}px` }, { translate: "0px 0px" }], { duration: 380 / speed, easing: "cubic-bezier(.3, .6, .3, 1)", fill: "forwards" });
-    await back.finished.catch(() => {});
-    act("idle");
-    glr?.pose(f, { lean: 0.1, turn: 0.5 });
-    f.classList.remove("speaking");
+    // 命中：ボスをアップに
+    focus(bp.x - 0.06, bp.y, 1.35, 10);
+    await impact(a, kind, a.damage, { big });
+    hitLine();
+    await wait(big ? 600 : 420);
+    camTo(1, 0, 0, 4);
+    await move(f, [{ transform: step }, { transform: base }], 260);
+    f.classList.remove("active", "speaking");
     bossEl.classList.remove("speaking");
     f.style.zIndex = "";
-    f.classList.remove("active");
     f.getAnimations().forEach((x) => x.cancel());
     skillTag.classList.remove("on");
-    await wait(220);
+    await wait(200);
   }
 
   // 走るときの残像

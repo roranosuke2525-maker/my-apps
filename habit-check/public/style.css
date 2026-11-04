@@ -865,3 +865,21 @@ body.theater-open { overflow: hidden; }
 .bs-orb { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: radial-gradient(circle, #fff 20%, var(--c) 55%, transparent 72%); box-shadow: 0 0 16px var(--c), 0 0 30px var(--c); z-index: 32; }
 .bs-num { top: calc(26% + var(--ny, 0px)); }
 .boss-view .bs-stage { aspect-ratio: 4 / 3; }
+
+/* 必殺技の一枚絵（カットイン） */
+.bs-splash { position: absolute; inset: 0; z-index: 70; overflow: hidden; background: #000; pointer-events: none; animation: bs-sp-in 0.18s ease-out both; }
+.bs-splash::before, .bs-splash::after { content: ""; position: absolute; left: 0; right: 0; height: 13%; background: #000; z-index: 3; animation: bs-sp-bar 0.35s cubic-bezier(.2, .9, .3, 1) both; }
+.bs-splash::before { top: 0; border-bottom: 2px solid var(--c); }
+.bs-splash::after { bottom: 0; border-top: 2px solid var(--c); }
+.bs-splash-img { position: absolute; inset: -4%; background-size: cover; background-position: 35% 50%; animation: bs-sp-img 1.55s cubic-bezier(.15, .8, .3, 1) both; }
+.bs-splash-shine { position: absolute; inset: 0; z-index: 2; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%); background-size: 260% 100%; animation: bs-sp-shine 0.9s ease-out 0.25s both; mix-blend-mode: screen; }
+.bs-splash-text { position: absolute; right: 5%; bottom: 16%; z-index: 4; text-align: right; color: #fff; animation: bs-sp-text 0.5s cubic-bezier(.2, 1.3, .4, 1) 0.3s both; }
+.bs-splash-text span { display: block; font-size: 13px; font-weight: 800; letter-spacing: 0.3em; color: var(--c); text-shadow: 0 0 4px #000, 0 0 8px #000, 0 1px 2px #000; }
+.bs-splash-text b { display: block; font-size: 30px; font-weight: 900; font-style: italic; letter-spacing: 0.06em; -webkit-text-stroke: 1.5px #000; paint-order: stroke; text-shadow: 0 0 14px var(--c), 0 3px 0 rgba(0, 0, 0, 0.6); }
+.bs-splash.out { animation: bs-sp-out 0.2s ease-in forwards; }
+@keyframes bs-sp-in { from { opacity: 0; } }
+@keyframes bs-sp-bar { from { transform: scaleY(3.5); } }
+@keyframes bs-sp-img { from { transform: translateX(-18%) skewX(-8deg); opacity: 0; filter: brightness(2.2); } 30% { opacity: 1; filter: none; } to { transform: translateX(0) scale(1.06); } }
+@keyframes bs-sp-shine { from { background-position: 120% 0; } to { background-position: -40% 0; } }
+@keyframes bs-sp-text { from { transform: translateX(40%) skewX(-12deg); opacity: 0; } }
+@keyframes bs-sp-out { to { opacity: 0; transform: scale(1.04); filter: brightness(2.5); } }

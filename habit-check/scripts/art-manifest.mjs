@@ -206,32 +206,20 @@ export const CAST2 = [
   ...person("tokijii", "Toki-jii (2026-11-01 新版), a thin old former prisoner: long white beard, kind tired eyes, a patched brown robe, a walking stick, a broken shackle on one ankle."),
 ];
 
-// バトルの構え（右の敵に向かう横向きの絵）。1枚の絵を曲げるかわりに、動きごとの絵を切りかえて動かす
-const SAME = "The exact same character, face, outfit, colors and art style as the reference image. The whole body including the feet is visible, about the same size on the canvas as the reference.";
-const BATTLE_ATTACK = {
-  hero: "Pose: a powerful forward sword slash toward the RIGHT, lunging step, body in side view facing right, sword swung forward, cape sweeping behind.",
-  muki: "Pose: swinging the battle axe forward in a heavy downward strike toward the RIGHT, wide lunging stance, side view facing right.",
-  rumi: "Pose: casting a fire spell, one arm thrust forward toward the RIGHT with a bright flame in the open palm, side view facing right, cape fluttering.",
-  fumi: "Pose: casting magic, an open book held in one hand and the other hand extended toward the RIGHT releasing glowing light, side view facing right.",
-  zeni: "Pose: throwing a handful of gold coins forward toward the RIGHT with one arm, abacus in the other hand, side view facing right, coat flaring.",
+// 必殺技の一枚絵（img/splash/<名前>.webp・16:9）。バトルで、はじめて攻撃する人と大技のときにカットインで出す。
+// 見本は cast2 の絵。描いたあと 1280x720 の WebP にする（finish-art.py の bg と同じ）
+const SPLASH_BASE = "cinematic key visual, extremely detailed linework, dramatic rim lighting, polished coloring. The exact same character, face, hair, outfit and colors as the reference image. " +
+  "Background: dark dramatic backdrop with radial speed lines, no other characters. Wide cinematic composition, the character large in frame on the left half. No text, no frame, no border.";
+const SPLASH_SCENE = {
+  hero: "Scene: he unleashes a powerful slash with his weapon toward the RIGHT side, dynamic low-angle perspective, body twisted into the swing, cloak and white scarf whipping in the wind, intense determined eyes, a brilliant arc of light trailing the weapon, sparks and motion lines.",
+  muki: "Scene: a heavily muscled veteran warrior brings his huge battle axe crashing down toward the RIGHT side, muscles straining, fierce roar, shockwave and flying rock debris, red-orange fiery glow.",
+  rumi: "Scene: cool and cute heroine casting a big fire spell toward the RIGHT side, a confident bright smile with a playful wink, one hand thrust forward unleashing a swirling torrent of flames shaped like a phoenix, lantern glowing. Cool-and-cute, tasteful.",
+  fumi: "Scene: cool and cute scholar heroine casting powerful magic toward the RIGHT side, sharp confident gaze, glasses glinting, open glowing book, swirling pages and runes, a large purple-blue magic circle. Cool-and-cute, tasteful, not revealing.",
+  zeni: "Scene: a cool young merchant flicks a barrage of gold coins toward the RIGHT side like bullets, confident smirk, coat flaring, abacus with glowing beads, golden light trails.",
 };
-const BATTLE_JUMP = {
-  caster: "Pose: jumping lightly into the air toward the RIGHT, knees bent, both arms raised gathering magic power, side view facing right.",
-  fighter: "Pose: leaping high into the air toward the RIGHT, knees tucked, weapon raised overhead ready to strike down, side view facing right.",
-};
-const battle = (id, kind, attack) => [
-  { id: `battle/${id}_ready`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} Pose: battle-ready stance, body turned three-quarters to the RIGHT facing an enemy on the right side, knees slightly bent, weapon or hands held ready.` },
-  { id: `battle/${id}_run`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} Pose: running fast toward the RIGHT, side view facing right, mid-stride with one leg forward, arms swinging, hair and clothes flowing behind.` },
-  { id: `battle/${id}_attack`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} ${BATTLE_ATTACK[attack]}` },
-  { id: `battle/${id}_jump`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} ${BATTLE_JUMP[kind]}` },
-];
-export const BATTLE_POSES = ["ready", "run", "attack", "jump"];
-export const BATTLE = [
-  ...["hero_1", "hero_2", "hero_3", "hero_4", "hero_5", "hero_6"].flatMap((id) => battle(id, "fighter", "hero")),
-  ...battle("muki", "fighter", "muki"),
-  ...battle("rumi", "caster", "rumi"),
-  ...battle("fumi", "caster", "fumi"),
-  ...battle("zeni", "caster", "zeni"),
+export const SPLASH = [
+  ...["hero_1", "hero_2", "hero_3", "hero_4", "hero_5", "hero_6"].map((id) => ({ id: `splash/${id}`, kind: "bg", ratio: "16:9", ref: `cast2/${id}`, prompt: `Japanese seinen manga style ${SPLASH_BASE} ${SPLASH_SCENE.hero}` })),
+  ...["muki", "rumi", "fumi", "zeni"].map((id) => ({ id: `splash/${id}`, kind: "bg", ratio: "16:9", ref: `cast2/${id}`, prompt: `Japanese manga style ${SPLASH_BASE} ${SPLASH_SCENE[id]}` })),
 ];
 
-export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS, ...CAST2, ...BATTLE];
+export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS, ...CAST2, ...SPLASH];
