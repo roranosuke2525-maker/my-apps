@@ -54,6 +54,16 @@ const MOVES = {
 };
 const MUSCLE_MOVE = { name: "鍛えた肉体の一撃", motion: "charge", fx: "muscle", big: true };
 
+// 構えの個性：tempo 弾むはやさ / bounce 弾む大きさ / shift 体重の移しかた / sway 上体のゆれ / arms 腕の開き / lean 前のめり / tilt 首かしげ / fidget 落ちつきのなさ
+const PERSONA = {
+  さとし: { tempo: 9.5, bounce: 1, shift: 1, sway: 0.6, arms: 0.1, lean: 0.15, tilt: 0, fidget: 1 }, // まっすぐな主人公：軽快に弾む
+  ルミ: { tempo: 12, bounce: 1.25, shift: 1.4, sway: 1.2, arms: 0.2, lean: 0.05, tilt: 0.25, fidget: 1.6 }, // 元気：はやく大きく弾み、首をかしげる
+  ムキ: { tempo: 5.5, bounce: 0.55, shift: 0.6, sway: 0.3, arms: 0.22, lean: 0.25, tilt: 0, fidget: 0.4 }, // 古兵：ゆっくり重く、どっしり
+  フミ: { tempo: 4.2, bounce: 0.45, shift: 1.5, sway: 1, arms: 0.02, lean: -0.05, tilt: -0.2, fidget: 0.8 }, // 学者：ふわっと左右に体重を移す
+  ゼニ: { tempo: 7, bounce: 0.6, shift: 0.9, sway: 0.5, arms: 0.14, lean: 0.05, tilt: 0.12, fidget: 1.3 }, // 商人：気楽に、手が落ちつかない
+  あいぼう: { tempo: 13, bounce: 1.5, shift: 0.6, sway: 0.4, arms: 0, lean: 0, tilt: 0.2, fidget: 1 }, // ぴょこぴょこ
+};
+
 function pickMove(who, big, seed) {
   const list = MOVES[who] || MOVES.さとし;
   const pool = list.filter((m) => !!m.big === big);
@@ -192,7 +202,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     root.classList.add("gl");
     for (const [who, el] of Object.entries(fighters)) {
       // 関節で動かす（あいぼうは体のつくりがちがうので関節なし）。フミは胸が揺れる
-      glr.add(el, el.firstElementChild, { float: false, stance: true, rig: who !== "あいぼう", chest: who === "フミ" ? [0.5, 0.67] : null });
+      glr.add(el, el.firstElementChild, { float: false, stance: true, rig: who !== "あいぼう", chest: who === "フミ" ? [0.5, 0.67] : null, persona: PERSONA[who] });
       glr.pose(el, { turn: 0.5, lean: 0.1 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
@@ -418,20 +428,29 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     skillTag.classList.remove("on"); void skillTag.offsetWidth; skillTag.classList.add("on");
     f.classList.add("active");
     const kind = mv.fx;
-    const D = reach(f);
     const base = "translate(0, 0) rotate(0deg)";
     const hitLine = () => say(msg.children[0].textContent, `${boss.name}に ${Math.round(a.damage)}の ダメージ！`);
     const act = (m, ms) => glr?.act(f, m, ms);
+    // 列から前へ出る：ボスのほうへ大きく歩み出て、手前（画面の下）に立つ。ほかの仲間は少し暗くなる
+    act("run");
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const SX = Math.min(reach(f) * 0.45, sw * 0.26), SY = sh * 0.05;
+    // 前に出た人とボスだけを明るく（ほかの仲間は少し暗く）
+    f.classList.add("speaking");
+    bossEl.classList.add("speaking");
+    f.style.zIndex = "25";
+    const stepOut = f.animate([{ translate: "0px 0px" }, { translate: `${SX}px ${SY}px` }], { duration: 420 / speed, easing: "cubic-bezier(.3, .7, .3, 1)", fill: "forwards" });
+    await stepOut.finished.catch(() => {});
+    act("idle");
+    glr?.pose(f, { lean: 0.3, turn: 0.8 });
+    const D = reach(f);
     const bp = posOf(bossEl);
     const fp = posOf(f);
     // 命中のアップ：攻撃する人とボスのあいだ（ボス寄り）へ寄る
     const closeUp = (z = 1.5) => focus(bp.x - 0.12, bp.y + 0.02, z, 9);
-
-    // 一歩前に出て、行動する人を少しアップに
-    act("run", 260);
-    focus(fp.x + 0.12, fp.y, 1.22, 5);
-    await move(f, [{ transform: base }, { transform: "translate(18px, 0)" }], 260);
-    const fromStep = "translate(18px, 0)";
+    focus(fp.x + 0.1, fp.y, 1.22, 5);
+    await wait(160);
+    const fromStep = base;
 
     if (mv.motion === "dash" || mv.motion === "combo" || mv.motion === "rush") {
       // ふりかぶる（腕を後ろへ、体をひねる）
@@ -555,11 +574,11 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       const fp0 = posOf(f);
       emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
       act("jump", 260);
-      await move(f, [{ transform: fromStep }, { transform: "translate(18px, -24px) rotate(-3deg)" }, { transform: "translate(22px, 0) rotate(2deg)" }], 380, "cubic-bezier(.3, .7, .4, 1)");
+      await move(f, [{ transform: fromStep }, { transform: "translate(0px, -24px) rotate(-3deg)" }, { transform: "translate(4px, 0) rotate(2deg)" }], 380, "cubic-bezier(.3, .7, .4, 1)");
       act("cast");
       glr?.pose(f, { lean: 0.5, turn: 0.8 });
       if (mv.motion === "cast") {
-        move(f, [{ transform: "translate(22px, 0) rotate(2deg)" }, { transform: "translate(32px, -4px) rotate(5deg)" }, { transform: "translate(22px, 0) rotate(0deg)" }], 420);
+        move(f, [{ transform: "translate(4px, 0) rotate(2deg)" }, { transform: "translate(14px, -4px) rotate(5deg)" }, { transform: "translate(4px, 0) rotate(0deg)" }], 420);
         focus((fp.x + bp.x) / 2, (fp.y + bp.y) / 2, 1.15, 5);
         await shoot(f, mv.orb || "#ffe066", 380);
         closeUp(1.5);
@@ -579,9 +598,19 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       camTo(1, 0, 0, 3);
       act("idle");
       glr?.pose(f, { lean: 0.1, turn: 0.5 });
-      await move(f, [{ transform: "translate(22px, 0)" }, { transform: base }], 280);
+      await move(f, [{ transform: "translate(4px, 0)" }, { transform: base }], 240);
     }
+    // 列にもどる
+    act("run");
+    glr?.pose(f, { lean: -0.2, turn: 0.5 });
+    camTo(1, 0, 0, 3);
+    const back = f.animate([{ translate: `${SX}px ${SY}px` }, { translate: "0px 0px" }], { duration: 380 / speed, easing: "cubic-bezier(.3, .6, .3, 1)", fill: "forwards" });
+    await back.finished.catch(() => {});
     act("idle");
+    glr?.pose(f, { lean: 0.1, turn: 0.5 });
+    f.classList.remove("speaking");
+    bossEl.classList.remove("speaking");
+    f.style.zIndex = "";
     f.classList.remove("active");
     f.getAnimations().forEach((x) => x.cancel());
     skillTag.classList.remove("on");

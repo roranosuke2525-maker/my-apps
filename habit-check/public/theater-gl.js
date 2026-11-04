@@ -26,6 +26,7 @@ uniform vec4 u_fig;
 uniform float u_rig, u_legL, u_legR, u_kneeL, u_kneeR, u_armL, u_armR, u_elbL, u_elbR, u_head, u_twist;
 uniform vec2 u_jig, u_chest;
 uniform float u_jigOn;
+uniform float u_tempo, u_bounce, u_shift;
 varying vec2 v_uv;
 varying float v_shade;
 vec2 F(vec2 f) { return u_fig.xy + f * (u_fig.zw - u_fig.xy); }
@@ -87,10 +88,12 @@ void main() {
   // 構え（格闘ゲームの待機）：足は地面につけたまま、ひざを曲げて体ごと沈む→戻る、をリズムよく。
   // ひざから上は伸び縮みさせず、まとめて動かす（拡大して見えないように）
   float knee = mix(smoothstep(0.06, 0.34, a_p.y), smoothstep(0.08, 0.30, f.y), u_rig);
-  float beat = 0.5 - 0.5 * cos(u_t * 10.0 + u_phase);
-  p.y -= u_stance * 0.022 * beat * knee;
-  p.x += u_stance * 0.010 * beat * knee;
-  p.x += u_stance * 0.006 * sin(u_t * 5.0 + u_phase) * smoothstep(0.55, 0.9, a_p.y);
+  float beat = 0.5 - 0.5 * cos(u_t * u_tempo + u_phase);
+  p.y -= u_stance * 0.022 * u_bounce * beat * knee;
+  p.x += u_stance * 0.010 * u_bounce * beat * knee;
+  // 体重の移しかた：弾みの半分のはやさで左右に
+  p.x += u_stance * 0.010 * u_shift * sin(u_t * u_tempo * 0.27 + u_phase) * knee;
+  p.x += u_stance * 0.006 * sin(u_t * u_tempo * 0.5 + u_phase) * smoothstep(0.55, 0.9, a_p.y);
   float s = sin(u_t * 1.7 + u_phase);
   float chest = exp(-pow((p.y - 0.62) / 0.18, 2.0));
   p.x = 0.5 + (p.x - 0.5) * (1.0 + u_breath * 0.018 * s * chest);
@@ -148,7 +151,7 @@ export function createActorGL(canvas) {
   const U = {};
   for (const n of ["u_rect", "u_t", "u_phase", "u_breath", "u_sway", "u_talk", "u_hop", "u_flutter", "u_a", "u_b", "u_mix", "u_bright", "u_sat", "u_alpha", "u_shadow",
     "u_lean", "u_tilt", "u_squash", "u_turn", "u_bob", "u_shake", "u_slump", "u_stance",
-    "u_fig", "u_rig", "u_legL", "u_legR", "u_kneeL", "u_kneeR", "u_armL", "u_armR", "u_elbL", "u_elbR", "u_head", "u_twist", "u_jig", "u_chest", "u_jigOn"]) U[n] = gl.getUniformLocation(prog, n);
+    "u_fig", "u_rig", "u_legL", "u_legR", "u_kneeL", "u_kneeR", "u_armL", "u_armR", "u_elbL", "u_elbR", "u_head", "u_twist", "u_jig", "u_chest", "u_jigOn", "u_tempo", "u_bounce", "u_shift"]) U[n] = gl.getUniformLocation(prog, n);
 
   // 網目：(GRID_X+1)×(GRID_Y+1) の点と三角形
   const pts = [];
@@ -228,13 +231,24 @@ export function createActorGL(canvas) {
   }
 
   // 関節の目標（動きの種類と、その動きが始まってからの時間 u で決める）
+  const FID0 = { armL: 0, armR: 0, elbL: 0, elbR: 0, head: 0 };
+  const PERSONA0 = { tempo: 10, bounce: 1, shift: 0.6, sway: 0.6, arms: 0.08, lean: 0, tilt: 0, fidget: 1 };
   const JOINTS = ["legL", "legR", "kneeL", "kneeR", "armL", "armR", "elbL", "elbR", "head", "twist"];
   function targetsOf(a, t) {
     const m = a.act.mode, u = t - a.act.t0, ph = a.phase;
     const s1 = Math.sin(t * 1.6 + ph), s2 = Math.sin(t * 2.3 + ph * 1.7);
-    const beat = a.stance ? 0.5 - 0.5 * Math.cos(t * 10 + ph) : 0;
-    // ふだん：腕は体の横で少し揺れ、ひざは構えのリズムで曲がる
-    const g = { legL: -0.05, legR: 0.05, kneeL: -0.12 * beat, kneeR: -0.12 * beat, armL: -0.08 + 0.04 * s1, armR: 0.08 - 0.04 * s2, elbL: 0.06 * s2, elbR: -0.06 * s1, head: 0.04 * s1, twist: a.stance ? 0.25 : 0 };
+    const P = a.persona;
+    const beat = a.stance ? 0.5 - 0.5 * Math.cos(t * P.tempo + ph) : 0;
+    const sh = Math.sin(t * P.tempo * 0.27 + ph);
+    // ふだん：腕は体の横で揺れ、ひざは構えのリズムで曲がる。体重を移す側のひざが深く曲がる（人ごとの個性つき）
+    const fid = a.fidgetJ;
+    const g = {
+      legL: -0.05 - 0.04 * P.shift * sh, legR: 0.05 - 0.04 * P.shift * sh,
+      kneeL: -0.12 * P.bounce * beat - 0.08 * P.shift * Math.max(0, sh), kneeR: -0.12 * P.bounce * beat - 0.08 * P.shift * Math.max(0, -sh),
+      armL: -P.arms + 0.04 * P.sway * s1 + fid.armL, armR: P.arms - 0.04 * P.sway * s2 + fid.armR,
+      elbL: 0.06 * s2 + fid.elbL, elbR: -0.06 * s1 + fid.elbR,
+      head: 0.04 * P.sway * s1 + P.tilt * 0.3 + fid.head, twist: a.stance ? 0.25 + 0.08 * P.sway * Math.sin(t * 0.9 + ph) : 0,
+    };
     // 角度は控えめに（1枚の絵を曲げるので、大きく回すとマントや服が裂けたように見える）
     if (m === "run") {
       const c = Math.sin(u * 14);
@@ -318,12 +332,17 @@ export function createActorGL(canvas) {
       const hop = hopAge < 1.2 ? 0.05 * Math.exp(-hopAge * 4) * Math.abs(Math.sin(hopAge * 11)) : 0;
       // しぐさ：目標へ追いつく（ばね）。ときどき体重をかけ直す・首をかしげる（じっとしていても生きて見える）
       if (t > a.fidgetAt) {
-        a.fidgetAt = t + 2.5 + Math.random() * 4;
+        a.fidgetAt = t + (2.5 + Math.random() * 4) / Math.max(0.3, a.persona.fidget);
         a.idle = { lean: (Math.random() - 0.5) * 0.5, tilt: (Math.random() - 0.5) * 0.5 };
+        // 手を少し上げる・首を振る・腕を組みなおす、のどれか（すぐ元へもどる）
+        const r = Math.random();
+        a.fidgetJ = r < 0.33 ? { armL: 0, armR: 0.35, elbL: 0, elbR: 0.5, head: 0 } : r < 0.66 ? { armL: 0, armR: 0, elbL: 0, elbR: 0, head: (Math.random() - 0.5) * 0.3 } : { armL: -0.25, armR: 0, elbL: -0.4, elbR: 0, head: 0 };
+        a.fidgetEnd = t + 0.8 + Math.random() * 0.8;
       }
+      if (t > a.fidgetEnd) a.fidgetJ = FID0;
       const pose = a.pose;
       const goal = {
-        lean: pose.lean + a.idle.lean * 0.6, tilt: pose.tilt + a.idle.tilt, squash: pose.squash, turn: pose.turn, slump: pose.slump,
+        lean: pose.lean + a.idle.lean * 0.6 + a.persona.lean, tilt: pose.tilt + a.idle.tilt + a.persona.tilt, squash: pose.squash, turn: pose.turn, slump: pose.slump,
       };
       for (const k of Object.keys(goal)) a.cur[k] = ease(a.cur[k], goal[k], dt, k === "squash" ? 16 : 5);
       // 驚き：ぴょんとつぶれて伸びる。怒り：ふるえ。歩き：入ってくるあいだだけ
@@ -346,8 +365,8 @@ export function createActorGL(canvas) {
       }
       // 胸：体の動きの加速度に、遅れてついてくる
       if (a.chest) {
-        const beat = a.stance ? 0.5 - 0.5 * Math.cos(t * 10 + a.phase) : 0;
-        const by = -r.bottom / Math.max(1, box.height) - 0.022 * beat + hop + Math.max(0, jump) * 0.5 + (a.talking ? 0.004 * Math.abs(Math.sin(t * 7)) : 0) + 0.004 * Math.sin(t * 1.7 + a.phase);
+        const beat = a.stance ? 0.5 - 0.5 * Math.cos(t * a.persona.tempo + a.phase) : 0;
+        const by = -r.bottom / Math.max(1, box.height) - 0.022 * a.persona.bounce * beat + hop + Math.max(0, jump) * 0.5 + (a.talking ? 0.004 * Math.abs(Math.sin(t * 7)) : 0) + 0.004 * Math.sin(t * 1.7 + a.phase);
         const bx = (r.left + r.width / 2) / Math.max(1, box.width);
         if (a.prevBy == null) { a.prevBy = by; a.prevBx = bx; a.vBy = 0; a.vBx = 0; }
         const vy = (by - a.prevBy) / Math.max(dt, 0.001), vx = (bx - a.prevBx) / Math.max(dt, 0.001);
@@ -393,6 +412,9 @@ export function createActorGL(canvas) {
       gl.uniform2f(U.u_jig, a.jig.x, a.jig.y);
       gl.uniform2f(U.u_chest, a.chest ? a.chest[0] : 0.5, a.chest ? a.chest[1] : 0.66);
       gl.uniform1f(U.u_jigOn, a.chest ? 1 : 0);
+      gl.uniform1f(U.u_tempo, a.persona.tempo);
+      gl.uniform1f(U.u_bounce, a.persona.bounce);
+      gl.uniform1f(U.u_shift, a.persona.shift);
       // 足元の影（浮いている人には描かない）
       if (!a.float) {
         gl.uniform1f(U.u_shadow, 1);
@@ -421,11 +443,12 @@ export function createActorGL(canvas) {
     a.mixDur = dur;
   }
   const api = {
-    add(el, img, { float = false, boss = false, stance = false, rig = !boss && !float, chest = null } = {}) {
+    add(el, img, { float = false, boss = false, stance = false, rig = !boss && !float, chest = null, persona = null } = {}) {
       const zero = () => Object.fromEntries(JOINTS.map((j) => [j, 0]));
       actors.set(el, {
         el, img, float, boss, stance, rig, chest, j: zero(), jv: zero(), act: { mode: "idle", t0: performance.now() / 1000 }, fig: null,
-        jig: { x: 0, y: 0 }, jigV: { x: 0, y: 0 }, prevBy: null, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
+        jig: { x: 0, y: 0 }, jigV: { x: 0, y: 0 }, prevBy: null,
+        persona: { ...PERSONA0, ...(persona || {}), ...(boss ? { tempo: 3.5, bounce: 0.9, shift: 0.4 } : {}) }, fidgetJ: FID0, fidgetEnd: 0, phase: Math.random() * 6.28, mix: 1, bright: 1, sat: 1, talkAmp: 0, talking: false, hopAt: -10, src: "", prev: null, anyone,
         pose: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, cur: { lean: 0, tilt: 0, squash: 0, turn: 0, slump: 0 }, tex: null,
         idle: { lean: 0, tilt: 0 }, fidgetAt: performance.now() / 1000 + 1 + Math.random() * 3, jumpAt: -10, shakeUntil: 0, walkUntil: 0, flashAt: -10,
         base: null, ratio: 0, mixDur: 0.28, frames: {}, blinkAt: performance.now() / 1000 + 1 + Math.random() * 3, mouthOpen: false, mouthNext: 0, gestureUntil: 0,
