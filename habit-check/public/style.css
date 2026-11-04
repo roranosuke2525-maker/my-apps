@@ -839,16 +839,17 @@ body.theater-open { overflow: hidden; }
 .th-actors:not(.gl) .actor.emo-smile img { animation: th-hop 0.45s ease-out 2; }
 
 /* バトル：RPG のように仲間が左に斜めに並び（奥ほど上・小さめ）、右のボスと向き合う */
-.bs-party { left: 0; right: auto; width: 56%; bottom: 0; height: 100%; }
-.bs-fighter, .bs-fighter.small { --d: calc(var(--i) / max(1, var(--n) - 1)); left: calc(-24% + var(--d) * 50%); bottom: calc(22% - var(--d) * 20%); width: 80%; height: 62%;
+/* 仲間は同じ地面に横一列（左から順に） */
+.bs-party { left: 0; right: auto; width: 64%; bottom: 0; height: 100%; }
+.bs-fighter, .bs-fighter.small { --d: calc(var(--i) / max(1, var(--n) - 1)); left: calc(-19% + var(--d) * 72%); bottom: 4%; width: 56%; height: 64%;
   z-index: calc(5 + var(--i)); animation: none; transform: none; transition: filter 0.2s; transform-origin: 50% 100%; }
-.bs-fighter.small { height: 30%; width: 40%; }
+.bs-fighter.small { height: 22%; width: 24%; left: calc(-2% + var(--d) * 72%); z-index: 30; }
 .bs-fighter.active { z-index: 20; }
 .bs-fighter.aura img { filter: drop-shadow(0 0 12px rgba(255, 224, 102, 1)) brightness(1.2); }
 .bs.gl .bs-fighter.aura::after { content: ""; position: absolute; left: 10%; right: 10%; bottom: 0; height: 18%; border-radius: 50%; background: radial-gradient(rgba(255, 224, 102, 0.8), transparent 70%); animation: bs-aura 0.3s ease-in-out infinite alternate; }
 @keyframes bs-aura { to { opacity: 0.4; } }
 .bs-fighter.ghost { opacity: 0.45; pointer-events: none; z-index: 19; }
-.bs-boss { right: 2%; bottom: 6%; width: 50%; height: 84%; }
+.bs-boss { right: 0; bottom: 4%; width: 40%; height: 80%; }
 /* 技の名前（上のまん中） */
 .bs-skill { position: absolute; left: 50%; top: 40px; z-index: 45; transform: translateX(-50%); padding: 3px 14px; border-radius: 4px; border: 2px solid #fff;
   background: linear-gradient(#22306a, #121a40); color: #fff; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; opacity: 0; pointer-events: none; }
@@ -859,6 +860,8 @@ body.theater-open { overflow: hidden; }
   background: #121a40; box-shadow: 0 0 0 2px #121a40, 0 3px 8px rgba(0, 0, 0, 0.3); color: #fff; font-size: 14px; font-weight: 700; line-height: 1.55; pointer-events: none; }
 .bs-msg p { margin: 0; min-height: 1.5em; }
 /* 飛び道具 */
+.bs-orb.heart { border-radius: 0; background: none; box-shadow: none; width: 22px; height: 22px; margin: -11px 0 0 -11px; }
+.bs-orb.heart::before { content: "♥"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; color: #ff6fae; text-shadow: 0 0 10px #ff6fae, 0 0 20px #ffb3d6; }
 .bs-orb { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: radial-gradient(circle, #fff 20%, var(--c) 55%, transparent 72%); box-shadow: 0 0 16px var(--c), 0 0 30px var(--c); z-index: 32; }
 .bs-num { top: calc(26% + var(--ny, 0px)); }
 .boss-view .bs-stage { aspect-ratio: 4 / 3; }

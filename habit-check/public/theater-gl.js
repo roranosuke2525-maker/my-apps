@@ -301,6 +301,7 @@ export function createActorGL(canvas) {
     // 差分の絵：{ talk: url, blink: url, gesture: url }（ないものは省く）。先に読んでおく
     frames(el, f) { const a = actors.get(el); if (a) a.frames = Object.fromEntries(Object.entries(f).filter(([, u]) => u).map(([k, u]) => [k, loadImg(u)])); },
     preload(urls) { for (const u of urls) loadImg(u); },
+    blink(el) { const a = actors.get(el); if (a) a.blinkAt = performance.now() / 1000; },
     gesture(el, ms = 1200) { const a = actors.get(el); if (a) a.gestureUntil = performance.now() / 1000 + ms / 1000; },
     // 姿勢の目標（-1〜1）：lean 前のめり(+は右へ)、tilt 首かしげ、squash つぶれ、turn 向き、slump しょんぼり
     pose(el, p) { const a = actors.get(el); if (a) Object.assign(a.pose, p); },

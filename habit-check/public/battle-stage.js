@@ -32,10 +32,11 @@ const MOVES = {
     { name: "大地割り", motion: "leap", fx: "smash" },
     { name: "渾身の一撃", motion: "charge", fx: "smash", big: true },
   ],
+  // フミ：腰をくねらせて、ウインクと投げキッスのハートで攻める
   フミ: [
-    { name: "記録の頁", motion: "cast", fx: "pages", orb: "#c9a2ff" },
-    { name: "知恵の光", motion: "cast", fx: "tackle", orb: "#8fd6ff" },
-    { name: "大図書館の嵐", motion: "rain", fx: "pages", big: true },
+    { name: "魅惑のウインク", motion: "cast", fx: "heart", orb: "#ff6fae", allure: true },
+    { name: "禁断の頁", motion: "cast", fx: "pages", orb: "#c9a2ff", allure: true },
+    { name: "甘い誘惑", motion: "rain", fx: "heart", big: true, allure: true },
   ],
   ゼニ: [
     { name: "そろばん連弾", motion: "combo", fx: "coins" },
@@ -195,7 +196,8 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       glr.pose(el, { turn: 0.5, lean: 0.1 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
-      if (key && CAST_VARIANTS[key]?.includes("blink")) glr.frames(el, { blink: IMG(`cast2/${key}_blink`) });
+      const has = (v) => key && CAST_VARIANTS[key]?.includes(v);
+      glr.frames(el, { blink: has("blink") ? IMG(`cast2/${key}_blink`) : null, gesture: has("gesture") ? IMG(`cast2/${key}_gesture`) : null });
     }
     if (bossImg) {
       glr.add(bossEl, bossEl.firstElementChild, { boss: true, stance: true });
@@ -263,6 +265,14 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       pctx.translate(p.x * w, p.y * hh);
       pctx.rotate(p.rot);
       if (p.shape === "dot") { pctx.beginPath(); pctx.arc(0, 0, p.size * (0.4 + k * 0.6), 0, 6.283); pctx.fill(); }
+      else if (p.shape === "heart") {
+        const r = p.size;
+        pctx.beginPath();
+        pctx.moveTo(0, r * 0.35);
+        pctx.bezierCurveTo(-r * 1.2, -r * 0.5, -r * 0.45, -r * 1.25, 0, -r * 0.45);
+        pctx.bezierCurveTo(r * 0.45, -r * 1.25, r * 1.2, -r * 0.5, 0, r * 0.35);
+        pctx.fill();
+      }
       else if (p.shape === "streak") { pctx.fillRect(-p.size * 2, -p.size * 0.25, p.size * 4, p.size * 0.5); }
       else pctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
       pctx.restore();
@@ -342,6 +352,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     if (kind === "smash" || kind === "muscle") emit(22, { x: hx, y: hy + 0.1, color: ["#ffb35c", "#fff"], speed: 0.9, g: 1.6, size: 5, life: 0.6, glow: 10 });
     if (kind === "coins") emit(12, { x: hx, y: hy, color: ["#ffd86a", "#fff4c0"], speed: 0.6, g: 1.4, size: 5, life: 0.7, shape: "square", glow: 6 });
     if (kind === "pages") emit(12, { x: hx, y: hy, color: ["#fbf6ea", "#c9a2ff"], speed: 0.4, g: 0.3, size: 7, life: 0.8, shape: "square", glow: 8, drag: 2.5 });
+    if (kind === "heart") emit(22, { x: hx, y: hy, color: ["#ff6fae", "#ffb3d6", "#fff"], speed: 0.6, g: -0.3, size: 8, life: 0.9, shape: "heart", glow: 10, drag: 1.5 });
     if (kind === "tackle" || kind === "combo") emit(18, { x: hx, y: hy, color: ["#8fe6ff", "#fff"], speed: 0.8, g: 0.8, size: 5, life: 0.6, glow: 10 });
     root.classList.add("hitstop");
     await wait(big ? 130 : 70);
@@ -351,8 +362,11 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     emit(big ? 36 : 16, { x: hx, y: hy, color: ["#fff", "#ffe066", "#ffb35c"], speed: big ? 1.3 : 0.8, g: 1.8, size: 4, life: 0.6, shape: "streak", glow: 8, drag: 2 });
     bossEl.classList.remove("hit"); void bossEl.offsetWidth; bossEl.classList.add("hit");
     glr?.flash(bossEl);
-    glr?.pose(bossEl, { lean: 0.5, turn: -0.5 });
+    glr?.pose(bossEl, { lean: 0.6, turn: -0.5 });
     setTimeout(() => glr?.pose(bossEl, { lean: 0, turn: -0.5 }), 300 / speed);
+    // ボスは打たれた方向へ少し押しもどされる
+    bossEl.animate([{ transform: "translate(0, 0) rotate(0deg)" }, { transform: `translate(${big ? 26 : 14}px, ${big ? -6 : 0}px) rotate(${big ? 4 : 2}deg)` }, { transform: "translate(0, 0) rotate(0deg)" }],
+      { duration: (big ? 520 : 360) / speed, easing: "cubic-bezier(.2, .8, .3, 1)" });
     shake(big ? 1 : 0.5);
     const weak = boss.weak && (TYPE_ATTACKER[boss.weak] === a.who || boss.weak === "バランス");
     const num = h("span", { class: `bs-num${big ? " big" : ""}` },
@@ -366,9 +380,9 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   }
 
   // 飛び道具：攻撃する人の手元からボスへ光の玉が飛ぶ
-  async function shoot(f, color, ms = 380) {
+  async function shoot(f, color, ms = 380, heart = false) {
     const fp = posOf(f), bp = posOf(bossEl);
-    const orb = h("i", { class: "bs-orb" });
+    const orb = h("i", { class: `bs-orb${heart ? " heart" : ""}` });
     orb.style.setProperty("--c", color);
     orb.style.left = `${(fp.x + 0.06) * 100}%`;
     orb.style.top = `${(fp.y - 0.08) * 100}%`;
@@ -377,7 +391,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     const dx = (bp.x - fp.x - 0.1) * sw.width, dy = (bp.y - fp.y + 0.08) * sw.height;
     const trail = setInterval(() => {
       const r = orb.getBoundingClientRect();
-      emit(2, { x: (r.left + r.width / 2 - sw.left) / sw.width, y: (r.top + r.height / 2 - sw.top) / sw.height, color, speed: 0.08, g: 0, size: 4, life: 0.35, glow: 10 });
+      emit(2, { x: (r.left + r.width / 2 - sw.left) / sw.width, y: (r.top + r.height / 2 - sw.top) / sw.height, color, speed: 0.08, g: 0, size: heart ? 5 : 4, life: 0.35, glow: 10, shape: heart ? "heart" : "dot" });
     }, 30);
     await move(orb, [{ transform: "translate(0, 0)" }, { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 30}px)` }, { transform: `translate(${dx}px, ${dy}px)` }], ms, "ease-in");
     clearInterval(trail);
@@ -409,36 +423,70 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       // 走りこむ（土ぼこり・残像）
       const fp0 = posOf(f);
       emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
-      glr?.pose(f, { lean: 0.8, turn: 0.9 });
+      // ふりかぶる（少し下がって沈む）
+      glr?.pose(f, { lean: -0.6, turn: 0.6 });
+      await move(f, [{ transform: fromStep }, { transform: "translate(4px, 6px) rotate(-8deg)" }], 140);
+      glr?.pose(f, { lean: 0.9, turn: 0.9 });
       ghosts(f);
-      await move(f, [{ transform: fromStep }, { transform: `translate(${D}px, 0)` }], 260, "cubic-bezier(.5, 0, .7, 1)");
+      // 走る：上下に弾みながら
+      await move(f, [
+        { transform: "translate(4px, 6px) rotate(-8deg)" },
+        { transform: `translate(${D * 0.35}px, -10px) rotate(6deg)` },
+        { transform: `translate(${D * 0.7}px, 0px) rotate(10deg)` },
+        { transform: `translate(${D}px, -6px) rotate(12deg)` },
+      ], 280, "cubic-bezier(.5, 0, .7, 1)");
       if (mv.motion === "dash") {
-        await move(f, [{ transform: `translate(${D}px, 0) rotate(0deg)` }, { transform: `translate(${D + 14}px, 0) rotate(8deg)` }], 90);
+        // 斬りあげ → 斬りおろし
+        await move(f, [{ transform: `translate(${D}px, -6px) rotate(12deg)` }, { transform: `translate(${D + 10}px, -22px) rotate(-14deg)` }], 110);
+        await move(f, [{ transform: `translate(${D + 10}px, -22px) rotate(-14deg)` }, { transform: `translate(${D + 18}px, 4px) rotate(18deg)` }], 80, "ease-in");
         await impact(a, kind, a.damage, { big });
         hitLine();
+        // はね返って着地
+        await move(f, [{ transform: `translate(${D + 18}px, 4px) rotate(18deg)` }, { transform: `translate(${D - 30}px, -24px) rotate(-10deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 300);
       } else {
+        // 3連撃：右・左・とどめは跳んで
         const parts = [0.3, 0.3, 0.4];
+        let at = `translate(${D}px, -6px) rotate(12deg)`;
+        const hits = [
+          `translate(${D + 14}px, 0px) rotate(16deg)`,
+          `translate(${D + 6}px, -14px) rotate(-16deg)`,
+          `translate(${D + 20}px, 2px) rotate(22deg)`,
+        ];
         for (let k = 0; k < 3; k++) {
-          await move(f, [{ transform: `translate(${D}px, 0) rotate(${k % 2 ? -6 : 6}deg)` }, { transform: `translate(${D + 12}px, ${k === 2 ? -10 : 0}px) rotate(${k % 2 ? 8 : -8}deg)` }], 80);
+          if (k === 2) {
+            await move(f, [{ transform: at }, { transform: `translate(${D}px, -46px) rotate(-20deg)` }], 140);
+            at = `translate(${D}px, -46px) rotate(-20deg)`;
+          }
+          await move(f, [{ transform: at }, { transform: hits[k] }], k === 2 ? 90 : 75, "ease-in");
+          at = hits[k];
           await impact(a, kind, a.damage * parts[k], { big: big && k === 2, n: k });
-          await wait(90);
+          await wait(70);
         }
         hitLine();
+        await move(f, [{ transform: at }, { transform: `translate(${D - 30}px, -20px) rotate(-8deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 300);
       }
-      await wait(260);
+      await wait(200);
       glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      await move(f, [{ transform: `translate(${D}px, 0)` }, { transform: base }], 340, "cubic-bezier(.3, .6, .3, 1)");
+      // 戻りは軽く跳ねながら
+      await move(f, [
+        { transform: `translate(${D - 40}px, 0)` },
+        { transform: `translate(${(D - 40) * 0.5}px, -14px)` },
+        { transform: base },
+      ], 380, "cubic-bezier(.3, .6, .3, 1)");
     } else if (mv.motion === "leap") {
       // 高く跳んで、ボスの上から振りおろす
       glr?.pose(f, { lean: -0.4, turn: 0.6 });
       await wait(120);
       glr?.pose(f, { lean: 0.7, turn: 0.9 });
       const H = stage.clientHeight * 0.42;
+      await move(f, [{ transform: fromStep }, { transform: "translate(10px, 10px) rotate(-6deg)" }], 120);
+      ghosts(f);
       await move(f, [
-        { transform: fromStep, offset: 0 },
-        { transform: `translate(${D * 0.55}px, ${-H}px) rotate(-10deg)`, offset: 0.55 },
-        { transform: `translate(${D}px, ${-H * 0.15}px) rotate(14deg)`, offset: 1 },
-      ], 520, "cubic-bezier(.3, .5, .6, 1)");
+        { transform: "translate(10px, 10px) rotate(-6deg)", offset: 0 },
+        { transform: `translate(${D * 0.3}px, ${-H * 0.85}px) rotate(-18deg)`, offset: 0.35 },
+        { transform: `translate(${D * 0.6}px, ${-H}px) rotate(-28deg)`, offset: 0.6 },
+        { transform: `translate(${D}px, ${-H * 0.15}px) rotate(20deg)`, offset: 1 },
+      ], 560, "cubic-bezier(.3, .5, .6, 1)");
       await move(f, [{ transform: `translate(${D}px, ${-H * 0.15}px) rotate(14deg)` }, { transform: `translate(${D}px, 0) rotate(4deg)` }], 90, "ease-in");
       await impact(a, kind, a.damage, { big: true });
       hitLine();
@@ -465,20 +513,40 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       await move(f, [{ transform: `translate(${D + 10}px, 0) rotate(6deg)` }, { transform: base }], 380);
     } else {
       // cast / rain：その場から
-      glr?.pose(f, { lean: -0.3, turn: 0.6 });
-      glr?.emote(f, "smile");
       const fp0 = posOf(f);
-      emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
-      await wait(260);
+      if (mv.allure) {
+        // フミ：腰をくねらせて、髪をかきあげ、ウインク
+        glr?.pose(f, { lean: 0.2, tilt: 0.6, turn: 0.4 });
+        glr?.gesture(f, 1400);
+        await move(f, [
+          { transform: fromStep },
+          { transform: "translate(22px, 0) rotate(-6deg)" },
+          { transform: "translate(14px, 0) rotate(7deg)" },
+          { transform: "translate(22px, 0) rotate(-5deg)" },
+          { transform: "translate(18px, 0) rotate(3deg)" },
+        ], 700, "ease-in-out");
+        glr?.blink(f);
+        glr?.pose(f, { lean: 0.4, tilt: -0.5, turn: 0.7 });
+        emit(16, { x: fp0.x + 0.03, y: fp0.y - 0.08, color: ["#ff6fae", "#ffb3d6"], speed: 0.35, g: -0.4, size: 7, life: 0.9, shape: "heart", glow: 10, drag: 1.5 });
+        await wait(260);
+      } else {
+        // 構える → 小さく跳んで力をこめる
+        glr?.pose(f, { lean: -0.3, turn: 0.6 });
+        glr?.gesture(f, 900);
+        emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
+        await move(f, [{ transform: fromStep }, { transform: "translate(18px, -26px) rotate(-6deg)" }, { transform: "translate(22px, 0) rotate(4deg)" }], 360, "cubic-bezier(.3, .7, .4, 1)");
+      }
       glr?.pose(f, { lean: 0.5, turn: 0.8 });
       if (mv.motion === "cast") {
-        await shoot(f, mv.orb || "#ffe066");
+        // 投げる・放つ：前へ乗り出す
+        move(f, [{ transform: "translate(22px, 0) rotate(4deg)" }, { transform: "translate(34px, -4px) rotate(10deg)" }, { transform: "translate(22px, 0) rotate(0deg)" }], 420);
+        await shoot(f, mv.orb || "#ffe066", 380, mv.fx === "heart");
         await impact(a, kind, a.damage, { big });
       } else {
         // 頭上から降らせる（3回に分けて当たる）
         const bp = posOf(bossEl);
         for (let k = 0; k < 3; k++) {
-          emit(14, { x: bp.x + (Math.random() - 0.5) * 0.2, y: 0.05, color: kind === "coins" ? ["#ffd86a", "#fff4c0"] : kind === "flame" ? ["#ff5a2a", "#ffb35c"] : ["#fbf6ea", "#c9a2ff"], speed: 0.9, dir: Math.PI / 2, spread: 0.4, g: 2.4, size: 6, life: 0.6, shape: kind === "coins" ? "dot" : "square", glow: 8, drag: 0.5 });
+          emit(14, { x: bp.x + (Math.random() - 0.5) * 0.2, y: 0.05, color: kind === "coins" ? ["#ffd86a", "#fff4c0"] : kind === "flame" ? ["#ff5a2a", "#ffb35c"] : kind === "heart" ? ["#ff6fae", "#ffb3d6"] : ["#fbf6ea", "#c9a2ff"], speed: 0.9, dir: Math.PI / 2, spread: 0.4, g: 2.4, size: kind === "heart" ? 9 : 6, life: 0.6, shape: kind === "coins" ? "dot" : kind === "heart" ? "heart" : "square", glow: 8, drag: 0.5 });
           await wait(160);
           await impact(a, kind, a.damage / 3, { big: k === 2, n: k });
         }
@@ -486,7 +554,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       hitLine();
       await wait(380);
       glr?.pose(f, { lean: 0.1, turn: 0.5 });
-      await move(f, [{ transform: fromStep }, { transform: base }], 240);
+      await move(f, [{ transform: "translate(22px, 0)" }, { transform: base }], 260);
     }
     f.classList.remove("active");
     f.getAnimations().forEach((x) => x.cancel());
