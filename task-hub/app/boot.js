@@ -71,6 +71,7 @@
     if (d.mv) { aiDecide(d.mv); return; }
     if (d.fix) { fixReply(d.fix); return; }
     if (d.again) { aiAgain(d.again); return; }
+    if (d.del) { const t = known.get(d.del); if (!t) return; if (!el.classList.contains("arm")) { el.classList.add("arm"); el.textContent = "本当に削除？"; buzz(8); setTimeout(() => { if (el.isConnected) { el.classList.remove("arm"); el.textContent = "削除"; } }, 3000); return; } deleteTask(t); return; }
     if (d.cleardate) { setProps(PG.task, dateProps(null), "実行日を外しました").then(() => { $("#pprops").innerHTML = propsHtml(); }); return; }
     if (d.cap) { const nm = $("#cp-name")?.value || ""; capKind = d.cap; openCapture(); $("#cp-name").value = nm; return; }
     if (d.capgo) { submitCapture(); return; }

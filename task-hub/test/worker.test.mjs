@@ -141,3 +141,15 @@ test("今すぐ実行：定期実行の API トリガーを叩き、セッショ
     assert.equal(seen.at(-1).init.headers["anthropic-beta"], "experimental-cc-routine-2026-04-01");
   } finally { globalThis.fetch = realFetch; }
 });
+
+test("削除はゴミ箱へ移す（in_trash）、戻すで元に戻る", async () => {
+  const s = setup();
+  try {
+    const id = Object.keys(s.fake.pages)[0];
+    const r1 = await s.call("notion-delete-pages", { page_ids: [id] });
+    assert.equal(r1.status, 200); assert.equal(s.fake.pages[id].in_trash, true);
+    const r2 = await s.call("notion-restore-pages", { page_ids: [id] });
+    assert.equal(r2.status, 200); assert.equal(s.fake.pages[id].in_trash, false);
+    assert.equal((await s.call("notion-delete-pages", { page_ids: [] })).status, 400);
+  } finally { s.done(); }
+});

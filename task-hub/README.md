@@ -15,7 +15,7 @@ Notion の私用タスク運用（GTD＋AIリサーチ）を1画面ずつで回�
 
 - タップ：ページを開く
 - 右にスワイプ：✓ 済み／左にスワイプ：明日へ（済みの行は次にやるへ戻す）。どちらも取り消しできる
-- 長押し：日付・状態・AIをすぐ変えるシート
+- 長押し：日付・状態・AIをすぐ変えるシート。ここと ページの下の「削除」（2回押し）で Notion のゴミ箱へ。5秒は「取り消す」で戻せる
 - 右の日付を押しても同じシート
 - 一覧の一番上で下に引っぱると更新。右上の↻でも
 - PC：「/」で検索、「n」で新しく入れる
@@ -117,7 +117,7 @@ Worker は画面が MCP に出していた4つの道具（fetch・query・update
 
 - 本文は Notion API の Markdown（`GET/PATCH /v1/pages/:id/markdown`、`markdown_version: v2`＝MCP と同じ Notion-flavored Markdown、`Notion-Version: 2026-03-11`）で読み、`update_content`（old_str→new_str）で変わった所だけ置き換える
 - データソース・プロパティは `Notion-Version: 2025-09-03`
-- 子ページ・データベースを消す全体の置き換え（allow_deleting_content）は Worker が受け付けない。ページ・行の削除の窓口もない
+- 子ページ・データベースを消す全体の置き換え（allow_deleting_content）は Worker が受け付けない。タスクの「削除」は Notion のゴミ箱へ移す（`in_trash`・一度に10件まで）だけで、完全な削除はしない。「取り消す」は `notion-restore-pages` で戻す
 - Notion API は計算式の値を返す（MCP は返さない）が、画面は今までどおりステータスと実行日から段を出す
 
 ### しくみ（Cloudflare版）
@@ -194,7 +194,7 @@ npx wrangler dev          # ローカルで起動（.dev.vars に NOTION_TOKEN �
 
 `public/index.html` をアーティファクトとして公開する。capabilities：
 ```json
-{"mcp": {"servers": [{"server": "Notion", "tools": ["notion-fetch", "notion-query-data-sources", "notion-update-page", "notion-create-pages"]}]}}
+{"mcp": {"servers": [{"server": "Notion", "tools": ["notion-fetch", "notion-query-data-sources", "notion-update-page", "notion-create-pages", "notion-delete-pages", "notion-restore-pages"]}]}}
 ```
 
 Notion 連携がないところ（ブラウザで直接開くなど）では、（例）の付いた見本で動く。

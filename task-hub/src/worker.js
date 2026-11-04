@@ -113,7 +113,17 @@ export async function runTool(notion, tool, input) {
   if (tool === "notion-query-data-sources") return queryTool(notion, input);
   if (tool === "notion-update-page") return updateTool(notion, input);
   if (tool === "notion-create-pages") return createTool(notion, input);
+  if (tool === "notion-delete-pages") return trashTool(notion, input, true);
+  if (tool === "notion-restore-pages") return trashTool(notion, input, false);
   throw httpError(400, "使えない操作です", "bad_request");
+}
+
+// delete / restore：ページをゴミ箱へ移す・戻す（Notion のゴミ箱なので 30日は取り戻せる）。一度に 10 件まで
+async function trashTool(notion, input, trash) {
+  const ids = (input?.page_ids || []).slice(0, 10).map(normalizeId);
+  if (!ids.length) throw httpError(400, "ページのIDがありません", "bad_request");
+  for (const pid of ids) await notion("PATCH", `/pages/${pid}`, { in_trash: trash });
+  return { page_ids: ids, in_trash: trash };
 }
 
 // fetch：データソースは名前と列の型、ページは本文の Markdown
