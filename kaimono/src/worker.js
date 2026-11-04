@@ -50,6 +50,10 @@ export default {
       if (list?.[2] === "clear" && m === "POST") return json(await clearChecked(notion, env, list[1]));
       if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1]));
       if (list?.[2] === "cancel" && m === "POST") return json(await cancelRefill(notion, env, list[1]));
+      if (p === "/api/sets" && m === "POST") return json(await saveSet(notion, env, null, await readJson(request)));
+      const setm = p.match(/^\/api\/sets\/([0-9a-f-]{32,36})$/i);
+      if (setm && m === "PATCH") return json(await saveSet(notion, env, setm[1], await readJson(request)));
+      if (setm && m === "DELETE") return json(await removeSet(notion, env, setm[1]));
       if (p === "/api/refills/history" && m === "GET") return json(await refillHistory(notion, env));
       const rh = p.match(/^\/api\/refills\/([0-9a-f-]{32,36})$/i);
       if (rh && m === "PATCH") return json(await fixRefill(notion, env, rh[1], await readJson(request)));
@@ -304,7 +308,7 @@ const recent = [{ timestamp: "last_edited_time", direction: "descending" }];
 
 async function loadState(notion, env) {
   const today = todayJst();
-  const [tasks, stockPages, templates] = await Promise.all([
+  const [tasks, stockPages, templates, sets] = await Promise.all([
     queryAll(notion, env.TASK_DS_ID, {
       filter: { and: [openFilter, { property: "親タスク", relation: { is_empty: true } }, { or: [{ property: "分類タグ", select: { equals: "BUY" } }, { property: "補充対象", relation: { is_not_empty: true } }] }] },
       sorts: recent,
@@ -314,6 +318,7 @@ async function loadState(notion, env) {
     env.TEMPLATE_DS_ID
       ? queryAll(notion, env.TEMPLATE_DS_ID, { filter: { property: "使う", checkbox: { equals: true } } }).then((r) => ({ ok: r }), (err) => ({ err: err.publicMessage || "読めませんでした" }))
       : { err: "TEMPLATE_DS_ID が設定されていません" },
+    env.SET_DS_ID ? queryAll(notion, env.SET_DS_ID, { filter: { property: "使う", checkbox: { equals: true } } }).catch(() => []) : [],
   ]);
   const lists = tasks.map(taskOf);
   // チェックリストとして使うのは補充タスク以外。本文の ToDo を読む
@@ -330,6 +335,7 @@ async function loadState(notion, env) {
   return {
     lists, stock, today, loadedAt: new Date().toISOString(),
     templates: (templates.ok || []).map(templateOf).filter((x) => x.name),
+    sets: sets.map(setOf).filter((x) => x.name).sort((a, b) => a.order - b.order),
     sites: await siteList(env),
     stores: await storeList(env, [...(templates.ok || []).map((pg) => propText(pg.properties?.["店"])), ...stockPages.map((pg) => propText(pg.properties?.["店"]))]),
     templateErr: templates.err || "",
@@ -857,6 +863,54 @@ async function removeStore(env, body) {
   const list = (await storeList(env)).filter((x) => x !== body?.name);
   await env.SUBS.put("stores", JSON.stringify(list));
   return { stores: list };
+}
+
+// ---------- 買い物セット（1行＝1セット。品は1行に1品） ----------
+function setOf(page) {
+  const p = page.properties || {};
+  return {
+    id: normalizeId(page.id),
+    url: page.url,
+    name: propText(p["名前"]),
+    store: propText(p["店"]),
+    items: propText(p["品"]).split(/\n+/).map((x) => x.replace(/^[-・*\s]+/, "").trim()).filter(Boolean),
+    order: typeof p["並び"]?.number === "number" ? p["並び"].number : 999,
+  };
+}
+function needSets(env) { if (!env.SET_DS_ID) throw httpError(500, "SET_DS_ID が設定されていません"); }
+async function setPage(notion, env, id) {
+  const page = await notion("GET", `/pages/${normalizeId(id)}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.SET_DS_ID)) throw httpError(403, "DB_買い物セット の行ではありません");
+  return page;
+}
+async function saveSet(notion, env, id, body) {
+  needSets(env);
+  const props = {};
+  if (!id || body?.name !== undefined) {
+    const name = clean(body?.name, NAME_MAX, "セットの名前");
+    if (!name) throw httpError(400, "セットの名前を入れてください");
+    props["名前"] = { title: rich(name) };
+  }
+  if (!id || body?.items !== undefined) {
+    const items = (Array.isArray(body?.items) ? body.items : String(body?.items || "").split(/\n/)).map((x) => clean(x, ITEM_MAX, "品")).filter(Boolean);
+    if (items.length > 60) throw httpError(400, "1つのセットは60品までです");
+    const text = items.join("\n");
+    props["品"] = { rich_text: text ? chunkRich(text) : [] };
+  }
+  if (body?.store !== undefined) { const st = clean(body.store, 30, "店"); props["店"] = { select: st ? { name: st } : null }; }
+  if (!id) { props["使う"] = { checkbox: true }; props["並び"] = { number: Number(body?.order) || 100 }; }
+  const page = id
+    ? await notion("PATCH", `/pages/${normalizeId((await setPage(notion, env, id)).id)}`, { properties: props })
+    : await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.SET_DS_ID }, properties: props });
+  return { set: setOf(page) };
+}
+// Notion の文字は1かたまり2000字までなので分けて入れる
+const chunkRich = (text) => text.match(/[\s\S]{1,1900}/g).map((c) => ({ type: "text", text: { content: c } }));
+async function removeSet(notion, env, id) {
+  needSets(env);
+  const page = await setPage(notion, env, id);
+  await notion("PATCH", `/pages/${normalizeId(page.id)}`, { in_trash: true });
+  return { removed: normalizeId(page.id) };
 }
 
 // ---------- 購入サイト（名前と検索 URL。{q} に品名が入る）----------

@@ -29,6 +29,7 @@ DAILY_DS_ID = "53881991-7268-41b5-8954-2bc4b2bf1971"  # DB_Daily（在庫・補�
 TEMPLATE_DS_ID = "88548654-76ee-40be-a367-74ccaaa466e1"  # DB_買い物テンプレート（よく買う品のひな形）
 RECEIPT_DS_ID = "3d9030e3-35ee-40b9-bd34-441ad8f4a681"   # DB_レシート（1枚＝1行・写真つき）
 PRICE_DS_ID = "112a59f2-9003-462d-a401-a6d55dbb6ea2"     # DB_価格記録（1品×1回＝1行）
+SET_DS_ID = "f459461f-44b0-47f2-976e-d5381d219f12"       # DB_買い物セット（1行＝1セット）
 PLAYER_ID = "3e962844acbe81b0843ff78fe19791fa"        # DB_プレイヤー（作るタスクのプレイヤー。届かなければ付けない）
 # 通知（Web Push）の送り主。鍵は Worker がはじめて使うときに作って KV（SUBS の "vapid"）にしまう
 VAPID_SUBJECT = "https://kaimono.roranosuke2525.workers.dev"

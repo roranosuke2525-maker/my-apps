@@ -9,6 +9,7 @@ const DAILY_DS = "53881991-7268-41b5-8954-2bc4b2bf1971";
 const TPL_DS = "88548654-76ee-40be-a367-74ccaaa466e1";
 const RCPT_DS = "3d9030e3-35ee-40b9-bd34-441ad8f4a681";
 const PRICE_DS = "112a59f2-9003-462d-a401-a6d55dbb6ea2";
+const SET_DS = "f459461f-44b0-47f2-976e-d5381d219f12";
 const KEY = "test-key-0123456789";
 const hex = (n) => n.toString(16).padStart(32, "0");
 const rt = (s) => [{ plain_text: s }];
@@ -85,7 +86,7 @@ beforeEach(() => {
   calls = [];
   pushes = [];
   env = {
-    NOTION_TOKEN: "ntn_fake", APP_KEY: KEY, TASK_DS_ID: TASK_DS, DAILY_DS_ID: DAILY_DS, TEMPLATE_DS_ID: TPL_DS, RECEIPT_DS_ID: RCPT_DS, PRICE_DS_ID: PRICE_DS, PLAYER_ID: hex(99),
+    NOTION_TOKEN: "ntn_fake", APP_KEY: KEY, TASK_DS_ID: TASK_DS, DAILY_DS_ID: DAILY_DS, TEMPLATE_DS_ID: TPL_DS, RECEIPT_DS_ID: RCPT_DS, PRICE_DS_ID: PRICE_DS, SET_DS_ID: SET_DS, PLAYER_ID: hex(99),
     NOTION_API_BASE: "https://notion.test/v1", ASSETS: { fetch: async () => new Response("asset") },
     SUBS: kv(), VAPID_SUBJECT: "https://kaimono.test",
   };
@@ -604,4 +605,21 @@ test("補充した日を実行日に残す。過去の補充は日付を直す�
   assert.equal(pages.get(tid).in_trash, true);
   assert.equal((await api("PATCH", `/api/refills/${L1}`, { action: "trash" })).status, 403);
   assert.equal((await api("PATCH", `/api/refills/${R1}`, { action: "x" })).status, 400);
+});
+
+test("買い物セット：作る（使う・並び）・読み込みに出る（1行1品）・品と名前を直す・消す", async () => {
+  const made = await api("POST", "/api/sets", { name: "蒸籠蒸しの材料", store: "ヤオコー", items: ["もやし 3袋", " ", "えのき"] });
+  assert.equal(made.status, 200);
+  assert.deepEqual(made.data.set.items, ["もやし 3袋", "えのき"]);
+  const pg = pages.get(made.data.set.id);
+  assert.equal(pg.parent.data_source_id, SET_DS);
+  assert.equal(pg.properties["使う"].checkbox, true);
+  assert.deepEqual((await api("GET", "/api/state")).data.sets.map((x) => [x.name, x.items]), [["蒸籠蒸しの材料", ["もやし 3袋", "えのき"]]]);
+  const ed = await api("PATCH", `/api/sets/${made.data.set.id}`, { items: "白菜\n豚バラ 1パック" });
+  assert.equal(pg.properties["品"].rich_text[0].text.content, "白菜\n豚バラ 1パック");
+  assert.equal(ed.status, 200);
+  assert.equal((await api("POST", "/api/sets", { name: "", items: [] })).status, 400);
+  assert.equal((await api("DELETE", `/api/sets/${L1}`)).status, 403);
+  assert.equal((await api("DELETE", `/api/sets/${made.data.set.id}`)).status, 200);
+  assert.equal(pg.in_trash, true);
 });

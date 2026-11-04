@@ -372,4 +372,14 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .hrow .hname:empty { display: none; }
 .hrow input[type="date"] { border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; min-height: 34px; background: var(--bg); font-size: 16px; color: var(--ink); max-width: 160px; }
 
+.setchips { margin: 0 0 10px; align-items: center; }
+.setchips > .mute { font-size: 12px; }
+.setchips .chip small { color: var(--mute); font-size: 10px; }
+.setchips .chip.on small { color: var(--pri-ink); opacity: 0.85; }
+.setform { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.setform input, .setform textarea, .setform select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; background: var(--bg); font-size: 16px; color: var(--ink); font-family: inherit; }
+.setform label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.setform label select { flex: 1; }
+.setform .row-end { margin: 0; }
+
 [hidden] { display: none !important; }

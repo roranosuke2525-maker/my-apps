@@ -22,7 +22,7 @@ const store = {
 
 const S = {
   tab: "list", lists: [], stock: [], today: "", loadedAt: "", cur: store.get("cur"), sort: store.get("sort", "aisle"),
-  showBasket: false, edit: "", sheet: null, act: null, sites: [], stores: ["ヤオコー", "ヤクルト", "ドラッグストア"], maint: false, msearch: null, over: store.json("over", {}), // over：Notion に書いたばかりの品（id → 手元の値） lpick: null, // lpick：リストで選んで消す品の id pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
+  showBasket: false, edit: "", sheet: null, act: null, sites: [], sets: [], setAdded: store.json("setAdded", {}), stores: ["ヤオコー", "ヤクルト", "ドラッグストア"], maint: false, msearch: null, over: store.json("over", {}), // over：Notion に書いたばかりの品（id → 手元の値）、setAdded：セットで足した品（"リスト|セット" → 品の id） lpick: null, // lpick：リストで選んで消す品の id pick: null, // pick：補充でまとめて操作するときに選んだ品の id stockCat: "", alertDays: 3, push: null, loading: false,
   seg: store.get("seg", "usual"), templates: [], templateErr: "", planning: false, whenFor: "", openOther: "", wantList: "",
   reminders: {}, // タスク id → 何分前に知らせるか（決めていないタスクは REMIND_DEFAULT）
   plan: { counts: {}, extra: [], at: "", store: "", before: [30, 0], ...store.json("plan", {}) }, // いつもの買い物の下書き（端末に残す）
@@ -70,7 +70,7 @@ function setStatus(msg, err = false) {
   s.classList.toggle("err", !!err);
 }
 
-const saveSnap = () => store.set("snap", JSON.stringify({ lists: S.lists, stock: S.stock, today: S.today, loadedAt: S.loadedAt, templates: S.templates, templateErr: S.templateErr, stores: S.stores, sites: S.sites }));
+const saveSnap = () => store.set("snap", JSON.stringify({ lists: S.lists, stock: S.stock, today: S.today, loadedAt: S.loadedAt, templates: S.templates, templateErr: S.templateErr, stores: S.stores, sites: S.sites, sets: S.sets }));
 const savePlan = () => store.set("plan", JSON.stringify(S.plan));
 const saveQueue = () => store.set("queue", JSON.stringify(Q));
 const saveHist = () => store.set("hist", JSON.stringify(hist));
@@ -112,7 +112,7 @@ async function load({ quiet = false } = {}) {
   if (!quiet) setStatus("Notion から読みこみ中…");
   try {
     const st = await api("GET", "/api/state");
-    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "", reminders: st.reminders || {}, stores: st.stores || S.stores, sites: st.sites || S.sites });
+    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "", reminders: st.reminders || {}, stores: st.stores || S.stores, sites: st.sites || S.sites, sets: st.sets || [] });
     applyOver();
     if (S.wantList) { const t = listOf(S.wantList); if (t) { S.seg = kindOf(t); S.cur = t.id; S.tab = "list"; } S.wantList = ""; }
     for (const t of S.lists.filter((x) => kindOf(x) !== "other")) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
@@ -174,6 +174,8 @@ async function runOp(op) {
       for (const t of S.lists) for (const i of t.items || []) if (i.id === tid) { i.id = real; i.kind = res.items[n].kind || "todo"; }
       if (S.over[tid]) { S.over[real] = { ...S.over[tid], item: { ...S.over[tid].item, id: real, kind: res.items[n].kind } }; delete S.over[tid]; }
       for (const q of Q) if (q.item === tid) q.item = real;
+      for (const ids of Object.values(S.setAdded)) { const k = ids.indexOf(tid); if (k >= 0) ids[k] = real; }
+      saveSetAdded();
       if (S.edit === tid) S.edit = real;
     });
     render();
@@ -895,6 +897,88 @@ function renderList() {
   if (S.seg === "other") return head + renderOther();
   return head + renderUsual();
 }
+// ---------- 買い物セット：ボタンで明細に足す・もう一度押すと取り消す ----------
+const saveSetAdded = () => store.set("setAdded", JSON.stringify(S.setAdded));
+// where は "plan"（準備画面）かリストの id
+function setOn(where, id) { return where === "plan" ? !!S.plan.sets?.[id] : !!S.setAdded[`${where}|${id}`]?.length; }
+function setChips(where) {
+  const store_ = where === "plan" ? S.plan.store : "";
+  const sets = S.sets.filter((x) => !store_ || !x.store || x.store === store_);
+  return `<div class="chips setchips"><span class="mute">セット：</span>${sets.map((x) => { const on = setOn(where, x.id); return `<button type="button" class="chip${on ? " on" : ""}" data-setgo="${where}|${x.id}" aria-pressed="${on}" title="${esc(x.items.join("・"))}">${on ? "✓ " : "＋ "}${esc(x.name)}<small>${on ? "取り消す" : `${x.items.length}品`}</small></button>`; }).join("")}${where === "plan" ? `<button type="button" class="chip" data-setsave="1">💾 今の明細をセットに</button>` : ""}<button type="button" class="chip" data-setedit="1">⚙️</button></div>`;
+}
+function tplFor(name) { const k = kana(name).replace(/\s/g, ""); return S.templates.find((t) => t.store === S.plan.store && kana(t.name).replace(/\s/g, "") === k) || S.templates.find((t) => kana(t.name).replace(/\s/g, "") === k); }
+function toggleSet(where, id) {
+  const set = S.sets.find((x) => x.id === id); if (!set) return;
+  if (where === "plan") {
+    S.plan.sets ||= {};
+    const rec = S.plan.sets[id];
+    if (rec) {
+      // 取り消す：数を入れる前に戻し、足した品を外す
+      for (const [tid, prev] of Object.entries(rec.counts)) { if (prev) S.plan.counts[tid] = prev; else delete S.plan.counts[tid]; }
+      for (const e of rec.extra) { const k = S.plan.extra.indexOf(e); if (k >= 0) S.plan.extra.splice(k, 1); }
+      delete S.plan.sets[id]; savePlan(); render(); toast(`「${set.name}」を取り消しました`); return;
+    }
+    const r = { counts: {}, extra: [] };
+    for (const item of set.items) {
+      const q = A.splitQty(item); const tpl = tplFor(q.name);
+      if (tpl) {
+        if (!(tpl.id in r.counts)) r.counts[tpl.id] = S.plan.counts[tpl.id] || 0;
+        const n = parseFloat(q.qty) || tpl.qty || 1;
+        S.plan.counts[tpl.id] = Math.max(S.plan.counts[tpl.id] || 0, n);
+      } else if (!S.plan.extra.includes(item)) { S.plan.extra.push(item); r.extra.push(item); }
+    }
+    S.plan.sets[id] = r; savePlan(); render(); toast(`「${set.name}」の${set.items.length}品を入れました（もう一度押すと取り消し）`); return;
+  }
+  const key = `${where}|${id}`; const t = listOf(where); if (!t) return;
+  if (S.setAdded[key]?.length) {
+    const ids = S.setAdded[key]; delete S.setAdded[key]; saveSetAdded();
+    for (const iid of ids) if (findItem(iid)[1]) removeItem(iid);
+    toast(`「${set.name}」で入れた品を取り消しました`); return;
+  }
+  // リストにまだない品だけ足す
+  const have = new Set((t.items || []).map((i) => kana(A.splitQty(i.text).name).replace(/\s/g, "")));
+  const texts = set.items.filter((x) => !have.has(kana(A.splitQty(x).name).replace(/\s/g, "")));
+  if (!texts.length) { toast("セットの品はもうリストに入っています"); return; }
+  const before = new Set((t.items || []).map((i) => i.id));
+  S.cur = t.id; addTexts(texts);
+  S.setAdded[key] = (t.items || []).filter((i) => !before.has(i.id)).map((i) => i.id); saveSetAdded(); render();
+  toast(`「${set.name}」から${texts.length}品入れました（もう一度押すと取り消し）`);
+}
+async function savePlanAsSet() {
+  const items = [...planPicked(), ...S.plan.extra];
+  if (!items.length) { toast("先に明細に品を入れてください"); return; }
+  const name = (prompt(`今の明細（${items.length}品）をセットにします。名前は？（例：蒸籠蒸しの材料）`) || "").trim(); if (!name) return;
+  try { const r = await api("POST", "/api/sets", { name, store: S.plan.store, items }); S.sets.push(r.set); saveSnap(); render(); toast(`セット「${name}」を作りました`); }
+  catch (err) { toast(`作れませんでした：${err.message}`); }
+}
+// セットを直すシート：名前・店・品（1行1品）・消す・新しく作る
+function openSetSheet() { S.setSheetNew = false; renderSetSheet(); }
+function renderSetSheet() {
+  const el = $("#sheet");
+  const form = (x) => `<form class="setform card" data-setform="${x ? x.id : "new"}"><input name="name" value="${esc(x?.name || "")}" placeholder="セットの名前（例：蒸籠蒸しの材料）" maxlength="100" required>
+    <label class="mute">よく買う店 ${storeSelect("store", x?.store || "")}</label>
+    <textarea name="items" rows="${Math.min(10, Math.max(4, (x?.items.length || 0) + 1))}" placeholder="1行に1品（例：もやし 3袋）">${esc((x?.items || []).join("\n"))}</textarea>
+    <div class="row-end">${x ? `<button type="button" class="btn danger sm" data-setdel="${x.id}">🗑 消す</button>` : ""}<button type="submit" class="btn pri sm">${x ? "保存" : "作る"}</button></div></form>`;
+  el.innerHTML = `<div class="sheet-bg" data-setsheetclose="1"></div><div class="sheet"><div class="sh-head"><b>⚙️ 買い物セット</b><button type="button" class="more" data-setsheetclose="1" aria-label="閉じる">×</button></div>
+    <p class="note">Notion の DB_買い物セット と同じ中身です。品は1行に1品、数は「もやし 3袋」のように後ろに書きます。</p>
+    ${S.sets.map(form).join("")}${S.setSheetNew ? form(null) : `<div class="row-end"><button type="button" class="btn" data-setnew="1">＋ 新しいセット</button></div>`}</div>`;
+  el.hidden = false; document.body.classList.add("modal");
+}
+async function saveSetForm(f) {
+  const id = f.dataset.setform; const body = { name: f.elements.name.value, store: f.elements.store.value === "__add" ? "" : f.elements.store.value, items: f.elements.items.value.split("\n") };
+  try {
+    const r = id === "new" ? await api("POST", "/api/sets", body) : await api("PATCH", `/api/sets/${id}`, body);
+    const k = S.sets.findIndex((x) => x.id === r.set.id); if (k >= 0) S.sets[k] = r.set; else S.sets.push(r.set);
+    S.setSheetNew = false; saveSnap(); renderSetSheet(); toast(`セット「${r.set.name}」を保存しました`);
+  } catch (err) { toast(`保存できませんでした：${err.message}`); }
+}
+async function deleteSet(id) {
+  const x = S.sets.find((s) => s.id === id); if (!x || !confirm(`セット「${x.name}」を消しますか？（Notion のゴミ箱から戻せます）`)) return;
+  try { await api("DELETE", `/api/sets/${id}`); S.sets = S.sets.filter((s) => s.id !== id); saveSnap(); renderSetSheet(); toast("消しました"); }
+  catch (err) { toast(`消せませんでした：${err.message}`); }
+}
+document.addEventListener("submit", (e) => { if (e.target.dataset?.setform) { e.preventDefault(); saveSetForm(e.target); } });
+
 const addBox = (ph) => `<form class="addbox" id="addform"><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="done" placeholder="${esc(ph)}" aria-label="買うもの"><button type="submit" class="btn pri">入れる</button></form><div class="suggest" id="suggest"></div>`;
 
 function renderUsual() {
@@ -928,7 +1012,7 @@ function listView(t, ph) {
   const body = items.length ? groups(items) : `<div class="empty small">上の欄から入れてください。「、」で区切るとまとめて入ります</div>`;
   const bk = items.length && !todo.length ? `<div class="empty small">🎉 ぜんぶかごに入りました</div>` : "";
   const foot = `<div class="lfoot">${basket.length ? `<button type="button" class="btn" data-clear="${t.id}">チェック済み${basket.length}品をリストから消す</button>` : ""}${items.length && !todo.length ? `<button type="button" class="btn ok" data-finish="${t.id}">買い物おわり（済みにする）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
-  return `${when}${addBox(ph)}<div class="card list">${tools}${prog}${body}${bk}</div>${foot}`;
+  return `${when}${addBox(ph)}${setChips(t.id)}<div class="card list">${tools}${prog}${body}${bk}</div>${foot}`;
 }
 
 function renderPlan(canBack) {
@@ -951,6 +1035,7 @@ function renderPlan(canBack) {
   return `<div class="card plan"><div class="phead"><h2>🛒 準備：今回なにを何個？</h2>${canBack ? `<button type="button" class="btn ghost sm" data-plan="0">やめる</button>` : ""}</div>
     <p class="note">名前をタップでいつもの数、−／＋で数を決めます。品は Notion の DB_買い物テンプレート で整えられます。</p>
     <div class="chips">${stores.map((n) => `<button type="button" class="chip" data-pstore="${esc(n)}" aria-pressed="${n === S.plan.store}">${esc(n)}</button>`).join("")}<button type="button" class="chip" data-storeadd="plan">＋ 店</button></div>
+    ${setChips("plan")}
     ${xs.length ? "" : `<p class="note">「${esc(S.plan.store)}」のテンプレートはまだありません。下の欄に入れて「＋テンプレへ」で増やせます</p>`}
     <div class="list">${rows}</div>
     ${extra ? `<div class="ghead"><span>✍️</span>今回だけ</div>${extra}` : ""}
@@ -1227,7 +1312,7 @@ async function pushAction(kind) {
 
 // ---------- 画面の操作 ----------
 document.addEventListener("click", (e) => {
-  const el = e.target.closest("button,[data-go],[data-sheetclose],[data-actclose]"); if (!el) return;
+  const el = e.target.closest("button,[data-go],[data-sheetclose],[data-actclose],[data-setsheetclose]"); if (!el) return;
   const d = el.dataset;
   if (d.tab) { S.tab = d.tab; S.edit = ""; S.pick = null; S.lpick = null; render(); if (d.tab === "alert") loadPush(); window.scrollTo(0, 0); return; }
   if (d.go) { S.tab = d.go; render(); window.scrollTo(0, 0); return; }
@@ -1249,7 +1334,13 @@ document.addEventListener("click", (e) => {
   if (d.pstep) { const [id, n] = d.pstep.split("|"); planStep(id, +n); return; }
   if (d.pextradel) { S.plan.extra.splice(+d.pextradel, 1); savePlan(); render(); return; }
   if (d.tpladd) { addToTemplate(+d.tpladd, el); return; }
-  if (d.planclear) { S.plan.counts = {}; S.plan.extra = []; savePlan(); render(); return; }
+  if (d.planclear) { S.plan.counts = {}; S.plan.extra = []; S.plan.sets = {}; savePlan(); render(); return; }
+  if (d.setgo) { const [where, id] = d.setgo.split("|"); toggleSet(where, id); return; }
+  if (d.setsave) { savePlanAsSet(); return; }
+  if (d.setedit) { openSetSheet(); return; }
+  if (d.setsheetclose) { closeSheet(); return; }
+  if (d.setdel) { deleteSet(d.setdel); return; }
+  if (d.setnew) { S.setSheetNew = true; renderSetSheet(); return; }
   if (d.plancreate) { createPlan(el); return; }
   if (d.remind) { const [target, m] = d.remind.split("|"); toggleRemind(target, +m); return; }
   if (d.wfine) { S.wfine = S.wfine === d.wfine ? "" : d.wfine; render(); return; }
