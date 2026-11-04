@@ -270,7 +270,7 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
       el.style.setProperty("--h", c.h);
       actors.append(el);
       if (glr) {
-        glr.add(el, img, { float: c.float, boss: c.boss });
+        glr.add(el, img, { float: c.float, boss: c.boss, rig: !c.boss && !c.float && !!c.key, chest: c.key === "fumi" ? [0.5, 0.67] : null });
         glr.walk(el, c.boss ? 0 : 700); // 歩いて入ってくる
         glr.frames(el, framesOf(c, emo));
         if (c.key) glr.preload((CAST_VARIANTS[c.key] || []).filter((v) => /talk|blink|gesture/.test(v)).map((v) => IMG(`cast2/${c.key}_${v}`)));

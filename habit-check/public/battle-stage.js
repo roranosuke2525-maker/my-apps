@@ -32,11 +32,10 @@ const MOVES = {
     { name: "大地割り", motion: "leap", fx: "smash" },
     { name: "渾身の一撃", motion: "charge", fx: "smash", big: true },
   ],
-  // フミ：腰をくねらせて、ウインクと投げキッスのハートで攻める
   フミ: [
-    { name: "魅惑のウインク", motion: "cast", fx: "heart", orb: "#ff6fae", allure: true },
-    { name: "禁断の頁", motion: "cast", fx: "pages", orb: "#c9a2ff", allure: true },
-    { name: "甘い誘惑", motion: "rain", fx: "heart", big: true, allure: true },
+    { name: "記録の頁", motion: "cast", fx: "pages", orb: "#c9a2ff" },
+    { name: "知恵の光", motion: "cast", fx: "tackle", orb: "#8fd6ff" },
+    { name: "大図書館の嵐", motion: "rain", fx: "pages", big: true },
   ],
   ゼニ: [
     { name: "そろばん連弾", motion: "combo", fx: "coins" },
@@ -192,7 +191,8 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   if (glr) {
     root.classList.add("gl");
     for (const [who, el] of Object.entries(fighters)) {
-      glr.add(el, el.firstElementChild, { float: false, stance: true });
+      // 関節で動かす（あいぼうは体のつくりがちがうので関節なし）。フミは胸が揺れる
+      glr.add(el, el.firstElementChild, { float: false, stance: true, rig: who !== "あいぼう", chest: who === "フミ" ? [0.5, 0.67] : null });
       glr.pose(el, { turn: 0.5, lean: 0.1 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
@@ -296,6 +296,14 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     if (parts.length > 400) parts.splice(0, parts.length - 400);
   }
   const camTo = (z, x, y, pace = 6) => { camS.tz = z; camS.tx = x; camS.ty = y; camS.pace = pace; };
+  // 舞台の (fx, fy)（割合）がまん中に来るように寄る
+  const focus = (fx, fy, z, pace = 6) => {
+    const w = stage.clientWidth, hh = stage.clientHeight;
+    // 寄りすぎて舞台の外が見えないように、まん中の位置を内側へ
+    const half = 0.5 / z;
+    const cx = Math.min(1 - half, Math.max(half, fx)), cy = Math.min(1 - half, Math.max(half, fy));
+    camTo(z, -(cx - 0.5) * w * z, -(cy - 0.5) * hh * z, pace);
+  };
   const shake = (v) => { camS.shake = Math.max(camS.shake, v); };
   // 舞台の中の位置（割合）
   const posOf = (el) => {
@@ -332,7 +340,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   // 攻撃する人がボスの手前まで行くための横の距離（px）
   function reach(f) {
     const r = f.getBoundingClientRect(), b = bossEl.getBoundingClientRect();
-    return Math.max(0, b.left + b.width * 0.18 - (r.left + r.width * 0.72));
+    return Math.max(0, b.left + b.width * 0.18 - (r.left + r.width * 0.72)) / camS.zoom;
   }
 
   // 命中：一瞬止まる → 閃光・火花・ダメージの数字・ゆれ
@@ -352,7 +360,6 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     if (kind === "smash" || kind === "muscle") emit(22, { x: hx, y: hy + 0.1, color: ["#ffb35c", "#fff"], speed: 0.9, g: 1.6, size: 5, life: 0.6, glow: 10 });
     if (kind === "coins") emit(12, { x: hx, y: hy, color: ["#ffd86a", "#fff4c0"], speed: 0.6, g: 1.4, size: 5, life: 0.7, shape: "square", glow: 6 });
     if (kind === "pages") emit(12, { x: hx, y: hy, color: ["#fbf6ea", "#c9a2ff"], speed: 0.4, g: 0.3, size: 7, life: 0.8, shape: "square", glow: 8, drag: 2.5 });
-    if (kind === "heart") emit(22, { x: hx, y: hy, color: ["#ff6fae", "#ffb3d6", "#fff"], speed: 0.6, g: -0.3, size: 8, life: 0.9, shape: "heart", glow: 10, drag: 1.5 });
     if (kind === "tackle" || kind === "combo") emit(18, { x: hx, y: hy, color: ["#8fe6ff", "#fff"], speed: 0.8, g: 0.8, size: 5, life: 0.6, glow: 10 });
     root.classList.add("hitstop");
     await wait(big ? 130 : 70);
@@ -398,7 +405,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     orb.remove();
   }
 
-  // 1回の攻撃：前に出る → 技の名前 → 動き（技ごとにちがう）→ 命中 → もとの場所へ
+  // 1回の攻撃：前に出る → 技の名前 → 動き（技ごとにちがう。関節も動く）→ 命中（アップ）→ もとの場所へ
   async function hit(a) {
     const f = fighters[a.who] || fighters.さとし;
     const big = a.damage >= boss.hp * 0.12;
@@ -414,152 +421,171 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     const D = reach(f);
     const base = "translate(0, 0) rotate(0deg)";
     const hitLine = () => say(msg.children[0].textContent, `${boss.name}に ${Math.round(a.damage)}の ダメージ！`);
+    const act = (m, ms) => glr?.act(f, m, ms);
+    const bp = posOf(bossEl);
+    const fp = posOf(f);
+    // 命中のアップ：攻撃する人とボスのあいだ（ボス寄り）へ寄る
+    const closeUp = (z = 1.5) => focus(bp.x - 0.12, bp.y + 0.02, z, 9);
 
-    // 一歩前に出る（RPG の「行動する人」）
-    await move(f, [{ transform: base }, { transform: "translate(18px, 0)" }], 220);
+    // 一歩前に出て、行動する人を少しアップに
+    act("run", 260);
+    focus(fp.x + 0.12, fp.y, 1.22, 5);
+    await move(f, [{ transform: base }, { transform: "translate(18px, 0)" }], 260);
     const fromStep = "translate(18px, 0)";
 
     if (mv.motion === "dash" || mv.motion === "combo" || mv.motion === "rush") {
-      // 走りこむ（土ぼこり・残像）
+      // ふりかぶる（腕を後ろへ、体をひねる）
+      act("windup");
+      glr?.pose(f, { lean: -0.4, turn: 0.6 });
+      await move(f, [{ transform: fromStep }, { transform: "translate(6px, 4px) rotate(-3deg)" }], 220);
+      // 走る（足と腕を交互に振る）
       const fp0 = posOf(f);
       emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
-      // ふりかぶる（少し下がって沈む）
-      glr?.pose(f, { lean: -0.6, turn: 0.6 });
-      await move(f, [{ transform: fromStep }, { transform: "translate(4px, 6px) rotate(-8deg)" }], 140);
-      glr?.pose(f, { lean: 0.9, turn: 0.9 });
+      act("run");
+      glr?.pose(f, { lean: 0.7, turn: 0.9 });
       ghosts(f);
-      // 走る：上下に弾みながら
+      closeUp(1.3);
       await move(f, [
-        { transform: "translate(4px, 6px) rotate(-8deg)" },
-        { transform: `translate(${D * 0.35}px, -10px) rotate(6deg)` },
-        { transform: `translate(${D * 0.7}px, 0px) rotate(10deg)` },
-        { transform: `translate(${D}px, -6px) rotate(12deg)` },
-      ], 280, "cubic-bezier(.5, 0, .7, 1)");
+        { transform: "translate(6px, 4px) rotate(-3deg)" },
+        { transform: `translate(${D * 0.35}px, -8px) rotate(3deg)` },
+        { transform: `translate(${D * 0.7}px, 0px) rotate(4deg)` },
+        { transform: `translate(${D}px, -4px) rotate(5deg)` },
+      ], 320, "cubic-bezier(.5, 0, .7, 1)");
       if (mv.motion === "dash") {
-        // 斬りあげ → 斬りおろし
-        await move(f, [{ transform: `translate(${D}px, -6px) rotate(12deg)` }, { transform: `translate(${D + 10}px, -22px) rotate(-14deg)` }], 110);
-        await move(f, [{ transform: `translate(${D + 10}px, -22px) rotate(-14deg)` }, { transform: `translate(${D + 18}px, 4px) rotate(18deg)` }], 80, "ease-in");
+        // ふりあげて → 振りおろす（腕と腰が先に動き、体があとからついてくる）
+        act("windup");
+        await move(f, [{ transform: `translate(${D}px, -4px) rotate(5deg)` }, { transform: `translate(${D + 4}px, -16px) rotate(-6deg)` }], 150);
+        act("strike");
+        closeUp(1.55);
+        await move(f, [{ transform: `translate(${D + 4}px, -16px) rotate(-6deg)` }, { transform: `translate(${D + 16}px, 2px) rotate(8deg)` }], 90, "ease-in");
         await impact(a, kind, a.damage, { big });
         hitLine();
-        // はね返って着地
-        await move(f, [{ transform: `translate(${D + 18}px, 4px) rotate(18deg)` }, { transform: `translate(${D - 30}px, -24px) rotate(-10deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 300);
+        await wait(220);
+        act("jump", 300);
+        await move(f, [{ transform: `translate(${D + 16}px, 2px) rotate(8deg)` }, { transform: `translate(${D - 30}px, -26px) rotate(-6deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 320);
       } else {
         // 3連撃：右・左・とどめは跳んで
         const parts = [0.3, 0.3, 0.4];
-        let at = `translate(${D}px, -6px) rotate(12deg)`;
-        const hits = [
-          `translate(${D + 14}px, 0px) rotate(16deg)`,
-          `translate(${D + 6}px, -14px) rotate(-16deg)`,
-          `translate(${D + 20}px, 2px) rotate(22deg)`,
-        ];
+        let at = `translate(${D}px, -4px) rotate(5deg)`;
+        const hits = [`translate(${D + 12}px, 0px) rotate(7deg)`, `translate(${D + 6}px, -10px) rotate(-6deg)`, `translate(${D + 18}px, 2px) rotate(9deg)`];
+        closeUp(1.55);
         for (let k = 0; k < 3; k++) {
+          act("windup");
           if (k === 2) {
-            await move(f, [{ transform: at }, { transform: `translate(${D}px, -46px) rotate(-20deg)` }], 140);
-            at = `translate(${D}px, -46px) rotate(-20deg)`;
-          }
-          await move(f, [{ transform: at }, { transform: hits[k] }], k === 2 ? 90 : 75, "ease-in");
+            act("jump");
+            await move(f, [{ transform: at }, { transform: `translate(${D}px, -46px) rotate(-8deg)` }], 170);
+            at = `translate(${D}px, -46px) rotate(-8deg)`;
+            act("windup");
+            await wait(60);
+          } else await wait(90);
+          act("strike");
+          await move(f, [{ transform: at }, { transform: hits[k] }], k === 2 ? 100 : 80, "ease-in");
           at = hits[k];
           await impact(a, kind, a.damage * parts[k], { big: big && k === 2, n: k });
-          await wait(70);
+          await wait(80);
         }
         hitLine();
-        await move(f, [{ transform: at }, { transform: `translate(${D - 30}px, -20px) rotate(-8deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 300);
+        await wait(160);
+        act("jump", 300);
+        await move(f, [{ transform: at }, { transform: `translate(${D - 30}px, -20px) rotate(-4deg)` }, { transform: `translate(${D - 40}px, 0) rotate(0deg)` }], 320);
       }
-      await wait(200);
+      // 戻る（走って）
+      camTo(1, 0, 0, 3);
+      act("run");
       glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      // 戻りは軽く跳ねながら
-      await move(f, [
-        { transform: `translate(${D - 40}px, 0)` },
-        { transform: `translate(${(D - 40) * 0.5}px, -14px)` },
-        { transform: base },
-      ], 380, "cubic-bezier(.3, .6, .3, 1)");
+      await move(f, [{ transform: `translate(${D - 40}px, 0)` }, { transform: `translate(${(D - 40) * 0.5}px, -8px)` }, { transform: base }], 420, "cubic-bezier(.3, .6, .3, 1)");
     } else if (mv.motion === "leap") {
-      // 高く跳んで、ボスの上から振りおろす
-      glr?.pose(f, { lean: -0.4, turn: 0.6 });
-      await wait(120);
-      glr?.pose(f, { lean: 0.7, turn: 0.9 });
-      const H = stage.clientHeight * 0.42;
-      await move(f, [{ transform: fromStep }, { transform: "translate(10px, 10px) rotate(-6deg)" }], 120);
+      // かがんで → 高く跳ぶ（ひざをかかえる）→ 空中でふりかぶる → 振りおろしながら着地
+      act("windup");
+      glr?.pose(f, { lean: -0.3, turn: 0.6 });
+      await move(f, [{ transform: fromStep }, { transform: "translate(10px, 10px) rotate(-3deg)" }], 200);
+      const H = stage.clientHeight * 0.42 / camS.zoom;
+      act("jump");
       ghosts(f);
+      focus((fp.x + bp.x) / 2, 0.35, 1.25, 4);
       await move(f, [
-        { transform: "translate(10px, 10px) rotate(-6deg)", offset: 0 },
-        { transform: `translate(${D * 0.3}px, ${-H * 0.85}px) rotate(-18deg)`, offset: 0.35 },
-        { transform: `translate(${D * 0.6}px, ${-H}px) rotate(-28deg)`, offset: 0.6 },
-        { transform: `translate(${D}px, ${-H * 0.15}px) rotate(20deg)`, offset: 1 },
-      ], 560, "cubic-bezier(.3, .5, .6, 1)");
-      await move(f, [{ transform: `translate(${D}px, ${-H * 0.15}px) rotate(14deg)` }, { transform: `translate(${D}px, 0) rotate(4deg)` }], 90, "ease-in");
+        { transform: "translate(10px, 10px) rotate(-3deg)", offset: 0 },
+        { transform: `translate(${D * 0.3}px, ${-H * 0.85}px) rotate(-8deg)`, offset: 0.35 },
+        { transform: `translate(${D * 0.6}px, ${-H}px) rotate(-12deg)`, offset: 0.6 },
+        { transform: `translate(${D}px, ${-H * 0.15}px) rotate(8deg)`, offset: 1 },
+      ], 600, "cubic-bezier(.3, .5, .6, 1)");
+      act("windup");
+      await wait(60);
+      act("strike");
+      closeUp(1.6);
+      await move(f, [{ transform: `translate(${D}px, ${-H * 0.15}px) rotate(8deg)` }, { transform: `translate(${D}px, 0) rotate(3deg)` }], 90, "ease-in");
       await impact(a, kind, a.damage, { big: true });
       hitLine();
       await wait(320);
+      camTo(1, 0, 0, 3);
+      act("jump", 400);
       glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      await move(f, [{ transform: `translate(${D}px, 0) rotate(4deg)` }, { transform: `translate(${D * 0.5}px, ${-H * 0.25}px) rotate(-6deg)`, offset: 0.5 }, { transform: base }], 420);
+      await move(f, [{ transform: `translate(${D}px, 0) rotate(3deg)` }, { transform: `translate(${D * 0.5}px, ${-H * 0.25}px) rotate(-4deg)`, offset: 0.5 }, { transform: base }], 460);
     } else if (mv.motion === "charge") {
-      // 力をためる（足元に光が集まる）→ 一気に突進
+      // 力をためる（腕を引いて腰を落とす。足元に光が集まる）→ 一気に突進
       f.classList.add("aura");
-      glr?.pose(f, { lean: -0.5, turn: 0.6, slump: 0.3 });
+      act("windup");
+      glr?.pose(f, { lean: -0.4, turn: 0.6, slump: 0.3 });
+      focus(fp.x + 0.05, fp.y, 1.4, 4);
       const fp0 = posOf(f);
       for (let k = 0; k < 5; k++) {
         emit(6, { x: fp0.x + (Math.random() - 0.5) * 0.1, y: fp0.bottom - 0.02, color: ["#ffe066", "#fff"], speed: 0.25, dir: -Math.PI / 2, spread: 0.6, g: -0.6, size: 4, life: 0.6, glow: 10 });
-        await wait(110);
+        await wait(120);
       }
       f.classList.remove("aura");
+      act("run");
       glr?.pose(f, { lean: 0.95, turn: 0.9, slump: 0 });
       ghosts(f);
-      await move(f, [{ transform: fromStep }, { transform: `translate(${D + 10}px, 0) rotate(6deg)` }], 170, "cubic-bezier(.6, 0, .8, 1)");
+      closeUp(1.5);
+      await move(f, [{ transform: fromStep }, { transform: `translate(${D + 10}px, 0) rotate(4deg)` }], 190, "cubic-bezier(.6, 0, .8, 1)");
+      act("strike");
       await impact(a, kind, a.damage, { big: true });
       hitLine();
-      await wait(360);
+      await wait(380);
+      camTo(1, 0, 0, 3);
+      act("run");
       glr?.pose(f, { lean: -0.2, turn: 0.5 });
-      await move(f, [{ transform: `translate(${D + 10}px, 0) rotate(6deg)` }, { transform: base }], 380);
+      await move(f, [{ transform: `translate(${D + 10}px, 0) rotate(4deg)` }, { transform: base }], 420);
     } else {
-      // cast / rain：その場から
+      // cast / rain：構える → 小さく跳んで力をこめる → 腕をふりだして放つ
+      act("windup");
+      glr?.pose(f, { lean: -0.3, turn: 0.6 });
+      glr?.gesture(f, 900);
+      focus(fp.x + 0.08, fp.y, 1.35, 5);
       const fp0 = posOf(f);
-      if (mv.allure) {
-        // フミ：腰をくねらせて、髪をかきあげ、ウインク
-        glr?.pose(f, { lean: 0.2, tilt: 0.6, turn: 0.4 });
-        glr?.gesture(f, 1400);
-        await move(f, [
-          { transform: fromStep },
-          { transform: "translate(22px, 0) rotate(-6deg)" },
-          { transform: "translate(14px, 0) rotate(7deg)" },
-          { transform: "translate(22px, 0) rotate(-5deg)" },
-          { transform: "translate(18px, 0) rotate(3deg)" },
-        ], 700, "ease-in-out");
-        glr?.blink(f);
-        glr?.pose(f, { lean: 0.4, tilt: -0.5, turn: 0.7 });
-        emit(16, { x: fp0.x + 0.03, y: fp0.y - 0.08, color: ["#ff6fae", "#ffb3d6"], speed: 0.35, g: -0.4, size: 7, life: 0.9, shape: "heart", glow: 10, drag: 1.5 });
-        await wait(260);
-      } else {
-        // 構える → 小さく跳んで力をこめる
-        glr?.pose(f, { lean: -0.3, turn: 0.6 });
-        glr?.gesture(f, 900);
-        emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
-        await move(f, [{ transform: fromStep }, { transform: "translate(18px, -26px) rotate(-6deg)" }, { transform: "translate(22px, 0) rotate(4deg)" }], 360, "cubic-bezier(.3, .7, .4, 1)");
-      }
+      emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
+      act("jump", 260);
+      await move(f, [{ transform: fromStep }, { transform: "translate(18px, -24px) rotate(-3deg)" }, { transform: "translate(22px, 0) rotate(2deg)" }], 380, "cubic-bezier(.3, .7, .4, 1)");
+      act("cast");
       glr?.pose(f, { lean: 0.5, turn: 0.8 });
       if (mv.motion === "cast") {
-        // 投げる・放つ：前へ乗り出す
-        move(f, [{ transform: "translate(22px, 0) rotate(4deg)" }, { transform: "translate(34px, -4px) rotate(10deg)" }, { transform: "translate(22px, 0) rotate(0deg)" }], 420);
-        await shoot(f, mv.orb || "#ffe066", 380, mv.fx === "heart");
+        move(f, [{ transform: "translate(22px, 0) rotate(2deg)" }, { transform: "translate(32px, -4px) rotate(5deg)" }, { transform: "translate(22px, 0) rotate(0deg)" }], 420);
+        focus((fp.x + bp.x) / 2, (fp.y + bp.y) / 2, 1.15, 5);
+        await shoot(f, mv.orb || "#ffe066", 380);
+        closeUp(1.5);
         await impact(a, kind, a.damage, { big });
       } else {
         // 頭上から降らせる（3回に分けて当たる）
-        const bp = posOf(bossEl);
+        focus(bp.x - 0.05, 0.4, 1.3, 5);
         for (let k = 0; k < 3; k++) {
-          emit(14, { x: bp.x + (Math.random() - 0.5) * 0.2, y: 0.05, color: kind === "coins" ? ["#ffd86a", "#fff4c0"] : kind === "flame" ? ["#ff5a2a", "#ffb35c"] : kind === "heart" ? ["#ff6fae", "#ffb3d6"] : ["#fbf6ea", "#c9a2ff"], speed: 0.9, dir: Math.PI / 2, spread: 0.4, g: 2.4, size: kind === "heart" ? 9 : 6, life: 0.6, shape: kind === "coins" ? "dot" : kind === "heart" ? "heart" : "square", glow: 8, drag: 0.5 });
+          emit(14, { x: bp.x + (Math.random() - 0.5) * 0.2, y: 0.05, color: kind === "coins" ? ["#ffd86a", "#fff4c0"] : kind === "flame" ? ["#ff5a2a", "#ffb35c"] : ["#fbf6ea", "#c9a2ff"], speed: 0.9, dir: Math.PI / 2, spread: 0.4, g: 2.4, size: 6, life: 0.6, shape: kind === "coins" ? "dot" : "square", glow: 8, drag: 0.5 });
           await wait(160);
+          if (k === 2) closeUp(1.5);
           await impact(a, kind, a.damage / 3, { big: k === 2, n: k });
         }
       }
       hitLine();
       await wait(380);
+      camTo(1, 0, 0, 3);
+      act("idle");
       glr?.pose(f, { lean: 0.1, turn: 0.5 });
-      await move(f, [{ transform: "translate(22px, 0)" }, { transform: base }], 260);
+      await move(f, [{ transform: "translate(22px, 0)" }, { transform: base }], 280);
     }
+    act("idle");
     f.classList.remove("active");
     f.getAnimations().forEach((x) => x.cancel());
     skillTag.classList.remove("on");
-    await wait(200);
+    await wait(220);
   }
 
   // 走るときの残像
