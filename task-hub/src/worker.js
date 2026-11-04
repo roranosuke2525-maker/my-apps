@@ -7,18 +7,20 @@ const NOTION_BASE = "https://api.notion.com/v1";
 const API_VERSION = "2025-09-03"; // データソース・ページのプロパティ
 const MD_VERSION = "2026-03-11"; // 本文の Markdown（Notion-flavored Markdown＝markdown_version v2）
 
-// 画面（HTML）は端のキャッシュに残らないようにして配る（更新したらすぐ新しい画面になるように）
+import { BUILD, HTML, SW } from "./bundle.js";
+// 画面（HTML）と sw.js は Worker の中から配る（資産の置き場の端キャッシュに古い版が残っても、デプロイした版が必ず出る）。保存させない
 async function page(request, env, url) {
-  const res = await env.ASSETS.fetch(request);
-  if (url.pathname !== "/" && url.pathname !== "/index.html" && url.pathname !== "/sw.js") return res;
-  const h = new Headers(res.headers); h.set("Cache-Control", "no-store"); h.delete("ETag");
-  return new Response(res.body, { status: res.status, headers: h });
+  const p = url.pathname;
+  if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Build": BUILD } });
+  if (p === "/sw.js") return new Response(SW, { headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-store", "X-Build": BUILD } });
+  if (p === "/api/version") return json({ build: BUILD });
+  return env.ASSETS.fetch(request);
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith("/api/")) return page(request, env, url);
+    if (!url.pathname.startsWith("/api/") || url.pathname === "/api/version") return page(request, env, url);
     try {
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います", code: "bad_key" }, 401);

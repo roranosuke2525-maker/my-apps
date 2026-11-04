@@ -16,7 +16,7 @@
   const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
   const ALL_STATUSES = [ST.inbox, ST.ai, ST.next, ST.doing, ST.wait, ST.some, ST.ref, ST.done];
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
-  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅", "🛠", "🛠💭", "🛠✅"];
+  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅"];
   const AI_TURN = { "🔍": "ai", "🔬": "ai", "💬": "ai", "💭": "me", "🔍✅": "me", "🛠": "ai", "🛠💭": "me", "🛠✅": "me" };
   const AI_LABEL = { "🔍": "調べて", "🔬": "徹底調査", "💬": "深掘り（質問票）", "💭": "回答待ち", "🔍✅": "調べ終わった・判定待ち", "🛠": "アプリを直して", "🛠💭": "アプリ修正の質問・回答待ち", "🛠✅": "アプリ修正を反映・確認待ち" };
   const WAKU = ["☼ 朝", "💻 PC", "🏠 家・外", "作業中"];

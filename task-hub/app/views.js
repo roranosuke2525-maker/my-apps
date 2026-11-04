@@ -265,8 +265,7 @@
     return `<div class="form" style="flex:1;min-height:0;overflow:auto"><label for="rq-name">何を調べる・決める？</label><input id="rq-name" type="text" maxlength="200" placeholder="例）食洗機 ビルトイン 45cm 比較">
       <label for="rq-url">参考URL（なくてもよい）</label><input id="rq-url" type="url" placeholder="https://">
       <label for="rq-memo">メモ（条件・気になること）</label><textarea id="rq-memo" placeholder="例）予算10万円まで。深さ45cm"></textarea>
-      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"], ["🛠", "🛠 アプリ修正", "アプリを直して反映"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
-      <div id="rq-app" ${reqMode === "🛠" ? "" : "hidden"}><label for="rq-appsel">どのアプリ？</label><select id="rq-appsel" class="sel">${(S.apps || []).length ? `<option value="">（名前とメモから判断してもらう）</option>${S.apps.map((a) => `<option value="${esc(a.url)}">${esc(a.name)}${a.state ? `　${esc(a.state)}` : ""}</option>`).join("")}` : `<option value="">（DB_アプリが読めません。名前とメモで判断）</option>`}</select><p class="mute" style="font-size:11.5px;margin:4px 0 0">毎時41分（7:41〜23:41）の定期実行が直して反映し、本文の「🛠 修正の記録」にやり取りごとのトグルで残します。</p></div>
+      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
       <div style="display:flex;gap:8px;margin-top:4px"><button type="button" class="btn pri" data-req="1" style="flex:1">AIに預ける</button><button type="button" class="btn" data-pickai="1">今あるタスクから</button></div>
       <p class="mute" style="font-size:11.5px;margin:0">ステータス「🤖 AI」で DB_タスク管理 に入ります。次の定時処理（${nextRun()}）で処理されます。</p></div>`;
   }

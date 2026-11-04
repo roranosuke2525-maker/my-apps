@@ -682,6 +682,36 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 .shead .sname { color: var(--ink); }
 .sgroup { color: var(--mute); }
 .sprog i { box-shadow: none; }
+/* ===== シンプルに（面を減らし、線と余白で分ける） ===== */
+:root { --card: #14171c; --sunk: #1b1f26; --line: rgba(255, 255, 255, .07); --shadow: none; }
+.card, .iconbtn, .chip, .pipe .step, .park .pk, .tipbar, .hnext { box-shadow: none; }
+.iconbtn { background: transparent; }
+.top .ttl .date { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.top .ttl h1 { display: none !important; }
+.hero { background: transparent; padding: 4px 2px 8px; gap: 4px 14px; }
+.hnext { background: var(--card); }
+.tipbar { background: transparent; border-radius: 0; padding: 2px 4px 2px 10px; border-left: 2px solid var(--accent); }
+.seg { background: transparent; padding: 0; gap: 2px; border-bottom: 1px solid var(--line); border-radius: 0; }
+.seg button { border-radius: 0; padding: 9px 4px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.seg button[aria-pressed="true"] { background: transparent; box-shadow: none; border-bottom-color: var(--ink); }
+.chip { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }
+.pipe .step { background: transparent; border-radius: 10px; border-bottom: 2px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.pipe .step[aria-pressed="true"] { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); border-bottom-color: var(--c); }
+.pipe .arr { background: var(--line); } .pipe .arr::after { border-left-color: rgba(255, 255, 255, .25); }
+.park .pk { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.park .pk[aria-pressed="true"] { background: var(--card); box-shadow: inset 0 0 0 1px var(--c); }
+.panel-head { border-bottom: 1px solid var(--line); }
+.sech { padding-top: 18px; }
+.row { padding-left: 0; }
+.btn { border-radius: 10px; }
+.dest { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+.dest.near, .dest:active { background: color-mix(in srgb, var(--c) 22%, var(--card)); }
+.orb { background: var(--card); box-shadow: 0 0 0 1px var(--line), 0 12px 30px rgba(0, 0, 0, .4); }
+#modal .sheet { box-shadow: 0 0 0 1px var(--line), 0 -8px 30px rgba(0, 0, 0, .5); }
+.csug, .quick, .g-role, .g-node, .g-card, .hc-i, .fix, .ask { box-shadow: none; }
+nav.tabs { background: var(--bg); }
+.fab { box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 </style>
 
 <div id="app">

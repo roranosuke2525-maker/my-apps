@@ -682,6 +682,36 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 .shead .sname { color: var(--ink); }
 .sgroup { color: var(--mute); }
 .sprog i { box-shadow: none; }
+/* ===== シンプルに（面を減らし、線と余白で分ける） ===== */
+:root { --card: #14171c; --sunk: #1b1f26; --line: rgba(255, 255, 255, .07); --shadow: none; }
+.card, .iconbtn, .chip, .pipe .step, .park .pk, .tipbar, .hnext { box-shadow: none; }
+.iconbtn { background: transparent; }
+.top .ttl .date { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.top .ttl h1 { display: none !important; }
+.hero { background: transparent; padding: 4px 2px 8px; gap: 4px 14px; }
+.hnext { background: var(--card); }
+.tipbar { background: transparent; border-radius: 0; padding: 2px 4px 2px 10px; border-left: 2px solid var(--accent); }
+.seg { background: transparent; padding: 0; gap: 2px; border-bottom: 1px solid var(--line); border-radius: 0; }
+.seg button { border-radius: 0; padding: 9px 4px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.seg button[aria-pressed="true"] { background: transparent; box-shadow: none; border-bottom-color: var(--ink); }
+.chip { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }
+.pipe .step { background: transparent; border-radius: 10px; border-bottom: 2px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.pipe .step[aria-pressed="true"] { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); border-bottom-color: var(--c); }
+.pipe .arr { background: var(--line); } .pipe .arr::after { border-left-color: rgba(255, 255, 255, .25); }
+.park .pk { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.park .pk[aria-pressed="true"] { background: var(--card); box-shadow: inset 0 0 0 1px var(--c); }
+.panel-head { border-bottom: 1px solid var(--line); }
+.sech { padding-top: 18px; }
+.row { padding-left: 0; }
+.btn { border-radius: 10px; }
+.dest { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+.dest.near, .dest:active { background: color-mix(in srgb, var(--c) 22%, var(--card)); }
+.orb { background: var(--card); box-shadow: 0 0 0 1px var(--line), 0 12px 30px rgba(0, 0, 0, .4); }
+#modal .sheet { box-shadow: 0 0 0 1px var(--line), 0 -8px 30px rgba(0, 0, 0, .5); }
+.csug, .quick, .g-role, .g-node, .g-card, .hc-i, .fix, .ask { box-shadow: none; }
+nav.tabs { background: var(--bg); }
+.fab { box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 </style>
 
 <div id="app">
@@ -720,7 +750,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
   const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", some: "🕰 SOMEDAY", ai: "🤖 AI", inbox: "📥 INBOX", done: "✅ DONE", ref: "📚 REFERENCE" };
   const ALL_STATUSES = [ST.inbox, ST.ai, ST.next, ST.doing, ST.wait, ST.some, ST.ref, ST.done];
   const OPEN_STATUSES = [ST.next, ST.doing, ST.wait, ST.some, ST.ai, ST.inbox];
-  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅", "🛠", "🛠💭", "🛠✅"];
+  const AIA = ["🔍", "🔬", "💬", "💭", "🔍✅"];
   const AI_TURN = { "🔍": "ai", "🔬": "ai", "💬": "ai", "💭": "me", "🔍✅": "me", "🛠": "ai", "🛠💭": "me", "🛠✅": "me" };
   const AI_LABEL = { "🔍": "調べて", "🔬": "徹底調査", "💬": "深掘り（質問票）", "💭": "回答待ち", "🔍✅": "調べ終わった・判定待ち", "🛠": "アプリを直して", "🛠💭": "アプリ修正の質問・回答待ち", "🛠✅": "アプリ修正を反映・確認待ち" };
   const WAKU = ["☼ 朝", "💻 PC", "🏠 家・外", "作業中"];
@@ -1893,8 +1923,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     return `<div class="form" style="flex:1;min-height:0;overflow:auto"><label for="rq-name">何を調べる・決める？</label><input id="rq-name" type="text" maxlength="200" placeholder="例）食洗機 ビルトイン 45cm 比較">
       <label for="rq-url">参考URL（なくてもよい）</label><input id="rq-url" type="url" placeholder="https://">
       <label for="rq-memo">メモ（条件・気になること）</label><textarea id="rq-memo" placeholder="例）予算10万円まで。深さ45cm"></textarea>
-      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"], ["🛠", "🛠 アプリ修正", "アプリを直して反映"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
-      <div id="rq-app" ${reqMode === "🛠" ? "" : "hidden"}><label for="rq-appsel">どのアプリ？</label><select id="rq-appsel" class="sel">${(S.apps || []).length ? `<option value="">（名前とメモから判断してもらう）</option>${S.apps.map((a) => `<option value="${esc(a.url)}">${esc(a.name)}${a.state ? `　${esc(a.state)}` : ""}</option>`).join("")}` : `<option value="">（DB_アプリが読めません。名前とメモで判断）</option>`}</select><p class="mute" style="font-size:11.5px;margin:4px 0 0">毎時41分（7:41〜23:41）の定期実行が直して反映し、本文の「🛠 修正の記録」にやり取りごとのトグルで残します。</p></div>
+      <label>頼み方</label><div class="modes">${[["🔍", "🔍 調べて", "答え・情報がほしい"], ["🔬", "🔬 徹底調査", "市場を網羅（1回1件）"], ["💬", "💬 深掘り", "質問票で一緒に決める"]].map(([k, n, d]) => `<button type="button" data-reqmode="${k}" aria-pressed="${reqMode === k}"><b>${n}</b>${d}</button>`).join("")}</div>
       <div style="display:flex;gap:8px;margin-top:4px"><button type="button" class="btn pri" data-req="1" style="flex:1">AIに預ける</button><button type="button" class="btn" data-pickai="1">今あるタスクから</button></div>
       <p class="mute" style="font-size:11.5px;margin:0">ステータス「🤖 AI」で DB_タスク管理 に入ります。次の定時処理（${nextRun()}）で処理されます。</p></div>`;
   }
@@ -2978,8 +3007,6 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
           <div class="g-pair"><span class="g-chip ai">🔬 徹底調査</span><span class="g-a">→</span><span class="g-chip me">🔍✅ 判定待ち</span><small>1回1件・市場を網羅</small></div>
           <div class="g-pair"><span class="g-chip ai">💬 深掘り</span><span class="g-a">⇄</span><span class="g-chip me">💭 回答待ち</span><small>明確度90%でまとめ</small></div>
           <div class="g-pair"><span class="g-chip me">🔍✅</span><span class="g-a">→</span><span class="g-chip ai">🔍 に戻す</span><small>「こうしたい」を書いて再調査</small></div>
-          <div class="g-pair"><span class="g-chip ai">🛠 アプリ修正</span><span class="g-a">→</span><span class="g-chip me">🛠✅ 確認</span><small>毎時41分に直して反映・記録はトグル</small></div>
-          <div class="g-pair"><span class="g-chip me">🛠💭 質問</span><span class="g-a">→</span><span class="g-chip ai">答えて 🛠 に戻す</span></div>
         </div>
         <div class="g-legend"><span class="g-chip ai">AIの番</span>定時処理が拾う　<span class="g-chip me">自分の番</span>AIは触らない</div></section>
 
@@ -2996,8 +3023,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
           <div><b>月</b>7:23 🩺 タスク運用診断</div>
           <div><b>火</b>19:46 ♻️ 資源ごみ（第2・4水曜の前日）</div>
           <div><b>毎月1日</b>8:10 🎯 目標の月次振り返り</div>
-          <div><b>毎日</b>7:41〜23:41 毎時 🛠 アプリ修正</div>
-          <div><b>土日祝</b>AIリサーチは休み（ジャーナル・読書辞典・アプリ修正は動く）</div>
+          <div><b>土日祝</b>AIリサーチは休み（ジャーナル・読書辞典は動く）</div>
         </div></section>
 
       <section class="g-sec"><h3>⑤ AIとの約束</h3>
@@ -3254,7 +3280,7 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
     if (d.runnow) { runNow(el); return; }
-    if (d.reqmode) { reqMode = d.reqmode; if ($("#rq-app")) $("#rq-app").hidden = reqMode !== "🛠"; for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
+    if (d.reqmode) { reqMode = d.reqmode;  for (const b of document.querySelectorAll("[data-reqmode]")) b.setAttribute("aria-pressed", String(b === el)); return; }
     if (d.req) { submitRequest(); return; }
     if (d.pickai) { pickForAi(); return; }
     if (d.aipick) { const t = known.get(d.aipick); closeModal(); if (t) setProps(t, { "ステータス": ST.ai, "AIアクション": reqMode }, `AIに預けました（${reqMode}・次の定時処理 ${nextRun()}）`); return; }

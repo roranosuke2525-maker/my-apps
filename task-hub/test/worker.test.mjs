@@ -20,7 +20,9 @@ test("合言葉がないと 401、画面はそのまま配る", async () => {
   try {
     assert.equal((await s.call("notion-fetch", { id: "x" }, "wrong")).status, 401);
     const page = await worker.fetch(new Request("https://app.test/"), s.env);
-    assert.equal(await page.text(), "assets");
+    assert.match(await page.text(), /<title>今どこ<\/title>/);
+    const icon = await worker.fetch(new Request("https://app.test/icons/icon-192.png"), s.env);
+    assert.equal(await icon.text(), "assets");
   } finally { s.done(); }
 });
 
@@ -62,9 +64,12 @@ test("済みにした補充タスク：補充対象が空でない（リレー�
   assert.deepEqual(f.and[1], { property: "補充対象", relation: { is_not_empty: true } });
 });
 
-test("画面と sw.js は端に残さない（no-store）、ほかの部品はそのまま", async () => {
+test("画面と sw.js は Worker の中から配る（no-store・X-Build）、ほかの部品は資産の置き場から", async () => {
   const env = { ASSETS: { fetch: () => new Response("x", { headers: { "Cache-Control": "public, max-age=0", ETag: "abc" } }) } };
-  for (const path of ["/", "/sw.js"]) { const r = await worker.fetch(new Request(`https://app.test${path}`), env); assert.equal(r.headers.get("Cache-Control"), "no-store"); assert.equal(r.headers.get("ETag"), null); }
+  const home = await worker.fetch(new Request("https://app.test/"), env);
+  assert.equal(home.headers.get("Cache-Control"), "no-store"); assert.ok(home.headers.get("X-Build")); assert.match(await home.text(), /<title>今どこ<\/title>/);
+  const sw = await worker.fetch(new Request("https://app.test/sw.js"), env); assert.equal(sw.headers.get("Cache-Control"), "no-store"); assert.match(await sw.text(), /addEventListener\("fetch"/);
+  const v = await worker.fetch(new Request("https://app.test/api/version"), env); assert.equal((await v.json()).build, home.headers.get("X-Build"));
   const r = await worker.fetch(new Request("https://app.test/icons/x.png"), env); assert.equal(r.headers.get("ETag"), "abc");
 });
 
