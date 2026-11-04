@@ -19,15 +19,49 @@ const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const HERO_KEYS = { みならい: "hero_1", かけだし: "hero_2", いちにんまえ: "hero_3", ベテラン: "hero_4", たつじん: "hero_5", でんせつ: "hero_6" };
 const FAMILY_ATTACKER = { ホコリ: "ムキ", ダラケ: "ムキ", ヨナキ: "ルミ", コイン: "ゼニ", モジ: "フミ", アトマワシ: "あいぼう", ザツム: "さとし", モヤモヤ: "さとし" };
 const TYPE_ATTACKER = { ちから: "ムキ", かしこさ: "フミ", やさしさ: "ルミ", しっかり: "ゼニ" };
-// 技の名前と演出（CSS の .fx-<kind>）
+// 技：名前・動き（motion）・演出（fx）。仲間ごとに何種類かあり、攻撃のたびに選ぶ（大きなダメージは big の技）
+//   motion：dash 走りこんで斬る / leap 跳びかかる / combo 走りこんで3連撃 / cast その場から飛び道具 / rain 頭上から降らせる / charge 力をためて一撃
 const MOVES = {
-  さとし: { name: "灯りの剣", fx: "slash" },
-  ムキ: { name: "大斧の一撃", fx: "smash" },
-  フミ: { name: "記録の頁", fx: "pages" },
-  ゼニ: { name: "そろばん連弾", fx: "coins" },
-  ルミ: { name: "ともしびの炎", fx: "flame" },
-  あいぼう: { name: "たいあたり", fx: "tackle" },
+  さとし: [
+    { name: "灯りの剣", motion: "dash", fx: "slash" },
+    { name: "三連斬り", motion: "combo", fx: "slash" },
+    { name: "天翔ける一閃", motion: "leap", fx: "slash", big: true },
+  ],
+  ムキ: [
+    { name: "大斧の一撃", motion: "dash", fx: "smash" },
+    { name: "大地割り", motion: "leap", fx: "smash" },
+    { name: "渾身の一撃", motion: "charge", fx: "smash", big: true },
+  ],
+  フミ: [
+    { name: "記録の頁", motion: "cast", fx: "pages", orb: "#c9a2ff" },
+    { name: "知恵の光", motion: "cast", fx: "tackle", orb: "#8fd6ff" },
+    { name: "大図書館の嵐", motion: "rain", fx: "pages", big: true },
+  ],
+  ゼニ: [
+    { name: "そろばん連弾", motion: "combo", fx: "coins" },
+    { name: "金貨投げ", motion: "cast", fx: "coins", orb: "#ffd86a" },
+    { name: "黄金の雨", motion: "rain", fx: "coins", big: true },
+  ],
+  ルミ: [
+    { name: "ともしびの炎", motion: "cast", fx: "flame", orb: "#ff9a4a" },
+    { name: "灯の舞", motion: "combo", fx: "flame" },
+    { name: "大かがり火", motion: "rain", fx: "flame", big: true },
+  ],
+  あいぼう: [
+    { name: "たいあたり", motion: "dash", fx: "tackle" },
+    { name: "とびかかり", motion: "leap", fx: "tackle", big: true },
+  ],
 };
+const MUSCLE_MOVE = { name: "鍛えた肉体の一撃", motion: "charge", fx: "muscle", big: true };
+
+function pickMove(who, big, seed) {
+  const list = MOVES[who] || MOVES.さとし;
+  const pool = list.filter((m) => !!m.big === big);
+  const from = pool.length ? pool : list;
+  let x = 0;
+  for (const c of String(seed)) x = (x * 31 + c.charCodeAt(0)) >>> 0;
+  return from[x % from.length];
+}
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -56,7 +90,7 @@ export function attacksOf(log, members) {
   for (const x of [...log].reverse()) {
     const key = x.key || `${x.date}|${x.kind}|${x.name || ""}`;
     if (x.kind === "muscle") {
-      out.push({ key, who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: { name: "鍛えた肉体の一撃", fx: "muscle" } });
+      out.push({ key, who: "さとし", damage: x.damage, what: "きたえた からだの力", date: x.date, move: MUSCLE_MOVE });
     } else if (x.kind === "task") {
       const want = FAMILY_ATTACKER[x.family] || "さとし";
       out.push({ key, who: has(want) ? want : "さとし", damage: x.damage, what: `${x.name}${"★".repeat(x.stars || 0)}を片づけた力`, date: x.date });
@@ -120,18 +154,15 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     if (who === "あいぼう") return IMG(`pet/${petKey(pet.stage, pet.stage === "成長期" || pet.stage === "成体" ? pet.type : null)}`);
     return IMG(`cast2/${{ ルミ: "rumi", ムキ: "muki", フミ: "fumi", ゼニ: "zeni" }[who]}`);
   };
-  // 格闘ゲームのように 1対1：前に出ている仲間（front）だけがボスと向き合う。攻撃する人が変わると入れ替わる
+  // RPG のように：仲間は左に斜めに並び（奥ほど上）、右のボスと向き合う。攻撃する人だけが前に出る
   const fighters = {};
-  let front = "さとし";
-  const partyEl = h("div", { class: "bs-party" }, party.map((who) => {
-    const el = h("div", { class: `bs-fighter${who === "あいぼう" ? " small" : ""}${who === front ? " front" : " bench"}` }, h("img", { src: imgOf(who), alt: who, draggable: "false" }));
+  const partyEl = h("div", { class: "bs-party" }, party.map((who, i) => {
+    const el = h("div", { class: `bs-fighter${who === "あいぼう" ? " small" : ""}` }, h("img", { src: imgOf(who), alt: who, draggable: "false" }));
+    el.style.setProperty("--i", i);
+    el.style.setProperty("--n", party.length);
     fighters[who] = el;
     return el;
   }));
-  // 左上：仲間の顔（前に出ている人を明るく）
-  const roster = h("div", { class: "bs-roster" }, party.map((who) => h("span", { class: `bs-face${who === front ? " on" : ""}`, "data-who": who },
-    h("img", { src: imgOf(who), alt: who, draggable: "false" }))));
-  const frontName = h("b", { class: "bs-front-name", text: front });
   const bossImg = BOSS_IMAGES[boss.name] ? IMG(BOSS_IMAGES[boss.name]) : null;
   const bossEl = h("div", { class: `bs-boss${won ? " down" : ""}` }, bossImg ? h("img", { src: bossImg, alt: boss.name, draggable: "false" }) : null);
   const fx = h("div", { class: "bs-fx", "aria-hidden": "true" });
@@ -145,15 +176,14 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   const caption = h("p", { class: "bs-caption", "aria-live": "polite" });
   const skipBtn = h("button", { type: "button", class: "bs-skip", text: "とばす" });
   const replayBtn = h("button", { type: "button", class: "bs-replay", text: "▶ 戦いを見る" });
-  const round = Number((boss.chapter || "").match(/第(\d+)話/)?.[1] || 1);
-  const stage = h("div", { class: "bs-stage" }, cam,
-    h("div", { class: "bs-hud" },
-      h("div", { class: "bs-hud-p1" }, roster, frontName),
-      h("span", { class: "bs-vs", text: "VS" }),
-      h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-bar" }, hpLag, hpFill), h("span", { class: "bs-hp-row" }, h("span", { class: "bs-hp-name", text: boss.name }), hpText))));
-  const root = h("div", { class: "bs" }, stage, h("div", { class: "bs-foot" }, caption, skipBtn, replayBtn));
+  // 下：メッセージの窓（「ムキの こうげき！」）。上：技の名前の札
+  const msg = h("div", { class: "bs-msg", "aria-hidden": "true" }, h("p", {}), h("p", {}));
+  const skillTag = h("div", { class: "bs-skill", "aria-hidden": "true" });
+  const stage = h("div", { class: "bs-stage" }, cam, skillTag,
+    h("div", { class: "bs-hp" }, h("span", { class: "bs-hp-name", text: boss.name }), h("span", { class: "bs-hp-bar" }, hpLag, hpFill), hpText));
+  const root = h("div", { class: "bs" }, stage, msg, h("div", { class: "bs-foot" }, caption, skipBtn, replayBtn));
 
-  // 立ち絵を WebGL でなめらかに（格闘ゲームの構えのように、その場で弾む・体重を移す。大きさは変えない）。使えなければ <img> のまま
+  // 立ち絵を WebGL でなめらかに（構えてその場で小さく弾む。大きさは変えない）。使えなければ <img> のまま
   let glr = null;
   if (!reduceMotion) {
     try { glr = createActorGL(glCanvas); } catch { glr = null; }
@@ -162,7 +192,7 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     root.classList.add("gl");
     for (const [who, el] of Object.entries(fighters)) {
       glr.add(el, el.firstElementChild, { float: false, stance: true });
-      glr.pose(el, { turn: 0.6, lean: 0.15 });
+      glr.pose(el, { turn: 0.5, lean: 0.1 });
       // まばたき（差分の絵があれば）
       const key = (el.firstElementChild.getAttribute("src").match(/cast2\/([\w]+)\.webp$/) || [])[1];
       if (key && CAST_VARIANTS[key]?.includes("blink")) glr.frames(el, { blink: IMG(`cast2/${key}_blink`) });
@@ -276,113 +306,207 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
   let cancelled = false;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms / speed));
 
-  // 仲間の入れ替え：いまの人が左へ下がり、次の人が飛びこんでくる
-  async function tagIn(who) {
-    if (!fighters[who] || who === front) return;
-    const out = fighters[front], inn = fighters[who];
-    out.classList.remove("front"); out.classList.add("bench");
-    inn.classList.remove("bench"); inn.classList.add("front", "enter");
-    front = who;
-    for (const f of roster.children) f.classList.toggle("on", f.dataset.who === who);
-    frontName.textContent = who === "あいぼう" ? pet?.name || "あいぼう" : who;
-    glr?.walk(inn, 420);
-    await wait(380);
-    inn.classList.remove("enter");
+  // メッセージの窓に2行まで出す
+  function say(line1, line2 = "") {
+    const [a, b] = msg.children;
+    a.textContent = line1;
+    b.textContent = line2;
+    msg.classList.toggle("on", !!(line1 || line2));
   }
 
-  // 1回の攻撃：カットイン（技の名前）→ ため・踏み込み（残像・土ぼこり・カメラが寄る）→ 技の演出 → 命中（一瞬止まる・閃光・火花・ダメージ・カメラのゆれ）→ もどる
-  async function hit(a) {
-    await tagIn(fighters[a.who] ? a.who : "さとし");
-    const f = fighters[front];
-    const move = a.move || MOVES[a.who] || MOVES.さとし;
-    const who = a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who;
-    const kind = a.combined ? "combo" : move.fx;
-    caption.textContent = a.combined ? `これまでの攻撃！` : `${who}の${move.name}！`;
-    caption.dataset.sub = a.combined ? "" : a.what;
+  // 要素を動かす（transform は translate と rotate だけ：大きさは変えない）
+  function move(el, frames, ms, easing = "cubic-bezier(.3, .7, .3, 1)") {
+    const an = el.animate(frames, { duration: ms / speed, easing, fill: "forwards" });
+    return an.finished.catch(() => {});
+  }
+  // 攻撃する人がボスの手前まで行くための横の距離（px）
+  function reach(f) {
+    const r = f.getBoundingClientRect(), b = bossEl.getBoundingClientRect();
+    return Math.max(0, b.left + b.width * 0.18 - (r.left + r.width * 0.72));
+  }
+
+  // 命中：一瞬止まる → 閃光・火花・ダメージの数字・ゆれ
+  async function impact(a, kind, dmg, { big = false, n = 0 } = {}) {
     const bp = posOf(bossEl);
-    const big = a.damage >= boss.hp * 0.12;
-
-    // カットイン（カメラは攻撃する人へ少し寄る）
-    if (speed === 1) {
-      const fp = posOf(f);
-      camTo(1, 0, 0, 5);
-      const portrait = f.querySelector("img")?.src;
-      const cut = h("div", { class: `bs-cutin cut-${kind}` },
-        h("div", { class: "bs-cut-lines" }),
-        portrait ? h("img", { class: "bs-cut-face", src: portrait, alt: "" }) : null,
-        h("div", { class: "bs-cut-text" }, h("span", { class: "bs-cut-who", text: a.combined ? "ALL" : who }), h("b", { text: a.combined ? "これまでの攻撃" : move.name })));
-      fx.append(cut);
-      await wait(720);
-      cut.classList.add("out");
-      setTimeout(() => cut.remove(), 300);
-    }
-
-    // ため → 踏み込み（残像を残し、足元に土ぼこり。カメラはボスへ寄る）
-    f.classList.add("charge");
-    glr?.pose(f, { lean: -0.5, turn: 0.6 });
-    await wait(170);
-    const fp0 = posOf(f);
-    emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
-    for (let k = 1; k <= 3; k++) {
-      const ghost = f.cloneNode(true);
-      ghost.classList.add("ghost");
-      ghost.style.setProperty("--k", k);
-      partyEl.append(ghost);
-      setTimeout(() => ghost.remove(), 460);
-    }
-    f.classList.remove("charge");
-    f.classList.add("attack");
-    glr?.pose(f, { lean: 0.8, turn: 0.9 });
-    camTo(1, (0.5 - bp.x) * 10, 0, 9);
-    await wait(200);
-
-    // 技の演出（CSS）＋粒子
+    const hx = bp.x - 0.04 + (n % 2 ? 0.03 : 0), hy = bp.y - 0.05 + n * 0.05;
     const e = h("div", { class: `bs-effect fx-${kind}` });
-    if (kind === "coins" || kind === "pages") for (let i = 0; i < 12; i++) {
+    if (kind === "coins" || kind === "pages") for (let i = 0; i < 10; i++) {
       const p = h("i", {});
-      p.style.setProperty("--d", `${i * 35}ms`);
+      p.style.setProperty("--d", `${i * 30}ms`);
       p.style.setProperty("--y", `${-40 + Math.random() * 80}px`);
       e.append(p);
     }
     fx.append(e);
-    const hx = bp.x - 0.04, hy = bp.y;
-    if (kind === "slash") emit(16, { x: hx, y: hy, color: ["#fff", "#ffe9a0"], speed: 1.1, dir: -0.6, spread: 0.9, g: 0.3, size: 6, life: 0.35, shape: "streak", glow: 10, drag: 4 });
-    if (kind === "flame") emit(30, { x: hx, y: hy + 0.05, color: ["#ff5a2a", "#ffb35c", "#fff6c8"], speed: 0.35, dir: -Math.PI / 2, spread: 1.4, g: -0.5, size: 7, life: 0.7, glow: 14, drag: 1 });
-    if (kind === "smash" || kind === "muscle") emit(24, { x: hx, y: hy, color: ["#ffb35c", "#fff"], speed: 0.9, g: 1.6, size: 5, life: 0.6, glow: 10 });
-    if (kind === "coins") emit(14, { x: hx, y: hy, color: ["#ffd86a", "#fff4c0"], speed: 0.6, g: 1.4, size: 5, life: 0.7, shape: "square", glow: 6 });
-    if (kind === "pages") emit(14, { x: hx, y: hy, color: ["#fbf6ea", "#c9a2ff"], speed: 0.4, g: 0.3, size: 7, life: 0.8, shape: "square", glow: 8, drag: 2.5 });
-    if (kind === "tackle" || kind === "combo") emit(20, { x: hx, y: hy, color: ["#8fe6ff", "#fff"], speed: 0.8, g: 0.8, size: 5, life: 0.6, glow: 10 });
-    await wait(kind === "flame" || kind === "pages" || kind === "coins" ? 320 : 200);
-
-    // 命中：一瞬止まる → 閃光・衝撃・火花・ダメージ・カメラのゆれ
+    if (kind === "slash") emit(14, { x: hx, y: hy, color: ["#fff", "#ffe9a0"], speed: 1.1, dir: -0.6, spread: 0.9, g: 0.3, size: 6, life: 0.35, shape: "streak", glow: 10, drag: 4 });
+    if (kind === "flame") emit(26, { x: hx, y: hy + 0.05, color: ["#ff5a2a", "#ffb35c", "#fff6c8"], speed: 0.35, dir: -Math.PI / 2, spread: 1.4, g: -0.5, size: 7, life: 0.7, glow: 14, drag: 1 });
+    if (kind === "smash" || kind === "muscle") emit(22, { x: hx, y: hy + 0.1, color: ["#ffb35c", "#fff"], speed: 0.9, g: 1.6, size: 5, life: 0.6, glow: 10 });
+    if (kind === "coins") emit(12, { x: hx, y: hy, color: ["#ffd86a", "#fff4c0"], speed: 0.6, g: 1.4, size: 5, life: 0.7, shape: "square", glow: 6 });
+    if (kind === "pages") emit(12, { x: hx, y: hy, color: ["#fbf6ea", "#c9a2ff"], speed: 0.4, g: 0.3, size: 7, life: 0.8, shape: "square", glow: 8, drag: 2.5 });
+    if (kind === "tackle" || kind === "combo") emit(18, { x: hx, y: hy, color: ["#8fe6ff", "#fff"], speed: 0.8, g: 0.8, size: 5, life: 0.6, glow: 10 });
     root.classList.add("hitstop");
-    await wait(big ? 140 : 90);
+    await wait(big ? 130 : 70);
     root.classList.remove("hitstop");
     const flash = h("div", { class: "bs-flash" });
-    const impact = h("div", { class: "bs-impact" });
-    fx.append(flash, impact);
-    emit(big ? 40 : 22, { x: hx, y: hy, color: ["#fff", "#ffe066", "#ffb35c"], speed: big ? 1.4 : 0.9, g: 1.8, size: 4, life: 0.7, shape: "streak", glow: 8, drag: 2 });
-    emit(10, { x: hx, y: hy, color: "#ffe9b0", speed: 0.5, g: 2.2, size: 6, life: 0.8, shape: "square", glow: 4, drag: 1 });
+    fx.append(flash);
+    emit(big ? 36 : 16, { x: hx, y: hy, color: ["#fff", "#ffe066", "#ffb35c"], speed: big ? 1.3 : 0.8, g: 1.8, size: 4, life: 0.6, shape: "streak", glow: 8, drag: 2 });
     bossEl.classList.remove("hit"); void bossEl.offsetWidth; bossEl.classList.add("hit");
     glr?.flash(bossEl);
-    glr?.emote(bossEl, "angry");
-    glr?.pose(bossEl, { lean: 0.5, turn: -0.6 });
-    setTimeout(() => glr?.pose(bossEl, { lean: 0, turn: -0.6 }), 350 / speed);
-    camTo(1, (0.5 - bp.x) * 16, 0, 14);
-    shake(big ? 1 : 0.65);
+    glr?.pose(bossEl, { lean: 0.5, turn: -0.5 });
+    setTimeout(() => glr?.pose(bossEl, { lean: 0, turn: -0.5 }), 300 / speed);
+    shake(big ? 1 : 0.5);
     const weak = boss.weak && (TYPE_ATTACKER[boss.weak] === a.who || boss.weak === "バランス");
     const num = h("span", { class: `bs-num${big ? " big" : ""}` },
-      big ? h("small", { text: "CRITICAL!" }) : weak ? h("small", { text: "こうかばつぐん" }) : null,
-      String(Math.round(a.damage)));
-    num.style.setProperty("--x", `${-20 + Math.random() * 40}px`);
+      n === 0 && big ? h("small", { text: "かいしんの いちげき！" }) : n === 0 && weak ? h("small", { text: "こうかは ばつぐんだ！" }) : null,
+      String(Math.round(dmg)));
+    num.style.setProperty("--x", `${-30 + n * 26 + Math.random() * 10}px`);
+    num.style.setProperty("--ny", `${n * -14}px`);
     fx.append(num);
-    setHp(hp - a.damage);
-    await wait(big ? 560 : 460);
-    f.classList.remove("attack");
-    glr?.pose(f, { lean: 0.15, turn: 0.6 });
-    camTo(1, 0, 0, 4);
-    setTimeout(() => { e.remove(); num.remove(); flash.remove(); impact.remove(); }, 900);
-    await wait(300);
+    setHp(hp - dmg);
+    setTimeout(() => { e.remove(); num.remove(); flash.remove(); }, 1000);
+  }
+
+  // 飛び道具：攻撃する人の手元からボスへ光の玉が飛ぶ
+  async function shoot(f, color, ms = 380) {
+    const fp = posOf(f), bp = posOf(bossEl);
+    const orb = h("i", { class: "bs-orb" });
+    orb.style.setProperty("--c", color);
+    orb.style.left = `${(fp.x + 0.06) * 100}%`;
+    orb.style.top = `${(fp.y - 0.08) * 100}%`;
+    fx.append(orb);
+    const sw = fx.getBoundingClientRect();
+    const dx = (bp.x - fp.x - 0.1) * sw.width, dy = (bp.y - fp.y + 0.08) * sw.height;
+    const trail = setInterval(() => {
+      const r = orb.getBoundingClientRect();
+      emit(2, { x: (r.left + r.width / 2 - sw.left) / sw.width, y: (r.top + r.height / 2 - sw.top) / sw.height, color, speed: 0.08, g: 0, size: 4, life: 0.35, glow: 10 });
+    }, 30);
+    await move(orb, [{ transform: "translate(0, 0)" }, { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 30}px)` }, { transform: `translate(${dx}px, ${dy}px)` }], ms, "ease-in");
+    clearInterval(trail);
+    orb.remove();
+  }
+
+  // 1回の攻撃：前に出る → 技の名前 → 動き（技ごとにちがう）→ 命中 → もとの場所へ
+  async function hit(a) {
+    const f = fighters[a.who] || fighters.さとし;
+    const big = a.damage >= boss.hp * 0.12;
+    const mv = a.combined ? { name: "みんなの こうげき", motion: "rush", fx: "combo" } : a.move || pickMove(a.who, big, a.key || a.what);
+    const who = a.who === "あいぼう" ? pet?.name || "あいぼう" : a.who;
+    caption.textContent = a.combined ? "これまでの攻撃！" : `${who}の${mv.name}！`;
+    caption.dataset.sub = a.combined ? "" : a.what;
+    say(a.combined ? "なかまたちの こうげき！" : `${who}の ${mv.name}！`);
+    skillTag.textContent = mv.name;
+    skillTag.classList.remove("on"); void skillTag.offsetWidth; skillTag.classList.add("on");
+    f.classList.add("active");
+    const kind = mv.fx;
+    const D = reach(f);
+    const base = "translate(0, 0) rotate(0deg)";
+    const hitLine = () => say(msg.children[0].textContent, `${boss.name}に ${Math.round(a.damage)}の ダメージ！`);
+
+    // 一歩前に出る（RPG の「行動する人」）
+    await move(f, [{ transform: base }, { transform: "translate(18px, 0)" }], 220);
+    const fromStep = "translate(18px, 0)";
+
+    if (mv.motion === "dash" || mv.motion === "combo" || mv.motion === "rush") {
+      // 走りこむ（土ぼこり・残像）
+      const fp0 = posOf(f);
+      emit(8, { x: fp0.x, y: fp0.bottom - 0.02, color: "#d9c7a8", speed: 0.25, dir: Math.PI, spread: 1.2, g: 0.4, size: 5, life: 0.5, glow: 0, drag: 3 });
+      glr?.pose(f, { lean: 0.8, turn: 0.9 });
+      ghosts(f);
+      await move(f, [{ transform: fromStep }, { transform: `translate(${D}px, 0)` }], 260, "cubic-bezier(.5, 0, .7, 1)");
+      if (mv.motion === "dash") {
+        await move(f, [{ transform: `translate(${D}px, 0) rotate(0deg)` }, { transform: `translate(${D + 14}px, 0) rotate(8deg)` }], 90);
+        await impact(a, kind, a.damage, { big });
+        hitLine();
+      } else {
+        const parts = [0.3, 0.3, 0.4];
+        for (let k = 0; k < 3; k++) {
+          await move(f, [{ transform: `translate(${D}px, 0) rotate(${k % 2 ? -6 : 6}deg)` }, { transform: `translate(${D + 12}px, ${k === 2 ? -10 : 0}px) rotate(${k % 2 ? 8 : -8}deg)` }], 80);
+          await impact(a, kind, a.damage * parts[k], { big: big && k === 2, n: k });
+          await wait(90);
+        }
+        hitLine();
+      }
+      await wait(260);
+      glr?.pose(f, { lean: -0.2, turn: 0.5 });
+      await move(f, [{ transform: `translate(${D}px, 0)` }, { transform: base }], 340, "cubic-bezier(.3, .6, .3, 1)");
+    } else if (mv.motion === "leap") {
+      // 高く跳んで、ボスの上から振りおろす
+      glr?.pose(f, { lean: -0.4, turn: 0.6 });
+      await wait(120);
+      glr?.pose(f, { lean: 0.7, turn: 0.9 });
+      const H = stage.clientHeight * 0.42;
+      await move(f, [
+        { transform: fromStep, offset: 0 },
+        { transform: `translate(${D * 0.55}px, ${-H}px) rotate(-10deg)`, offset: 0.55 },
+        { transform: `translate(${D}px, ${-H * 0.15}px) rotate(14deg)`, offset: 1 },
+      ], 520, "cubic-bezier(.3, .5, .6, 1)");
+      await move(f, [{ transform: `translate(${D}px, ${-H * 0.15}px) rotate(14deg)` }, { transform: `translate(${D}px, 0) rotate(4deg)` }], 90, "ease-in");
+      await impact(a, kind, a.damage, { big: true });
+      hitLine();
+      await wait(320);
+      glr?.pose(f, { lean: -0.2, turn: 0.5 });
+      await move(f, [{ transform: `translate(${D}px, 0) rotate(4deg)` }, { transform: `translate(${D * 0.5}px, ${-H * 0.25}px) rotate(-6deg)`, offset: 0.5 }, { transform: base }], 420);
+    } else if (mv.motion === "charge") {
+      // 力をためる（足元に光が集まる）→ 一気に突進
+      f.classList.add("aura");
+      glr?.pose(f, { lean: -0.5, turn: 0.6, slump: 0.3 });
+      const fp0 = posOf(f);
+      for (let k = 0; k < 5; k++) {
+        emit(6, { x: fp0.x + (Math.random() - 0.5) * 0.1, y: fp0.bottom - 0.02, color: ["#ffe066", "#fff"], speed: 0.25, dir: -Math.PI / 2, spread: 0.6, g: -0.6, size: 4, life: 0.6, glow: 10 });
+        await wait(110);
+      }
+      f.classList.remove("aura");
+      glr?.pose(f, { lean: 0.95, turn: 0.9, slump: 0 });
+      ghosts(f);
+      await move(f, [{ transform: fromStep }, { transform: `translate(${D + 10}px, 0) rotate(6deg)` }], 170, "cubic-bezier(.6, 0, .8, 1)");
+      await impact(a, kind, a.damage, { big: true });
+      hitLine();
+      await wait(360);
+      glr?.pose(f, { lean: -0.2, turn: 0.5 });
+      await move(f, [{ transform: `translate(${D + 10}px, 0) rotate(6deg)` }, { transform: base }], 380);
+    } else {
+      // cast / rain：その場から
+      glr?.pose(f, { lean: -0.3, turn: 0.6 });
+      glr?.emote(f, "smile");
+      const fp0 = posOf(f);
+      emit(14, { x: fp0.x, y: fp0.y, color: [mv.orb || "#ffe066", "#fff"], speed: 0.3, g: -0.2, size: 4, life: 0.5, glow: 12 });
+      await wait(260);
+      glr?.pose(f, { lean: 0.5, turn: 0.8 });
+      if (mv.motion === "cast") {
+        await shoot(f, mv.orb || "#ffe066");
+        await impact(a, kind, a.damage, { big });
+      } else {
+        // 頭上から降らせる（3回に分けて当たる）
+        const bp = posOf(bossEl);
+        for (let k = 0; k < 3; k++) {
+          emit(14, { x: bp.x + (Math.random() - 0.5) * 0.2, y: 0.05, color: kind === "coins" ? ["#ffd86a", "#fff4c0"] : kind === "flame" ? ["#ff5a2a", "#ffb35c"] : ["#fbf6ea", "#c9a2ff"], speed: 0.9, dir: Math.PI / 2, spread: 0.4, g: 2.4, size: 6, life: 0.6, shape: kind === "coins" ? "dot" : "square", glow: 8, drag: 0.5 });
+          await wait(160);
+          await impact(a, kind, a.damage / 3, { big: k === 2, n: k });
+        }
+      }
+      hitLine();
+      await wait(380);
+      glr?.pose(f, { lean: 0.1, turn: 0.5 });
+      await move(f, [{ transform: fromStep }, { transform: base }], 240);
+    }
+    f.classList.remove("active");
+    f.getAnimations().forEach((x) => x.cancel());
+    skillTag.classList.remove("on");
+    await wait(200);
+  }
+
+  // 走るときの残像
+  function ghosts(f) {
+    for (let k = 1; k <= 3; k++) {
+      setTimeout(() => {
+        const ghost = f.cloneNode(true);
+        ghost.classList.add("ghost");
+        ghost.getAnimations?.().forEach((x) => x.cancel());
+        ghost.style.transform = getComputedStyle(f).transform;
+        partyEl.append(ghost);
+        ghost.animate([{ opacity: 0.45 }, { opacity: 0 }], { duration: 360, fill: "forwards" });
+        setTimeout(() => ghost.remove(), 380);
+      }, k * 60 / speed);
+    }
   }
 
   async function play(list, from) {
@@ -395,17 +519,8 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
     glr?.pose(bossEl, { slump: 0 });
     setHp(from, true);
     camTo(1, 0, 0, 2);
-    if (speed === 1) {
-      const r1 = h("div", { class: "bs-call", text: `ROUND ${round}` });
-      fx.append(r1);
-      await wait(800);
-      r1.remove();
-      const r2 = h("div", { class: "bs-call fight", text: "FIGHT!" });
-      fx.append(r2);
-      shake(0.3);
-      await wait(650);
-      r2.remove();
-    } else await wait(300);
+    say(`${boss.name}が たちはだかる！`);
+    await wait(900);
     for (const a of list) {
       if (cancelled) break;
       await hit(a);
@@ -425,11 +540,13 @@ export function battleStage({ boss, members = [], hero = "", pet = null, bg = "c
       const bp = posOf(bossEl);
       emit(60, { x: bp.x, y: bp.y, color: ["#ffe066", "#fff", "#ffb35c"], speed: 0.9, g: 0.6, size: 5, life: 1.4, glow: 12, drag: 1.2 });
       shake(0.8);
-      const banner = h("div", { class: "bs-win ko", text: "K.O." });
+      const banner = h("div", { class: "bs-win", text: "撃破！" });
+      say(`${boss.name}を やっつけた！`);
       fx.append(banner);
       caption.textContent = `${boss.name}を たおした！`;
     } else {
       const total = list.reduce((a, x) => a + x.damage, 0);
+      say(list.length ? `${boss.name}に あわせて ${Math.round(list.reduce((a, x) => a + x.damage, 0))}の ダメージ！` : "", list.length ? `のこりHP ${Math.round(end)}` : "");
       caption.textContent = list.length ? `合計 ${Math.round(total)} ダメージ！ のこり ${Math.round(end)}` : `のこりHP ${Math.round(end)}。習慣やタスクで仲間が攻撃します`;
     }
     markSeen();

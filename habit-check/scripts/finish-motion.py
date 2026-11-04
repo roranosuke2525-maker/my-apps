@@ -105,8 +105,42 @@ def process(name, base_name, src_im, is_png):
     fig, dx, dy = align_face(base, bb, im, vb)
     canvas = Image.new("RGBA", base.size, (0, 0, 0, 0))
     canvas.alpha_composite(fig, dest=(max(0, dx), max(0, dy)), source=(max(0, -dx), max(0, -dy)))
+    if name.endswith(("_talk", "_blink")):
+        # 口パク・まばたきは顔だけを差し替える（体や手が描き変わって崩れないように）
+        canvas = face_patch(base, canvas, bb)
     canvas.save(OUT / "cast2" / f"{name}.webp", "WEBP", quality=86, method=6)
     return None
+
+
+def face_patch(base, variant, bb):
+    """元の絵の上に、差分の顔（目と口のあたり）だけをぼかした楕円で重ねる"""
+    from PIL import ImageDraw, ImageFilter
+    A = np.asarray(base.getchannel("A")) > 16
+    h = bb[3] - bb[1]
+    top = bb[1]
+    # 頭：上から 6%〜24% の行で、人物がいる横の幅（髪の広がりに引っぱられないよう、中央値で）
+    rows = range(top + int(h * 0.06), top + int(h * 0.24))
+    lefts, rights = [], []
+    for y in rows:
+        xs = np.where(A[y])[0]
+        if len(xs):
+            lefts.append(xs[0])
+            rights.append(xs[-1])
+    if not lefts:
+        return variant
+    hx0, hx1 = int(np.median(lefts)), int(np.median(rights))
+    cx = (hx0 + hx1) / 2
+    hw = max(8, (hx1 - hx0) * 0.30)
+    cy = top + h * 0.13
+    hh = h * 0.075
+    mask = Image.new("L", base.size, 0)
+    ImageDraw.Draw(mask).ellipse((cx - hw, cy - hh, cx + hw, cy + hh), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(max(2, hw * 0.25)))
+    out = base.copy()
+    out.paste(variant, (0, 0), mask)
+    # 透明な所は元の絵のまま
+    out.putalpha(base.getchannel("A"))
+    return out
 
 
 MOTION_SUFFIX = ("_talk", "_blink", "_gesture")
