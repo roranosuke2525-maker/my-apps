@@ -334,10 +334,13 @@ function siteBtns(q) {
 function renderAct() {
   const a = S.act; const x = S.stock.find((s) => s.id === a.id); if (!x) { closeAct(); return; }
   const open = x.open?.length;
-  const head = `<div class="sh-head"><b>${a.mode === "change" ? "🔄 別の商品に変える" : "補充"}</b><button type="button" class="more" data-actclose="1" aria-label="閉じる">×</button></div>
+  const head = `<div class="sh-head"><b>${a.mode === "change" ? "🔄 別の商品に変える" : a.mode === "hist" ? "🕘 補充の履歴" : "補充"}</b><button type="button" class="more" data-actclose="1" aria-label="閉じる">×</button></div>
     <div class="sc-row">${thumb(x, "big")}<div><b>${esc(x.name)}</b><small>${esc([leftTx(x.left), x.store, open ? "補充リストに入っています" : ""].filter(Boolean).join("・"))}</small></div></div>`;
   let body;
-  if (a.mode === "change") {
+  if (a.mode === "hist") {
+    if (!H.list && !H.loading) loadHistory().then(() => S.act && renderAct());
+    body = `${histRows(x.id)}<div class="row-end"><button type="button" class="btn ghost sm" data-actmode="act">戻る</button></div>`;
+  } else if (a.mode === "change") {
     const pick = a.pick ? `<div class="card pickcard"><div class="sc-row">${thumb({ image: a.pick.image })}<div><b>${esc(a.pick.name)}</b><small>${esc(a.pick.link || "")}</small></div></div>
       <label class="check"><input type="checkbox" id="acttoday" ${a.today ? "checked" : ""}> 新しく買った（買った日を今日にする）</label>
       <div class="row-end"><button type="button" class="btn ghost sm" data-actpick="">選び直す</button><button type="button" class="btn pri" data-actapply="1">この商品に変える</button></div></div>` : "";
@@ -352,7 +355,8 @@ function renderAct() {
       <button type="button" class="btn ok" data-actdo="restock">✓ 補充した<small>最終補充日を今日に</small></button>
       ${open ? `<button type="button" class="btn danger" data-actdo="cancel">✖ 補充リストから外す<small>今回は買わない</small></button>` : `<button type="button" class="btn" data-actdo="tolist">🛒 補充リストへ<small>補充タスクを作る</small></button>`}
       <button type="button" class="btn" data-actdo="edit">✏️ 直す<small>使う数・頻度・店など</small></button>
-      <button type="button" class="btn" data-actmode="change">🔄 別の商品に変える<small>ネットで探して入れ替え</small></button></div>
+      <button type="button" class="btn" data-actmode="change">🔄 別の商品に変える<small>ネットで探して入れ替え</small></button>
+      <button type="button" class="btn ghost" data-actmode="hist">🕘 この品の補充の履歴<small>日付を直す・取り消す</small></button></div>
       <p class="note">買う：</p><div class="glinks">${x.link ? `<a class="btn pri sm" href="${esc(x.link)}" target="_blank" rel="noopener">🛒 いつもの注文ページ</a>` : ""}${siteBtns(x.name)}</div>`;
   }
   const el = $("#sheet");
@@ -362,7 +366,7 @@ function renderAct() {
 async function actDo(kind, btn) {
   const id = S.act.id; const x = S.stock.find((s) => s.id === id); if (!x) return;
   if (kind === "edit") { S.act = null; openSheet(id); return; }
-  if (kind === "restock") { closeAct(); restock(id); return; }
+  if (kind === "restock") { closeAct(); H.list = null; restock(id); return; }
   if (kind === "tolist") { closeAct(); if (await toList(id)) toast(`「${x.name}」を補充リストに入れました`); return; }
   if (kind === "cancel") {
     btn.disabled = true;
@@ -548,8 +552,11 @@ async function allToList() {
   for (const x of soon) if (await toList(x.id)) ok++;
   toast(`${ok}品を補充リストに入れました`);
 }
+// 「補充した」は取り消しが面倒なので、いつも確かめてから記録する
+const okRestock = (names) => confirm(`${names.length > 1 ? `${names.length}品（${names.slice(0, 3).join("・")}${names.length > 3 ? "…" : ""}）` : `「${names[0]}」`}を補充した（買った）として記録しますか？\n最終補充日が今日になります。`);
 async function restock(id, btn) {
   const x = S.stock.find((s) => s.id === id); if (!x) return;
+  if (!okRestock([x.name])) return;
   if (btn) btn.disabled = true;
   try {
     setSync("busy");
@@ -565,6 +572,7 @@ async function bulk(kind, btn) {
   const ids = [...(S.pick || [])]; const xs = S.stock.filter((x) => ids.includes(x.id));
   if (!xs.length) { toast("品を選んでください"); return; }
   if (kind === "trash" && !confirm(`${xs.length}品を在庫から消しますか？\n（Notion のゴミ箱に入り、30日はそこから戻せます）`)) return;
+  if (kind === "restock" && !okRestock(xs.map((x) => x.name))) return;
   btn.disabled = true; let ok = 0;
   for (const x of xs) {
     btn.textContent = `${ok + 1}/${xs.length}…`;
@@ -1020,8 +1028,44 @@ function renderSuggest() {
     + (out.length ? `<div class="sgl">${Object.keys(hist).length ? "よく買う" : "定番"}</div>${out.map(([n]) => `<button type="button" class="chip" data-sug="${esc(n)}">＋ ${esc(n)}</button>`).join("")}` : "");
 }
 
+// ---------- 補充の履歴：間違えて補充した記録を直す ----------
+const H = { list: null, loading: false };
+async function loadHistory() {
+  H.loading = true;
+  try { H.list = (await api("GET", "/api/refills/history")).history; } catch (err) { H.list = []; toast(`履歴を読めませんでした：${err.message}`); }
+  H.loading = false;
+}
+function histRows(stockId) {
+  if (!H.list) return `<p class="note">読みこみ中…</p>`;
+  const xs = H.list.filter((h) => !stockId || h.stock === stockId);
+  if (!xs.length) return `<p class="note">補充した記録はありません</p>`;
+  return `<div class="hist">${xs.map((h) => { const x = S.stock.find((s) => s.id === h.stock); return `<div class="hrow">${stockId ? "" : thumb(x || {})}<span class="hname">${stockId ? "" : esc(h.name)}</span><input type="date" data-hdate="${h.id}" value="${esc(h.date || "")}" max="${jstDay()}" aria-label="補充した日"><button type="button" class="btn ghost sm" data-hfix="reopen|${h.id}" title="まだ買っていなかった">↩ リストに戻す</button><button type="button" class="btn danger sm" data-hfix="trash|${h.id}" title="間違えて補充した">🗑 取り消す</button></div>`; }).join("")}</div>
+    <p class="note">日付を変えると最終補充日と切れる予定日が直ります。「↩ リストに戻す」はまだ買っていなかったとき、「🗑 取り消す」は間違えて補充したとき（記録をゴミ箱へ）。</p>`;
+}
+async function fixHistory(action, id, value) {
+  const h = H.list?.find((x) => x.id === id); if (!h) return;
+  if (action === "trash" && !confirm(`${md(h.date || "")}の「${h.name}」の補充の記録を取り消しますか？`)) return;
+  if (action === "reopen" && !confirm(`「${h.name}」を補充リストに戻しますか？（補充した記録はなくなります）`)) return;
+  try {
+    const r = await api("PATCH", `/api/refills/${id}`, action === "date" ? { action, date: value } : { action });
+    if (action === "date") h.date = r.date;
+    else H.list = H.list.filter((x) => x.id !== id);
+    if (r.task) { S.lists.push(r.task); const x = S.stock.find((s) => s.id === h.stock); if (x) x.open = [...(x.open || []), r.task.id]; }
+    toast(action === "date" ? "補充した日を直しました" : action === "reopen" ? `「${h.name}」を補充リストに戻しました` : "補充の記録を取り消しました");
+    // 最終補充日・切れる予定日は Notion の計算で決まるので、少し待って読み直す
+    setTimeout(() => load({ quiet: true }), 1500);
+    if (S.act) renderAct(); else render();
+  } catch (err) { toast(`直せませんでした：${err.message}`); }
+}
+document.addEventListener("change", (e) => { const id = e.target.dataset?.hdate; if (id && e.target.value) fixHistory("date", id, e.target.value); });
+function renderHistoryView() {
+  if (!H.list && !H.loading) loadHistory().then(render);
+  return `<div class="ltools"><b>🕘 補充の履歴</b><span class="mute">${H.list ? `${H.list.length}件` : ""}</span><button type="button" class="btn pri sm" data-histview="0">おわる</button></div><div class="card">${histRows("")}</div>`;
+}
+
 function renderStock() {
   if (S.maint) return renderMaint();
+  if (S.histView) return renderHistoryView();
   const all = S.stock;
   const out = all.filter((x) => x.left != null && x.left <= 0).length;
   const week = all.filter((x) => x.left != null && x.left > 0 && x.left <= SOON_DAYS).length;
@@ -1042,6 +1086,7 @@ function renderStock() {
   }).join("");
   return `<div class="stats1"><span><b style="color:var(--bad)">${out}</b>切れ</span><span><b style="color:var(--warn)">${week}</b>${SOON_DAYS}日内</span><span><b>${listed}</b>リスト済</span><span><b>${all.length}</b>全部</span></div>
     <div class="stock-acts three"><button type="button" class="btn pri" data-scan="add">📷 スキャン</button><button type="button" class="btn" data-sheet="new">＋ 登録</button><button type="button" class="btn" data-maint="1">🛠 整備</button></div>
+    <div class="row-end"><button type="button" class="btn ghost sm" data-histview="1">🕘 補充の履歴（間違いを直す）</button></div>
     ${soon || noImg ? `<div class="row-end">${soon ? `<button type="button" class="btn sm" data-alltolist="1">切れそうな${soon}品をまとめてリストへ</button>` : ""}${noImg ? `<button type="button" class="btn ghost sm" data-fillimg="1">🖼 画像をまとめて取る（${noImg}品）</button>` : ""}</div>` : ""}
     ${cats.length ? `<div class="chips"><button type="button" class="chip" data-cat="" aria-pressed="${!S.stockCat}">すべて</button>${cats.map((c) => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${S.stockCat === c}">${CAT_ICON[c] || ""}${esc(c)}</button>`).join("")}${unset ? `<button type="button" class="chip" data-cat="未設定" aria-pressed="${S.stockCat === "未設定"}">⚙️ 未設定 ${unset}</button>` : ""}</div>` : ""}
     <div class="ltools pickbar"><span class="mute">${items.length}品</span>${S.pick ? `<button type="button" class="btn ghost sm" data-pickall="1">${items.every((x) => S.pick.has(x.id)) ? "全部外す" : "全部選ぶ"}</button>` : ""}<button type="button" class="btn ${S.pick ? "pri" : "ghost"} sm" data-pickmode="1">${S.pick ? "選ぶのをやめる" : "☑ 選んでまとめて"}</button></div>
@@ -1221,7 +1266,11 @@ document.addEventListener("click", (e) => {
   if (d.del) { removeItem(d.del); return; }
   if (d.basket) { S.showBasket = !S.showBasket; render(); return; }
   if (d.clear) { const t = listOf(d.clear); if (t) clearBasket(t); return; }
-  if (d.finish) { const t = listOf(d.finish); if (t) finishList(t, t.refill.length ? "補充した" : "買い物おわり"); return; }
+  if (d.finish) {
+    const t = listOf(d.finish); if (!t) return;
+    if (t.refill.length && !okRestock([t.name.replace(/^補充:/, "")])) return;
+    finishList(t, t.refill.length ? "補充した" : "買い物おわり"); return;
+  }
   if (d.sug) {
     const i = $("#addin"); const parts = A.splitInput(i.value);
     if (!/[、,，;\n]\s*$/.test(i.value)) parts.pop();
@@ -1232,6 +1281,8 @@ document.addEventListener("click", (e) => {
   if (d.tolist) { toList(d.tolist, el).then((ok) => ok && toast("補充リストに入れました")); return; }
   if (d.alltolist) { el.disabled = true; allToList(); return; }
   if (d.restock) { restock(d.restock, el); return; }
+  if (d.histview) { S.histView = d.histview === "1"; if (S.histView) H.list = null; render(); return; }
+  if (d.hfix) { const [a, id] = d.hfix.split("|"); fixHistory(a, id); return; }
   if (d.sheet) { openSheet(d.sheet); return; }
   if (d.act) { openAct(d.act); return; }
   if (d.actclose) { closeAct(); return; }

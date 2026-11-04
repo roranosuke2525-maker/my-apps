@@ -50,6 +50,9 @@ export default {
       if (list?.[2] === "clear" && m === "POST") return json(await clearChecked(notion, env, list[1]));
       if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1]));
       if (list?.[2] === "cancel" && m === "POST") return json(await cancelRefill(notion, env, list[1]));
+      if (p === "/api/refills/history" && m === "GET") return json(await refillHistory(notion, env));
+      const rh = p.match(/^\/api\/refills\/([0-9a-f-]{32,36})$/i);
+      if (rh && m === "PATCH") return json(await fixRefill(notion, env, rh[1], await readJson(request)));
       if (p === "/api/sites" && m === "POST") return json(await addSite(env, await readJson(request)));
       if (p === "/api/sites" && m === "DELETE") return json(await removeSite(env, await readJson(request)));
       if (list?.[2] === "when" && m === "PATCH") return json(await setWhen(notion, env, list[1], await readJson(request)));
@@ -547,9 +550,11 @@ async function addTemplate(notion, env, body) {
 
 async function finishList(notion, env, id) {
   const t = await listPage(notion, env, id);
-  await notion("PATCH", `/pages/${t.id}`, { properties: { "ステータス": { status: { name: ST.done } } } });
+  await notion("PATCH", `/pages/${t.id}`, { properties: doneProps(t) });
   return { done: t.id };
 }
+// 補充タスクを済みにするときは、実行日に今日を入れて補充した日を決める（後でページを触っても完了日がずれないように）
+const doneProps = (t) => ({ "ステータス": { status: { name: ST.done } }, ...(t.refill?.length ? { "実行日": { date: { start: todayJst() } } } : {}) });
 
 // ---------- 在庫・補充 ----------
 async function openRefills(notion, env, stockId) {
@@ -581,7 +586,7 @@ async function restocked(notion, env, id) {
   const x = stockOf(page, today);
   let open = await openRefills(notion, env, x.id);
   if (!open.length) open = [(await refill(notion, env, x.id)).task];
-  for (const t of open) await notion("PATCH", `/pages/${t.id}`, { properties: { "ステータス": { status: { name: ST.done } } } });
+  for (const t of open) await notion("PATCH", `/pages/${t.id}`, { properties: doneProps({ refill: [x.id] }) });
   const after = stockOf(page, today, today);
   after.open = [];
   return { stock: after, done: open.map((t) => t.id) };
@@ -656,6 +661,43 @@ async function editStock(notion, env, id, body) {
     }
   }
   return { stock: x, renamed };
+}
+
+// 補充の履歴：済みにした補充タスク（新しい順に80件）。補充した日は 完了日（実行日、なければ最終更新日時）
+async function refillHistory(notion, env) {
+  const pages = await queryAll(notion, env.TASK_DS_ID, {
+    filter: { and: [{ property: "ステータス", status: { equals: ST.done } }, { property: "補充対象", relation: { is_not_empty: true } }] },
+    sorts: recent,
+  });
+  return {
+    history: pages.slice(0, 80).map((pg) => {
+      const t = taskOf(pg);
+      return { id: t.id, url: t.url, name: t.name.replace(/^補充:/, ""), stock: t.refill[0], date: formulaDate(pg.properties?.["完了日"]) || t.date || (pg.last_edited_time ? jstOf(pg.last_edited_time) : null) };
+    }).sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+  };
+}
+const jstOf = (iso) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 10);
+// 過去の補充を直す：補充した日を変える／補充リストに戻す（まだ買っていなかった）／記録ごと消す（間違えて補充した）
+async function fixRefill(notion, env, id, body) {
+  const page = await notion("GET", `/pages/${normalizeId(id)}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.TASK_DS_ID)) throw httpError(403, "DB_タスク管理 の行ではありません");
+  const t = taskOf(page);
+  if (!t.refill.length) throw httpError(403, "補充タスクではありません");
+  if (body?.action === "date") {
+    const d = dateOf(body?.date);
+    if (!d || d > todayJst()) throw httpError(400, "補充した日が正しくありません");
+    await notion("PATCH", `/pages/${t.id}`, { properties: { "実行日": { date: { start: d } } } });
+    return { id: t.id, date: d };
+  }
+  if (body?.action === "reopen") {
+    await notion("PATCH", `/pages/${t.id}`, { properties: { "ステータス": { status: { name: ST.next } }, "実行日": { date: null } } });
+    return { id: t.id, reopened: true, task: { ...t, status: ST.next, date: null, at: null } };
+  }
+  if (body?.action === "trash") {
+    await notion("PATCH", `/pages/${t.id}`, { in_trash: true });
+    return { id: t.id, trashed: true };
+  }
+  throw httpError(400, "直し方を選んでください");
 }
 
 // 補充リストから外す：補充タスクをゴミ箱へ（在庫の品はそのまま。最終補充日も変えない）

@@ -364,4 +364,12 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .sugs:empty { display: none; }
 .sugs .chip { font-size: 12px; min-height: 30px; }
 
+.hist { display: flex; flex-direction: column; }
+.hrow { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.hrow:first-child { border-top: 0; }
+.hrow .thumb { width: 30px; height: 30px; }
+.hrow .hname { flex: 1 1 120px; min-width: 0; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hrow .hname:empty { display: none; }
+.hrow input[type="date"] { border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; min-height: 34px; background: var(--bg); font-size: 16px; color: var(--ink); max-width: 160px; }
+
 [hidden] { display: none !important; }

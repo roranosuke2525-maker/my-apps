@@ -587,3 +587,21 @@ test("購入サイト：検索ページの URL を貼るだけで登録（検索
   assert.ok(!(await api("DELETE", "/api/sites", { name: "Amazon" })).data.sites.some((x) => x.name === "Amazon"));
   assert.equal((await api("POST", "/api/sites", { name: "x", url: "http://bad" })).status, 400);
 });
+
+test("補充した日を実行日に残す。過去の補充は日付を直す・補充リストに戻す・記録ごと消すができる", async () => {
+  const done = await api("POST", `/api/stock/${D1}/restocked`);
+  const tid = done.data.done[0];
+  assert.equal(pages.get(tid).properties["実行日"].date.start, today);
+  const h = (await api("GET", "/api/refills/history")).data.history;
+  assert.ok(h.some((x) => x.id === tid && x.stock === D1 && x.date === today));
+  assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "date", date: "2026-10-20" })).data.date, "2026-10-20");
+  assert.equal(pages.get(tid).properties["実行日"].date.start, "2026-10-20");
+  assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "date", date: "2999-01-01" })).status, 400); // 未来の日は入れない
+  assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "reopen" })).data.reopened, true);
+  assert.equal(pages.get(tid).properties["ステータス"].status.name, "⏭ NEXT");
+  assert.equal(pages.get(tid).properties["実行日"].date, null);
+  assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "trash" })).data.trashed, true);
+  assert.equal(pages.get(tid).in_trash, true);
+  assert.equal((await api("PATCH", `/api/refills/${L1}`, { action: "trash" })).status, 403);
+  assert.equal((await api("PATCH", `/api/refills/${R1}`, { action: "x" })).status, 400);
+});
