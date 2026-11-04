@@ -206,4 +206,32 @@ export const CAST2 = [
   ...person("tokijii", "Toki-jii (2026-11-01 新版), a thin old former prisoner: long white beard, kind tired eyes, a patched brown robe, a walking stick, a broken shackle on one ankle."),
 ];
 
-export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS, ...CAST2];
+// バトルの構え（右の敵に向かう横向きの絵）。1枚の絵を曲げるかわりに、動きごとの絵を切りかえて動かす
+const SAME = "The exact same character, face, outfit, colors and art style as the reference image. The whole body including the feet is visible, about the same size on the canvas as the reference.";
+const BATTLE_ATTACK = {
+  hero: "Pose: a powerful forward sword slash toward the RIGHT, lunging step, body in side view facing right, sword swung forward, cape sweeping behind.",
+  muki: "Pose: swinging the battle axe forward in a heavy downward strike toward the RIGHT, wide lunging stance, side view facing right.",
+  rumi: "Pose: casting a fire spell, one arm thrust forward toward the RIGHT with a bright flame in the open palm, side view facing right, cape fluttering.",
+  fumi: "Pose: casting magic, an open book held in one hand and the other hand extended toward the RIGHT releasing glowing light, side view facing right.",
+  zeni: "Pose: throwing a handful of gold coins forward toward the RIGHT with one arm, abacus in the other hand, side view facing right, coat flaring.",
+};
+const BATTLE_JUMP = {
+  caster: "Pose: jumping lightly into the air toward the RIGHT, knees bent, both arms raised gathering magic power, side view facing right.",
+  fighter: "Pose: leaping high into the air toward the RIGHT, knees tucked, weapon raised overhead ready to strike down, side view facing right.",
+};
+const battle = (id, kind, attack) => [
+  { id: `battle/${id}_ready`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} Pose: battle-ready stance, body turned three-quarters to the RIGHT facing an enemy on the right side, knees slightly bent, weapon or hands held ready.` },
+  { id: `battle/${id}_run`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} Pose: running fast toward the RIGHT, side view facing right, mid-stride with one leg forward, arms swinging, hair and clothes flowing behind.` },
+  { id: `battle/${id}_attack`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} ${BATTLE_ATTACK[attack]}` },
+  { id: `battle/${id}_jump`, kind: "sprite", ratio: "3:4", ref: `cast2/${id}`, prompt: `${MANGA} ${SAME} ${BATTLE_JUMP[kind]}` },
+];
+export const BATTLE_POSES = ["ready", "run", "attack", "jump"];
+export const BATTLE = [
+  ...["hero_1", "hero_2", "hero_3", "hero_4", "hero_5", "hero_6"].flatMap((id) => battle(id, "fighter", "hero")),
+  ...battle("muki", "fighter", "muki"),
+  ...battle("rumi", "caster", "rumi"),
+  ...battle("fumi", "caster", "fumi"),
+  ...battle("zeni", "caster", "zeni"),
+];
+
+export const ALL = [...PETS, ...MONSTERS, ...BOSSES, ...CAST, ...BACKGROUNDS, ...CAST2, ...BATTLE];
