@@ -817,7 +817,7 @@ body.theater-open { overflow: hidden; }
 :root[data-theme="dark"] .board-cork { background-color: #6e4f2f; }
 
 /* バトル（章ボスだけの画面） */
-.boss-view .boss-card { padding: 0; overflow: hidden; }
+.boss-view .boss-card { padding: 0; overflow: hidden; flex: none; }
 .boss-view .boss-card > .sub:first-child { padding: 10px 14px 0; }
 .boss-view .boss-card > .bs { padding: 6px 0 0; align-self: stretch; }
 .boss-view .bs-stage { height: auto; aspect-ratio: 4 / 3; max-height: 52vh; border-radius: 0; }
