@@ -5,6 +5,7 @@ import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWei
 import { SLOT_ORDER, slotOf, itemName, rarityOf, isCrit, RARITY_EFFECT } from "./item-config.js";
 import { questBoard, epilogueCount } from "./guild-config.js";
 import { getBody, postBody, muscleHits, MUSCLE_TYPE } from "./muscle.js";
+import { pushReady, saveSubscription, pushAll, runAlerts, jstClock } from "./push.js";
 import { RANKS, WEAK_BONUS, BALANCE_BONUS, PET_BONUS, STAR_BONUS, STAT_EXP, STAT_RATE, STAT_MAX, familyOf, starsOf } from "./battle-config.js";
 
 const NOTION_BASE = "https://api.notion.com/v1";
@@ -40,6 +41,11 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
 
     try {
+      // 通知を受けた端末（sw.js）が文言を知るための窓口。合言葉なしで読めるのは、きょうのアラートの習慣名だけ
+      if (url.pathname === "/api/push/alert" && request.method === "GET") {
+        const raw = env.PUSH ? await env.PUSH.get(`alert:${jstClock().date}`) : null;
+        return json(raw ? JSON.parse(raw) : {});
+      }
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います" }, 401);
       const notion = notionClient(env);
@@ -102,6 +108,19 @@ export default {
         const body = await readJson(request);
         return json(await checkBody(notion, env, body));
       }
+      // 朝のアラート（Web Push）：公開鍵・端末の登録・ためし送り
+      if (url.pathname === "/api/push/key" && request.method === "GET") {
+        return json({ ready: pushReady(env), key: env.VAPID_PUBLIC_KEY || null });
+      }
+      if (url.pathname === "/api/push/subscribe" && request.method === "POST") {
+        if (!pushReady(env)) throw httpError(503, "通知の設定がまだです");
+        return json(await saveSubscription(env, (await readJson(request)).subscription));
+      }
+      if (url.pathname === "/api/push/test" && request.method === "POST") {
+        if (!pushReady(env)) throw httpError(503, "通知の設定がまだです");
+        await env.PUSH.put(`alert:${jstClock().date}`, JSON.stringify({ habit: "（ためし）通知のテスト", at: jstClock().hm }), { expirationTtl: 86400 });
+        return json({ sent: await pushAll(env) });
+      }
       if (url.pathname === "/api/aibou" && request.method === "GET") {
         return json(await getAibou(notion, env));
       }
@@ -117,6 +136,19 @@ export default {
       const status = err.status || 500;
       return json({ error: err.publicMessage || "サーバーでエラーが起きました" }, status);
     }
+  },
+
+  // 決まった時刻（wrangler.toml の crons）に起きて、朝のアラートを調べる
+  async scheduled(event, env, ctx) {
+    if (!env.NOTION_TOKEN || !env.DATA_SOURCE_ID) return;
+    const notion = notionClient(env);
+    ctx.waitUntil(runAlerts(env, {
+      now: new Date(event.scheduledTime || Date.now()),
+      isDone: async (habit, date) => {
+        const row = await findRow(notion, env, date);
+        return !!row?.properties?.[habit]?.checkbox;
+      },
+    }));
   },
 };
 

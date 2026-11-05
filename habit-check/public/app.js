@@ -431,6 +431,47 @@ function setupBadgeButton() {
   };
 }
 
+// 朝のアラート（浴室乾燥など）：この端末を通知先に登録する。登録ずみなら「ためしに送る」
+function urlB64ToBytes(b64) {
+  const s = atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64.length + 3) % 4));
+  return Uint8Array.from(s, (c) => c.charCodeAt(0));
+}
+
+async function setupPushButton() {
+  const btn = $("push-btn");
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+  let info;
+  try { info = await api("GET", "/api/push/key"); } catch { return; }
+  if (!info.ready || !info.key) return;
+  const reg = await navigator.serviceWorker.ready;
+  const subscribed = !!(await reg.pushManager.getSubscription().catch(() => null));
+  btn.hidden = false;
+  btn.textContent = subscribed && Notification.permission === "granted" ? "朝のアラートを ためしに送る" : "朝のアラートを受け取る";
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      if (Notification.permission !== "granted") {
+        const res = await Notification.requestPermission();
+        if (res !== "granted") throw new Error("通知が許可されませんでした（設定から許可できます）");
+      }
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(info.key) });
+      await api("POST", "/api/push/subscribe", { subscription: sub.toJSON() });
+      if (btn.textContent.includes("ためし")) {
+        const { sent } = await api("POST", "/api/push/test", {});
+        toast(sent ? "ためしの通知を送りました" : "送れませんでした。もう一度登録してください", !sent);
+      } else {
+        toast("この端末に、朝のアラートを送ります");
+        btn.textContent = "朝のアラートを ためしに送る";
+      }
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
 function saveNote(row, input, save) {
   const value = input.value;
   save.disabled = true;
@@ -1790,6 +1831,7 @@ function start() {
   setupBadgeButton();
   show();
   if (!memoryKey) return;
+  setupPushButton();
   loadDay();
   loadPlayer();
 }

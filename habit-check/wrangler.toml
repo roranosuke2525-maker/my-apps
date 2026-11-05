@@ -7,6 +7,14 @@ directory = "./public"
 binding = "ASSETS"
 run_worker_first = ["/api/*"]
 
+# 朝のアラート（Web Push）：購読した端末を覚える KV と、起きる時刻（UTC。22:45 UTC = 7:45 JST）。アラートの中身は src/push.js
+[[kv_namespaces]]
+binding = "PUSH"
+id = "56205bb443734577825f7116cba60b6f"
+
+[triggers]
+crons = ["45 22 * * *"]
+
 [vars]
 # DB_習慣チェック のデータソースID（IDだけでは読み書きできない。権限はインテグレーション側）
 DATA_SOURCE_ID = "e730b8b2-bb41-491d-9382-a296c40e6deb"
@@ -29,7 +37,11 @@ MUSCLE_DS_ID = "6c75e86c-9ac2-4313-a2eb-c4b4ee825eac"  # DB_筋肉チェック�
 BODY_DS_ID = "1730d2d3-32fc-45e9-944e-fe9b801909a5"    # DB_体組成ログ（体重・体脂肪率を判定の参考に。読むだけ・なくても動く）
 # MUSCLE_MODEL = "claude-haiku-5-5"                    # 安くしたいとき（既定は claude-sonnet-5-5）
 
+# 朝のアラートの VAPID 公開鍵（公開してよい）。秘密鍵は secret の VAPID_PRIVATE_JWK
+VAPID_PUBLIC_KEY = "BK5MfdgfFdun5VsDcCYHLPLCE8_qYUU6OKHNP1Ym1nVX45uSFCu8k-RlOwM26nlYwLTnyeO2CawRkS8JP2sMilw"
+
 # 秘密の値は wrangler secret put で入れる（このファイルには書かない）
 #   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
 #   APP_KEY      : アプリを開くときの合言葉（16文字以上）
 #   ANTHROPIC_API_KEY : Claude の API キー（からだチェックの判定。なければからだチェックだけ使えない）
+#   VAPID_PRIVATE_JWK : 朝のアラートの VAPID 秘密鍵（JWK の JSON。なければアラートだけ使えない）
