@@ -252,6 +252,7 @@ async function loadDay({ quiet = false } = {}) {
 
 // 時間帯ごとのまとまり。時間帯の順は SLOTS、中の並びは届いた順（アーティファクト版は Notion のビューの順）で、◆必ず を先に
 const DAY_COLS = 3;
+let dayCols = DAY_COLS; // 習慣が多くて入りきらないときは4列にする（fitHabits）
 
 function slotGroups() {
   return SLOTS.map(([slot, label]) => ({
@@ -261,7 +262,8 @@ function slotGroups() {
   })).filter((g) => g.list.length);
 }
 
-function renderDay() {
+function renderDay(keepCols = false) {
+  if (keepCols !== true) dayCols = DAY_COLS;
   $("date-label").textContent = dateLabel(state.date);
   $("go-today").hidden = state.date === todayJst();
   $("next").disabled = daysFromToday(state.date) >= 0;
@@ -287,7 +289,7 @@ function renderDay() {
   for (const g of slotGroups()) {
     const last = lines.at(-1);
     const n = g.list.length;
-    if (n < DAY_COLS && last && last.every((x) => x.list.length < DAY_COLS) && last.reduce((a, x) => a + x.list.length, n) <= DAY_COLS) last.push(g);
+    if (n < dayCols && last && last.every((x) => x.list.length < dayCols) && last.reduce((a, x) => a + x.list.length, n) <= dayCols) last.push(g);
     else lines.push([g]);
   }
   const slotEl = (g, cols) => h("div", { class: `slot${g.slot === now ? " now" : ""}`, style: `--cols:${cols};flex-grow:${cols}` },
@@ -299,9 +301,9 @@ function renderDay() {
     h("div", { class: "slot-tiles" }, g.list.map((x) => habitTile(x, row, canEdit))),
   );
   const groups = lines.map((line) => {
-    const rows = Math.max(...line.map((g) => Math.ceil(g.list.length / DAY_COLS)));
+    const rows = Math.max(...line.map((g) => Math.ceil(g.list.length / dayCols)));
     return h("div", { class: "slot-line", style: `--rows:${rows}` },
-      line.length === 1 ? slotEl(line[0], DAY_COLS) : line.map((g) => slotEl(g, g.list.length)));
+      line.length === 1 ? slotEl(line[0], dayCols) : line.map((g) => slotEl(g, g.list.length)));
   });
   swap(body, [
     statusCard(row),
@@ -312,21 +314,30 @@ function renderDay() {
 }
 
 // 1画面に収めるため、タイル1行に使える高さで詰め方を変える：ふつう → compact（説明を隠す）→ tight（名前1行）
+// それでも入らなければ4列にして、さらに詰める（ultra）。スクロールしなくても全部見えるようにする
 const FIT_FULL = 44;
 const FIT_COMPACT = 32;
+const FIT_TIGHT = 26;
 function fitHabits() {
   const box = document.querySelector("#day-body .habits");
   if (!box) return;
-  box.classList.remove("compact", "tight");
+  box.classList.remove("compact", "tight", "ultra");
   const lines = [...box.querySelectorAll(".slot-line")];
   const rows = lines.reduce((a, l) => a + Number(l.style.getPropertyValue("--rows") || 1), 0);
   if (!rows) return;
   const gaps = (lines.length - 1) * 6 + lines.reduce((a, l) => a + (Number(l.style.getPropertyValue("--rows") || 1) - 1) * 4, 0);
   const per = (box.clientHeight - gaps) / rows;
-  if (per < FIT_COMPACT) box.classList.add("compact", "tight");
+  if (per < FIT_TIGHT && dayCols === DAY_COLS) {
+    dayCols = 4;
+    return renderDay(true);
+  }
+  if (per < FIT_TIGHT) box.classList.add("compact", "tight", "ultra");
+  else if (per < FIT_COMPACT) box.classList.add("compact", "tight");
   else if (per < FIT_FULL) box.classList.add("compact");
 }
-window.addEventListener("resize", () => { if (state.view === "habit" && state.tab === "day") fitHabits(); });
+window.addEventListener("resize", () => {
+  if (state.view === "habit" && state.tab === "day") renderDay();
+});
 
 function statusCard(row) {
   const scored = state.habits.filter((x) => counts(x, state.date));

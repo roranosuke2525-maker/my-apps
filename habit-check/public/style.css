@@ -871,7 +871,8 @@ body.theater-open { overflow: hidden; }
 .bs-splash::before, .bs-splash::after { content: ""; position: absolute; left: 0; right: 0; height: 13%; background: #000; z-index: 3; animation: bs-sp-bar 0.35s cubic-bezier(.2, .9, .3, 1) both; }
 .bs-splash::before { top: 0; border-bottom: 2px solid var(--c); }
 .bs-splash::after { bottom: 0; border-top: 2px solid var(--c); }
-.bs-splash-img { position: absolute; inset: -4%; background-size: cover; background-position: 35% 50%; animation: bs-sp-img 1.55s cubic-bezier(.15, .8, .3, 1) both; }
+/* 一枚絵は切らずに全体を見せる（16:9 の絵が、上下の黒い帯のあいだにちょうど収まる） */
+.bs-splash-img { position: absolute; inset: 0; background-size: contain; background-repeat: no-repeat; background-position: center; animation: bs-sp-img 1.55s cubic-bezier(.15, .8, .3, 1) both; }
 .bs-splash-shine { position: absolute; inset: 0; z-index: 2; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%); background-size: 260% 100%; animation: bs-sp-shine 0.9s ease-out 0.25s both; mix-blend-mode: screen; }
 .bs-splash-text { position: absolute; right: 5%; bottom: 16%; z-index: 4; text-align: right; color: #fff; animation: bs-sp-text 0.5s cubic-bezier(.2, 1.3, .4, 1) 0.3s both; }
 .bs-splash-text span { display: block; font-size: 13px; font-weight: 800; letter-spacing: 0.3em; color: var(--c); text-shadow: 0 0 4px #000, 0 0 8px #000, 0 1px 2px #000; }
@@ -879,7 +880,15 @@ body.theater-open { overflow: hidden; }
 .bs-splash.out { animation: bs-sp-out 0.2s ease-in forwards; }
 @keyframes bs-sp-in { from { opacity: 0; } }
 @keyframes bs-sp-bar { from { transform: scaleY(3.5); } }
-@keyframes bs-sp-img { from { transform: translateX(-18%) skewX(-8deg); opacity: 0; filter: brightness(2.2); } 30% { opacity: 1; filter: none; } to { transform: translateX(0) scale(1.06); } }
+@keyframes bs-sp-img { from { transform: translateX(-18%) skewX(-8deg); opacity: 0; filter: brightness(2.2); } 30% { opacity: 1; filter: none; } to { transform: translateX(0) scale(1.03); } }
 @keyframes bs-sp-shine { from { background-position: 120% 0; } to { background-position: -40% 0; } }
 @keyframes bs-sp-text { from { transform: translateX(40%) skewX(-12deg); opacity: 0; } }
 @keyframes bs-sp-out { to { opacity: 0; transform: scale(1.04); filter: brightness(2.5); } }
+
+/* 習慣が多い日：4列・最小の高さなしで、必ず1画面に収める */
+.habits.ultra { overflow: hidden; }
+.habits.ultra .slot-line { min-height: 0; }
+.habits.ultra .habit { padding: 1px 4px; gap: 4px; min-height: 0; }
+.habits.ultra .habit .name { font-size: 10.5px; line-height: 1.1; }
+.habits.ultra .habit .box { width: 13px; height: 13px; }
+.habits.ultra .slot-label small { font-size: 9px; }

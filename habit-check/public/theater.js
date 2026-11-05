@@ -35,9 +35,6 @@ const STAGE_CAST = {
   百回隊: { img: BOSS_IMAGES.百回隊の総攻撃, h: 0.7, boss: true },
 };
 // 戦いの場面（WARNING のあと）で、構えの絵に切り替わる人
-const FIGHTERS = new Set(["さとし", "ムキ", "フミ", "ゼニ", "シロガネ"]);
-const BATTLE_STEPS = 14;
-const SALTY = /^(は？|はあ？|ふーん|へえ|なにそれ|で？|知らない|いや|ちょっと|……)/;
 const HERO_KEYS = { みならい: "hero_1", かけだし: "hero_2", いちにんまえ: "hero_3", ベテラン: "hero_4", たつじん: "hero_5", でんせつ: "hero_6" };
 const EP1_HERO = { 0: "みならい", 1: "みならい", 2: "かけだし", 3: "かけだし", 4: "いちにんまえ", 5: "ベテラン", 6: "ベテラン", 7: "たつじん", 8: "たつじん", 9: "でんせつ" };
 const PET_HEIGHT = { egg: 0.26, baby: 0.28, child: 0.36, adult: 0.5 };
@@ -109,7 +106,6 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
   let auto = false;
   let autoTimer = null;
   let ended = false;
-  let battleLeft = 0; // WARNING のあと、しばらくは戦いの構え
   const onStage = []; // { who, el, slot, last }
   const segSteps = []; // 背景ごとの、その背景で進んだ段の数（横に流す量）
   const bgAt = []; // 各段の背景の番号（もどるとき用）
@@ -221,15 +217,9 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
   }
 
   // 口パク・まばたき・手ぶりの差分（あるものだけ）。表情の差分を出しているときは、その表情の口の差分
-  function framesOf(c, emo) {
-    if (!c.key) return {};
-    const has = (v) => CAST_VARIANTS[c.key]?.includes(v);
-    const face = emo && has(emo) ? `${c.key}_${emo}` : c.key;
-    return {
-      talk: has(`${face.slice(c.key.length + 1) ? `${face.slice(c.key.length + 1)}_talk` : "talk"}`) ? IMG(`cast2/${face}_talk`) : null,
-      blink: face === c.key && has("blink") ? IMG(`cast2/${c.key}_blink`) : null,
-      gesture: face === c.key && has("gesture") ? IMG(`cast2/${c.key}_gesture`) : null,
-    };
+  // 口パク・まばたきの差分は使わない（顔だけが変わって不自然に見えるため）
+  function framesOf() {
+    return {};
   }
 
   function setFace(a, emo) {
@@ -273,7 +263,6 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
         glr.add(el, img, { float: c.float, boss: c.boss, rig: false, still: true, chest: c.key === "fumi" ? [0.5, 0.67] : null });
         glr.walk(el, c.boss ? 0 : 700); // 歩いて入ってくる
         glr.frames(el, framesOf(c, emo));
-        if (c.key) glr.preload((CAST_VARIANTS[c.key] || []).filter((v) => /talk|blink|gesture/.test(v)).map((v) => IMG(`cast2/${c.key}_${v}`)));
       } else {
         el.classList.add("walk");
         setTimeout(() => el.classList.remove("walk"), 700);
@@ -385,6 +374,8 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
   function render(k, { instant = false } = {}) {
     const s = script[k];
     progress.style.width = `${((k + 1) / script.length) * 100}%`;
+    // 場面（背景）が変わったら、前の場面の人はいったん下がる（その場にいない人が残らないように）
+    if (k > 0 && bgAt[k] !== bgAt[k - 1] && !instant) clearStage();
     setBg(bgAt[k], instant);
     pan(k);
     bubbles.replaceChildren();
@@ -415,16 +406,12 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
         stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
         const boss = s.text.match(/(?:出現|ラスボス)[：:]\s*(.+)$/)?.[1]?.trim();
         if (boss && castOf(boss)) bringOn(boss);
-        // 仲間は構える
-        battleLeft = BATTLE_STEPS;
-        for (const a of onStage) if (FIGHTERS.has(a.who)) setFace(a, "battle");
+        // （構えの差分は使わない：表情は台本の指定だけで変える）
       }
       return;
     }
     if (s.kind === "narr") {
-      // 地の文に出てきた人物を、だまって舞台に上げる
-      const who = subjectOf(s.text);
-      if (who && who !== "さとし" && castOf(who)) bringOn(who, { quiet: true });
+      // 地の文に名前が出ただけの人は舞台に上げない（その場にいない人が出てしまうため）。舞台に立つのは話した人だけ
       for (const x of onStage) x.el.classList.remove("speaking");
       facing(null);
       capName.textContent = "";
@@ -433,10 +420,10 @@ export function openTheater({ chapter, blocks, labels, bgs: bgList, pet, hero, o
       return;
     }
     // せりふ：立ち絵の上に吹き出し
-    if (battleLeft > 0) battleLeft--;
+
     // 妻は、変なことを言われたときの短い返し（「は？」「なにそれ」など）で塩対応の顔
-    if (s.who === "妻" && !s.emo && SALTY.test(s.text)) s.emo = "angry";
-    const actor = bringOn(s.who, { emo: s.emo || (battleLeft > 0 && FIGHTERS.has(s.who) ? "battle" : null) });
+    // 表情は台本の指定（場面ごとに選んだもの）だけ。指定がなければ ふつうの顔
+    const actor = bringOn(s.who, { emo: s.emo || null });
     if (!actor) for (const x of onStage) x.el.classList.remove("speaking");
     gesture(actor, s.emo);
     // 長いせりふや「！」のときは、手ぶりを交えて話す

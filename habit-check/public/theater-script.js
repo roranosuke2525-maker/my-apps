@@ -70,11 +70,12 @@ function recent(paras, i) {
 }
 
 // せりふの表情：せりふそのものと、同じ段落の地の文（「…」ルミは笑った。など）から決める
+// 台本で表情を選んでいない話だけに使う。大げさにならないよう、はっきりした手がかりのときだけ
 const EMOS = [
-  ["surprised", /^(え[？?！!]|えっ|えー|な、|なっ|ひゃ|ひっ|うそ|まさか)|！？|!\?|[？?]！/, /目を丸く|驚|固まっ|息を呑|ぎょっと|飛び上が|びくっ/],
-  ["angry", /ふざけ|てめえ|黙れ|許さ|やめろ|貴様|返せ|うるせえ|ちがう！|違う！|！！/, /怒鳴|叫ん|にらみ|睨|歯を食いしば|拳を握|声を荒/],
-  ["sad", /ごめん|すまな|すみません|つかれ|疲れ|こわかった|怖|さみし|寂し|いなくな|消え/, /泣|涙|震え|うつむ|うなだれ|唇を噛|かすれ|小さく言/],
-  ["smile", /やった|よかった|ありがと|えらい|すごい|がっはっは|あはは|ふふ|おはよー|おめでと|かわいい|うまいうまい/, /笑|ほほえ|微笑|にっこり|嬉し|うれし|頬をゆる/],
+  ["surprised", /^$/, /目を丸く|息を呑|ぎょっと|飛び上が/],
+  ["angry", /^$/, /怒鳴|声を荒|歯を食いしば/],
+  ["sad", /^$/, /泣|涙|うなだれ/],
+  ["smile", /がっはっは|あはは/, /笑|ほほえ|微笑|にっこり/],
 ];
 export function emoOf(line, narr = "") {
   for (const [emo, say, around] of EMOS) if (around.test(narr)) return emo;
@@ -106,6 +107,7 @@ export const SPEAKER_CODES = {
   カ: "カゾエ", ゴ: "ゴウ", 妻: "妻", 子: "小さな勇者", ト: "トキ爺", あ: "あいぼう", 系: "SYSTEM",
 };
 const hasSay = (b) => b.type === "p" && b.text.includes("「");
+const EMO_NAMES = new Set(["smile", "angry", "sad", "surprised"]);
 
 export function toScript(blocks, labels) {
   const out = [];
@@ -138,13 +140,18 @@ export function toScript(blocks, labels) {
     if (useGiven && hasSay(b)) {
       const token = given[sayIndex++];
       if (token === "-") return out.push({ kind: "narr", text: b.text, fx: fxOf(b.text) });
-      const whos = token.split("/").map((t) => SPEAKER_CODES[t] || t);
+      // 「ル:smile」のように、話し手のあとに場面ごとに選んだ表情（なければ ふつう）
+      const whos = token.split("/").map((t) => {
+        const [code, emo] = t.split(":");
+        return { who: SPEAKER_CODES[code] || code, emo: EMO_NAMES.has(emo) ? emo : null };
+      });
       let k = 0;
       for (const p of b.parts) {
-        if (p.say) out.push({ kind: "say", who: whos[Math.min(k++, whos.length - 1)], text: p.text, fx: fxOf(p.text), emo: emoOf(p.text, mood) });
+        const w = whos[Math.min(k, whos.length - 1)];
+        if (p.say) { k++; out.push({ kind: "say", who: w.who, text: p.text, fx: fxOf(p.text), emo: w.emo }); }
         else out.push({ kind: "narr", text: p.text, fx: fxOf(p.text), aside: true });
       }
-      return remember(whos.at(-1));
+      return remember(whos.at(-1).who);
     }
     if (!says.length) {
       // 地の文だけ。次の段落がせりふだけなら、ここに出てきた人物がしゃべる手がかりになる
