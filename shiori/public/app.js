@@ -204,7 +204,7 @@ async function lookupBook() {
       list.hidden = true;
       note.textContent = `${b.year ? `${b.year}年` : ""}${b.isbn ? ` ISBN ${b.isbn}` : ""}`.trim();
     } },
-      b.cover ? el("img", { src: b.cover, alt: "", loading: "lazy" }) : el("span", { class: "no-cover" }, "表紙なし"),
+      b.cover ? el("img", { src: b.cover, alt: "", loading: "lazy" }) : el("span", { class: "no-cover" }, "なし"),
       el("span", {},
         el("div", { class: "c-title" }, b.volume ? `${b.title} ${b.volume}` : b.title),
         el("div", { class: "c-meta" }, [b.author, b.publisher, b.year && `${b.year}年`].filter(Boolean).join(" ・ ")))))));
