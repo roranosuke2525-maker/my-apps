@@ -49,6 +49,16 @@
       </div>
       <form id="add-book" class="card form" hidden>
         <label>書籍名<input id="nb-title" required maxlength="200" autocomplete="off" placeholder="例：月と六ペンス"></label>
+        <div class="actions left">
+          <button type="button" id="nb-lookup" class="btn ghost small">Web で探して埋める</button>
+          <span id="nb-lookup-note" class="note"></span>
+        </div>
+        <ol id="nb-results" class="candidates" hidden></ol>
+        <div id="nb-cover-wrap" class="cover-pick" hidden>
+          <img id="nb-cover" alt="表紙" width="48">
+          <span class="note">表紙も一緒に入れます</span>
+          <button type="button" id="nb-cover-clear" class="linkish">表紙は入れない</button>
+        </div>
         <div class="row2">
           <label>著者名<input id="nb-author" list="authors" maxlength="60" autocomplete="off" placeholder="例：サマセット•モーム"></label>
           <label>出版社<input id="nb-publisher" list="publishers" maxlength="60" autocomplete="off" placeholder="例：新潮文庫"></label>
@@ -120,6 +130,7 @@
       </form>
       <div class="dict-tools">
         <input id="dict-q" type="search" placeholder="さがす" aria-label="辞典をさがす" autocomplete="off">
+        <button type="button" id="dict-web" class="btn ghost small" title="入れた言葉を、この本の名前と一緒に Web で検索">Web で</button>
         <label class="upto">p.<input id="dict-upto" inputmode="numeric" placeholder="—" aria-label="このページまでだけ見る">まで</label>
       </div>
       <div id="dict-filter" class="chips" aria-label="種別で絞る"></div>

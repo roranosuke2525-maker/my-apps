@@ -53,6 +53,14 @@ function hl(id, bookId, quote, page, more = {}) {
   });
 }
 
+const NDL_XML = `<rss><channel>
+<item><title>白鳥とコウモリ</title><dc:title>白鳥とコウモリ</dc:title><dc:creator>東野, 圭吾, 1958-2026</dc:creator><dcndl:volume>上</dcndl:volume><dcndl:seriesTitle>幻冬舎文庫 ; ひ-17-3</dcndl:seriesTitle><dc:publisher>幻冬舎</dc:publisher><dcterms:issued>2024.4</dcterms:issued><dc:identifier xsi:type="dcndl:TOHANMARCNO">34584545</dc:identifier><dc:identifier xsi:type="dcndl:ISBN">978-4-344-43370-0</dc:identifier></item>
+<item><title>白鳥とコウモリ</title><dc:title>白鳥とコウモリ</dc:title><dc:publisher>松竹事業推進部</dc:publisher><dcterms:issued>2026.9</dcterms:issued><dc:identifier xsi:type="dcndl:JPNO">24302830</dc:identifier></item>
+<item><dc:title>地下室の手記</dc:title><dc:creator>Dostoyevsky, Fyodor, 1821-1881</dc:creator><dc:creator>江川, 卓, 1927-2001 訳</dc:creator><dc:publisher>新潮社</dc:publisher><dcndl:seriesTitle>新潮文庫</dcndl:seriesTitle><dcterms:issued>1969</dcterms:issued><dc:identifier xsi:type="dcndl:ISBN">9784102010112</dc:identifier></item>
+<item><dc:title>白鳥とコウモリ</dc:title><dc:creator>東野, 圭吾, 1958-2026</dc:creator><dcndl:volume>上</dcndl:volume><dc:identifier xsi:type="dcndl:ISBN">978-4-344-43370-0</dc:identifier></item>
+<item><dc:title>ほか &amp; 本</dc:title><dc:creator>作家 著</dc:creator><dc:publisher>見本社</dc:publisher><dc:identifier xsi:type="dcndl:ISBN">978-4-00-000000-0</dc:identifier></item>
+</channel></rss>`;
+
 let pages;
 let calls;
 let next;
@@ -80,6 +88,19 @@ beforeEach(() => {
   children[B3] = [{ type: "child_page", id: hex(33), child_page: { title: "子ページだけ" } }];
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
+    // 本を Web で探す：国立国会図書館の書誌と表紙の画像は偽物で答える
+    if (u.hostname === "ndlsearch.ndl.go.jp") {
+      calls.push({ method: "GET", path: u.pathname, body: Object.fromEntries(u.searchParams), headers: {} });
+      return new Response(NDL_XML, { status: 200, headers: { "content-type": "application/xml" } });
+    }
+    if (u.hostname === "images-na.ssl-images-amazon.com") {
+      const hit = u.pathname.includes("/434443370X.");
+      return new Response("", { status: 200, headers: { "content-type": hit ? "image/jpeg" : "image/gif" } });
+    }
+    if (u.hostname === "books.google.com") {
+      const hit = u.search.includes("ISBN9784102010112");
+      return new Response("", { status: 200, headers: { "content-type": hit ? "image/jpeg" : "image/png" } });
+    }
     const path = u.pathname.replace(/^\/v1/, "");
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push({ method: init.method, path, body, headers: init.headers });
@@ -141,7 +162,7 @@ test("本の一覧：読書メモ_DB の行と著者・出版社の選択肢", a
   const by = Object.fromEntries(data.books.map((b) => [b.title, b]));
   assert.deepEqual(by["見本の本"], {
     id: B1, url: `https://www.notion.so/${B1}`, title: "見本の本", author: "作家　一", publisher: "", status: "読中", finished: null, rating: "", review: "",
-    meter: false, notebooklm: false, cover: "https://example.test/c.jpg", highlightCount: 1, highlightMore: false, legacyCount: 0, termCount: 0, termMore: false,
+    meter: false, notebooklm: false, cover: "https://example.test/c.jpg", highlightCount: 1, highlightMore: false, legacyCount: 0, termCount: 0, termMore: false, research: false,
   });
   assert.equal(by["読んだ本"].finished, "2026-09-01");
   assert.equal(by["読んだ本"].meter, true);
@@ -284,4 +305,33 @@ test("読書辞典：足す・直す・消す。種別とページを確かめ�
   assert.equal((await api("PATCH", `/api/terms/${hex(21)}`, { memo: "x" })).status, 403, "ハイライトの行は辞典として書き換えない");
   assert.equal((await api("DELETE", `/api/terms/${B1}`)).status, 403, "本は消さない");
   assert.equal(writes().length, before);
+});
+
+test("本を Web で探す：ISBN のある本だけ、重複なし、著者は「姓　名」、文庫は出版社に、表紙は Amazon→Google の順", async () => {
+  const { status, data } = await api("GET", "/api/lookup?q=%E7%99%BD%E9%B3%A5%E3%81%A8%E3%82%B3%E3%82%A6%E3%83%A2%E3%83%AA");
+  assert.equal(status, 200);
+  assert.deepEqual(data.items, [
+    { title: "白鳥とコウモリ", volume: "上", author: "東野　圭吾", publisher: "幻冬舎文庫", series: "幻冬舎文庫", year: "2024", isbn: "9784344433700", cover: "https://images-na.ssl-images-amazon.com/images/P/434443370X.09.LZZZZZZZ.jpg" },
+    { title: "地下室の手記", volume: "", author: "Dostoyevsky, Fyodor", publisher: "新潮文庫", series: "新潮文庫", year: "1969", isbn: "9784102010112", cover: "https://books.google.com/books/content?vid=ISBN9784102010112&printsec=frontcover&img=1&zoom=1" },
+    { title: "ほか & 本", volume: "", author: "作家", publisher: "見本社", series: "", year: "", isbn: "9784000000000", cover: "" },
+  ]);
+  assert.equal(calls.find((c) => c.path === "/api/opensearch").body.title, "白鳥とコウモリ");
+  assert.equal((await api("GET", "/api/lookup?q=%E6%9C%AC")).status, 400, "1文字では探さない");
+  assert.equal(writes().length, 0);
+});
+
+test("本を足すとき表紙も入れられる。背景を調べる印を付け外しできる", async () => {
+  const add = await api("POST", "/api/books", { title: "新しい本", cover: "https://images-na.ssl-images-amazon.com/images/P/434443370X.09.LZZZZZZZ.jpg" });
+  assert.equal(add.status, 200);
+  assert.deepEqual(writes()[0].body.properties["ファイル&メディア"], { files: [{ type: "external", name: "cover.jpg", external: { url: "https://images-na.ssl-images-amazon.com/images/P/434443370X.09.LZZZZZZZ.jpg" } }] });
+  assert.equal(add.data.book.cover, "https://images-na.ssl-images-amazon.com/images/P/434443370X.09.LZZZZZZZ.jpg");
+  assert.equal((await api("POST", "/api/books", { title: "b", cover: "http://insecure.test/x.jpg" })).status, 400);
+  assert.equal((await api("POST", "/api/books", { title: "c", cover: "" })).status, 200);
+  assert.ok(!("ファイル&メディア" in writes()[1].body.properties));
+
+  const on = await api("PATCH", `/api/books/${B1}`, { research: true });
+  assert.deepEqual(writes()[2].body.properties, { "🔍 背景を調べる": { checkbox: true } });
+  assert.equal(on.data.book.research, true);
+  const off = await api("PATCH", `/api/books/${B1}`, { research: false });
+  assert.equal(off.data.book.research, false);
 });

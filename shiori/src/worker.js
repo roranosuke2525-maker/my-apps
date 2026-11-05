@@ -9,6 +9,9 @@ const RATINGS = ["★★★★★", "★★★★", "★★★", "★★", "★"
 const SOURCES = ["📷 付箋写真", "📱 Kindle", "✍️ 手入力"];
 const KINDS = ["📍 舞台", "🌿 植物", "👥 人物・距離感", "🍽 食・道具", "📖 言葉", "✦ その他"];
 const TERM_MAX = 100;
+const RESEARCH_PROP = "🔍 背景を調べる"; // 読書メモ_DB のチェック。付けると次の「読書辞典の下準備」が背景を調べる
+const LOOKUP_MAX = 6;
+const NDL_BASE = "https://ndlsearch.ndl.go.jp/api/opensearch";
 const DESC_MAX = 1000;
 const TITLE_MAX = 200;
 const QUOTE_MAX = 1900; // Notion のタイトルは 2000 文字まで
@@ -38,6 +41,7 @@ export default {
       const term = p.match(/^\/api\/terms\/([0-9a-f-]{32,36})$/i);
 
       if (p === "/api/books" && m === "GET") return json(await getBooks(notion, env));
+      if (p === "/api/lookup" && m === "GET") return json(await lookupBooks(url.searchParams.get("q")));
       if (p === "/api/books" && m === "POST") return json(await addBook(notion, env, await readJson(request)));
       if (book && book[2] && m === "GET") return json(await getHighlights(notion, env, book[1]));
       if (book && !book[2] && m === "PATCH") return json(await updateBook(notion, env, book[1], await readJson(request)));
@@ -149,6 +153,7 @@ function bookOf(page) {
     legacyCount: relIds(p[LEGACY_REL]).length,
     termCount: relIds(p["読書辞典"]).length,
     termMore: !!p["読書辞典"]?.has_more,
+    research: !!p[RESEARCH_PROP]?.checkbox,
   };
 }
 
@@ -203,6 +208,11 @@ async function addBook(notion, env, body) {
   const properties = { 書籍名: { title: rich(title) }, ステータス: { status: { name: status } } };
   if (author) properties["著者名"] = { select: { name: author.replace(/,/g, "，") } };
   if (publisher) properties["出版社"] = { select: { name: publisher.replace(/,/g, "，") } };
+  const cover = clean(body?.cover, 500, "表紙のURL");
+  if (cover) {
+    if (!/^https:\/\/[^\s"<>]+$/.test(cover)) throw httpError(400, "表紙のURLが正しくありません");
+    properties["ファイル&メディア"] = { files: [{ type: "external", name: "cover.jpg", external: { url: cover } }] };
+  }
   const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.BOOK_DS_ID }, properties });
   return { book: bookOf(page) };
 }
@@ -226,9 +236,74 @@ async function updateBook(notion, env, id, body) {
   if ("review" in body) properties["感想"] = { rich_text: rich(clean(body.review, REVIEW_MAX, "感想")) };
   if ("meter" in body) properties["読書メーター"] = { checkbox: !!body.meter };
   if ("notebooklm" in body) properties.NotebookLM = { checkbox: !!body.notebooklm };
+  if ("research" in body) properties[RESEARCH_PROP] = { checkbox: !!body.research };
   if (!Object.keys(properties).length) throw httpError(400, "変更する項目がありません");
   const page = await notion("PATCH", `/pages/${normalizeId(id)}`, { properties });
   return { book: bookOf(page) };
+}
+
+// ---------- 本を Web で探す（国立国会図書館の書誌＋表紙） ----------
+// 書名で国立国会図書館サーチ（OpenSearch）を引き、ISBN のある本だけを返す。表紙は Amazon（ISBN-10）→ Google の順で、ある方を使う
+const tag = (xml, name) => (xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([^<]*)<`)) || [])[1]?.trim() || "";
+const unescapeXml = (s) => s.replace(/&(lt|gt|amp|quot|apos|#39);/g, (_, e) => ({ lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", "#39": "'" })[e]);
+
+// 「東野, 圭吾, 1958-2026」→「東野　圭吾」。年・役割（著・訳）は落とす。「Dostoyevsky, Fyodor」のような欧文はそのまま
+function formatCreator(raw) {
+  const first = unescapeXml(raw).split(/\s*;\s*/)[0];
+  const parts = first.split(/\s*,\s*/).map((x) => x.replace(/\s*(著|訳|編|監修|作|画)$/u, "").trim()).filter((x) => x && !/^\d{4}/.test(x));
+  if (!parts.length) return "";
+  return /^[\x20-\x7e]+$/.test(parts.join("")) ? parts.join(", ") : parts.join("　");
+}
+
+const isbn13to10 = (isbn13) => {
+  const core = isbn13.slice(3, 12);
+  const sum = [...core].reduce((a, c, i) => a + (10 - i) * Number(c), 0);
+  const r = (11 - (sum % 11)) % 11;
+  return core + (r === 10 ? "X" : String(r));
+};
+
+async function coverFor(isbn) {
+  const tries = [
+    { url: `https://images-na.ssl-images-amazon.com/images/P/${isbn13to10(isbn)}.09.LZZZZZZZ.jpg`, ok: (ct) => /image\/jpe?g/.test(ct) },
+    { url: `https://books.google.com/books/content?vid=ISBN${isbn}&printsec=frontcover&img=1&zoom=1`, ok: (ct) => /image\/jpe?g/.test(ct) },
+  ];
+  for (const t of tries) {
+    try {
+      const res = await fetch(t.url, { method: "HEAD" });
+      if (res.ok && t.ok(res.headers.get("content-type") || "")) return t.url;
+    } catch { /* 次を試す */ }
+  }
+  return "";
+}
+
+async function lookupBooks(q) {
+  const title = clean(q, TITLE_MAX, "書名").replace(/\s+/g, " ");
+  if (title.length < 2) throw httpError(400, "書名を2文字以上入れてください");
+  const res = await fetch(`${NDL_BASE}?title=${encodeURIComponent(title)}&cnt=20`);
+  if (!res.ok) throw httpError(502, "国立国会図書館サーチにつながりませんでした");
+  const xml = await res.text();
+  const seen = new Set();
+  const items = [];
+  for (const it of xml.match(/<item>[\s\S]*?<\/item>/g) || []) {
+    const isbn = (tag(it, 'dc:identifier xsi:type="dcndl:ISBN"') || "").replace(/-/g, "");
+    if (!/^97[89]\d{10}$/.test(isbn) || seen.has(isbn)) continue;
+    seen.add(isbn);
+    const series = unescapeXml(tag(it, "dcndl:seriesTitle")).split(/\s*;\s*/)[0];
+    const publisher = unescapeXml(tag(it, "dc:publisher"));
+    items.push({
+      title: unescapeXml(tag(it, "dc:title")),
+      volume: unescapeXml(tag(it, "dcndl:volume")),
+      author: formatCreator(tag(it, "dc:creator")),
+      publisher: /文庫|新書/.test(series) ? series : publisher,
+      series,
+      year: (tag(it, "dcterms:issued").match(/\d{4}/) || [""])[0],
+      isbn,
+      cover: "",
+    });
+    if (items.length >= LOOKUP_MAX) break;
+  }
+  await Promise.all(items.map(async (b) => { b.cover = await coverFor(b.isbn); }));
+  return { items };
 }
 
 // ---------- ハイライト（DB_読書ハイライト） ----------

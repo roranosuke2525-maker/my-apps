@@ -197,22 +197,52 @@
 
   // ---------- 読書辞典：種別ごとに調べるリンク ----------
   // 人物・距離感は検索するとネタバレになりやすいので出さない
-  function lookupLinks(term, kind) {
-    const q = encodeURIComponent(String(term || "").trim());
+  function lookupLinks(term, kind, bookTitle) {
+    const t = String(term || "").trim();
+    const q = encodeURIComponent(t);
     if (!q) return [];
+    // 本の名前と一緒に検索すると、その作品の中での意味に当たりやすい（人物はネタバレになるので付けない）
+    const withBook = bookTitle ? { label: "本と一緒に", url: `https://www.google.com/search?q=${encodeURIComponent(`${t} ${bookTitle}`)}` } : null;
     const maps = { label: "地図", url: `https://www.google.com/maps/search/?api=1&query=${q}` };
     const image = { label: "画像", url: `https://www.google.com/search?tbm=isch&q=${q}` };
     const dict = { label: "辞書", url: `https://kotobank.jp/search?q=${q}` };
     const web = { label: "検索", url: `https://www.google.com/search?q=${q}` };
     const wiki = { label: "Wikipedia", url: `https://ja.wikipedia.org/w/index.php?search=${q}` };
-    return {
+    const links = {
       "📍 舞台": [maps, image, wiki],
       "🌿 植物": [image, wiki],
       "👥 人物・距離感": [],
       "🍽 食・道具": [image, dict],
       "📖 言葉": [dict, web],
     }[kind] || [dict, web];
+    return kind === "👥 人物・距離感" || !withBook ? links : [...links, withBook];
   }
 
-  root.ShioriParse = { lookupLinks, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
+  // ---------- 本そのものを調べるリンク ----------
+  // レビューや解説はネタバレを含みやすいので、行き先は自分で選ぶ。書店・出版社・図書館は比較的安全
+  function bookLinks(book) {
+    const title = String(book?.title || "").trim();
+    if (!title) return [];
+    const author = String(book?.author || "").replace(/\u3000/g, " ").trim();
+    const ta = encodeURIComponent(author ? `${title} ${author}` : title);
+    const t = encodeURIComponent(title);
+    const pub = String(book?.publisher || "").trim();
+    return [
+      { label: "読書メーター", url: `https://bookmeter.com/search?keyword=${ta}`, safe: false },
+      { label: "Amazon", url: `https://www.amazon.co.jp/s?k=${ta}&i=stripbooks`, safe: true },
+      { label: "出版社の紹介", url: `https://www.google.com/search?q=${encodeURIComponent(`${title} ${pub || author} 作品紹介`)}`, safe: true },
+      { label: "国会図書館", url: `https://ndlsearch.ndl.go.jp/search?cs=bib&f-ht=ndl&keyword=${ta}`, safe: true },
+      { label: "Wikipedia", url: `https://ja.wikipedia.org/w/index.php?search=${t}`, safe: false },
+      { label: "Google", url: `https://www.google.com/search?q=${ta}`, safe: false },
+    ];
+  }
+
+  // ハイライトの文を、本の名前つきで検索する（長い引用は頭の 40 字だけ）
+  function quoteSearchUrl(text, bookTitle) {
+    const q = String(text || "").replace(/\s+/g, " ").trim().slice(0, 40);
+    if (!q) return "";
+    return `https://www.google.com/search?q=${encodeURIComponent(`"${q}" ${bookTitle || ""}`.trim())}`;
+  }
+
+  root.ShioriParse = { lookupLinks, bookLinks, quoteSearchUrl, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
 })(typeof window !== "undefined" ? window : globalThis);
