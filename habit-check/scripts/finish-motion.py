@@ -105,8 +105,8 @@ def process(name, base_name, src_im, is_png):
     fig, dx, dy = align_face(base, bb, im, vb)
     canvas = Image.new("RGBA", base.size, (0, 0, 0, 0))
     canvas.alpha_composite(fig, dest=(max(0, dx), max(0, dy)), source=(max(0, -dx), max(0, -dy)))
-    if name.endswith(("_talk", "_blink")):
-        # 口パク・まばたきは顔だけを差し替える（体や手が描き変わって崩れないように）
+    if name.endswith(("_talk", "_blink", "_smile", "_angry", "_sad", "_surprised")):
+        # 口パク・まばたき・表情は顔だけを差し替える（体や手・持ち物が描き変わって崩れないように）
         canvas = face_patch(base, canvas, bb)
     canvas.save(OUT / "cast2" / f"{name}.webp", "WEBP", quality=86, method=6)
     return None
