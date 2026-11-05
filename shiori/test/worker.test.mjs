@@ -58,7 +58,8 @@ const NDL_XML = `<rss><channel>
 <item><title>白鳥とコウモリ</title><dc:title>白鳥とコウモリ</dc:title><dc:publisher>松竹事業推進部</dc:publisher><dcterms:issued>2026.9</dcterms:issued><dc:identifier xsi:type="dcndl:JPNO">24302830</dc:identifier></item>
 <item><dc:title>地下室の手記</dc:title><dc:creator>Dostoyevsky, Fyodor, 1821-1881</dc:creator><dc:creator>江川, 卓, 1927-2001 訳</dc:creator><dc:publisher>新潮社</dc:publisher><dcndl:seriesTitle>新潮文庫</dcndl:seriesTitle><dcterms:issued>1969</dcterms:issued><dc:identifier xsi:type="dcndl:ISBN">9784102010112</dc:identifier></item>
 <item><dc:title>白鳥とコウモリ</dc:title><dc:creator>東野, 圭吾, 1958-2026</dc:creator><dcndl:volume>上</dcndl:volume><dc:identifier xsi:type="dcndl:ISBN">978-4-344-43370-0</dc:identifier></item>
-<item><dc:title>ほか &amp; 本</dc:title><dc:creator>作家 著</dc:creator><dc:publisher>見本社</dc:publisher><dc:identifier xsi:type="dcndl:ISBN">978-4-00-000000-0</dc:identifier></item>
+<item><dc:title>Swan and Bat</dc:title><dc:creator>Higashino, Keigo</dc:creator><dc:publisher>Overseas</dc:publisher><dc:identifier xsi:type="dcndl:ISBN">9786020670690</dc:identifier></item>
+<item><dc:title>ほか &amp; 本</dc:title><dc:creator>作家 著</dc:creator><dc:publisher>見本社</dc:publisher><dc:identifier xsi:type="dcndl:ISBN">4-00-000000-9</dc:identifier></item>
 </channel></rss>`;
 
 let pages;
@@ -314,8 +315,9 @@ test("本を Web で探す：ISBN のある本だけ、重複なし、著者は�
     { title: "白鳥とコウモリ", volume: "上", author: "東野　圭吾", publisher: "幻冬舎文庫", series: "幻冬舎文庫", year: "2024", isbn: "9784344433700", cover: "https://images-na.ssl-images-amazon.com/images/P/434443370X.09.LZZZZZZZ.jpg" },
     { title: "地下室の手記", volume: "", author: "Dostoyevsky, Fyodor", publisher: "新潮文庫", series: "新潮文庫", year: "1969", isbn: "9784102010112", cover: "https://books.google.com/books/content?vid=ISBN9784102010112&printsec=frontcover&img=1&zoom=1" },
     { title: "ほか & 本", volume: "", author: "作家", publisher: "見本社", series: "", year: "", isbn: "9784000000000", cover: "" },
-  ]);
-  assert.equal(calls.find((c) => c.path === "/api/opensearch").body.title, "白鳥とコウモリ");
+    { title: "Swan and Bat", volume: "", author: "Higashino, Keigo", publisher: "Overseas", series: "", year: "", isbn: "9786020670690", cover: "" },
+  ], "ISBN-10 は 13 桁に、日本の本（文庫を先に）→海外版の順");
+  assert.deepEqual(calls.find((c) => c.path === "/api/opensearch").body, { title: "白鳥とコウモリ", cnt: "50" });
   assert.equal((await api("GET", "/api/lookup?q=%E6%9C%AC")).status, 400, "1文字では探さない");
   assert.equal(writes().length, 0);
 });

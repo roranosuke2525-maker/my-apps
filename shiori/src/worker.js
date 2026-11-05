@@ -255,6 +255,16 @@ function formatCreator(raw) {
   return /^[\x20-\x7e]+$/.test(parts.join("")) ? parts.join(", ") : parts.join("　");
 }
 
+// 古い本は ISBN-10 で登録されていることがある → 13 桁にそろえる
+const isbnTo13 = (raw) => {
+  const d = String(raw || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+  if (/^97[89]\d{10}$/.test(d)) return d;
+  if (!/^\d{9}[\dX]$/.test(d)) return "";
+  const core = `978${d.slice(0, 9)}`;
+  const sum = [...core].reduce((a, c, i) => a + Number(c) * (i % 2 ? 3 : 1), 0);
+  return core + String((10 - (sum % 10)) % 10);
+};
+
 const isbn13to10 = (isbn13) => {
   const core = isbn13.slice(3, 12);
   const sum = [...core].reduce((a, c, i) => a + (10 - i) * Number(c), 0);
@@ -279,18 +289,31 @@ async function coverFor(isbn) {
 async function lookupBooks(q) {
   const title = clean(q, TITLE_MAX, "書名").replace(/\s+/g, " ");
   if (title.length < 2) throw httpError(400, "書名を2文字以上入れてください");
-  const res = await fetch(`${NDL_BASE}?title=${encodeURIComponent(title)}&cnt=20`);
-  if (!res.ok) throw httpError(502, "国立国会図書館サーチにつながりませんでした");
+  // 混み合うと一時的に失敗することがあるので1回だけやり直す
+  const ndl = () => fetch(`${NDL_BASE}?title=${encodeURIComponent(title)}&cnt=50`, { headers: { "User-Agent": "shiori/1.0 (reading-notes app)", Accept: "application/xml" } });
+  let res = await ndl();
+  if (!res.ok) {
+    await new Promise((r) => setTimeout(r, 600));
+    res = await ndl();
+  }
+  if (!res.ok) throw httpError(502, `国立国会図書館サーチにつながりませんでした（${res.status}）。少し待ってからもう一度`);
   const xml = await res.text();
-  const seen = new Set();
+  const seen = new Map();
   const items = [];
   for (const it of xml.match(/<item>[\s\S]*?<\/item>/g) || []) {
-    const isbn = (tag(it, 'dc:identifier xsi:type="dcndl:ISBN"') || "").replace(/-/g, "");
-    if (!/^97[89]\d{10}$/.test(isbn) || seen.has(isbn)) continue;
-    seen.add(isbn);
+    const isbn = isbnTo13(tag(it, 'dc:identifier xsi:type="dcndl:ISBN"'));
+    if (!isbn) continue;
     const series = unescapeXml(tag(it, "dcndl:seriesTitle")).split(/\s*;\s*/)[0];
     const publisher = unescapeXml(tag(it, "dc:publisher"));
-    items.push({
+    // 同じ ISBN が何度も出るときは、文庫名・著者などが埋まっている方を採る
+    const dup = seen.get(isbn);
+    if (dup) {
+      if (!dup.series && series) { dup.series = series; dup.publisher = /文庫|新書/.test(series) ? series : dup.publisher; }
+      if (!dup.author) dup.author = formatCreator(tag(it, "dc:creator"));
+      if (!dup.volume) dup.volume = unescapeXml(tag(it, "dcndl:volume"));
+      continue;
+    }
+    const item = {
       title: unescapeXml(tag(it, "dc:title")),
       volume: unescapeXml(tag(it, "dcndl:volume")),
       author: formatCreator(tag(it, "dc:creator")),
@@ -299,11 +322,15 @@ async function lookupBooks(q) {
       year: (tag(it, "dcterms:issued").match(/\d{4}/) || [""])[0],
       isbn,
       cover: "",
-    });
-    if (items.length >= LOOKUP_MAX) break;
+    };
+    seen.set(isbn, item);
+    items.push(item);
   }
-  await Promise.all(items.map(async (b) => { b.cover = await coverFor(b.isbn); }));
-  return { items };
+  // 日本の本（978-4）を先に、その中でも文庫・新書を先に。海外の翻訳版は後ろ
+  const rank = (b) => (b.isbn.startsWith("9784") ? 0 : 2) + (/文庫|新書/.test(b.series) ? 0 : 1);
+  const picked = items.map((b, i) => [rank(b), i, b]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).slice(0, LOOKUP_MAX).map((x) => x[2]);
+  await Promise.all(picked.map(async (b) => { b.cover = await coverFor(b.isbn); }));
+  return { items: picked };
 }
 
 // ---------- ハイライト（DB_読書ハイライト） ----------
