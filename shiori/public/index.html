@@ -101,10 +101,28 @@
 
     <!-- Kindle -->
     <section id="view-kindle" class="view" hidden>
-      <div class="card guide">
-        <p>Kindle の「メモとハイライト」（<a href="https://read.amazon.co.jp/notebook" target="_blank" rel="noopener">read.amazon.co.jp/notebook</a>）で本を開き、ページ全体をコピーして下に貼ります。Kindle 端末の「My Clippings.txt」の中身でも読めます。</p>
-        <p class="note">Readwise を Claude につないであれば、毎日 7:08・21:08 に Kindle のハイライトが自動でここに入ります（📱 Kindle の印）。貼り付けは、すぐ入れたいときや Readwise を使わないときだけ。</p>
+      <div class="card guide sync-card">
+        <h2 class="sec">Safari で1タップ同期</h2>
+        <p>Safari で Kindle の「メモとハイライト」（<a href="https://read.amazon.co.jp/notebook" target="_blank" rel="noopener">read.amazon.co.jp/notebook</a>）を開き、ブックマーク <b>「しおりへ同期」</b> を押すだけ。全部の本のハイライトとメモを読み取り、登録済みのものを外して、しおりに入れます。本棚に無い本は「読中」で足します。</p>
+        <div class="actions left">
+          <a id="bm-link" class="btn small" href="#" draggable="true" title="PC ではこのボタンをブックマークバーへドラッグ">🔖 しおりへ同期</a>
+          <button type="button" id="bm-copy" class="btn ghost small">コードをコピー</button>
+        </div>
+        <details id="bm-howto">
+          <summary>iPhone でブックマークを作るには</summary>
+          <ol>
+            <li>上の「コードをコピー」を押す</li>
+            <li>Safari の共有ボタン → <b>ブックマークを追加</b>（このページでよい）。名前を「しおりへ同期」にして保存</li>
+            <li>ブックマーク一覧を開き、右下の「編集」→ 作ったブックマークを開き、<b>アドレスをすべて消してコピーしたコードを貼る</b> → 完了</li>
+            <li>Safari で read.amazon.co.jp/notebook を開いて Amazon にログインし、ブックマーク「しおりへ同期」を押す</li>
+          </ol>
+          <p class="note">PC（Safari・Chrome）では「🔖 しおりへ同期」をブックマークバーへドラッグするだけ。Amazon のログインはブラウザの中で済ませるので、しおりにパスワードは渡りません。</p>
+        </details>
       </div>
+      <details class="card guide">
+        <summary>貼り付けで入れる（ブックマークが使えないとき）</summary>
+        <p>Kindle の「メモとハイライト」で本を開き、ページ全体をコピーして下に貼ります。Kindle 端末の「My Clippings.txt」の中身でも読めます。</p>
+      </details>
       <label class="pick">本<select id="kindle-book"></select></label>
       <textarea id="kindle-text" rows="7" placeholder="黄色のハイライト | 位置: 1,234&#10;ここにハイライトの文…&#10;メモ: 自分のメモ"></textarea>
       <div class="actions">

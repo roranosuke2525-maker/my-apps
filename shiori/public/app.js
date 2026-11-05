@@ -522,7 +522,38 @@ async function savePage(btn) {
 }
 
 // ---------- Kindle ----------
+// Safari のブックマーク「しおりへ同期」。Amazon の「メモとハイライト」の中で動き、全部の本のハイライトを読んで /api/kindle-sync にフォームで送る（→ sync.html）
+function bookmarkletCode() {
+  const action = `${location.origin}/api/kindle-sync`;
+  const code = `(()=>{const S=${JSON.stringify(action)};if(!/^read\\.amazon\\./.test(location.hostname)){if(confirm("Kindle の「メモとハイライト」を開いてから押してください。いま開きますか？"))location.href="https://read.amazon.co.jp/notebook";return}
+if(document.getElementById("shiori-sync"))return;const o=location.origin,q=(d,s)=>d.querySelector(s),T=(e)=>(e?e.textContent:"").replace(/\\s+/g," ").trim();
+const box=document.createElement("div");box.id="shiori-sync";box.style.cssText="position:fixed;left:12px;right:12px;bottom:24px;z-index:2147483647;background:#1f4d52;color:#fff;padding:14px 16px;border-radius:12px;font:15px/1.5 -apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3)";document.body.appendChild(box);
+const say=(m)=>{box.textContent="しおりへ同期："+m};say("本の一覧を読んでいます…");
+const get=async(u)=>{const r=await fetch(u,{credentials:"include"});if(!r.ok)throw new Error("HTTP "+r.status);return new DOMParser().parseFromString(await r.text(),"text/html")};
+(async()=>{try{const lib=await get(o+"/notebook");
+const books=[...lib.querySelectorAll(".kp-notebook-library-each-book")].map(b=>({asin:b.id,title:T(q(b,"h2")),author:T(q(b,"p")),cover:(q(b,"img")||{}).src||"",items:[]}));
+if(!books.length)throw new Error("本が見つかりません。Amazon にログインしていますか？");
+for(let i=0;i<books.length;i++){const b=books[i];say((i+1)+"/"+books.length+" 『"+b.title+"』");let u=o+"/notebook?asin="+encodeURIComponent(b.asin)+"&contentLimitState=&";
+for(let n=0;n<80&&u;n++){const d=await get(u);
+for(const r of d.querySelectorAll(".a-row.a-spacing-base")){const t=T(q(r,"#highlight")),m=T(q(r,"#note")),h=T(q(r,"#annotationHighlightHeader"))||T(q(r,"#annotationNoteHeader")),l=(q(r,"#kp-annotation-location")||{}).value||"";if(t||m)b.items.push({text:t,note:m,header:h,loc:l})}
+const nx=(q(d,".kp-notebook-annotations-next-page-start")||{}).value,cl=(q(d,".kp-notebook-content-limit-state")||{}).value||"";u=nx?o+"/notebook?asin="+encodeURIComponent(b.asin)+"&token="+encodeURIComponent(nx)+"&contentLimitState="+encodeURIComponent(cl):""}}
+const total=books.reduce((a,b)=>a+b.items.length,0);say(books.length+"冊・"+total+"件を読み取りました。しおりを開きます…");
+const f=document.createElement("form");f.method="POST";f.action=S;f.style.display="none";const i=document.createElement("input");i.type="hidden";i.name="data";i.value=JSON.stringify({v:1,host:location.hostname,at:new Date().toISOString(),books});f.appendChild(i);document.body.appendChild(f);f.submit()}
+catch(e){say("うまくいきませんでした："+e.message);setTimeout(()=>box.remove(),9000)}})()})()`;
+  return `javascript:${encodeURIComponent(code)}`;
+}
+
 function setupKindle() {
+  const bm = bookmarkletCode();
+  $("#bm-link").href = bm;
+  $("#bm-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    toast("このボタンはブックマークバーへドラッグして使います。iPhone は「コードをコピー」から");
+  });
+  $("#bm-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(bm); toast("コピーしました。ブックマークのアドレスに貼ってください"); $("#bm-howto").open = true; }
+    catch { const ta = el("textarea", { readonly: true, rows: "3", "aria-label": "ブックマークのコード" }); ta.value = bm; $("#bm-howto").after(ta); ta.select(); toast("長押しでコピーしてください"); }
+  });
   $("#kindle-book").addEventListener("change", (e) => { selectBook(e.target.value); if (state.kindle) renderKindle(); });
   $("#kindle-parse").addEventListener("click", () => {
     const groups = P.parseKindle($("#kindle-text").value);

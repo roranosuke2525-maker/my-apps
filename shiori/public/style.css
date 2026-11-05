@@ -231,3 +231,18 @@ details.guide ol { margin: 10px 0 0; padding-left: 1.3em; font-size: 0.86rem; co
 .booklinks a.risky { border-style: dashed; }
 .research { display: flex; flex-direction: column; gap: 6px; }
 .research .on { color: var(--ok); font-weight: 700; font-size: 0.85rem; }
+
+/* Kindle 同期（sync.html） */
+.sync-books { list-style: none; margin: 0; padding: 0; }
+.sync-book { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.sync-head { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; cursor: pointer; }
+.sync-head input { width: 20px; height: 20px; flex: none; margin-top: 4px; accent-color: var(--cloth); }
+.sync-thumb { width: 40px; height: 56px; flex: none; object-fit: cover; border-radius: 3px; background: var(--cloth); display: block; }
+.sync-main { flex: 1 1 auto; min-width: 0; }
+.sync-title { font-family: var(--f-book); font-weight: 700; font-size: 1.05rem; line-height: 1.4; }
+.sync-meta { color: var(--ink-2); font-size: 0.8rem; }
+.sync-where { margin-top: 2px; color: var(--cloth); }
+.sync-book .linkish { margin: 6px 0 0 30px; }
+.sync-book .hls { margin: 8px 0 0; }
+.sync-done { margin: 8px 0 12px; padding-left: 1.2em; }
+.sync-card .actions.left { margin: 8px 0; }

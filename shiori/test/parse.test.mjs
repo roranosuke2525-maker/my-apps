@@ -124,3 +124,16 @@ test("本そのものを調べるリンクと、本の名前つきの検索", ()
   assert.equal(P.quoteSearchUrl("  人は　誰でも  " + "あ".repeat(60), "本"), `https://www.google.com/search?q=${encodeURIComponent(`"人は 誰でも ${"あ".repeat(33)}" 本`)}`);
   assert.equal(P.quoteSearchUrl("", "本"), "");
 });
+
+test("Kindle 同期：見出しからページ・位置、Amazon の書名から出版社、著者を本棚の書き方に", () => {
+  assert.deepEqual(P.kindleMeta("黄色のハイライト | 位置: 1,234", ""), { page: null, loc: "1,234" });
+  assert.deepEqual(P.kindleMeta("ページ: 12 | 位置: 180", "180"), { page: 12, loc: "180" });
+  assert.deepEqual(P.kindleMeta("Yellow highlight | Location: 70", ""), { page: null, loc: "70" });
+  assert.deepEqual(P.kindleMeta("", "  "), { page: null, loc: "" });
+  assert.deepEqual(P.splitAmazonTitle("海辺のカフカ（上） (新潮文庫)"), { title: "海辺のカフカ（上）", publisher: "新潮文庫" });
+  assert.deepEqual(P.splitAmazonTitle("白鳥とコウモリ"), { title: "白鳥とコウモリ", publisher: "" });
+  assert.deepEqual(P.splitAmazonTitle("地下室の手記 (光文社古典新訳文庫)"), { title: "地下室の手記", publisher: "光文社古典新訳文庫" });
+  assert.equal(P.matchAuthor(["村上　春樹", "東野　圭吾"], "著者: 村上春樹"), "村上　春樹");
+  assert.equal(P.matchAuthor(["村上　春樹"], "by 凪良ゆう"), "凪良ゆう");
+  assert.equal(P.matchAuthor([], ""), "");
+});

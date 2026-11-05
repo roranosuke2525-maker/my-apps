@@ -337,3 +337,23 @@ test("本を足すとき表紙も入れられる。背景を調べる印を付�
   const off = await api("PATCH", `/api/books/${B1}`, { research: false });
   assert.equal(off.data.book.research, false);
 });
+
+test("Kindle 同期：Amazon からのフォームは合言葉なしで受け取り、画面に渡す HTML を返す", async () => {
+  const data = { v: 1, host: "read.amazon.co.jp", books: [{ asin: "B0", title: "本 </script><b>", author: "著者: 人", items: [{ text: "文", note: "", header: "位置: 1", loc: "1" }] }] };
+  const form = new URLSearchParams({ data: JSON.stringify(data) });
+  const res = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form.toString() }), env);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("Content-Type"), /text\/html/);
+  const html = await res.text();
+  assert.ok(html.includes('sessionStorage.setItem("shiori:kindleSync"'));
+  assert.ok(html.includes("\\u003c/script>\\u003cb>"), "payload の < は逃がす");
+  assert.ok(!html.includes("</script><b>"));
+  assert.equal(calls.length, 0, "Notion には触らない");
+  const bad = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "data=%7Bnope" }), env);
+  assert.equal(bad.status, 400);
+  const notForm = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }), env);
+  assert.equal(notForm.status, 400);
+  const get = await worker.fetch(new Request("https://shiori.test/api/kindle-sync"), env);
+  assert.equal(get.status, 303);
+  assert.equal(get.headers.get("Location"), "https://shiori.test/sync.html");
+});

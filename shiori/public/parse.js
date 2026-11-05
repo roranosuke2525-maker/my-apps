@@ -100,6 +100,33 @@
     return n.length ? n : parseBlocks(t);
   }
 
+  // Safari のブックマーク「しおりへ同期」が読んだ Kindle の見出し（「黄色のハイライト | 位置: 1,234」「ページ: 12」）からページ・位置を取る
+  function kindleMeta(header, loc) {
+    const h = String(header || "");
+    const pm = h.match(/(?:ページ|page)\s*[:：]?\s*([0-9０-９,]+)/i);
+    const page = pm ? Number(pm[1].replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).replace(/,/g, "")) : null;
+    const lm = h.match(/(?:位置|location)(?:\s*No\.?)?\s*[:：]?\s*([0-9０-９,\-–]+)/i);
+    const l = String(loc || "").trim() || (lm ? lm[1] : "");
+    return { page: Number.isInteger(page) ? page : null, loc: l.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)) };
+  }
+
+  // Amazon の書名「海辺のカフカ（上） (新潮文庫)」→ 書名と出版社（文庫・新書のかっこだけ）
+  function splitAmazonTitle(raw) {
+    let title = String(raw || "").replace(/\s+/g, " ").trim();
+    let publisher = "";
+    const m = title.match(/^(.*?)\s*[(（]([^()（）]*(?:文庫|新書|選書|ブックス|BOOKS|BUNKO|Bunko))[)）]\s*$/i);
+    if (m) { title = m[1].trim(); publisher = m[2].trim(); }
+    return { title, publisher };
+  }
+
+  // 「著者: 村上春樹」を、本棚にある書き方（「村上　春樹」）に合わせる。無ければそのまま
+  function matchAuthor(authors, raw) {
+    const a = String(raw || "").replace(/^(?:著者|by)\s*[:：]?\s*/i, "").replace(/\s*[,、].*$/, "").trim();
+    if (!a) return "";
+    const k = norm(a);
+    return (authors || []).find((x) => norm(x) === k) || a;
+  }
+
   // 書名で読書メモ_DB の本を探す（空白・かっこの違いは無視）
   function matchBook(books, title) {
     const k = norm(title);
@@ -244,5 +271,5 @@
     return `https://www.google.com/search?q=${encodeURIComponent(`"${q}" ${bookTitle || ""}`.trim())}`;
   }
 
-  root.ShioriParse = { lookupLinks, bookLinks, quoteSearchUrl, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
+  root.ShioriParse = { kindleMeta, splitAmazonTitle, matchAuthor, lookupLinks, bookLinks, quoteSearchUrl, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
 })(typeof window !== "undefined" ? window : globalThis);

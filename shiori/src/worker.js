@@ -30,6 +30,8 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
 
     try {
+      // Safari のブックマーク「しおりへ同期」が Amazon のページから送るフォーム。合言葉は持たないので、受け取った中身を画面に渡すだけ（Notion には触らない）
+      if (url.pathname === "/api/kindle-sync") return await kindleSyncPage(request, url);
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います" }, 401);
       const notion = notionClient(env);
@@ -432,6 +434,33 @@ async function addHighlights(notion, env, body) {
   // ページの関連は書いた直後に増えていないことがあるので、足した数を加えて返す
   if (out.highlightCount === bookOf(book).highlightCount) out.highlightCount += added;
   return { added, book: out };
+}
+
+// ---------- Kindle 同期（ブックマークから受け取る） ----------
+const SYNC_MAX = 8 * 1024 * 1024;
+async function kindleSyncPage(request, url) {
+  if (request.method !== "POST") return Response.redirect(`${url.origin}/sync.html`, 303);
+  const type = request.headers.get("Content-Type") || "";
+  if (!/application\/x-www-form-urlencoded|multipart\/form-data/.test(type)) throw httpError(400, "フォームからだけ受け取れます");
+  const len = Number(request.headers.get("Content-Length") || 0);
+  if (len > SYNC_MAX) throw httpError(413, "一度に受け取れる量を超えました（8MB）");
+  const form = await request.formData().catch(() => null);
+  const raw = form?.get("data");
+  if (typeof raw !== "string" || !raw) throw httpError(400, "データがありません");
+  if (raw.length > SYNC_MAX) throw httpError(413, "一度に受け取れる量を超えました（8MB）");
+  let data;
+  try { data = JSON.parse(raw); } catch { throw httpError(400, "データの形が読めません"); }
+  if (!data || data.v !== 1 || !Array.isArray(data.books)) throw httpError(400, "データの形が読めません");
+  // 画面（sync.html）に渡す。</script> で閉じられないように < を逃がす
+  const safe = JSON.stringify(data).replace(/</g, "\\u003c");
+  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>しおりへ同期</title></head><body style="font-family:-apple-system,sans-serif;padding:24px;color:#1f3a3d">
+<p id="msg">Kindle のハイライトを受け取りました。しおりを開いています…</p>
+<script type="application/json" id="payload">${safe}</script>
+<script>
+try { sessionStorage.setItem("shiori:kindleSync", document.getElementById("payload").textContent); location.replace("/sync.html"); }
+catch (e) { document.getElementById("msg").textContent = "データを受け取れませんでした：" + e.message; }
+</script></body></html>`;
+  return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 async function updateHighlight(notion, env, id, body) {
