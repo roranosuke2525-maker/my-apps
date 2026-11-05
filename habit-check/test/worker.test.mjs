@@ -649,18 +649,21 @@ test("きろく：EXPはプレイヤーの付いた行を検索してまとめ�
   assert.equal(calls.filter((c) => c.path.includes("/properties/")).length, 0);
 });
 
-test("ぼうけん：前のボスを倒した日のEXPは、次のボスに使い回さない（翌日から戦う）", async () => {
+test("ぼうけん：前のボスを倒した日の、倒しきったあとの残りの攻撃は次のボスに入る", async () => {
   pages.push(
     ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } }, 撃破日: { type: "date", date: { start: "2026-10-20" } } }),
-    ep2(E2, 2, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } } }),
+    ep2(E2, 2, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-21" } }, ボスHP: { type: "number", number: 1000 } }),
   );
   const d20 = pages.find((p) => p.id === "day20");
   d20.properties["◇☼ 新聞"].checkbox = true;
-  d20.properties.EXP = formula(500); // 10/20 の 500 は第1話のボスで使った
+  d20.properties.EXP = formula(500); // 10/20：500 × 弱点1.5 = 750。第1話のボス（HP100）を倒したあとの残りが第2話へ
   const data = await (await req("GET", "/api/battle")).json();
   assert.equal(data.boss.name, "ボス2");
-  assert.equal(data.boss.start, "2026-10-21");
-  assert.equal(data.boss.damage, 0);
+  assert.equal(data.boss.start, "2026-10-20"); // 前のボスを倒した日からたたかう
+  // 10/20 の習慣の攻撃は、第1話のボスを倒しきったあとの残りの割合だけ（750 より少なく、0 ではない）
+  const h20 = data.boss.log.find((x) => x.date === "2026-10-20" && x.kind === "habit").damage;
+  assert.ok(h20 > 600 && h20 < 750, String(h20));
+  assert.ok(data.boss.damage >= h20);
   assert.equal(data.boss.defeatedOn, null);
 });
 

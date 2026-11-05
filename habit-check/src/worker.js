@@ -1051,12 +1051,21 @@ async function getBattle(notion, env) {
   const current = currentBoss(ep2);
   let boss = null;
   if (current) {
-    // 1日のダメージは1体のボスにだけ入る：前のボスを倒した日に読んだ話は、翌日から戦う（同じ日のEXPを使い回さない）
-    const prev = ep2[ep2.indexOf(current) - 1];
-    const read = current.bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
-    const after = prev?.defeated ? addDays(prev.defeated.slice(0, 10), 1) : read;
-    const start = read > after ? read : after;
-    boss = fight(current, { ...all, muscle }, start, petType, stats, equip);
+    // 前のボスを倒した日からたたかう。倒した日は、前のボスを倒しきったあとの残りの攻撃だけが入る（むだにしない）
+    const i = ep2.indexOf(current);
+    const startOf = (k) => {
+      const before = ep2[k - 1];
+      if (before?.defeated) return before.defeated.slice(0, 10);
+      return ep2[k].bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
+    };
+    const prev = ep2[i - 1];
+    const start = startOf(i);
+    let carry = null;
+    if (prev?.defeated && prev.boss && typeof prev.hp === "number") {
+      const pf = fight(prev, { ...all, muscle }, startOf(i - 1), petType, stats, equip);
+      carry = { date: start, ratio: pf.defeatedOn === start ? pf.leftover : 0 };
+    }
+    boss = fight(current, { ...all, muscle }, start, petType, stats, equip, carry);
     if (boss.defeatedOn) {
       await notion("PATCH", `/pages/${current.id}`, { properties: { 撃破日: { date: { start: boss.defeatedOn } } } });
       current.defeated = boss.defeatedOn;
@@ -1109,7 +1118,8 @@ function weakened(m, type, exp) {
 }
 
 // equip：装備中のそうびの、型ごとのダメージ＋%
-function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats, equip = {}) {
+// carry：{ date, ratio }。前のボスを倒した日は、その日の攻撃のうち残り（ratio）だけがこのボスに入る
+function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats, equip = {}, carry = null) {
   const weak = chapter.weak;
   const petHit = !!petType && petType === weak;
   const statVal = weak === "バランス" ? Math.min(...TYPES.map((t) => stats[t])) : stats[weak] || 0;
@@ -1117,25 +1127,27 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
   const m = (t) => weakMult(weak, t) * (1 + (equip[t] || 0) / 100);
   const days = {};
   const day = (d) => (days[d] ||= { habit: 0, tasks: [] });
+  const share = (date) => (carry && date === carry.date ? carry.ratio : 1);
   for (const [date, d] of Object.entries(habitDays)) {
     if (date < start) continue;
     // 型ごとのダメージも残す（画面で、型ごとに仲間の攻撃として見せる）
-    const byType = Object.fromEntries(TYPES.map((t) => [t, d.points[t] * m(t) * mult]));
+    const byType = Object.fromEntries(TYPES.map((t) => [t, d.points[t] * m(t) * mult * share(date)]));
     day(date).habit = TYPES.reduce((a, t) => a + byType[t], 0);
     day(date).habitTypes = byType;
   }
   for (const t of tasks) {
     if (t.date < start) continue;
-    day(t.date).tasks.push({ ...t, damage: weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult });
+    day(t.date).tasks.push({ ...t, damage: weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult * share(t.date) });
   }
   // 💪 からだチェック（週1回まで・素のダメージに「ちから」の倍率を掛ける）
   for (const x of muscle) {
     if (x.date < start) continue;
-    day(x.date).muscle = (day(x.date).muscle || 0) + x.damage * m(MUSCLE_TYPE) * mult;
+    day(x.date).muscle = (day(x.date).muscle || 0) + x.damage * m(MUSCLE_TYPE) * mult * share(x.date);
     day(x.date).muscleInfo = x;
   }
   let damage = 0;
   let defeatedOn = null;
+  let leftover = 0;
   const log = [];
   const today = jstDate(new Date().toISOString());
   let todayDamage = 0;
@@ -1152,7 +1164,11 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     }
     if (d.muscle) log.push({ key: `${date}|m`, date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
     for (const t of d.tasks) log.push({ key: `t|${t.id}`, date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
-    if (!defeatedOn && damage >= chapter.hp) defeatedOn = date;
+    if (!defeatedOn && damage >= chapter.hp) {
+      defeatedOn = date;
+      // 倒した日の攻撃のうち、HP を削りきったあとの残り（次のボスへ持ちこす割合）
+      leftover = total > 0 ? Math.max(0, Math.min(1, (damage - chapter.hp) / total)) : 0;
+    }
   }
   return {
     chapterId: chapter.id,
@@ -1166,6 +1182,7 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     petHit,
     mult: Math.round(mult * 100) / 100,
     defeatedOn,
+    leftover,
     log: log.slice(-BATTLE_LOG).reverse(),
   };
 }
