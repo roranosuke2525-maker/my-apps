@@ -1046,7 +1046,6 @@ function renderPlan(canBack) {
 
 function renderOther() {
   const ts = otherTasks(); const refills = ts.filter((t) => t.refill.length); const rest = ts.filter((t) => !t.refill.length);
-  if (!ts.length) return `<div class="empty">ネット注文などの買い物タスクはありません</div>`;
   const card = (t) => {
     const items = t.items || []; const done = items.filter((i) => i.checked).length; const open = S.openOther === t.id;
     const meta = t.at ? fmtAt(t.at) : t.date ? md(t.date) : "";
@@ -1057,7 +1056,7 @@ function renderOther() {
       ${whenBar(t.id, t.at)}
       <div class="oacts">${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener">Notion ↗</a><button type="button" class="btn ok sm" data-finish="${t.id}">✓ 済み</button></div></div>`;
   };
-  return rest.map(card).join("") + (refills.length ? `<h3 class="sec">📦 補充（在庫から）</h3>${renderRefills(refills)}` : "");
+  return (rest.length ? rest.map(card).join("") : `<div class="empty small">ネット注文などの買い物タスクはありません</div>`) + `<h3 class="sec">📦 補充（在庫から）</h3>${renderRefills(refills)}`;
 }
 function groups(items) {
   if (S.sort === "added") {
@@ -1079,11 +1078,56 @@ function itemRow(i) {
   const q = A.splitQty(i.text);
   return `<div class="item${i.checked ? " on" : ""}${i.id.startsWith("tmp") ? " pending" : ""}"><button type="button" class="tick" data-toggle="${i.id}" aria-pressed="${i.checked}"><span class="box" aria-hidden="true"></span><span class="tx">${esc(q.name)}</span>${q.qty ? `<span class="qty">${esc(q.qty)}</span>` : ""}</button><button type="button" class="more" data-edit="${i.id}" aria-label="「${esc(q.name)}」を直す">⋯</button></div>`;
 }
+// 補充リスト：その場で足す欄つき。1件ずつ ✖ で外せる（補充タブとそのほかタブの両方で使う）
 function renderRefills(ts) {
-  return `<p class="note pad">買えたら ○ で済み（最終補充日が今日に）。名前をタップすると、外す・直す・別の商品に変える・ネットで買う が選べます。</p><div class="card list">${ts.map((t) => {
+  const add = `<form class="raddbox" id="raddform"><input id="rin" type="search" maxlength="200" autocomplete="off" enterkeyhint="done" placeholder="補充リストに足す（在庫の品の名前・新しい品）" aria-label="補充リストに足す品"><button type="submit" class="btn pri sm">足す</button></form><div class="chips rsug" id="rsug">${refillSugHtml("")}</div>`;
+  return `<div class="card rcard">${add}${ts.length ? `<div class="list">${ts.map((t) => {
     const x = S.stock.find((s) => t.refill.includes(s.id));
-    return `<div class="item ritem"><button type="button" class="tick" data-finish="${t.id}" aria-label="「${esc(t.name)}」を買えた"><span class="box" aria-hidden="true"></span></button><button type="button" class="tick rname" ${x ? `data-act="${x.id}"` : `data-finish="${t.id}"`}>${x ? thumb(x) : ""}<span class="tx">${esc(t.name.replace(/^補充:/, ""))}</span>${x ? `<span class="qty" style="color:${leftColor(x)}">${esc(leftTx(x.left))}</span>` : ""}</button><button type="button" class="more${t.at ? " on" : ""}" data-whenopen="${t.id}" aria-label="「${esc(t.name)}」の時刻と通知">⏰</button>${t.link ? `<a class="more" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="注文ページを開く">🛒</a>` : ""}</div>${t.at || S.whenFor === t.id ? `<div class="rwhen">${whenBar(t.id, t.at)}</div>` : ""}`;
-  }).join("")}</div>`;
+    return `<div class="item ritem"><button type="button" class="tick" data-finish="${t.id}" aria-label="「${esc(t.name)}」を買えた"><span class="box" aria-hidden="true"></span></button><button type="button" class="tick rname" ${x ? `data-act="${x.id}"` : `data-finish="${t.id}"`}>${x ? thumb(x) : ""}<span class="tx">${esc(t.name.replace(/^補充:/, ""))}</span>${x ? `<span class="qty" style="color:${leftColor(x)}">${esc(leftTx(x.left))}</span>` : ""}</button><button type="button" class="more${t.at ? " on" : ""}" data-whenopen="${t.id}" aria-label="「${esc(t.name)}」の時刻と通知">⏰</button>${t.link ? `<a class="more" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="注文ページを開く">🛒</a>` : ""}<button type="button" class="more rx" data-rcancel="${t.id}" aria-label="「${esc(t.name)}」を補充リストから外す" title="外す（今回は買わない）">✖</button></div>${t.at || S.whenFor === t.id ? `<div class="rwhen">${whenBar(t.id, t.at)}</div>` : ""}`;
+  }).join("")}</div>` : `<div class="empty small">補充リストは空です。上の欄か、在庫の 🛒 で足せます</div>`}</div>
+  ${ts.length ? `<p class="note pad">買えたら ○ で済み（最終補充日が今日に）。✖ で外す（今回は買わない）。名前をタップすると、直す・別の商品に変える・ネットで買う も選べます。</p>` : ""}`;
+}
+// 足す欄の候補：まだリストにない在庫の品。打ちかけなら名前で絞り、空なら切れそうな順
+function refillSugHtml(q) {
+  const k = kana(q.trim());
+  const xs = S.stock.filter((x) => !x.open?.length && (!k || kana(x.name).includes(k)))
+    .sort((a, b) => (k ? kana(b.name).startsWith(k) - kana(a.name).startsWith(k) : 0) || (a.left ?? 1e9) - (b.left ?? 1e9) || a.name.localeCompare(b.name, "ja")).slice(0, k ? 8 : 6);
+  const exact = k && S.stock.some((x) => kana(x.name) === k);
+  return xs.map((x) => `<button type="button" class="chip${x.left != null && x.left <= SOON_DAYS ? " warn" : ""}" data-radd="${x.id}">＋ ${esc(x.name)}${x.left != null ? `<small>${esc(leftTx(x.left))}</small>` : ""}</button>`).join("")
+    + (k && !exact ? `<button type="button" class="chip new" data-rnew="1">＋「${esc(q.trim())}」を新しく登録して入れる</button>` : "");
+}
+document.addEventListener("input", (e) => { if (e.target.id === "rin") { const b = $("#rsug"); if (b) b.innerHTML = refillSugHtml(e.target.value); } });
+document.addEventListener("submit", (e) => { if (e.target.id === "raddform") { e.preventDefault(); refillAddText(); } });
+async function refillAddText() {
+  const i = $("#rin"); const v = i?.value.trim(); if (!v) { i?.focus(); return; }
+  const k = kana(v);
+  const hit = S.stock.find((x) => kana(x.name) === k) || (() => { const xs = S.stock.filter((x) => !x.open?.length && kana(x.name).includes(k)); return xs.length === 1 ? xs[0] : null; })();
+  if (hit) { refillAdd(hit.id); return; }
+  if (!confirm(`「${v}」は在庫にない品です。新しく登録して補充リストに入れますか？`)) return;
+  try {
+    setSync("busy");
+    const res = await api("POST", "/api/stock", { name: v });
+    S.stock.push(res.stock); saveSnap();
+    if (await toList(res.stock.id)) toast(`「${res.stock.name}」を登録して補充リストに入れました（使う数は 🛠 整備で）`);
+  } catch (err) { setSync("err"); toast(`足せませんでした：${err.message}`); }
+}
+async function refillAdd(id, btn) {
+  const x = S.stock.find((s) => s.id === id); if (!x) return;
+  if (x.open?.length) { toast(`「${x.name}」はもう補充リストにあります`); return; }
+  if (await toList(id, btn)) toast(`「${x.name}」を補充リストに入れました`);
+}
+async function refillCancel(tid, btn) {
+  const t = listOf(tid); if (!t) return;
+  const name = t.name.replace(/^補充:/, "");
+  if (!confirm(`「${name}」を補充リストから外しますか？（今回は買わない。最終補充日は変わりません）`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    setSync("busy");
+    await api("POST", `/api/lists/${tid}/cancel`);
+    S.lists = S.lists.filter((x) => x.id !== tid);
+    for (const x of S.stock) if (x.open?.includes(tid)) x.open = x.open.filter((o) => o !== tid);
+    saveSnap(); setSync("ok"); render(); toast(`「${name}」を補充リストから外しました`);
+  } catch (err) { setSync("err"); if (btn) btn.disabled = false; toast(`外せませんでした：${err.message}`); }
 }
 
 // 入力中の候補：入れたことのある品目・在庫の名前・定番から
@@ -1170,6 +1214,8 @@ function renderStock() {
     return `<div class="srow${on ? " picked" : ""}" style="--c:${leftColor(x)}"><button type="button" class="sm-main" ${S.pick ? `data-pick="${x.id}" aria-pressed="${!!on}"` : `data-act="${x.id}"`}>${thumb(x)}<span class="sm-tx"><span class="nm">${esc(x.name)}</span><span class="sub"><b>${esc(leftTx(x.left) || "—")}</b>${x.open?.length ? `<i class="tag">リスト済</i>` : ""} ${esc(sub)}</span>${pct != null ? `<span class="gauge"><i style="width:${pct}%"></i></span>` : ""}</span></button>${act}</div>`;
   }).join("");
   return `<div class="stats1"><span><b style="color:var(--bad)">${out}</b>切れ</span><span><b style="color:var(--warn)">${week}</b>${SOON_DAYS}日内</span><span><b>${listed}</b>リスト済</span><span><b>${all.length}</b>全部</span></div>
+    <h3 class="sec">🛒 補充リスト<small>${listed}品</small></h3>${renderRefills(otherTasks().filter((t) => t.refill.length))}
+    <h3 class="sec">📦 在庫</h3>
     <div class="stock-acts three"><button type="button" class="btn pri" data-scan="add">📷 スキャン</button><button type="button" class="btn" data-sheet="new">＋ 登録</button><button type="button" class="btn" data-maint="1">🛠 整備</button></div>
     <div class="row-end"><button type="button" class="btn ghost sm" data-histview="1">🕘 補充の履歴（間違いを直す）</button></div>
     ${soon || noImg ? `<div class="row-end">${soon ? `<button type="button" class="btn sm" data-alltolist="1">切れそうな${soon}品をまとめてリストへ</button>` : ""}${noImg ? `<button type="button" class="btn ghost sm" data-fillimg="1">🖼 画像をまとめて取る（${noImg}品）</button>` : ""}</div>` : ""}
@@ -1369,6 +1415,9 @@ document.addEventListener("click", (e) => {
     addTexts([...parts, d.sug]);
     return;
   }
+  if (d.radd) { refillAdd(d.radd, el); return; }
+  if (d.rnew) { refillAddText(); return; }
+  if (d.rcancel) { refillCancel(d.rcancel, el); return; }
   if (d.tolist) { toList(d.tolist, el).then((ok) => ok && toast("補充リストに入れました")); return; }
   if (d.alltolist) { el.disabled = true; allToList(); return; }
   if (d.restock) { restock(d.restock, el); return; }

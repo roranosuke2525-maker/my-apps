@@ -383,3 +383,14 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .setform .row-end { margin: 0; }
 
 [hidden] { display: none !important; }
+
+/* 補充リスト：足す欄と ✖ */
+.rcard { padding: 10px; }
+.raddbox { display: flex; gap: 8px; margin: 0 0 6px; }
+.raddbox input { flex: 1; min-width: 0; }
+.raddbox .btn { flex: none; }
+.rsug { margin: 0 0 6px; }
+.rsug:empty { display: none; }
+.chip.new { border-style: dashed; color: var(--pri, #2f6b4f); }
+.ritem .more.rx { color: var(--bad); }
+.sec small { margin-left: 6px; font-weight: 500; }
