@@ -1,6 +1,6 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク）
-const CACHE = "shiori-v3";
-const SHELL = ["./", "index.html", "app.js", "parse.js", "style.css", "manifest.webmanifest", "icons/icon-192.png"];
+const CACHE = "shiori-v6";
+const SHELL = ["./", "index.html", "app.js", "parse.js", "style.css", "sync.html", "sync.js", "manifest.webmanifest", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

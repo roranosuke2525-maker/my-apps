@@ -9,6 +9,9 @@ const RATINGS = ["★★★★★", "★★★★", "★★★", "★★", "★"
 const SOURCES = ["📷 付箋写真", "📱 Kindle", "✍️ 手入力"];
 const KINDS = ["📍 舞台", "🌿 植物", "👥 人物・距離感", "🍽 食・道具", "📖 言葉", "✦ その他"];
 const TERM_MAX = 100;
+const RESEARCH_PROP = "🔍 背景を調べる"; // 読書メモ_DB のチェック。付けると次の「読書辞典の下準備」が背景を調べる
+const LOOKUP_MAX = 6;
+const NDL_BASE = "https://ndlsearch.ndl.go.jp/api/opensearch";
 const DESC_MAX = 1000;
 const TITLE_MAX = 200;
 const QUOTE_MAX = 1900; // Notion のタイトルは 2000 文字まで
@@ -27,6 +30,8 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
 
     try {
+      // Safari のブックマーク「しおりへ同期」が Amazon のページから送るフォーム。合言葉は持たないので、受け取った中身を画面に渡すだけ（Notion には触らない）
+      if (url.pathname === "/api/kindle-sync") return await kindleSyncPage(request, url);
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います" }, 401);
       const notion = notionClient(env);
@@ -38,6 +43,7 @@ export default {
       const term = p.match(/^\/api\/terms\/([0-9a-f-]{32,36})$/i);
 
       if (p === "/api/books" && m === "GET") return json(await getBooks(notion, env));
+      if (p === "/api/lookup" && m === "GET") return json(await lookupBooks(url.searchParams.get("q")));
       if (p === "/api/books" && m === "POST") return json(await addBook(notion, env, await readJson(request)));
       if (book && book[2] && m === "GET") return json(await getHighlights(notion, env, book[1]));
       if (book && !book[2] && m === "PATCH") return json(await updateBook(notion, env, book[1], await readJson(request)));
@@ -149,6 +155,7 @@ function bookOf(page) {
     legacyCount: relIds(p[LEGACY_REL]).length,
     termCount: relIds(p["読書辞典"]).length,
     termMore: !!p["読書辞典"]?.has_more,
+    research: !!p[RESEARCH_PROP]?.checkbox,
   };
 }
 
@@ -203,6 +210,11 @@ async function addBook(notion, env, body) {
   const properties = { 書籍名: { title: rich(title) }, ステータス: { status: { name: status } } };
   if (author) properties["著者名"] = { select: { name: author.replace(/,/g, "，") } };
   if (publisher) properties["出版社"] = { select: { name: publisher.replace(/,/g, "，") } };
+  const cover = clean(body?.cover, 500, "表紙のURL");
+  if (cover) {
+    if (!/^https:\/\/[^\s"<>]+$/.test(cover)) throw httpError(400, "表紙のURLが正しくありません");
+    properties["ファイル&メディア"] = { files: [{ type: "external", name: "cover.jpg", external: { url: cover } }] };
+  }
   const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.BOOK_DS_ID }, properties });
   return { book: bookOf(page) };
 }
@@ -226,9 +238,101 @@ async function updateBook(notion, env, id, body) {
   if ("review" in body) properties["感想"] = { rich_text: rich(clean(body.review, REVIEW_MAX, "感想")) };
   if ("meter" in body) properties["読書メーター"] = { checkbox: !!body.meter };
   if ("notebooklm" in body) properties.NotebookLM = { checkbox: !!body.notebooklm };
+  if ("research" in body) properties[RESEARCH_PROP] = { checkbox: !!body.research };
   if (!Object.keys(properties).length) throw httpError(400, "変更する項目がありません");
   const page = await notion("PATCH", `/pages/${normalizeId(id)}`, { properties });
   return { book: bookOf(page) };
+}
+
+// ---------- 本を Web で探す（国立国会図書館の書誌＋表紙） ----------
+// 書名で国立国会図書館サーチ（OpenSearch）を引き、ISBN のある本だけを返す。表紙は Amazon（ISBN-10）→ Google の順で、ある方を使う
+const tag = (xml, name) => (xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([^<]*)<`)) || [])[1]?.trim() || "";
+const unescapeXml = (s) => s.replace(/&(lt|gt|amp|quot|apos|#39);/g, (_, e) => ({ lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", "#39": "'" })[e]);
+
+// 「東野, 圭吾, 1958-2026」→「東野　圭吾」。年・役割（著・訳）は落とす。「Dostoyevsky, Fyodor」のような欧文はそのまま
+function formatCreator(raw) {
+  const first = unescapeXml(raw).split(/\s*;\s*/)[0];
+  const parts = first.split(/\s*,\s*/).map((x) => x.replace(/\s*(著|訳|編|監修|作|画)$/u, "").trim()).filter((x) => x && !/^\d{4}/.test(x));
+  if (!parts.length) return "";
+  return /^[\x20-\x7e]+$/.test(parts.join("")) ? parts.join(", ") : parts.join("　");
+}
+
+// 古い本は ISBN-10 で登録されていることがある → 13 桁にそろえる
+const isbnTo13 = (raw) => {
+  const d = String(raw || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+  if (/^97[89]\d{10}$/.test(d)) return d;
+  if (!/^\d{9}[\dX]$/.test(d)) return "";
+  const core = `978${d.slice(0, 9)}`;
+  const sum = [...core].reduce((a, c, i) => a + Number(c) * (i % 2 ? 3 : 1), 0);
+  return core + String((10 - (sum % 10)) % 10);
+};
+
+const isbn13to10 = (isbn13) => {
+  const core = isbn13.slice(3, 12);
+  const sum = [...core].reduce((a, c, i) => a + (10 - i) * Number(c), 0);
+  const r = (11 - (sum % 11)) % 11;
+  return core + (r === 10 ? "X" : String(r));
+};
+
+async function coverFor(isbn) {
+  const tries = [
+    { url: `https://images-na.ssl-images-amazon.com/images/P/${isbn13to10(isbn)}.09.LZZZZZZZ.jpg`, ok: (ct) => /image\/jpe?g/.test(ct) },
+    { url: `https://books.google.com/books/content?vid=ISBN${isbn}&printsec=frontcover&img=1&zoom=1`, ok: (ct) => /image\/jpe?g/.test(ct) },
+  ];
+  for (const t of tries) {
+    try {
+      const res = await fetch(t.url, { method: "HEAD" });
+      if (res.ok && t.ok(res.headers.get("content-type") || "")) return t.url;
+    } catch { /* 次を試す */ }
+  }
+  return "";
+}
+
+async function lookupBooks(q) {
+  const title = clean(q, TITLE_MAX, "書名").replace(/\s+/g, " ");
+  if (title.length < 2) throw httpError(400, "書名を2文字以上入れてください");
+  // 混み合うと一時的に失敗することがあるので1回だけやり直す
+  const ndl = () => fetch(`${NDL_BASE}?title=${encodeURIComponent(title)}&cnt=50`, { headers: { "User-Agent": "shiori/1.0 (reading-notes app)", Accept: "application/xml" } });
+  let res = await ndl();
+  if (!res.ok) {
+    await new Promise((r) => setTimeout(r, 600));
+    res = await ndl();
+  }
+  if (!res.ok) throw httpError(502, `国立国会図書館サーチにつながりませんでした（${res.status}）。少し待ってからもう一度`);
+  const xml = await res.text();
+  const seen = new Map();
+  const items = [];
+  for (const it of xml.match(/<item>[\s\S]*?<\/item>/g) || []) {
+    const isbn = isbnTo13(tag(it, 'dc:identifier xsi:type="dcndl:ISBN"'));
+    if (!isbn) continue;
+    const series = unescapeXml(tag(it, "dcndl:seriesTitle")).split(/\s*;\s*/)[0];
+    const publisher = unescapeXml(tag(it, "dc:publisher"));
+    // 同じ ISBN が何度も出るときは、文庫名・著者などが埋まっている方を採る
+    const dup = seen.get(isbn);
+    if (dup) {
+      if (!dup.series && series) { dup.series = series; dup.publisher = /文庫|新書/.test(series) ? series : dup.publisher; }
+      if (!dup.author) dup.author = formatCreator(tag(it, "dc:creator"));
+      if (!dup.volume) dup.volume = unescapeXml(tag(it, "dcndl:volume"));
+      continue;
+    }
+    const item = {
+      title: unescapeXml(tag(it, "dc:title")),
+      volume: unescapeXml(tag(it, "dcndl:volume")),
+      author: formatCreator(tag(it, "dc:creator")),
+      publisher: /文庫|新書/.test(series) ? series : publisher,
+      series,
+      year: (tag(it, "dcterms:issued").match(/\d{4}/) || [""])[0],
+      isbn,
+      cover: "",
+    };
+    seen.set(isbn, item);
+    items.push(item);
+  }
+  // 日本の本（978-4）を先に、その中でも文庫・新書を先に。海外の翻訳版は後ろ
+  const rank = (b) => (b.isbn.startsWith("9784") ? 0 : 2) + (/文庫|新書/.test(b.series) ? 0 : 1);
+  const picked = items.map((b, i) => [rank(b), i, b]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).slice(0, LOOKUP_MAX).map((x) => x[2]);
+  await Promise.all(picked.map(async (b) => { b.cover = await coverFor(b.isbn); }));
+  return { items: picked };
 }
 
 // ---------- ハイライト（DB_読書ハイライト） ----------
@@ -330,6 +434,33 @@ async function addHighlights(notion, env, body) {
   // ページの関連は書いた直後に増えていないことがあるので、足した数を加えて返す
   if (out.highlightCount === bookOf(book).highlightCount) out.highlightCount += added;
   return { added, book: out };
+}
+
+// ---------- Kindle 同期（ブックマークから受け取る） ----------
+const SYNC_MAX = 8 * 1024 * 1024;
+async function kindleSyncPage(request, url) {
+  if (request.method !== "POST") return Response.redirect(`${url.origin}/sync.html`, 303);
+  const type = request.headers.get("Content-Type") || "";
+  if (!/application\/x-www-form-urlencoded|multipart\/form-data/.test(type)) throw httpError(400, "フォームからだけ受け取れます");
+  const len = Number(request.headers.get("Content-Length") || 0);
+  if (len > SYNC_MAX) throw httpError(413, "一度に受け取れる量を超えました（8MB）");
+  const form = await request.formData().catch(() => null);
+  const raw = form?.get("data");
+  if (typeof raw !== "string" || !raw) throw httpError(400, "データがありません");
+  if (raw.length > SYNC_MAX) throw httpError(413, "一度に受け取れる量を超えました（8MB）");
+  let data;
+  try { data = JSON.parse(raw); } catch { throw httpError(400, "データの形が読めません"); }
+  if (!data || data.v !== 1 || !Array.isArray(data.books)) throw httpError(400, "データの形が読めません");
+  // 画面（sync.html）に渡す。</script> で閉じられないように < を逃がす
+  const safe = JSON.stringify(data).replace(/</g, "\\u003c");
+  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>しおりへ同期</title></head><body style="font-family:-apple-system,sans-serif;padding:24px;color:#1f3a3d">
+<p id="msg">Kindle のハイライトを受け取りました。しおりを開いています…</p>
+<script type="application/json" id="payload">${safe}</script>
+<script>
+try { sessionStorage.setItem("shiori:kindleSync", document.getElementById("payload").textContent); location.replace("/sync.html"); }
+catch (e) { document.getElementById("msg").textContent = "データを受け取れませんでした：" + e.message; }
+</script></body></html>`;
+  return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 async function updateHighlight(notion, env, id, body) {

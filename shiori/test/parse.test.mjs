@@ -112,3 +112,28 @@ test("読書辞典の調べるリンク：種別ごと。人物・距離感は�
   assert.deepEqual(P.lookupLinks("なにか", "").map((l) => l.label), ["辞書", "検索"]);
   assert.deepEqual(P.lookupLinks("  ", "📖 言葉"), []);
 });
+
+test("本そのものを調べるリンクと、本の名前つきの検索", () => {
+  const links = P.bookLinks({ title: "白鳥とコウモリ", author: "東野　圭吾", publisher: "幻冬舎文庫" });
+  assert.deepEqual(links.map((l) => [l.label, l.safe]), [["読書メーター", false], ["Amazon", true], ["出版社の紹介", true], ["国会図書館", true], ["Wikipedia", false], ["Google", false]]);
+  assert.equal(links[1].url, "https://www.amazon.co.jp/s?k=%E7%99%BD%E9%B3%A5%E3%81%A8%E3%82%B3%E3%82%A6%E3%83%A2%E3%83%AA%20%E6%9D%B1%E9%87%8E%20%E5%9C%AD%E5%90%BE&i=stripbooks");
+  assert.deepEqual(P.bookLinks({ title: " " }), []);
+  assert.deepEqual(P.lookupLinks("竹芝桟橋", "📍 舞台", "白鳥とコウモリ").map((l) => l.label), ["地図", "画像", "Wikipedia", "本と一緒に"]);
+  assert.deepEqual(P.lookupLinks("叔母", "👥 人物・距離感", "白鳥とコウモリ"), [], "人物は本の名前を付けても検索させない");
+  assert.deepEqual(P.lookupLinks("矜持", "📖 言葉").map((l) => l.label), ["辞書", "検索"]);
+  assert.equal(P.quoteSearchUrl("  人は　誰でも  " + "あ".repeat(60), "本"), `https://www.google.com/search?q=${encodeURIComponent(`"人は 誰でも ${"あ".repeat(33)}" 本`)}`);
+  assert.equal(P.quoteSearchUrl("", "本"), "");
+});
+
+test("Kindle 同期：見出しからページ・位置、Amazon の書名から出版社、著者を本棚の書き方に", () => {
+  assert.deepEqual(P.kindleMeta("黄色のハイライト | 位置: 1,234", ""), { page: null, loc: "1,234" });
+  assert.deepEqual(P.kindleMeta("ページ: 12 | 位置: 180", "180"), { page: 12, loc: "180" });
+  assert.deepEqual(P.kindleMeta("Yellow highlight | Location: 70", ""), { page: null, loc: "70" });
+  assert.deepEqual(P.kindleMeta("", "  "), { page: null, loc: "" });
+  assert.deepEqual(P.splitAmazonTitle("海辺のカフカ（上） (新潮文庫)"), { title: "海辺のカフカ（上）", publisher: "新潮文庫" });
+  assert.deepEqual(P.splitAmazonTitle("白鳥とコウモリ"), { title: "白鳥とコウモリ", publisher: "" });
+  assert.deepEqual(P.splitAmazonTitle("地下室の手記 (光文社古典新訳文庫)"), { title: "地下室の手記", publisher: "光文社古典新訳文庫" });
+  assert.equal(P.matchAuthor(["村上　春樹", "東野　圭吾"], "著者: 村上春樹"), "村上　春樹");
+  assert.equal(P.matchAuthor(["村上　春樹"], "by 凪良ゆう"), "凪良ゆう");
+  assert.equal(P.matchAuthor([], ""), "");
+});

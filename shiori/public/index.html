@@ -49,6 +49,16 @@
       </div>
       <form id="add-book" class="card form" hidden>
         <label>書籍名<input id="nb-title" required maxlength="200" autocomplete="off" placeholder="例：月と六ペンス"></label>
+        <div class="actions left">
+          <button type="button" id="nb-lookup" class="btn ghost small">Web で探して埋める</button>
+          <span id="nb-lookup-note" class="note"></span>
+        </div>
+        <ol id="nb-results" class="candidates" hidden></ol>
+        <div id="nb-cover-wrap" class="cover-pick" hidden>
+          <img id="nb-cover" alt="表紙" width="48">
+          <span class="note">表紙も一緒に入れます</span>
+          <button type="button" id="nb-cover-clear" class="linkish">表紙は入れない</button>
+        </div>
         <div class="row2">
           <label>著者名<input id="nb-author" list="authors" maxlength="60" autocomplete="off" placeholder="例：サマセット•モーム"></label>
           <label>出版社<input id="nb-publisher" list="publishers" maxlength="60" autocomplete="off" placeholder="例：新潮文庫"></label>
@@ -91,9 +101,28 @@
 
     <!-- Kindle -->
     <section id="view-kindle" class="view" hidden>
-      <div class="card guide">
-        <p>Kindle の「メモとハイライト」（<a href="https://read.amazon.co.jp/notebook" target="_blank" rel="noopener">read.amazon.co.jp/notebook</a>）で本を開き、ページ全体をコピーして下に貼ります。Kindle 端末の「My Clippings.txt」の中身でも読めます。</p>
+      <div class="card guide sync-card">
+        <h2 class="sec">Safari で1タップ同期</h2>
+        <p>Safari で Kindle の「メモとハイライト」（<a href="https://read.amazon.co.jp/notebook" target="_blank" rel="noopener">read.amazon.co.jp/notebook</a>）を開き、ブックマーク <b>「しおりへ同期」</b> を押すだけ。全部の本のハイライトとメモを読み取り、登録済みのものを外して、しおりに入れます。本棚に無い本は「読中」で足します。</p>
+        <div class="actions left">
+          <a id="bm-link" class="btn small" href="#" draggable="true" title="PC ではこのボタンをブックマークバーへドラッグ">🔖 しおりへ同期</a>
+          <button type="button" id="bm-copy" class="btn ghost small">コードをコピー</button>
+        </div>
+        <details id="bm-howto">
+          <summary>iPhone でブックマークを作るには</summary>
+          <ol>
+            <li>上の「コードをコピー」を押す</li>
+            <li>Safari の共有ボタン → <b>ブックマークを追加</b>（このページでよい）。名前を「しおりへ同期」にして保存</li>
+            <li>ブックマーク一覧を開き、右下の「編集」→ 作ったブックマークを開き、<b>アドレスをすべて消してコピーしたコードを貼る</b> → 完了</li>
+            <li>Safari で read.amazon.co.jp/notebook を開いて Amazon にログインし、ブックマーク「しおりへ同期」を押す</li>
+          </ol>
+          <p class="note">PC（Safari・Chrome）では「🔖 しおりへ同期」をブックマークバーへドラッグするだけ。Amazon のログインはブラウザの中で済ませるので、しおりにパスワードは渡りません。</p>
+        </details>
       </div>
+      <details class="card guide">
+        <summary>貼り付けで入れる（ブックマークが使えないとき）</summary>
+        <p>Kindle の「メモとハイライト」で本を開き、ページ全体をコピーして下に貼ります。Kindle 端末の「My Clippings.txt」の中身でも読めます。</p>
+      </details>
       <label class="pick">本<select id="kindle-book"></select></label>
       <textarea id="kindle-text" rows="7" placeholder="黄色のハイライト | 位置: 1,234&#10;ここにハイライトの文…&#10;メモ: 自分のメモ"></textarea>
       <div class="actions">
@@ -120,6 +149,7 @@
       </form>
       <div class="dict-tools">
         <input id="dict-q" type="search" placeholder="さがす" aria-label="辞典をさがす" autocomplete="off">
+        <button type="button" id="dict-web" class="btn ghost small" title="入れた言葉を、この本の名前と一緒に Web で検索">Web で</button>
         <label class="upto">p.<input id="dict-upto" inputmode="numeric" placeholder="—" aria-label="このページまでだけ見る">まで</label>
       </div>
       <div id="dict-filter" class="chips" aria-label="種別で絞る"></div>

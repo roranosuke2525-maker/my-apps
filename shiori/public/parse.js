@@ -100,6 +100,33 @@
     return n.length ? n : parseBlocks(t);
   }
 
+  // Safari のブックマーク「しおりへ同期」が読んだ Kindle の見出し（「黄色のハイライト | 位置: 1,234」「ページ: 12」）からページ・位置を取る
+  function kindleMeta(header, loc) {
+    const h = String(header || "");
+    const pm = h.match(/(?:ページ|page)\s*[:：]?\s*([0-9０-９,]+)/i);
+    const page = pm ? Number(pm[1].replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).replace(/,/g, "")) : null;
+    const lm = h.match(/(?:位置|location)(?:\s*No\.?)?\s*[:：]?\s*([0-9０-９,\-–]+)/i);
+    const l = String(loc || "").trim() || (lm ? lm[1] : "");
+    return { page: Number.isInteger(page) ? page : null, loc: l.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)) };
+  }
+
+  // Amazon の書名「海辺のカフカ（上） (新潮文庫)」→ 書名と出版社（文庫・新書のかっこだけ）
+  function splitAmazonTitle(raw) {
+    let title = String(raw || "").replace(/\s+/g, " ").trim();
+    let publisher = "";
+    const m = title.match(/^(.*?)\s*[(（]([^()（）]*(?:文庫|新書|選書|ブックス|BOOKS|BUNKO|Bunko))[)）]\s*$/i);
+    if (m) { title = m[1].trim(); publisher = m[2].trim(); }
+    return { title, publisher };
+  }
+
+  // 「著者: 村上春樹」を、本棚にある書き方（「村上　春樹」）に合わせる。無ければそのまま
+  function matchAuthor(authors, raw) {
+    const a = String(raw || "").replace(/^(?:著者|by)\s*[:：]?\s*/i, "").replace(/\s*[,、].*$/, "").trim();
+    if (!a) return "";
+    const k = norm(a);
+    return (authors || []).find((x) => norm(x) === k) || a;
+  }
+
   // 書名で読書メモ_DB の本を探す（空白・かっこの違いは無視）
   function matchBook(books, title) {
     const k = norm(title);
@@ -197,22 +224,52 @@
 
   // ---------- 読書辞典：種別ごとに調べるリンク ----------
   // 人物・距離感は検索するとネタバレになりやすいので出さない
-  function lookupLinks(term, kind) {
-    const q = encodeURIComponent(String(term || "").trim());
+  function lookupLinks(term, kind, bookTitle) {
+    const t = String(term || "").trim();
+    const q = encodeURIComponent(t);
     if (!q) return [];
+    // 本の名前と一緒に検索すると、その作品の中での意味に当たりやすい（人物はネタバレになるので付けない）
+    const withBook = bookTitle ? { label: "本と一緒に", url: `https://www.google.com/search?q=${encodeURIComponent(`${t} ${bookTitle}`)}` } : null;
     const maps = { label: "地図", url: `https://www.google.com/maps/search/?api=1&query=${q}` };
     const image = { label: "画像", url: `https://www.google.com/search?tbm=isch&q=${q}` };
     const dict = { label: "辞書", url: `https://kotobank.jp/search?q=${q}` };
     const web = { label: "検索", url: `https://www.google.com/search?q=${q}` };
     const wiki = { label: "Wikipedia", url: `https://ja.wikipedia.org/w/index.php?search=${q}` };
-    return {
+    const links = {
       "📍 舞台": [maps, image, wiki],
       "🌿 植物": [image, wiki],
       "👥 人物・距離感": [],
       "🍽 食・道具": [image, dict],
       "📖 言葉": [dict, web],
     }[kind] || [dict, web];
+    return kind === "👥 人物・距離感" || !withBook ? links : [...links, withBook];
   }
 
-  root.ShioriParse = { lookupLinks, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
+  // ---------- 本そのものを調べるリンク ----------
+  // レビューや解説はネタバレを含みやすいので、行き先は自分で選ぶ。書店・出版社・図書館は比較的安全
+  function bookLinks(book) {
+    const title = String(book?.title || "").trim();
+    if (!title) return [];
+    const author = String(book?.author || "").replace(/\u3000/g, " ").trim();
+    const ta = encodeURIComponent(author ? `${title} ${author}` : title);
+    const t = encodeURIComponent(title);
+    const pub = String(book?.publisher || "").trim();
+    return [
+      { label: "読書メーター", url: `https://bookmeter.com/search?keyword=${ta}`, safe: false },
+      { label: "Amazon", url: `https://www.amazon.co.jp/s?k=${ta}&i=stripbooks`, safe: true },
+      { label: "出版社の紹介", url: `https://www.google.com/search?q=${encodeURIComponent(`${title} ${pub || author} 作品紹介`)}`, safe: true },
+      { label: "国会図書館", url: `https://ndlsearch.ndl.go.jp/search?cs=bib&f-ht=ndl&keyword=${ta}`, safe: true },
+      { label: "Wikipedia", url: `https://ja.wikipedia.org/w/index.php?search=${t}`, safe: false },
+      { label: "Google", url: `https://www.google.com/search?q=${ta}`, safe: false },
+    ];
+  }
+
+  // ハイライトの文を、本の名前つきで検索する（長い引用は頭の 40 字だけ）
+  function quoteSearchUrl(text, bookTitle) {
+    const q = String(text || "").replace(/\s+/g, " ").trim().slice(0, 40);
+    if (!q) return "";
+    return `https://www.google.com/search?q=${encodeURIComponent(`"${q}" ${bookTitle || ""}`.trim())}`;
+  }
+
+  root.ShioriParse = { kindleMeta, splitAmazonTitle, matchAuthor, lookupLinks, bookLinks, quoteSearchUrl, parseKindle, pageFromText, splitTitle, matchBook, sentences, markSentences, groupMarks, exportText, norm };
 })(typeof window !== "undefined" ? window : globalThis);

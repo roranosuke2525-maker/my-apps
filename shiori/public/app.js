@@ -11,7 +11,7 @@ const SAVE_CHUNK = 40; // Worker が一度に足せるハイライトの数
 const KEY_STORAGE = "key";
 
 const $ = (s, el = document) => el.querySelector(s);
-const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), terms: new Map(), dict: { kind: "", q: "", upto: "", editing: null, newKind: "✦ その他", confirm: "" }, page: null, kindle: null, done: {} };
+const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), terms: new Map(), nbCover: "", dict: { kind: "", q: "", upto: "", editing: null, newKind: "✦ その他", confirm: "" }, page: null, kindle: null, done: {} };
 
 // ---------- 共通 ----------
 let memoryKey = "";
@@ -176,19 +176,66 @@ function renderShelf() {
   }));
 }
 
+function setCover(url) {
+  state.nbCover = url || "";
+  $("#nb-cover-wrap").hidden = !state.nbCover;
+  if (state.nbCover) $("#nb-cover").src = state.nbCover; else $("#nb-cover").removeAttribute("src");
+}
+
+// 書名で国立国会図書館を引いて候補を出し、選ぶと著者・出版社・表紙が埋まる
+async function lookupBook() {
+  const q = $("#nb-title").value.trim();
+  const note = $("#nb-lookup-note");
+  const list = $("#nb-results");
+  if (q.length < 2) { toast("先に書名を2文字以上入れてください"); return; }
+  const btn = $("#nb-lookup");
+  btn.disabled = true;
+  note.textContent = "探しています…";
+  list.hidden = true;
+  try {
+    const { items } = await api("GET", `/api/lookup?q=${encodeURIComponent(q)}`);
+    if (!items.length) { note.textContent = "見つかりませんでした。書名を短くして試してください"; return; }
+    note.textContent = `${items.length}件。合うものを押すと埋まります`;
+    list.replaceChildren(...items.map((b) => el("li", {}, el("button", { type: "button", onclick: () => {
+      $("#nb-title").value = b.volume ? `${b.title} ${b.volume}` : b.title;
+      if (b.author) $("#nb-author").value = b.author;
+      if (b.publisher) $("#nb-publisher").value = b.publisher;
+      setCover(b.cover);
+      list.hidden = true;
+      note.textContent = `${b.year ? `${b.year}年` : ""}${b.isbn ? ` ISBN ${b.isbn}` : ""}`.trim();
+    } },
+      b.cover ? el("img", { src: b.cover, alt: "", loading: "lazy" }) : el("span", { class: "no-cover" }, "なし"),
+      el("span", {},
+        el("div", { class: "c-title" }, b.volume ? `${b.title} ${b.volume}` : b.title),
+        el("div", { class: "c-meta" }, [b.author, b.publisher, b.year && `${b.year}年`].filter(Boolean).join(" ・ ")))))));
+    list.hidden = false;
+  } catch (e) {
+    note.textContent = "";
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function setupAddBook() {
   const form = $("#add-book");
   $("#add-book-open").addEventListener("click", () => { form.hidden = false; $("#nb-title").focus(); });
-  $("#add-book-cancel").addEventListener("click", () => { form.hidden = true; });
+  $("#add-book-cancel").addEventListener("click", () => { form.hidden = true; $("#nb-results").hidden = true; $("#nb-lookup-note").textContent = ""; setCover(""); });
+  $("#nb-lookup").addEventListener("click", lookupBook);
+  $("#nb-title").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("#nb-author").value) { e.preventDefault(); lookupBook(); } });
+  $("#nb-cover-clear").addEventListener("click", () => setCover(""));
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = form.querySelector("[type=submit]");
     btn.disabled = true;
     try {
-      const { book } = await api("POST", "/api/books", { title: $("#nb-title").value, author: $("#nb-author").value, publisher: $("#nb-publisher").value, status: "読中" });
+      const { book } = await api("POST", "/api/books", { title: $("#nb-title").value, author: $("#nb-author").value, publisher: $("#nb-publisher").value, cover: state.nbCover, status: "読中" });
       replaceBook(book);
       form.reset();
       form.hidden = true;
+      $("#nb-results").hidden = true;
+      $("#nb-lookup-note").textContent = "";
+      setCover("");
       selectBook(book.id);
       state.filter = "読中";
       renderAll();
@@ -237,7 +284,7 @@ function renderSheet(b, data) {
   } }, STATUSES.map((s) => el("option", { value: s, selected: s === b.status }, s)));
 
   const list = data.highlights.length
-    ? el("ol", { class: "hls" }, data.highlights.map((h) => hlItem(h)))
+    ? el("ol", { class: "hls" }, data.highlights.map((h) => hlItem(h, b)))
     : el("p", { class: "note" }, "まだハイライトがありません。付箋のページを撮るか、Kindle から取り込んでください。");
 
   const legacy = data.legacy.length
@@ -256,6 +303,8 @@ function renderSheet(b, data) {
       el("button", { type: "button", class: "btn ghost", onclick: () => go("dict") }, `辞典${b.termCount ? ` ${b.termCount}${b.termMore ? "+" : ""}語` : ""}`),
       el("button", { type: "button", class: "btn ghost", onclick: () => go("done") }, "読み終えた")),
     el("label", { class: "pick" }, "ステータス", statusSel),
+    bookLinksRow(b),
+    researchCard(b),
     el("h3", { class: "sec" }, `ハイライト ${data.highlights.length}件`),
     list,
     legacy,
@@ -265,14 +314,43 @@ function renderSheet(b, data) {
   ].filter(Boolean));
 }
 
-function hlItem(h) {
+// 本そのものを調べるリンク。点線のものはレビュー・あらすじが出やすい（ネタバレ注意）
+function bookLinksRow(b) {
+  return el("div", {},
+    el("h3", { class: "sec" }, "この本を調べる"),
+    el("div", { class: "booklinks" },
+      P.bookLinks(b).map((l) => el("a", { href: l.url, target: "_blank", rel: "noopener", class: l.safe ? "" : "risky", title: l.safe ? "" : "レビュー・あらすじが出やすい（ネタバレ注意）" }, l.label)),
+      el("span", { class: "note" }, "点線はネタバレ注意")));
+}
+
+// Claude に背景（作者・時代・舞台）をネタバレなしで調べてもらう。次の 7:08 か 21:08 の「読書辞典の下準備」が拾う
+function researchCard(b) {
+  const btn = el("button", { type: "button", class: "btn ghost small", onclick: async () => {
+    btn.disabled = true;
+    try {
+      const { book } = await api("PATCH", `/api/books/${b.id}`, { research: !b.research });
+      replaceBook(book);
+      Object.assign(b, book);
+      toast(book.research ? "頼みました。次の 7:08 か 21:08 に Claude が辞典と「読む前に」を書き足します" : "取り消しました");
+      wrap.replaceWith(researchCard(b));
+    } catch (e) { toast(e.message); btn.disabled = false; }
+  } }, b.research ? "頼むのをやめる" : "Claude に背景を調べてもらう");
+  const wrap = el("div", { class: "research" },
+    b.research ? el("span", { class: "on" }, "🔍 背景を調べる：頼んであります（次の 7:08 か 21:08）") : el("span", { class: "note" }, "作者・時代・舞台・作品の位置づけを、ネタバレなしで辞典と本のページに足してもらえます"),
+    el("div", {}, btn));
+  return wrap;
+}
+
+function hlItem(h, book) {
   const where = [h.page != null ? `p.${h.page}` : "", h.loc ? `位置 ${h.loc}` : "", h.source || ""].filter(Boolean);
+  const searchUrl = P.quoteSearchUrl(h.text, book?.title);
   const memoBox = el("div", { class: "hl-memo", hidden: !h.memo }, h.memo || "");
   const item = el("li", { class: "hl" },
     el("blockquote", {}, h.text),
     memoBox,
     el("div", { class: "hl-meta" }, ...where.map((w) => el("span", {}, w)),
-      h.id ? el("button", { type: "button", class: "linkish", onclick: () => editMemo(h, item, memoBox) }, h.memo ? "メモを直す" : "メモを書く") : null));
+      h.id ? el("button", { type: "button", class: "linkish", onclick: () => editMemo(h, item, memoBox) }, h.memo ? "メモを直す" : "メモを書く") : null,
+      searchUrl ? el("a", { href: searchUrl, target: "_blank", rel: "noopener", class: "linkish", title: "この文を本の名前と一緒に検索" }, "検索") : null));
   return item;
 }
 
@@ -444,7 +522,38 @@ async function savePage(btn) {
 }
 
 // ---------- Kindle ----------
+// Safari のブックマーク「しおりへ同期」。Amazon の「メモとハイライト」の中で動き、全部の本のハイライトを読んで /api/kindle-sync にフォームで送る（→ sync.html）
+function bookmarkletCode() {
+  const action = `${location.origin}/api/kindle-sync`;
+  const code = `(()=>{const S=${JSON.stringify(action)};if(!/^read\\.amazon\\./.test(location.hostname)){if(confirm("Kindle の「メモとハイライト」を開いてから押してください。いま開きますか？"))location.href="https://read.amazon.co.jp/notebook";return}
+if(document.getElementById("shiori-sync"))return;const o=location.origin,q=(d,s)=>d.querySelector(s),T=(e)=>(e?e.textContent:"").replace(/\\s+/g," ").trim();
+const box=document.createElement("div");box.id="shiori-sync";box.style.cssText="position:fixed;left:12px;right:12px;bottom:24px;z-index:2147483647;background:#1f4d52;color:#fff;padding:14px 16px;border-radius:12px;font:15px/1.5 -apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3)";document.body.appendChild(box);
+const say=(m)=>{box.textContent="しおりへ同期："+m};say("本の一覧を読んでいます…");
+const get=async(u)=>{const r=await fetch(u,{credentials:"include"});if(!r.ok)throw new Error("HTTP "+r.status);return new DOMParser().parseFromString(await r.text(),"text/html")};
+(async()=>{try{const lib=await get(o+"/notebook");
+const books=[...lib.querySelectorAll(".kp-notebook-library-each-book")].map(b=>({asin:b.id,title:T(q(b,"h2")),author:T(q(b,"p")),cover:(q(b,"img")||{}).src||"",items:[]}));
+if(!books.length)throw new Error("本が見つかりません。Amazon にログインしていますか？");
+for(let i=0;i<books.length;i++){const b=books[i];say((i+1)+"/"+books.length+" 『"+b.title+"』");let u=o+"/notebook?asin="+encodeURIComponent(b.asin)+"&contentLimitState=&";
+for(let n=0;n<80&&u;n++){const d=await get(u);
+for(const r of d.querySelectorAll(".a-row.a-spacing-base")){const t=T(q(r,"#highlight")),m=T(q(r,"#note")),h=T(q(r,"#annotationHighlightHeader"))||T(q(r,"#annotationNoteHeader")),l=(q(r,"#kp-annotation-location")||{}).value||"";if(t||m)b.items.push({text:t,note:m,header:h,loc:l})}
+const nx=(q(d,".kp-notebook-annotations-next-page-start")||{}).value,cl=(q(d,".kp-notebook-content-limit-state")||{}).value||"";u=nx?o+"/notebook?asin="+encodeURIComponent(b.asin)+"&token="+encodeURIComponent(nx)+"&contentLimitState="+encodeURIComponent(cl):""}}
+const total=books.reduce((a,b)=>a+b.items.length,0);say(books.length+"冊・"+total+"件を読み取りました。しおりを開きます…");
+const f=document.createElement("form");f.method="POST";f.action=S;f.style.display="none";const i=document.createElement("input");i.type="hidden";i.name="data";i.value=JSON.stringify({v:1,host:location.hostname,at:new Date().toISOString(),books});f.appendChild(i);document.body.appendChild(f);f.submit()}
+catch(e){say("うまくいきませんでした："+e.message);setTimeout(()=>box.remove(),9000)}})()})()`;
+  return `javascript:${encodeURIComponent(code)}`;
+}
+
 function setupKindle() {
+  const bm = bookmarkletCode();
+  $("#bm-link").href = bm;
+  $("#bm-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    toast("このボタンはブックマークバーへドラッグして使います。iPhone は「コードをコピー」から");
+  });
+  $("#bm-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(bm); toast("コピーしました。ブックマークのアドレスに貼ってください"); $("#bm-howto").open = true; }
+    catch { const ta = el("textarea", { readonly: true, rows: "3", "aria-label": "ブックマークのコード" }); ta.value = bm; $("#bm-howto").after(ta); ta.select(); toast("長押しでコピーしてください"); }
+  });
   $("#kindle-book").addEventListener("change", (e) => { selectBook(e.target.value); if (state.kindle) renderKindle(); });
   $("#kindle-parse").addEventListener("click", () => {
     const groups = P.parseKindle($("#kindle-text").value);
@@ -513,6 +622,12 @@ async function loadTerms(bookId, force = false) {
 function setupDict() {
   $("#dict-book").addEventListener("change", (e) => { selectBook(e.target.value); resetDictForm(); renderDict(); });
   $("#dict-q").addEventListener("input", (e) => { state.dict.q = e.target.value; renderDict(); });
+  $("#dict-web").addEventListener("click", () => {
+    const q = $("#dict-q").value.trim();
+    const book = bookOf($("#dict-book").value);
+    if (!q) { toast("「さがす」に言葉を入れてから押してください"); return; }
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(book ? `${q} ${book.title}` : q)}`, "_blank", "noopener");
+  });
   $("#dict-upto").addEventListener("input", (e) => { state.dict.upto = e.target.value.trim(); renderDict(); });
   $("#dict-cancel").addEventListener("click", resetDictForm);
   $("#dict-form").addEventListener("submit", saveTerm);
@@ -618,7 +733,7 @@ async function renderDict() {
   if (!terms.length) { box.replaceChildren(el("p", { class: "empty" }, "まだ語がありません。上の欄から1つ目を足してください。")); return; }
   box.replaceChildren(...[
     el("ol", { class: "terms" }, shown.map((t) => {
-      const links = P.lookupLinks(t.term, t.kind);
+      const links = P.lookupLinks(t.term, t.kind, bookOf(bookId)?.title);
       const confirming = d.confirm === t.id;
       return el("li", { class: "term" },
         el("div", { class: "term-head" },
