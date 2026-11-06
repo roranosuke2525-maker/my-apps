@@ -172,6 +172,7 @@ beforeEach(() => {
     if (!p) return new Response(JSON.stringify({ code: "object_not_found" }), { status: 404 });
     if (init.method === "GET") return ok(p);
     if (init.method === "PATCH") {
+      if (body.in_trash) { p.in_trash = true; return ok(p); }
       if (p.parent.data_source_id === AIBOU || p.parent.data_source_id === ITEMS) {
         Object.assign(p.properties, fakeProps(body.properties));
         return ok(p);
@@ -364,6 +365,16 @@ test("ギルド：ほうこくは依頼に紐づけて DB_ギルド達成記録 
   assert.deepEqual(post.body.parent, { type: "data_source_id", data_source_id: REPORT });
   assert.equal(post.body.properties.ひとこと.title[0].text.content, "サブスクを解約した");
   assert.deepEqual(post.body.properties.依頼, { relation: [{ id: QID }] });
+});
+
+test("ギルド：ほうこくの取り消しは、ほうこくの行をごみ箱へ。ほかのDBのページは消さない", async () => {
+  const RID = "4".repeat(32);
+  pages.push(other(RID, REPORT, { ひとこと: { type: "title", title: text("まちがい") }, 依頼: { type: "relation", relation: [{ id: QID }] } }, "2026-10-03T04:00:00.000Z"));
+  const res = await req("DELETE", `/api/guild/reports/${RID}`);
+  assert.equal(res.status, 200);
+  const patch = calls.find((c) => c.method === "PATCH" && c.path === `/pages/${RID}`);
+  assert.deepEqual(patch.body, { in_trash: true });
+  assert.equal((await req("DELETE", `/api/guild/reports/${QID}`)).status, 403);
 });
 
 test("ギルド：依頼以外のページや空のひとことは受け付けない", async () => {

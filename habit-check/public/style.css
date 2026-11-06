@@ -908,3 +908,10 @@ body.theater-open { overflow: hidden; }
 .qrow-report.done { background: #4f9a6a; color: #fff; }
 .qrow.locked { opacity: 0.6; }
 .qrow.master .qrow-task { color: #b07a12; }
+
+/* トーストのボタン（取り消し）・ほうこくの取り消し */
+.toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; border-radius: 14px; width: max-content; max-width: calc(100% - 32px); }
+.toast-btn { flex: none; border: 0; background: none; color: var(--honey, #f6cf55); font: inherit; font-weight: 800; padding: 4px 2px; cursor: pointer; text-decoration: underline; }
+.report { position: relative; padding-right: 92px; }
+.report-undo { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); border: 1px solid var(--line); background: var(--card); color: var(--danger); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.report-undo:disabled { opacity: 0.5; }

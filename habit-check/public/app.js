@@ -902,6 +902,12 @@ async function renderGuild() {
         ? h("div", { class: "list scroll fill" }, reports.map((r) => h("div", { class: "card report" },
           h("span", { class: "rnote", text: r.note || "（ひとことなし）" }),
           h("span", { class: "rmeta", text: `${jstStamp(r.date)} ・ ${(r.questIds || []).map((id) => titles[id.replace(/-/g, "")] || "依頼").join("、")}` }),
+          h("button", { type: "button", class: "report-undo", onclick: (e) => {
+            if (!confirm(`「${r.note || "このほうこく"}」を取り消しますか？（このとき落ちたそうびも消えます）`)) return;
+            e.currentTarget.disabled = true;
+            const qs = quests.filter((q) => (r.questIds || []).some((id) => id.replace(/-/g, "") === q.id.replace(/-/g, "")));
+            undoReport(r.id, qs);
+          } }, "取り消す"),
         )))
         : h("p", { class: "empty-msg", text: "まだほうこくがありません" }),
     ], "guild:reports");
@@ -1085,13 +1091,15 @@ function showRewards(drops, epis) {
 async function submitReport(selected, note, send) {
   send.disabled = true;
   try {
-    const { drops = [] } = await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
-    toast(`ほうこくしました：${selected.map((q) => q.title).join("、")}`);
+    const { report, drops = [] } = await api("POST", "/api/guild/reports", { questIds: selected.map((q) => q.id), note });
+    toast(`ほうこくしました：${selected.map((q) => q.title).join("、")}`, false,
+      report?.id ? { label: "取り消す", run: () => undoReport(report.id, selected) } : null);
     const epis = selected
       .map((q) => ({ q, no: epilogueCountOf(q, (q.count ?? 0) + 1) }))
       .filter(({ q, no }) => no > epilogueCountOf(q, q.count ?? 0));
     if (drops.length) state.loadedAt.items = 0;
-    if (drops.length || epis.length) setTimeout(() => showRewards(drops, epis), 1700);
+    clearTimeout(rewardTimer);
+    if (drops.length || epis.length) rewardTimer = setTimeout(() => showRewards(drops, epis), 1700);
     // Notion の数え直しを待たずに、けいじばんの回数を1つ進めておく
     for (const q of selected) {
       q.count = (q.count ?? 0) + 1;
@@ -1113,6 +1121,37 @@ async function submitReport(selected, note, send) {
     toast(err.message, true);
     send.disabled = false;
     return false;
+  }
+}
+
+// ほうこくの取り消し：ほうこくと、そのとき落ちたそうびを消して（Notion のごみ箱へ）、ギルド・Lv・そうびを読み直す
+let rewardTimer = null;
+async function undoReport(id, quests = []) {
+  clearTimeout(rewardTimer); // 取り消したほうこくの「そうび・後日談」の知らせは出さない
+  try {
+    await api("DELETE", `/api/guild/reports/${id}`);
+    // 画面が読み直されていることがあるので、いまの一覧の同じ依頼を進め戻す
+    const now = state.data.guild?.quests || [];
+    const ids = new Set(quests.map((q) => q.id.replace(/-/g, "")));
+    for (const q of now.filter((x) => ids.has(x.id.replace(/-/g, "")))) {
+      q.count = Math.max(0, (q.count ?? 1) - 1);
+      if (!q.repeat && q.stages?.length) {
+        q.master = q.count >= q.stages.length;
+        q.stage = Math.min(q.count, q.stages.length - 1);
+      }
+    }
+    if (state.data.guild) state.data.guild.reports = state.data.guild.reports.filter((r) => r.id.replace(/-/g, "") !== id.replace(/-/g, ""));
+    toast("ほうこくを取り消しました");
+    state.loadedAt.items = 0;
+    state.loadedAt.battle = 0;
+    if (state.view === "guild") renderGuild();
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => enqueue(async () => {
+      await Promise.all([loadData("guild", "/api/guild", { force: true }), loadPlayer({ force: true })]);
+      if (state.view === "guild") renderGuild();
+    }), REFRESH_DELAY);
+  } catch (err) {
+    toast(err.message, true);
   }
 }
 
@@ -1775,13 +1814,18 @@ function closeSheet() {
 }
 
 let toastTimer = null;
-function toast(msg, error = false) {
+// action：{ label, run } を渡すと、トーストにボタンを付けて少し長く出す（取り消しなど）
+function toast(msg, error = false, action = null) {
   const el = $("toast");
   el.textContent = msg;
+  el.classList.toggle("has-action", !!action);
+  if (action) {
+    el.append(h("button", { type: "button", class: "toast-btn", onclick: () => { el.classList.remove("show"); action.run(); } }, action.label));
+  }
   el.classList.toggle("error", error);
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), error ? 4000 : 1600);
+  toastTimer = setTimeout(() => el.classList.remove("show"), action ? 6000 : error ? 4000 : 1600);
 }
 
 // ---------- イベント ----------

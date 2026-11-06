@@ -75,6 +75,10 @@ export default {
       if (url.pathname === "/api/guild" && request.method === "GET") {
         return json(await getGuild(notion, env));
       }
+      const reportMatch = url.pathname.match(/^\/api\/guild\/reports\/([0-9a-f-]{32,36})$/i);
+      if (reportMatch && request.method === "DELETE") {
+        return json(await deleteReport(notion, env, reportMatch[1]));
+      }
       if (url.pathname === "/api/guild/reports" && request.method === "POST") {
         const body = await readJson(request);
         return json(await createReport(notion, env, body));
@@ -576,6 +580,24 @@ async function createReport(notion, env, body) {
     try { drops = await syncDrops(notion, env, [page]); } catch { /* 未接続など */ }
   }
   return { report: summarizeReport(page), drops };
+}
+
+// ほうこくの取り消し：ほうこくの行と、そのほうこくで落ちたそうびを ごみ箱へ（Notion で戻せる）
+async function deleteReport(notion, env, id) {
+  const page = await notion("GET", `/pages/${id}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(dsId(env, "REPORT_DS_ID"))) throw httpError(403, "DB_ギルド達成記録 のほうこくではありません");
+  await notion("PATCH", `/pages/${id}`, { in_trash: true });
+  let removedItems = 0;
+  if (env.ITEM_DS_ID) {
+    try {
+      const items = await queryAll(notion, dsId(env, "ITEM_DS_ID"), { filter: { property: "ほうこく", relation: { contains: id } } });
+      for (const it of items) {
+        await notion("PATCH", `/pages/${it.id}`, { in_trash: true });
+        removedItems++;
+      }
+    } catch { /* そうびの DB に届かなくても、ほうこくの取り消しはできている */ }
+  }
+  return { ok: true, removedItems };
 }
 
 // questIds（配列・最大 REPORT_QUEST_MAX 件）か、以前の questId（1件）を受け付ける

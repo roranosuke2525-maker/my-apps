@@ -156,6 +156,12 @@ const mock = `
     if (p === "/api/player") return reply({ player: player() });
     if (p === "/api/party") return reply({ members: members.filter((m) => m.needLv <= level()) });
     if (p === "/api/guild" && method === "GET") return reply({ quests: quests.map((q) => ({ ...q, playerLv: level() })), reports });
+    if (p.startsWith("/api/guild/reports/") && method === "DELETE") {
+      const id = p.split("/").pop();
+      const i = reports.findIndex((r) => r.id === id);
+      if (i >= 0) { const q = quests.find((x) => x.id === reports[i].questIds[0]); if (q) q.count = Math.max(0, q.count - 1); reports.splice(i, 1); }
+      return reply({ ok: true, removedItems: 0 });
+    }
     if (p === "/api/guild/reports") {
       const q = quests.find((x) => x.id === (body.questIds?.[0] || body.questId));
       q.count += 1; q.totalExp += q.exp; guildExp += q.exp;
