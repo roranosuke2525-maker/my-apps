@@ -6,6 +6,7 @@
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
+    sug: "bceda4df-aaa1-409b-9bb3-93f7ba88fd90", // DB_AI提案（AIからの提案。採用／見送りはアプリで決める）
     news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
     app: "01b7e064-7c8d-439e-8234-6fffad6ca4e4", // DB_アプリ（🛠 アプリ修正の対象）
@@ -55,7 +56,7 @@
   // ================= 状態 =================
   const S = {
     mode: "loading", tab: "today", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
-    tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
+    tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], sugs: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
     readList: [], readTag: "", readSeg: "list", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},

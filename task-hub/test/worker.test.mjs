@@ -153,3 +153,19 @@ test("削除はゴミ箱へ移す（in_trash）、戻すで元に戻る", async 
     assert.equal((await s.call("notion-delete-pages", { page_ids: [] })).status, 400);
   } finally { s.done(); }
 });
+
+test("今すぐ提案：which=suggest は別の定期実行（SUGGEST_ROUTINE_ID / TOKEN）を起動する", async () => {
+  const s = setup();
+  try {
+    const fired = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (u, init) => { if (String(u).includes("/routines/")) { fired.push({ u: String(u), auth: init.headers.Authorization }); return new Response(JSON.stringify({ claude_code_session_url: "https://x" }), { status: 200, headers: { "Content-Type": "application/json" } }); } return realFetch(u, init); };
+    const env = { ...s.env, ROUTINE_ID: "trig_aaa", ROUTINE_TOKEN: "t1", SUGGEST_ROUTINE_ID: "trig_bbb", SUGGEST_ROUTINE_TOKEN: "t2" };
+    const post = (body) => worker.fetch(new Request("https://app.test/api/run", { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body }), env);
+    assert.equal((await post(JSON.stringify({ which: "suggest" }))).status, 200);
+    assert.equal((await post("")).status, 200);
+    assert.deepEqual(fired.map((f) => [f.u.split("/routines/")[1].split("/")[0], f.auth]), [["trig_bbb", "Bearer t2"], ["trig_aaa", "Bearer t1"]]);
+    const none = await worker.fetch(new Request("https://app.test/api/run", { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ which: "suggest" }) }), s.env);
+    assert.equal(none.status, 500); assert.equal((await none.json()).code, "no_routine");
+  } finally { s.done(); }
+});

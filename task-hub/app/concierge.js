@@ -6,6 +6,7 @@
     const d = TODAY(); const out = [];
     const today = inStage("today"); const late = lateOf(); const next = inStage("next"); const inbox = inStage("inbox");
     const wait = inStage("wait"); const some = inStage("some");
+    if (S.sugs.length) out.push({ pri: 95, icon: "💡", title: `AIからの提案が ${S.sugs.length}件`, body: S.sugs.slice(0, 3).map((s) => s.name).join("・"), sug: true });
     if (late.length) out.push({ pri: 100, icon: "⏰", title: `遅れが ${late.length}件あります`, body: "日付を過ぎたものは、今日やるか、日を決め直すと流れが戻ります。", acts: [["late:today", "全部 今日にする"], ["late:tomorrow", "全部 明日にずらす"]], items: late.slice(0, 4), itemActs: [["d:today", "今日"], ["d:sat", "土曜"], ["s:some", "いつか"]] });
     const w = load8(today);
     if (today.length >= 8 || w > 12) {
@@ -40,8 +41,8 @@
   function openConcierge(at = 0) {
     const list = advise();
     const itemRow = (t, acts) => `<div class="crow" data-qt="${t.id}"><button type="button" class="cname" data-mopen="${t.id}">${esc(short(t.name, 28))}<small>${esc(metaOf(t).tx)}${t.weight ? `・${t.weight}` : ""}</small></button><span class="cacts">${acts.map(([k, n]) => k === "open" ? `<button type="button" class="qc" data-mopen="${t.id}">${n}</button>` : `<button type="button" class="qc" data-qk="${k}">${n}</button>`).join("")}</span></div>`;
-    modal(`<div class="tips"><h3>提案<small>${list.length}件・大事な順</small></h3><div class="clist">${list.map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
-      <div class="form" style="padding-top:0"><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
+    modal(`<div class="tips"><h3>提案<small>${list.length}件・大事な順</small></h3><div class="clist">${sugsHtml()}${list.filter((x) => !x.sug).map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
+      <div class="form" style="padding-top:0"><button type="button" class="btn" data-sugrun="1">💡 今すぐ提案してもらう</button><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
   }
   async function conciergeAct(k) {
     const [kind, v] = k.split(":");

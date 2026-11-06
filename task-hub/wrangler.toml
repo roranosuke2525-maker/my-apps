@@ -7,6 +7,8 @@ preview_urls = false
 [vars]
 # 「今すぐ実行」で起動する定期実行（Notion AIリサーチ定時処理）。ID は秘密ではない。トークンは secret の ROUTINE_TOKEN
 ROUTINE_ID = "trig_011VhxqJwREyytrHWR4Kev1z"
+# 「💡 今すぐ提案してもらう」で起動する定期実行（💡 タスクの提案）。トークンは secret の SUGGEST_ROUTINE_TOKEN
+SUGGEST_ROUTINE_ID = "trig_014THA8ShQcytYeEempVGMq9"
 
 [assets]
 directory = "./public"

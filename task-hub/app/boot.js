@@ -89,6 +89,9 @@
     if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
+    if (d.sugok) { el.disabled = true; adoptSug(d.sugok); return; }
+    if (d.sugno) { dismissSug(d.sugno); return; }
+    if (d.sugrun) { askSuggest(el); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
     if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
     if (d.newshide) { S.newsHide = !S.newsHide; render(); return; }
@@ -225,6 +228,11 @@
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));
+    S.sugs = [
+      { id: "a1".repeat(16), url: "https://www.notion.so/", name: "「保険の住所変更」は今日のPC枠で", kind: "📅 日付", reason: "2日遅れています。10分で終わる手続きなので、今日のPC枠に入れると流れが戻ります。", op: { set: { date: TODAY() } }, pri: 90, date: TODAY(), taskIds: [S.tasks.find((t) => t.name.includes("保険"))?.id].filter(Boolean), goalIds: [] },
+      { id: "a2".repeat(16), url: "https://www.notion.so/", name: "目標「タスク管理が効率的に回っている」の一歩：週1の見直し15分を予定に入れる", kind: "🎯 目標の一歩", reason: "挑戦中の目標に、今週動いたタスクがありません。小さな一歩を1つ置くと進みます。", op: { create: { "名前": "（例）日曜の夜に15分、次にやるを見直す", NEXT: "次にやるを上から3件だけ見る", "分類タグ": "LEARN", "枠": "💻 PC", "重さ": "S", date: addDays(TODAY(), 3) } }, pri: 80, date: TODAY(), taskIds: [], goalIds: ["7".repeat(32)] },
+      { id: "a3".repeat(16), url: "https://www.notion.so/", name: "「旅行の候補地」はいつかへ", kind: "🧹 手放す", reason: "3週間動いていません。日付の決まっていない楽しみは、いつかに置いて次にやるを軽くしましょう。", op: { set: { "ステータス": ST.some, date: null } }, pri: 60, date: TODAY(), taskIds: [S.tasks.find((t) => t.name.includes("旅行"))?.id].filter(Boolean), goalIds: [] },
+    ];
     S.goals = [
       { id: "7".repeat(32), url: "https://www.notion.so/", name: "（例）タスク管理が効率的に回っている", status: "🔥 挑戦中", kind: "🎯 GOAL", area: "LEARN", due: null, why: "", goalBy: "", projects: [P3, P1] },
       { id: "6".repeat(32), url: "https://www.notion.so/", name: "（例）家族で本を読む習慣がある", status: "💭 種", kind: "🌟 VISION", area: "FAMILY", due: null, why: "", goalBy: "", projects: [] },

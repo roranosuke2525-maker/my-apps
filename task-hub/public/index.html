@@ -391,6 +391,17 @@ input, textarea, select { font-size: 16px !important; }
 .cname { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; font-size: 13px; }
 .cname small { font-size: 10.5px; color: var(--mute); }
 .cacts { display: flex; gap: 4px; flex-wrap: wrap; }
+/* AIからの提案 */
+.sugbox h4 small { font-weight: 400; font-size: 11.5px; margin-left: 4px; }
+.sug { padding: 8px 0 6px; border-top: 1px dashed var(--line); }
+.sug .sh { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.sug .sh .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.sug .sh small { color: var(--mute); font-size: 11px; margin-left: auto; white-space: nowrap; }
+.sug p { margin: 4px 0 0 14px; font-size: 12.5px; color: var(--mute); }
+.sug .sdo { margin: 4px 0 6px 14px; font-size: 12.5px; }
+.sug .sdo:empty { display: none; }
+.sug .sacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 14px; }
+.sug .sacts .btn { height: 32px; font-size: 12.5px; padding: 0 12px; }
 .cacts .qc { height: 28px; padding: 0 9px; font-size: 11.5px; }
 
 /* ===== ニュース ===== */
@@ -743,6 +754,7 @@ nav.tabs { background: var(--bg); }
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
+    sug: "bceda4df-aaa1-409b-9bb3-93f7ba88fd90", // DB_AI提案（AIからの提案。採用／見送りはアプリで決める）
     news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
     app: "01b7e064-7c8d-439e-8234-6fffad6ca4e4", // DB_アプリ（🛠 アプリ修正の対象）
@@ -792,7 +804,7 @@ nav.tabs { background: var(--bg); }
   // ================= 状態 =================
   const S = {
     mode: "loading", tab: "today", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
-    tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], extraErr: {},
+    tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], sugs: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
     readList: [], readTag: "", readSeg: "list", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
@@ -1008,7 +1020,7 @@ nav.tabs { background: var(--bg); }
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, sugs] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -1016,7 +1028,10 @@ nav.tabs { background: var(--bg); }
       rows(DS.app, { limit: 50 }),
       // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
+      // AIからの提案（提案中だけ）
+      rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
     ]);
+    if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
 
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({
@@ -2451,15 +2466,15 @@ nav.tabs { background: var(--bg); }
       <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-capgo="1" style="flex:1">${capKind === "ai" ? "AIに預ける" : "入れる"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
     setTimeout(() => $("#cp-name")?.focus(), 50);
   }
-  async function createTask({ name, kind, mode, url, next, memo, app, today }) {
-    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : today ? ST.next : ST.inbox, "プレイヤー": [PLAYER] };
+  async function createTask({ name, kind, mode, url, next, memo, app, today, extra }) {
+    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : today ? ST.next : ST.inbox, "プレイヤー": [PLAYER], ...(extra || {}) };
     if (today && kind !== "ai") { props["date:実行日:start"] = TODAY(); props["date:実行日:is_datetime"] = 0; }
     if (kind === "ai") props["AIアクション"] = mode;
     if (app) props["アプリ"] = [app];
     if (url) props["userDefined:URL"] = url;
     if (next) props.NEXT = next;
     const content = mode === "🛠" && kind === "ai" ? `## 🛠 依頼\n\n${memo || name}\n\n## 🛠 修正の記録\n\n最新：まだありません` : [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
-    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
+    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 枠: props["枠"] || null, 重さ: props["重さ"] || null, 分類タグ: props["分類タグ"] || null, 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
     if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content; return t; }
     setSync("busy");
     try {
@@ -2925,6 +2940,7 @@ nav.tabs { background: var(--bg); }
     const d = TODAY(); const out = [];
     const today = inStage("today"); const late = lateOf(); const next = inStage("next"); const inbox = inStage("inbox");
     const wait = inStage("wait"); const some = inStage("some");
+    if (S.sugs.length) out.push({ pri: 95, icon: "💡", title: `AIからの提案が ${S.sugs.length}件`, body: S.sugs.slice(0, 3).map((s) => s.name).join("・"), sug: true });
     if (late.length) out.push({ pri: 100, icon: "⏰", title: `遅れが ${late.length}件あります`, body: "日付を過ぎたものは、今日やるか、日を決め直すと流れが戻ります。", acts: [["late:today", "全部 今日にする"], ["late:tomorrow", "全部 明日にずらす"]], items: late.slice(0, 4), itemActs: [["d:today", "今日"], ["d:sat", "土曜"], ["s:some", "いつか"]] });
     const w = load8(today);
     if (today.length >= 8 || w > 12) {
@@ -2959,8 +2975,8 @@ nav.tabs { background: var(--bg); }
   function openConcierge(at = 0) {
     const list = advise();
     const itemRow = (t, acts) => `<div class="crow" data-qt="${t.id}"><button type="button" class="cname" data-mopen="${t.id}">${esc(short(t.name, 28))}<small>${esc(metaOf(t).tx)}${t.weight ? `・${t.weight}` : ""}</small></button><span class="cacts">${acts.map(([k, n]) => k === "open" ? `<button type="button" class="qc" data-mopen="${t.id}">${n}</button>` : `<button type="button" class="qc" data-qk="${k}">${n}</button>`).join("")}</span></div>`;
-    modal(`<div class="tips"><h3>提案<small>${list.length}件・大事な順</small></h3><div class="clist">${list.map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
-      <div class="form" style="padding-top:0"><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
+    modal(`<div class="tips"><h3>提案<small>${list.length}件・大事な順</small></h3><div class="clist">${sugsHtml()}${list.filter((x) => !x.sug).map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
+      <div class="form" style="padding-top:0"><button type="button" class="btn" data-sugrun="1">💡 今すぐ提案してもらう</button><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
   }
   async function conciergeAct(k) {
     const [kind, v] = k.split(":");
@@ -2978,6 +2994,73 @@ nav.tabs { background: var(--bg); }
     const b = $("#tipsbadge"); if (!b) return;
     const n = S.mode === "loading" ? 0 : advise().filter((x) => x.pri >= 50).length;
     b.hidden = !n; b.textContent = n;
+  }
+  // ================= AIからの提案（DB_AI提案）：毎朝の定期実行が置いた提案を、採用／見送りで片づける =================
+  // 1行＝1提案。「操作」は JSON：{"set":{"ステータス":"…","date":"YYYY-MM-DD","NEXT":"…","枠":"…","重さ":"…","分類タグ":"…"}} か
+  // {"create":{"名前":"…","NEXT":"…","分類タグ":"…","枠":"…","重さ":"…","date":"…","メモ":"…","ステータス":"⏭ NEXT|📥 INBOX"}}
+  const SUG_KIND = { "🗂 整理": "var(--s-next)", "📅 日付": "var(--s-today)", "🆕 新タスク": "var(--accent)", "🎯 目標の一歩": "var(--s-wait)", "🧹 手放す": "var(--mute)" };
+  function toSug(r) {
+    let op = null; try { op = JSON.parse(text(r["操作"]) || "null"); } catch { op = null; }
+    const s = { id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", kind: r["種類"] || "🗂 整理", reason: text(r["理由"]), op, pri: Number(r["優先"]) || 0, date: r["date:日付:start"] || null,
+      taskIds: (list(r["対象タスク"]) || []).map(idOf).filter(Boolean), goalIds: (list(r["関連目標"]) || []).map(idOf).filter(Boolean) };
+    return s.name ? s : null;
+  }
+  const sugTask = (s) => s.taskIds.map((id) => known.get(id)).find(Boolean) || null;
+  // 「set」をタスクのプロパティに直す（date は実行日）
+  function sugSetProps(set) {
+    const out = {};
+    for (const [k, v] of Object.entries(set || {})) {
+      if (k === "date") Object.assign(out, dateProps(v || null));
+      else if (["ステータス", "NEXT", "枠", "重さ", "分類タグ", "名前"].includes(k)) out[k] = v;
+    }
+    return out;
+  }
+  function sugSummary(s) {
+    const op = s.op || {}; const t = sugTask(s);
+    if (op.create) { const c = op.create; return `新しく作る：${c["名前"] || ""}${c.date ? `・${md(c.date)}` : ""}${c["枠"] ? `・${c["枠"]}` : ""}${c["重さ"] ? `・${c["重さ"]}` : ""}`; }
+    if (op.set) { const bits = []; if (op.set["ステータス"]) { const key = Object.keys(ST).find((k) => ST[k] === op.set["ステータス"]); bits.push(`→ ${STAGES[key === "doing" ? "next" : key]?.name || op.set["ステータス"]}`); } if ("date" in op.set) bits.push(op.set.date ? `${md(op.set.date)}（${WD[dow(op.set.date)]}）にやる` : "日付を外す"); if (op.set.NEXT) bits.push(`次の一歩：${op.set.NEXT}`); return `${t ? short(t.name, 18) : "対象のタスク"} ${bits.join("・")}`; }
+    return "";
+  }
+  function sugsHtml() {
+    if (!S.sugs.length) return "";
+    return `<section class="csug sugbox"><h4><span>💡</span>AIからの提案<small class="mute">${S.sugs.length}件・毎朝 7:36 に更新</small></h4>${S.sugs.map((s) => { const t = sugTask(s); return `<div class="sug" data-sug="${s.id}" style="--c:${SUG_KIND[s.kind] || "var(--mute)"}"><div class="sh"><i class="dot"></i><b>${esc(s.name)}</b><small>${esc(s.kind)}</small></div>${s.reason ? `<p>${esc(s.reason)}</p>` : ""}<div class="sdo">${esc(sugSummary(s))}</div><div class="sacts">${s.op ? `<button type="button" class="btn pri" data-sugok="${s.id}">採用</button>` : ""}<button type="button" class="btn" data-sugno="${s.id}">見送り</button>${t ? `<button type="button" class="qc" data-mopen="${t.id}">タスクを開く</button>` : ""}</div></div>`; }).join("")}</section>`;
+  }
+  // 採用：操作を実行して、提案の行を ✅ 採用 にする
+  async function adoptSug(id) {
+    const s = S.sugs.find((x) => x.id === id); if (!s || !s.op) return;
+    const op = s.op; let made = null;
+    try {
+      if (op.create) {
+        const c = op.create;
+        made = await createTask({ name: c["名前"] || s.name, kind: "task", next: c.NEXT || "", memo: c["メモ"] || s.reason || "", today: c.date === TODAY(), extra: { ...(c.date && c.date !== TODAY() ? { ...dateProps(c.date), "ステータス": ST.next } : {}), ...(c["ステータス"] === ST.inbox ? { "ステータス": ST.inbox } : {}), ...(c["分類タグ"] ? { "分類タグ": c["分類タグ"] } : {}), ...(c["枠"] ? { "枠": c["枠"] } : {}), ...(c["重さ"] ? { "重さ": c["重さ"] } : {}), ...(s.goalIds.length ? { "関連目標": s.goalIds.map((g) => `https://www.notion.so/${g}`) } : {}) } });
+      } else if (op.set) {
+        const t = sugTask(s); const props = sugSetProps(op.set);
+        if (t) { const ok = await setProps(t, props, `「${short(t.name)}」${sugSummary(s).replace(short(t.name, 18), "").trim()}`, { undo: false }); if (!ok) return; }
+        else if (s.taskIds[0] && S.mode !== "demo") await call("update", { page_id: s.taskIds[0], command: "update_properties", properties: props, allow_async: false }, { read: false });
+      }
+    } catch (err) { toast(`採用できませんでした：${errText(err)}`); return; }
+    await settleSug(s, "✅ 採用", made ? [made.url] : null);
+    toast(op.create ? `提案を採用して「${short(made?.name || s.name)}」を作りました` : "提案を採用しました");
+  }
+  async function dismissSug(id) { const s = S.sugs.find((x) => x.id === id); if (!s) return; await settleSug(s, "⏭ 見送り"); toast("見送りました（同じ提案は繰り返しません）"); }
+  async function settleSug(s, state, madeUrls) {
+    S.sugs = S.sugs.filter((x) => x !== s); refresh(); if (!$("#modal").hidden) openConcierge();
+    if (S.mode === "demo") return;
+    const props = { "状態": state, "date:決めた日:start": TODAY(), "date:決めた日:is_datetime": 0 }; if (madeUrls) props["対象タスク"] = madeUrls;
+    try { await call("update", { page_id: s.id, command: "update_properties", properties: props, allow_async: false }, { read: false }); }
+    catch (err) { toast(`提案の記録を更新できませんでした：${errText(err)}`); }
+  }
+  // 今すぐ提案してもらう（定期実行「💡 タスクの提案」を API トリガーで起動）
+  async function askSuggest(el) {
+    if (S.mode === "demo") { toast("見本では動きません"); return; }
+    if (VIA !== "api") { window.open("https://claude.ai/code/routines", "_blank", "noopener"); return; }
+    el.disabled = true; el.textContent = "起動中…";
+    try {
+      const r = await fetch("/api/run", { method: "POST", headers: { Authorization: `Bearer ${store.get("key") || ""}`, "Content-Type": "application/json" }, body: JSON.stringify({ which: "suggest" }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      el.textContent = "起動しました（数分で届きます）"; toast("AIが提案を考えています。数分したら「↻」で読み直してください");
+    } catch (err) { el.disabled = false; el.textContent = "💡 今すぐ提案してもらう"; toast(String(err.message || "起動できませんでした").slice(0, 120)); }
   }
   // ================= 運用：使い方（運用マップの要約と図解）と、診断（週次レポート＋いまの健康診断と直し方） =================
   const MAP_PAGE = "3f662844acbe8183834dfcb4cff0883f"; // Notion運用マップ
@@ -3340,6 +3423,9 @@ nav.tabs { background: var(--bg); }
     if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
+    if (d.sugok) { el.disabled = true; adoptSug(d.sugok); return; }
+    if (d.sugno) { dismissSug(d.sugno); return; }
+    if (d.sugrun) { askSuggest(el); return; }
     if (d.newsday) { S.newsDay = d.newsday; render(); return; }
     if (d.newsarea !== undefined && el.closest(".seg")) { S.newsArea = d.newsarea; render(); return; }
     if (d.newshide) { S.newsHide = !S.newsHide; render(); return; }
@@ -3476,6 +3562,11 @@ nav.tabs { background: var(--bg); }
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));
+    S.sugs = [
+      { id: "a1".repeat(16), url: "https://www.notion.so/", name: "「保険の住所変更」は今日のPC枠で", kind: "📅 日付", reason: "2日遅れています。10分で終わる手続きなので、今日のPC枠に入れると流れが戻ります。", op: { set: { date: TODAY() } }, pri: 90, date: TODAY(), taskIds: [S.tasks.find((t) => t.name.includes("保険"))?.id].filter(Boolean), goalIds: [] },
+      { id: "a2".repeat(16), url: "https://www.notion.so/", name: "目標「タスク管理が効率的に回っている」の一歩：週1の見直し15分を予定に入れる", kind: "🎯 目標の一歩", reason: "挑戦中の目標に、今週動いたタスクがありません。小さな一歩を1つ置くと進みます。", op: { create: { "名前": "（例）日曜の夜に15分、次にやるを見直す", NEXT: "次にやるを上から3件だけ見る", "分類タグ": "LEARN", "枠": "💻 PC", "重さ": "S", date: addDays(TODAY(), 3) } }, pri: 80, date: TODAY(), taskIds: [], goalIds: ["7".repeat(32)] },
+      { id: "a3".repeat(16), url: "https://www.notion.so/", name: "「旅行の候補地」はいつかへ", kind: "🧹 手放す", reason: "3週間動いていません。日付の決まっていない楽しみは、いつかに置いて次にやるを軽くしましょう。", op: { set: { "ステータス": ST.some, date: null } }, pri: 60, date: TODAY(), taskIds: [S.tasks.find((t) => t.name.includes("旅行"))?.id].filter(Boolean), goalIds: [] },
+    ];
     S.goals = [
       { id: "7".repeat(32), url: "https://www.notion.so/", name: "（例）タスク管理が効率的に回っている", status: "🔥 挑戦中", kind: "🎯 GOAL", area: "LEARN", due: null, why: "", goalBy: "", projects: [P3, P1] },
       { id: "6".repeat(32), url: "https://www.notion.so/", name: "（例）家族で本を読む習慣がある", status: "💭 種", kind: "🌟 VISION", area: "FAMILY", due: null, why: "", goalBy: "", projects: [] },

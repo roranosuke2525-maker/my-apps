@@ -246,15 +246,15 @@
       <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-capgo="1" style="flex:1">${capKind === "ai" ? "AIに預ける" : "入れる"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
     setTimeout(() => $("#cp-name")?.focus(), 50);
   }
-  async function createTask({ name, kind, mode, url, next, memo, app, today }) {
-    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : today ? ST.next : ST.inbox, "プレイヤー": [PLAYER] };
+  async function createTask({ name, kind, mode, url, next, memo, app, today, extra }) {
+    const props = { "名前": name, "ステータス": kind === "ai" ? ST.ai : today ? ST.next : ST.inbox, "プレイヤー": [PLAYER], ...(extra || {}) };
     if (today && kind !== "ai") { props["date:実行日:start"] = TODAY(); props["date:実行日:is_datetime"] = 0; }
     if (kind === "ai") props["AIアクション"] = mode;
     if (app) props["アプリ"] = [app];
     if (url) props["userDefined:URL"] = url;
     if (next) props.NEXT = next;
     const content = mode === "🛠" && kind === "ai" ? `## 🛠 依頼\n\n${memo || name}\n\n## 🛠 修正の記録\n\n最新：まだありません` : [next ? `## やること\n\n- [ ] ${next}` : "", memo ? `## メモ\n\n${memo}` : ""].filter(Boolean).join("\n\n");
-    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
+    const local = (u) => toTask({ url: u, 名前: name, NEXT: next || "", ステータス: props["ステータス"], "date:実行日:start": props["date:実行日:start"] || null, AIアクション: props["AIアクション"] || null, "userDefined:URL": url || "", 枠: props["枠"] || null, 重さ: props["重さ"] || null, 分類タグ: props["分類タグ"] || null, 最終更新日時: new Date().toISOString(), createdTime: new Date().toISOString() });
     if (S.mode === "demo") { const t = local(`https://www.notion.so/${"d".repeat(24)}${String(Date.now()).slice(-8)}`); S.tasks.push(t); DEMO_BODIES[t.id] = content; return t; }
     setSync("busy");
     try {
