@@ -950,31 +950,32 @@ function questProgress(q) {
   return q.master ? `🪜 ${L}段 制覇` : `🪜 ${Math.min((q.count ?? 0) + 1, L)}段目／${L}`;
 }
 
+// けいじばんの1行：ランク・依頼名・いまの段階・報酬。右の「ほうこく」はワンタップで送る（ひとことは いまの段階の名前）
 function questCard(q) {
   const locked = questLocked(q);
   const rank = q.stageRank || q.rank || "?";
   const task = q.stages[q.stage ?? 0] || "";
-  const el = h("button", { type: "button", class: `quest note rank-${rank}${locked ? " locked" : ""}${q.master ? " master" : ""}`, onclick: () => openQuest(q) },
-    h("span", { class: "tack", "aria-hidden": "true" }),
+  const btn = h("button", { type: "button", class: "qrow-report", disabled: locked, "aria-label": `${q.title} をほうこくする` },
+    locked ? `Lv${q.need}` : "✓ ほうこく");
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    btn.textContent = "…";
+    submitReport([q], task || q.title, btn).then((ok) => { if (!ok) btn.textContent = "✓ ほうこく"; });
+  });
+  return h("div", { class: `qrow${locked ? " locked" : ""}${q.master ? " master" : ""}`, role: "button", tabindex: "0",
+    onclick: () => openQuest(q), onkeydown: (e) => { if (e.key === "Enter") openQuest(q); } },
     h("span", { class: `seal ${rank}`, "aria-label": `${rank}ランク`, text: rank }),
-    h("span", { class: "qbody" },
-      h("span", { class: "qreq", text: `依頼人：${q.requester || "ギルド"}` }),
-      h("span", { class: "qtitle", text: q.title }),
-      q.line ? h("span", { class: "qline", text: `「${q.line}」` }) : null,
-      task ? h("span", { class: "qtask", text: `▶ ${task}` }) : null,
-      h("span", { class: "qmeta" },
+    h("span", { class: "qrow-body" },
+      h("span", { class: "qrow-title", text: q.title }),
+      task ? h("span", { class: "qrow-task", text: q.master ? `🏆 制覇（${task}）` : task }) : null,
+      h("span", { class: "qrow-meta" },
         q.category ? h("span", { class: `tag ${CATEGORY_COLORS[q.category] || ""}`, text: q.category }) : null,
         h("span", { text: questProgress(q) }),
-      ),
-      h("span", { class: "qreward" },
-        h("b", { text: `ほうしゅう ${fmt(q.reward)} EXP` }),
-        h("span", { text: ` ＋ ${q.dropSlot || "そうび"} ${stars(RANK_RARITY[rank] || 1)}` }),
+        h("span", { class: "qrow-exp", text: `+${fmt(q.reward)}EXP` }),
       ),
     ),
-    questStamp(q, locked),
+    btn,
   );
-  el.style.setProperty("--tilt", `${tiltOf(q.id)}deg`);
-  return el;
 }
 
 function openQuest(q) {
@@ -1091,6 +1092,14 @@ async function submitReport(selected, note, send) {
       .filter(({ q, no }) => no > epilogueCountOf(q, q.count ?? 0));
     if (drops.length) state.loadedAt.items = 0;
     if (drops.length || epis.length) setTimeout(() => showRewards(drops, epis), 1700);
+    // Notion の数え直しを待たずに、けいじばんの回数を1つ進めておく
+    for (const q of selected) {
+      q.count = (q.count ?? 0) + 1;
+      if (!q.repeat && q.stages.length) {
+        q.master = q.count >= q.stages.length;
+        q.stage = Math.min(q.count, q.stages.length - 1);
+      }
+    }
     closeSheet();
     state.loadedAt.guild = 0;
     if (state.view === "guild") renderGuild();
@@ -1099,9 +1108,11 @@ async function submitReport(selected, note, send) {
       await Promise.all([loadData("guild", "/api/guild", { force: true }), loadPlayer({ force: true })]);
       if (state.view === "guild") renderGuild();
     }), REFRESH_DELAY);
+    return true;
   } catch (err) {
     toast(err.message, true);
     send.disabled = false;
+    return false;
   }
 }
 

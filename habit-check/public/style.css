@@ -892,3 +892,19 @@ body.theater-open { overflow: hidden; }
 .habits.ultra .habit .name { font-size: 10.5px; line-height: 1.1; }
 .habits.ultra .habit .box { width: 13px; height: 13px; }
 .habits.ultra .slot-label small { font-size: 9px; }
+
+/* けいじばん：見やすい1行の一覧（ワンタップでほうこく） */
+.board-cork { padding: 0; gap: 8px; background: none; }
+.qrow { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); cursor: pointer; }
+.qrow .seal { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 800 15px/1 Georgia, serif; color: #fff; }
+.qrow-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qrow-title { font-size: 15px; font-weight: 800; line-height: 1.3; }
+.qrow-task { font-size: 13px; color: var(--text); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qrow-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11.5px; color: var(--sub); }
+.qrow-exp { font-weight: 700; color: #b07a12; }
+.qrow-report { flex: none; min-width: 74px; height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 800; cursor: pointer; }
+.qrow-report:active { transform: scale(0.96); }
+.qrow-report:disabled { background: var(--line); color: var(--sub); cursor: default; }
+.qrow-report.done { background: #4f9a6a; color: #fff; }
+.qrow.locked { opacity: 0.6; }
+.qrow.master .qrow-task { color: #b07a12; }
