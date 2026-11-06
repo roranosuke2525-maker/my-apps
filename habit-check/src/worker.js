@@ -1,6 +1,13 @@
 // 習慣チェック入力アプリ：画面の配信と Notion API の中継（Cloudflare Worker）
 // Notion のトークンはこの Worker の secret にだけ置き、ブラウザには渡さない。
 
+import { TYPES, STAGES, THRESHOLDS, BALANCE_RATIO, NOTE_EXP, habitType, habitWeight, tagType } from "./aibou-config.js";
+import { SLOT_ORDER, slotOf, itemName, rarityOf, isCrit, RARITY_EFFECT } from "./item-config.js";
+import { questBoard, epilogueCount } from "./guild-config.js";
+import { getBody, postBody, muscleHits, MUSCLE_TYPE } from "./muscle.js";
+import { pushReady, saveSubscription, pushAll, runAlerts, jstClock } from "./push.js";
+import { RANKS, WEAK_BONUS, BALANCE_BONUS, PET_BONUS, STAR_BONUS, STAT_EXP, STAT_RATE, STAT_MAX, familyOf, starsOf } from "./battle-config.js";
+
 const NOTION_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 const NOTE_PROPERTY = "ひとこと";
@@ -34,6 +41,11 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
 
     try {
+      // 通知を受けた端末（sw.js）が文言を知るための窓口。合言葉なしで読めるのは、きょうのアラートの習慣名だけ
+      if (url.pathname === "/api/push/alert" && request.method === "GET") {
+        const raw = env.PUSH ? await env.PUSH.get(`alert:${jstClock().date}`) : null;
+        return json(raw ? JSON.parse(raw) : {});
+      }
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います" }, 401);
       const notion = notionClient(env);
@@ -63,6 +75,10 @@ export default {
       if (url.pathname === "/api/guild" && request.method === "GET") {
         return json(await getGuild(notion, env));
       }
+      const reportMatch = url.pathname.match(/^\/api\/guild\/reports\/([0-9a-f-]{32,36})$/i);
+      if (reportMatch && request.method === "DELETE") {
+        return json(await deleteReport(notion, env, reportMatch[1]));
+      }
       if (url.pathname === "/api/guild/reports" && request.method === "POST") {
         const body = await readJson(request);
         return json(await createReport(notion, env, body));
@@ -78,11 +94,65 @@ export default {
         const body = await readJson(request);
         return json(await markStory(notion, env, storyMatch[1], body));
       }
+      if (url.pathname === "/api/items" && request.method === "GET") {
+        return json(await getItems(notion, env));
+      }
+      const itemMatch = url.pathname.match(/^\/api\/items\/([0-9a-f-]{32,36})$/i);
+      if (itemMatch && request.method === "PATCH") {
+        const body = await readJson(request);
+        return json(await equipItem(notion, env, itemMatch[1], body));
+      }
+      if (url.pathname === "/api/battle" && request.method === "GET") {
+        return json(await getBattle(notion, env));
+      }
+      if (url.pathname === "/api/body" && request.method === "GET") {
+        return json(await getBody(notion, env));
+      }
+      if (url.pathname === "/api/body" && request.method === "POST") {
+        const body = await readJson(request);
+        return json(await checkBody(notion, env, body));
+      }
+      // 朝のアラート（Web Push）：公開鍵・端末の登録・ためし送り
+      if (url.pathname === "/api/push/key" && request.method === "GET") {
+        return json({ ready: pushReady(env), key: env.VAPID_PUBLIC_KEY || null });
+      }
+      if (url.pathname === "/api/push/subscribe" && request.method === "POST") {
+        if (!pushReady(env)) throw httpError(503, "通知の設定がまだです");
+        return json(await saveSubscription(env, (await readJson(request)).subscription));
+      }
+      if (url.pathname === "/api/push/test" && request.method === "POST") {
+        if (!pushReady(env)) throw httpError(503, "通知の設定がまだです");
+        await env.PUSH.put(`alert:${jstClock().date}`, JSON.stringify({ habit: "（ためし）通知のテスト", at: jstClock().hm }), { expirationTtl: 86400 });
+        return json({ sent: await pushAll(env) });
+      }
+      if (url.pathname === "/api/aibou" && request.method === "GET") {
+        return json(await getAibou(notion, env));
+      }
+      if (url.pathname === "/api/aibou" && request.method === "POST") {
+        return json(await createAibou(notion, env));
+      }
+      if (url.pathname === "/api/aibou" && request.method === "PATCH") {
+        const body = await readJson(request);
+        return json(await renameAibou(notion, env, body));
+      }
       return json({ error: "not found" }, 404);
     } catch (err) {
       const status = err.status || 500;
       return json({ error: err.publicMessage || "サーバーでエラーが起きました" }, status);
     }
+  },
+
+  // 決まった時刻（wrangler.toml の crons）に起きて、朝のアラートを調べる
+  async scheduled(event, env, ctx) {
+    if (!env.NOTION_TOKEN || !env.DATA_SOURCE_ID) return;
+    const notion = notionClient(env);
+    ctx.waitUntil(runAlerts(env, {
+      now: new Date(event.scheduledTime || Date.now()),
+      isDone: async (habit, date) => {
+        const row = await findRow(notion, env, date);
+        return !!row?.properties?.[habit]?.checkbox;
+      },
+    }));
   },
 };
 
@@ -189,7 +259,7 @@ async function loadSchema(notion, env) {
   const hidden = new Set((env.HIDDEN_HABITS || "").split(",").map((s) => s.trim()).filter(Boolean));
   const habits = Object.values(props)
     .filter((p) => p.type === "checkbox" && !hidden.has(p.name))
-    .map(parseHabit);
+    .map((p) => ({ ...parseHabit(p), aibou: { type: habitType(p.name), exp: habitWeight(p.name) } }));
   return { props, habits, habitNames: new Set(habits.map((h) => h.name)) };
 }
 
@@ -249,6 +319,8 @@ function propValue(prop) {
       return prop.checkbox;
     case "select":
       return prop.select?.name ?? null;
+    case "status":
+      return prop.status?.name ?? null;
     case "relation":
       return (prop.relation || []).map((r) => r.id);
     case "created_time":
@@ -345,6 +417,27 @@ async function fullRollup(notion, pageId, prop) {
   }
 }
 
+// rollup の元の行を、データソースの検索でまとめて読んで足す（プロパティAPIを25件ずつめくるより速い）。
+// 読めなければ null（fullRollup に任せる）
+const EXP_SOURCES = {
+  habitExp: { ds: "DATA_SOURCE_ID", prop: "EXP" },
+  taskExp: { ds: "TASK_DS_ID", prop: "討伐EXP", only: { property: "討伐EXP", formula: { number: { greater_than: 0 } } } },
+  guildExp: { ds: "GUILD_DS_ID", prop: "累計EXP" },
+};
+
+async function sumByQuery(notion, env, key) {
+  const src = EXP_SOURCES[key];
+  if (!src || !env[src.ds]) return null;
+  try {
+    const mine = { property: "プレイヤー", relation: { contains: env.PLAYER_PAGE_ID } };
+    const rows = await queryAll(notion, env[src.ds], { filter: src.only ? { and: [mine, src.only] } : mine }, MAX_PROPERTY_PAGES);
+    if (!rows.length) return null; // 1行もなければ rollup のほうを信じる（接続や関連の付け方が違うとき）
+    return rows.reduce((a, p) => a + (Number(propValue(p.properties?.[src.prop])) || 0), 0);
+  } catch {
+    return null;
+  }
+}
+
 async function pagedRollup(notion, pageId, propId) {
   let cursor;
   let last = null;
@@ -365,7 +458,7 @@ async function loadPlayer(notion, env) {
   const page = await notion("GET", `/pages/${env.PLAYER_PAGE_ID}`);
   const player = pick(page, PLAYER_FIELDS);
   const entries = await Promise.all(
-    Object.entries(EXP_ROLLUPS).map(async ([key, name]) => [key, await fullRollup(notion, page.id, page.properties?.[name])]),
+    Object.entries(EXP_ROLLUPS).map(async ([key, name]) => [key, (await sumByQuery(notion, env, key)) ?? (await fullRollup(notion, page.id, page.properties?.[name]))]),
   );
   const exp = Object.fromEntries(entries);
   // 習慣EXPも読めないときは計算し直さない（接続が足りない。Notion の値のまま出す）
@@ -382,6 +475,7 @@ async function loadPlayer(notion, env) {
 // 書き込んだらEXPが変わるので読み直させる
 function forgetPlayer(env) {
   playerCache.delete(env);
+  eventsCache.delete(env);
 }
 
 async function playerLevel(notion, env) {
@@ -431,6 +525,10 @@ const QUEST_FIELDS = {
   count: "達成回数",
   totalExp: "累計EXP",
   playerLv: "いまのLv",
+  requester: "依頼人",
+  lines: "依頼文",
+  repeat: "くりかえし",
+  closed: "受付終了",
 };
 const REPORT_LIMIT = 20;
 const REPORT_NOTE_MAX = 200;
@@ -446,11 +544,14 @@ async function getGuild(notion, env) {
     playerLevel(notion, env),
   ]);
   return {
-    quests: quests.map((p) => {
-      const q = pick(p, QUEST_FIELDS);
-      const { stagesText, ...rest } = q;
-      return { ...rest, ...(lv !== null ? { playerLv: lv } : {}), stages: splitStages(stagesText) };
-    }),
+    quests: quests.map((p) => pick(p, QUEST_FIELDS)).filter((q) => !q.closed).map((q) => {
+      const { stagesText, lines, closed, lv: _lv, exp: _exp, board: _board, ...rest } = q;
+      const stages = splitStages(stagesText);
+      const playerLv = lv !== null ? lv : q.playerLv;
+      const quest = { ...q, repeat: !!q.repeat, stages };
+      const b = questBoard(quest, playerLv);
+      return { ...rest, repeat: !!q.repeat, playerLv, stages, ...b, dropSlot: slotOf(q.category).slot, epilogues: epilogueCount(quest, q.count ?? 0) };
+    }).sort((a, b) => a.need - b.need || (a.repeat ? 1 : 0) - (b.repeat ? 1 : 0)),
     reports: (reports.results || []).map(summarizeReport),
   };
 }
@@ -473,7 +574,30 @@ async function createReport(notion, env, body) {
       依頼: { relation: questIds.map((id) => ({ id })) },
     },
   });
-  return { report: summarizeReport(page) };
+  // そうびのドロップ（DB_そうび に接続していなければ、ほうこくだけで終わる）
+  let drops = [];
+  if (env.ITEM_DS_ID) {
+    try { drops = await syncDrops(notion, env, [page]); } catch { /* 未接続など */ }
+  }
+  return { report: summarizeReport(page), drops };
+}
+
+// ほうこくの取り消し：ほうこくの行と、そのほうこくで落ちたそうびを ごみ箱へ（Notion で戻せる）
+async function deleteReport(notion, env, id) {
+  const page = await notion("GET", `/pages/${id}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(dsId(env, "REPORT_DS_ID"))) throw httpError(403, "DB_ギルド達成記録 のほうこくではありません");
+  await notion("PATCH", `/pages/${id}`, { in_trash: true });
+  let removedItems = 0;
+  if (env.ITEM_DS_ID) {
+    try {
+      const items = await queryAll(notion, dsId(env, "ITEM_DS_ID"), { filter: { property: "ほうこく", relation: { contains: id } } });
+      for (const it of items) {
+        await notion("PATCH", `/pages/${it.id}`, { in_trash: true });
+        removedItems++;
+      }
+    } catch { /* そうびの DB に届かなくても、ほうこくの取り消しはできている */ }
+  }
+  return { ok: true, removedItems };
 }
 
 // questIds（配列・最大 REPORT_QUEST_MAX 件）か、以前の questId（1件）を受け付ける
@@ -494,6 +618,8 @@ function splitStages(text) {
 }
 
 // ---------- ものがたり（DB_ものがたり） ----------
+// エピソード1（ほんぺん）は Lv で、エピソード2 は「前の話のボスを倒したか」で開く。よりみちは Notion の判定のまま
+const EP2 = "エピソード2";
 const STORY_FIELDS = {
   title: "しょう",
   kind: "しゅるい",
@@ -502,11 +628,21 @@ const STORY_FIELDS = {
   state: "じょうたい",
   read: "よんだ",
   playerLv: "いまのLv",
+  boss: "ボス",
+  hp: "ボスHP",
+  weak: "弱点",
+  bossStart: "ボス開始日",
+  defeated: "撃破日",
 };
 
-// lv：正しいレベル（分からなければ null で Notion の「いまのLv」のまま）
-function summarizeStory(page, lv = null) {
+// lv：正しいレベル（分からなければ null で Notion の「いまのLv」のまま）。prev：ひとつ前のエピソード2の話
+function summarizeStory(page, lv = null, prev = undefined) {
   const s = pick(page, STORY_FIELDS);
+  if (s.kind === EP2) {
+    const locked = !!prev && !prev.defeated;
+    const state = s.read ? (s.defeated ? "✅ ボスを たおした" : s.boss ? "⚔️ ボスと たたかっている" : "✅ 読んだ") : locked ? "🔒 前の話のボスを倒すと開く" : "📖 NEW！ 読める";
+    return { ...s, playerLv: lv ?? s.playerLv, locked, state };
+  }
   const notionLocked = typeof s.unlockLv === "number" && typeof s.playerLv === "number" && s.playerLv < s.unlockLv;
   if (lv !== null) s.playerLv = lv;
   const locked = typeof s.unlockLv === "number" && typeof s.playerLv === "number" && s.playerLv < s.unlockLv;
@@ -515,35 +651,47 @@ function summarizeStory(page, lv = null) {
   return { ...s, locked };
 }
 
-async function getStories(notion, env) {
+async function loadStories(notion, env) {
   const [rows, lv] = await Promise.all([
     queryAll(notion, dsId(env, "STORY_DS_ID"), { sorts: [{ property: "じゅんばん", direction: "ascending" }] }),
     playerLevel(notion, env),
   ]);
-  return { chapters: rows.map((p) => summarizeStory(p, lv)) };
+  const out = [];
+  let prev;
+  for (const p of rows) {
+    const c = summarizeStory(p, lv, prev);
+    if (c.kind === EP2) prev = c;
+    out.push(c);
+  }
+  return out;
 }
 
-async function storyPage(notion, env, id) {
-  const page = await notion("GET", `/pages/${id}`);
-  if (normalizeId(page.parent?.data_source_id) !== normalizeId(dsId(env, "STORY_DS_ID"))) {
-    throw httpError(403, "DB_ものがたり のページではありません");
-  }
-  return page;
+async function getStories(notion, env) {
+  return { chapters: await loadStories(notion, env) };
+}
+
+async function openStory(notion, env, id) {
+  const chapter = (await loadStories(notion, env)).find((c) => normalizeId(c.id) === normalizeId(id));
+  if (!chapter) throw httpError(403, "DB_ものがたり のページではありません");
+  if (chapter.locked) throw httpError(403, chapter.kind === EP2 ? "前の話のボスを倒すと読めます" : `Lv${chapter.unlockLv}になると読めます`);
+  return chapter;
 }
 
 async function getStory(notion, env, id) {
-  const chapter = summarizeStory(await storyPage(notion, env, id), await playerLevel(notion, env));
-  if (chapter.locked) throw httpError(403, `Lv${chapter.unlockLv}になると読めます`);
+  const chapter = await openStory(notion, env, id);
   return { chapter, blocks: await readText(notion, id, 0) };
 }
 
+// エピソード2 の話を初めて「よんだ」にした日から、その話のボスとの戦いが始まる
 async function markStory(notion, env, id, body) {
   if (typeof body?.read !== "boolean") throw httpError(400, "変更できない項目です");
-  const lv = await playerLevel(notion, env);
-  const chapter = summarizeStory(await storyPage(notion, env, id), lv);
-  if (chapter.locked) throw httpError(403, `Lv${chapter.unlockLv}になると読めます`);
-  const page = await notion("PATCH", `/pages/${id}`, { properties: { よんだ: { checkbox: body.read } } });
-  return { chapter: summarizeStory(page, lv) };
+  const chapter = await openStory(notion, env, id);
+  const properties = { よんだ: { checkbox: body.read } };
+  if (body.read && chapter.kind === EP2 && chapter.boss && !chapter.bossStart) {
+    properties["ボス開始日"] = { date: { start: jstDate(new Date().toISOString()) } };
+  }
+  await notion("PATCH", `/pages/${id}`, { properties });
+  return { chapter: (await loadStories(notion, env)).find((c) => normalizeId(c.id) === normalizeId(id)) };
 }
 
 // 本文を「段落」と「引用（SYSTEM など）」の並びにする。トグル（▶ 読む）の中も読む
@@ -572,13 +720,512 @@ async function readText(notion, blockId, depth) {
   return out;
 }
 
+// ---------- あいぼう（DB_あいぼう） ----------
+// EXP・傾向ポイントは保存せず、誕生日からの DB_習慣チェック と DB_タスク管理（DONE）で毎回計算する。
+// 進化した段階・型・日付だけを DB_あいぼう に書き、あとでチェックを外しても戻さない。
+const PET_FIELDS = { name: "名前", birthday: "誕生日", stage: "段階", childType: "成長期の型", adultType: "成体の型", history: "進化履歴" };
+const PET_NAME_MAX = 20;
+const TASK_DONE = "✅ DONE";
+const AIBOU_QUERY_PAGES = 30;
+const HISTORY_WORD = { 幼体: "孵化", 成長期: "成長期", 成体: "成体" };
+
+async function petPage(notion, env) {
+  const res = await notion("POST", `/data_sources/${dsId(env, "AIBOU_DS_ID")}/query`, {
+    sorts: [{ timestamp: "created_time", direction: "ascending" }],
+    page_size: 1,
+  });
+  return res.results?.[0] || null;
+}
+
+function summarizePet(page) {
+  const p = pick(page, PET_FIELDS);
+  return { ...p, name: p.name || "", stage: STAGES.includes(p.stage) ? p.stage : "たまご", history: p.history || "" };
+}
+
+async function getAibou(notion, env) {
+  const page = await petPage(notion, env);
+  if (!page) return { pet: null };
+  let pet = summarizePet(page);
+  const birthday = pet.birthday?.slice(0, 10) || jstDate(page.created_time);
+  const days = await aibouDays(notion, env, birthday);
+  const g = grow(pet, days);
+  if (g.events.length) pet = await saveEvolution(notion, page.id, g);
+  const idx = STAGES.indexOf(g.stage);
+  const next = STAGES[idx + 1] || null;
+  return {
+    pet: { ...pet, birthday, stage: g.stage, childType: g.childType, adultType: g.adultType, type: g.stage === "成長期" ? g.childType : g.stage === "成体" ? g.adultType : null },
+    exp: g.exp,
+    today: Math.round(days[jstDate(new Date().toISOString())]?.exp || 0),
+    points: g.points,
+    period: g.period,
+    from: idx > 0 ? THRESHOLDS[g.stage] : 0,
+    next: next ? { stage: next, at: THRESHOLDS[next] } : null,
+    evolved: g.events,
+  };
+}
+
+async function createAibou(notion, env) {
+  if (await petPage(notion, env)) return getAibou(notion, env);
+  await notion("POST", "/pages", {
+    parent: { type: "data_source_id", data_source_id: dsId(env, "AIBOU_DS_ID") },
+    properties: {
+      名前: { title: [] },
+      誕生日: { date: { start: jstDate(new Date().toISOString()) } },
+      段階: { select: { name: "たまご" } },
+    },
+  });
+  return getAibou(notion, env);
+}
+
+async function renameAibou(notion, env, body) {
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  if (!name || [...name].length > PET_NAME_MAX) throw httpError(400, `名前を${PET_NAME_MAX}字以内で入れてください`);
+  const page = await petPage(notion, env);
+  if (!page) throw httpError(404, "あいぼうがまだいません");
+  const updated = await notion("PATCH", `/pages/${page.id}`, { properties: { 名前: { title: [{ type: "text", text: { content: name } }] } } });
+  return { pet: summarizePet(updated) };
+}
+
+// 日ごとの EXP と、4つの型への振り分け（あいぼう用：習慣とタスクを日ごとに合わせる）
+async function aibouDays(notion, env, from) {
+  const { habitDays, tasks } = await loadEvents(notion, env, from);
+  const days = {};
+  for (const [date, d] of Object.entries(habitDays)) days[date] = { exp: d.exp, points: { ...d.points } };
+  for (const t of tasks) {
+    const d = (days[t.date] ||= { exp: 0, points: zeroPoints() });
+    d.exp += t.exp;
+    addPoints(d.points, t.type, t.exp);
+  }
+  return days;
+}
+
+// from 以降の習慣（日ごと）と DONE タスク（1件ずつ）。全期間（能力値）でも使うので、書き込みまで1分だけ使い回す
+const eventsCache = new WeakMap();
+const EVENTS_TTL = 60e3;
+
+async function loadEvents(notion, env, from) {
+  const cache = eventsCache.get(env) || new Map();
+  eventsCache.set(env, cache);
+  const hit = cache.get(from);
+  if (hit && Date.now() - hit.at < EVENTS_TTL) return hit.value;
+  const [rows, done] = await Promise.all([
+    queryAll(notion, env.DATA_SOURCE_ID, {
+      filter: { timestamp: "created_time", created_time: { on_or_after: `${from}T00:00:00+09:00` } },
+      sorts: [{ timestamp: "created_time", direction: "ascending" }],
+    }, AIBOU_QUERY_PAGES),
+    queryAll(notion, dsId(env, "TASK_DS_ID"), {
+      filter: { and: [{ property: "ステータス", status: { equals: TASK_DONE } }, { property: "完了日", formula: { date: { on_or_after: from } } }] },
+    }, AIBOU_QUERY_PAGES),
+  ]);
+  const habitDays = {};
+  for (const page of rows) {
+    const date = jstDate(page.created_time);
+    if (habitDays[date]) continue; // 同じ日に2行あれば最初の行だけ（画面と同じ）
+    const parts = habitParts(page);
+    const sum = parts.reduce((a, x) => a + x.exp, 0);
+    const formulaExp = propValue(page.properties?.EXP);
+    const total = typeof formulaExp === "number" ? formulaExp : sum;
+    const d = (habitDays[date] = { exp: total, points: zeroPoints() });
+    if (sum > 0) for (const x of parts) addPoints(d.points, x.type, (x.exp / sum) * total);
+    else addPoints(d.points, null, total);
+  }
+  const tasks = [];
+  for (const page of done) {
+    const exp = propValue(page.properties?.["討伐EXP"]);
+    const date = propValue(page.properties?.["完了日"])?.slice(0, 10);
+    if (typeof exp !== "number" || !exp || !date || date < from) continue;
+    tasks.push({ ...monsterOf(page, date), exp, date });
+  }
+  const value = { habitDays, tasks };
+  cache.set(from, { at: Date.now(), value });
+  return value;
+}
+
+// タスク1件をモンスターとして見る（種族＝分類タグ、格＝重さ、★＝作ってから until までの日数）
+function monsterOf(page, until = jstDate(new Date().toISOString())) {
+  const tag = propValue(page.properties?.["分類タグ"]);
+  const weight = propValue(page.properties?.["重さ"]) || "M";
+  const family = familyOf(tag);
+  const rank = RANKS[weight] || RANKS.M;
+  const ageDays = Math.max(0, Math.round((Date.parse(until) - Date.parse(jstDate(page.created_time))) / 86400e3));
+  return {
+    id: page.id,
+    url: page.url,
+    title: propValue(page.properties?.["名前"]) || "",
+    status: propValue(page.properties?.["ステータス"]),
+    type: tagType(tag),
+    weight,
+    family: family.name,
+    colors: family.color,
+    shape: rank.shape,
+    name: family.name + rank.name,
+    stars: starsOf(ageDays),
+    ageDays,
+  };
+}
+
+function habitParts(page) {
+  const out = [];
+  for (const [name, prop] of Object.entries(page.properties || {})) {
+    if (prop.type === "checkbox" && prop.checkbox) out.push({ name, type: habitType(name), exp: habitWeight(name) });
+  }
+  if (propValue(page.properties?.[NOTE_PROPERTY])) out.push({ name: "ひとこと", type: null, exp: NOTE_EXP });
+  return out;
+}
+
+function zeroPoints() {
+  return Object.fromEntries(TYPES.map((t) => [t, 0]));
+}
+
+// 型が null なら4つに均等割り
+function addPoints(points, type, v) {
+  if (type) points[type] += v;
+  else for (const t of TYPES) points[t] += v / TYPES.length;
+}
+
+function topType(points) {
+  return TYPES.reduce((best, t) => (points[t] > points[best] ? t : best), TYPES[0]);
+}
+
+function adultTypeOf(points) {
+  const vals = TYPES.map((t) => points[t]);
+  const sum = vals.reduce((a, b) => a + b, 0);
+  if (sum > 0 && Math.max(...vals) - Math.min(...vals) <= sum * BALANCE_RATIO) return "バランス";
+  return topType(points);
+}
+
+// 進化履歴「2026-11-01 孵化／2026-11-15 成長期（ちから）」から、段階ごとの日付を読む
+function historyDates(text) {
+  const out = {};
+  for (const m of String(text).matchAll(/(\d{4}-\d{2}-\d{2})\s*(孵化|成長期|成体)/g)) out[m[2] === "孵化" ? "幼体" : m[2]] = m[1];
+  return out;
+}
+
+// 日付順に EXP を積み、しきい値を越えた日に進化させる。その日のぶんは前の段階の期間に数える。
+// すでに Notion に保存された進化は、保存された日付・型のまま（下がらない）
+function grow(pet, days) {
+  const stored = STAGES.indexOf(pet.stage);
+  const dates = historyDates(pet.history);
+  const periods = STAGES.map(zeroPoints);
+  const points = zeroPoints();
+  const events = [];
+  let { childType, adultType } = pet;
+  let idx = 0;
+  let exp = 0;
+  for (const date of Object.keys(days).sort()) {
+    const d = days[date];
+    exp += d.exp;
+    for (const t of TYPES) { points[t] += d.points[t]; periods[idx][t] += d.points[t]; }
+    while (idx < STAGES.length - 1) {
+      const next = STAGES[idx + 1];
+      const saved = idx + 1 <= stored;
+      if (saved && dates[next] ? date < dates[next] : exp < THRESHOLDS[next]) break;
+      idx++;
+      if (next === "成長期" && (!saved || !childType)) childType = topType(periods[1]);
+      if (next === "成体" && (!saved || !adultType)) adultType = adultTypeOf(periods[2]);
+      if (!saved) events.push({ stage: next, date, type: next === "成長期" ? childType : next === "成体" ? adultType : null });
+    }
+  }
+  // 保存済みの段階より下には戻らない（チェックを外して EXP が減ったとき）
+  if (idx < stored) idx = stored;
+  const round = (p) => Object.fromEntries(TYPES.map((t) => [t, Math.round(p[t])]));
+  return { stage: STAGES[idx], childType: childType || null, adultType: adultType || null, exp: Math.round(exp), points: round(points), period: round(periods[idx]), events };
+}
+
+async function saveEvolution(notion, pageId, g) {
+  // 別の端末が先に書いていたら書かない（履歴が二重にならないように）
+  const current = summarizePet(await notion("GET", `/pages/${pageId}`));
+  const fresh = g.events.filter((e) => STAGES.indexOf(e.stage) > STAGES.indexOf(current.stage));
+  if (!fresh.length) return current;
+  const lines = fresh.map((e) => `${e.date} ${HISTORY_WORD[e.stage]}${e.type ? `（${e.type}）` : ""}`);
+  const history = [current.history, ...lines].filter(Boolean).join("／");
+  const properties = {
+    段階: { select: { name: g.stage } },
+    進化履歴: { rich_text: [{ type: "text", text: { content: history } }] },
+  };
+  if (g.childType) properties["成長期の型"] = { select: { name: g.childType } };
+  if (g.adultType) properties["成体の型"] = { select: { name: g.adultType } };
+  return summarizePet(await notion("PATCH", `/pages/${pageId}`, { properties }));
+}
+
+// ---------- そうび（DB_そうび） ----------
+// ギルドの「ほうこく」1件につき、依頼ごとに1つ落ちる。Notion で直接ほうこくを足した分も、次に読んだときに落とす
+const ITEM_FIELDS = { name: "名前", slot: "部位", type: "型", rarity: "レア", effect: "効果", crit: "会心", equipped: "装備中", date: "入手日", questIds: "依頼", reportIds: "ほうこく" };
+const syncing = new WeakMap(); // env ごと：同時に読んでも二重に落とさない
+
+function summarizeItem(page) {
+  return pick(page, ITEM_FIELDS);
+}
+
+// fresh：いま作ったばかりのほうこく（検索にまだ出てこないことがあるので、足して数える）
+async function syncDrops(notion, env, fresh = []) {
+  if (syncing.get(env)) return syncing.get(env);
+  const run = (async () => {
+    const [reports, quests, items] = await Promise.all([
+      queryAll(notion, dsId(env, "REPORT_DS_ID"), { sorts: [{ timestamp: "created_time", direction: "ascending" }] }),
+      queryAll(notion, dsId(env, "GUILD_DS_ID"), {}),
+      queryAll(notion, dsId(env, "ITEM_DS_ID"), {}),
+    ]);
+    for (const f of fresh) if (!reports.some((r) => normalizeId(r.id) === normalizeId(f.id))) reports.push(f);
+    const questById = new Map(quests.map((q) => [normalizeId(q.id), pick(q, { title: "依頼", category: "カテゴリ", rank: "ランク", repeat: "くりかえし", stagesText: "段階" })]));
+    const have = new Set();
+    for (const it of items.map(summarizeItem)) {
+      for (const r of it.reportIds || []) for (const q of it.questIds || []) have.add(`${normalizeId(r)}|${normalizeId(q)}`);
+    }
+    const stageOf = new Map();
+    const created = [];
+    for (const r of reports) {
+      const report = summarizeReport(r);
+      for (const qid of (report.questIds || []).map(normalizeId)) {
+        const stage = stageOf.get(qid) || 0;
+        stageOf.set(qid, stage + 1);
+        const quest = questById.get(qid);
+        if (!quest || have.has(`${normalizeId(r.id)}|${qid}`)) continue;
+        const { slot, type } = slotOf(quest.category);
+        const crit = isCrit(r.id);
+        const rarity = rarityOf({ ...quest, stages: splitStages(quest.stagesText) }, stage, crit);
+        const page = await notion("POST", "/pages", {
+          parent: { type: "data_source_id", data_source_id: dsId(env, "ITEM_DS_ID") },
+          properties: {
+            名前: { title: [{ type: "text", text: { content: itemName(quest.title, stage, slot, rarity) } }] },
+            部位: { select: { name: slot } },
+            型: { select: { name: type } },
+            レア: { number: rarity },
+            効果: { number: RARITY_EFFECT[rarity] },
+            会心: { checkbox: crit },
+            入手日: { date: { start: jstDate(r.created_time) } },
+            依頼: { relation: [{ id: qid }] },
+            ほうこく: { relation: [{ id: r.id }] },
+          },
+        });
+        created.push({ ...summarizeItem(page), quest: quest.title });
+      }
+    }
+    return created;
+  })();
+  syncing.set(env, run);
+  try {
+    return await run;
+  } finally {
+    syncing.delete(env);
+  }
+}
+
+async function getItems(notion, env) {
+  const drops = await syncDrops(notion, env);
+  const items = (await queryAll(notion, dsId(env, "ITEM_DS_ID"), { sorts: [{ timestamp: "created_time", direction: "ascending" }] })).map(summarizeItem);
+  return { items, drops, slots: SLOT_ORDER };
+}
+
+// 装備する／外す。同じ部位は1つだけ（装備したら、同じ部位のほかのものは外す）
+async function equipItem(notion, env, id, body) {
+  if (typeof body?.equipped !== "boolean") throw httpError(400, "変更できない項目です");
+  const page = await notion("GET", `/pages/${id}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(dsId(env, "ITEM_DS_ID"))) throw httpError(403, "DB_そうび のアイテムではありません");
+  const item = summarizeItem(page);
+  if (body.equipped) {
+    const others = await queryAll(notion, dsId(env, "ITEM_DS_ID"), {
+      filter: { and: [{ property: "部位", select: { equals: item.slot } }, { property: "装備中", checkbox: { equals: true } }] },
+    });
+    for (const o of others) if (normalizeId(o.id) !== normalizeId(id)) await notion("PATCH", `/pages/${o.id}`, { properties: { 装備中: { checkbox: false } } });
+  }
+  await notion("PATCH", `/pages/${id}`, { properties: { 装備中: { checkbox: body.equipped } } });
+  return getItems(notion, env);
+}
+
+// 装備中のそうびの、型ごとのダメージ＋%（ぜんぶ は4つに半分ずつ）。DB_そうび が読めなければ何も足さない
+async function equipBonus(notion, env) {
+  if (!env.ITEM_DS_ID) return {};
+  try {
+    const rows = await queryAll(notion, env.ITEM_DS_ID, { filter: { property: "装備中", checkbox: { equals: true } } });
+    const bonus = {};
+    for (const it of rows.map(summarizeItem)) {
+      const add = (t, v) => { bonus[t] = (bonus[t] || 0) + v; };
+      if (it.type === "ぜんぶ") for (const t of TYPES) add(t, (it.effect || 0) / 2);
+      else if (TYPES.includes(it.type)) add(it.type, it.effect || 0);
+    }
+    return bonus;
+  } catch {
+    return {};
+  }
+}
+
+// ---------- ぼうけん（章ボス・モンスター・能力値） ----------
+// ボスへのダメージは、その話を「よんだ」日からの習慣・DONEタスクのEXPに、弱点・凶暴化・あいぼう・能力値のボーナスを掛けたもの。
+// HP を削りきった日を DB_ものがたり の「撃破日」に書くと、次の話が開く（あとでチェックを外しても戻らない）
+const STATS_FROM = "2000-01-01";
+const OPEN_MONSTERS = 100;
+const BATTLE_LOG = 20;
+
+async function getBattle(notion, env) {
+  const [stories, all, petRow, open, equip, muscle] = await Promise.all([
+    loadStories(notion, env),
+    loadEvents(notion, env, STATS_FROM),
+    env.AIBOU_DS_ID ? petPage(notion, env) : null,
+    openMonsters(notion, env),
+    equipBonus(notion, env),
+    muscleHits(notion, env),
+  ]);
+  const pet = petRow ? summarizePet(petRow) : null;
+  const petType = pet?.stage === "成長期" ? pet.childType : pet?.stage === "成体" ? pet.adultType : null;
+  const stats = statsOf(all);
+  const ep2 = stories.filter((c) => c.kind === EP2);
+  const current = currentBoss(ep2);
+  let boss = null;
+  if (current) {
+    // 前のボスを倒した日からたたかう。倒した日は、前のボスを倒しきったあとの残りの攻撃だけが入る（むだにしない）
+    const i = ep2.indexOf(current);
+    const startOf = (k) => {
+      const before = ep2[k - 1];
+      if (before?.defeated) return before.defeated.slice(0, 10);
+      return ep2[k].bossStart?.slice(0, 10) || jstDate(new Date().toISOString());
+    };
+    const prev = ep2[i - 1];
+    const start = startOf(i);
+    let carry = null;
+    if (prev?.defeated && prev.boss && typeof prev.hp === "number") {
+      const pf = fight(prev, { ...all, muscle }, startOf(i - 1), petType, stats, equip);
+      carry = { date: start, ratio: pf.defeatedOn === start ? pf.leftover : 0 };
+    }
+    boss = fight(current, { ...all, muscle }, start, petType, stats, equip, carry);
+    if (boss.defeatedOn) {
+      await notion("PATCH", `/pages/${current.id}`, { properties: { 撃破日: { date: { start: boss.defeatedOn } } } });
+      current.defeated = boss.defeatedOn;
+    }
+  }
+  const next = ep2.find((c) => !c.read && !c.locked) || null;
+  return {
+    boss,
+    next: next && { id: next.id, title: next.title },
+    cleared: ep2.length > 0 && ep2.every((c) => c.read && (c.defeated || !c.boss)),
+    stats,
+    equip,
+    pet: pet && { name: pet.name, stage: pet.stage, type: petType },
+    monsters: open.monsters,
+    moreMonsters: open.more,
+  };
+}
+
+function currentBoss(ep2) {
+  return ep2.find((c) => c.read && c.boss && typeof c.hp === "number" && !c.defeated) || null;
+}
+
+// 💪 からだチェック：写真を判定して DB_筋肉チェック に残し、いま戦っているボスにつなぐ。返事にぼうけんの最新を付ける
+async function checkBody(notion, env, body) {
+  const stories = await loadStories(notion, env).catch(() => []);
+  const boss = currentBoss(stories.filter((c) => c.kind === EP2));
+  const saved = await postBody(notion, env, body, { bossId: boss?.id || null });
+  const battle = await getBattle(notion, env).catch(() => null);
+  const hit = battle?.boss?.log?.find((x) => x.kind === "muscle" && x.date === saved.record.date);
+  return { ...saved, boss: battle?.boss ? { name: battle.boss.name, hp: battle.boss.hp, damage: battle.boss.damage, defeatedOn: battle.boss.defeatedOn, hit: hit?.damage ?? null, before: battle.boss.start > saved.record.date } : null };
+}
+
+function statsOf({ habitDays, tasks }) {
+  const points = zeroPoints();
+  for (const d of Object.values(habitDays)) for (const t of TYPES) points[t] += d.points[t];
+  for (const t of tasks) addPoints(points, t.type, t.exp);
+  return Object.fromEntries(TYPES.map((t) => [t, Math.floor(points[t] / STAT_EXP)]));
+}
+
+// 型ごとの倍率（弱点なら1.5倍、弱点がバランスなら全部1.2倍）
+function weakMult(weak, type) {
+  if (weak === "バランス") return BALANCE_BONUS;
+  return type === weak ? WEAK_BONUS : 1;
+}
+
+// EXP（型 null は4つに均等）に型ごとの倍率 m(型) を掛ける
+function weakened(m, type, exp) {
+  if (type) return exp * m(type);
+  return TYPES.reduce((a, t) => a + (exp / TYPES.length) * m(t), 0);
+}
+
+// equip：装備中のそうびの、型ごとのダメージ＋%
+// carry：{ date, ratio }。前のボスを倒した日は、その日の攻撃のうち残り（ratio）だけがこのボスに入る
+function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats, equip = {}, carry = null) {
+  const weak = chapter.weak;
+  const petHit = !!petType && petType === weak;
+  const statVal = weak === "バランス" ? Math.min(...TYPES.map((t) => stats[t])) : stats[weak] || 0;
+  const mult = (petHit ? PET_BONUS : 1) * (1 + Math.min(STAT_MAX, statVal * STAT_RATE));
+  const m = (t) => weakMult(weak, t) * (1 + (equip[t] || 0) / 100);
+  const days = {};
+  const day = (d) => (days[d] ||= { habit: 0, tasks: [] });
+  const share = (date) => (carry && date === carry.date ? carry.ratio : 1);
+  for (const [date, d] of Object.entries(habitDays)) {
+    if (date < start) continue;
+    // 型ごとのダメージも残す（画面で、型ごとに仲間の攻撃として見せる）
+    const byType = Object.fromEntries(TYPES.map((t) => [t, d.points[t] * m(t) * mult * share(date)]));
+    day(date).habit = TYPES.reduce((a, t) => a + byType[t], 0);
+    day(date).habitTypes = byType;
+  }
+  for (const t of tasks) {
+    if (t.date < start) continue;
+    day(t.date).tasks.push({ ...t, damage: weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult * share(t.date) });
+  }
+  // 💪 からだチェック（週1回まで・素のダメージに「ちから」の倍率を掛ける）
+  for (const x of muscle) {
+    if (x.date < start) continue;
+    day(x.date).muscle = (day(x.date).muscle || 0) + x.damage * m(MUSCLE_TYPE) * mult * share(x.date);
+    day(x.date).muscleInfo = x;
+  }
+  let damage = 0;
+  let defeatedOn = null;
+  let leftover = 0;
+  const log = [];
+  const today = jstDate(new Date().toISOString());
+  let todayDamage = 0;
+  for (const date of Object.keys(days).sort()) {
+    const d = days[date];
+    const total = d.habit + (d.muscle || 0) + d.tasks.reduce((a, t) => a + t.damage, 0);
+    damage += total;
+    if (date === today) todayDamage = total;
+    // 攻撃は1件ずつ（key：画面が「もう見た攻撃」を覚えるための名前）
+    // 習慣はその日の分をまとめて1件（型ごとに仲間が攻撃）。あとからチェックが増えたら、画面は増えた分だけ見せる
+    if (d.habit) {
+      const types = Object.fromEntries(Object.entries(d.habitTypes || {}).filter(([, v]) => v > 0).map(([t, v]) => [t, Math.round(v)]));
+      log.push({ key: `${date}|h`, date, kind: "habit", damage: Math.round(d.habit), types });
+    }
+    if (d.muscle) log.push({ key: `${date}|m`, date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
+    for (const t of d.tasks) log.push({ key: `t|${t.id}`, date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
+    if (!defeatedOn && damage >= chapter.hp) {
+      defeatedOn = date;
+      // 倒した日の攻撃のうち、HP を削りきったあとの残り（次のボスへ持ちこす割合）
+      leftover = total > 0 ? Math.max(0, Math.min(1, (damage - chapter.hp) / total)) : 0;
+    }
+  }
+  return {
+    chapterId: chapter.id,
+    chapter: chapter.title,
+    name: chapter.boss,
+    hp: chapter.hp,
+    weak,
+    start,
+    damage: Math.min(chapter.hp, Math.round(damage)),
+    today: Math.round(todayDamage),
+    petHit,
+    mult: Math.round(mult * 100) / 100,
+    defeatedOn,
+    leftover,
+    log: log.slice(-BATTLE_LOG).reverse(),
+  };
+}
+
+// まだ終わっていないタスク＝モンスター（古い順に OPEN_MONSTERS 件）
+async function openMonsters(notion, env) {
+  const res = await notion("POST", `/data_sources/${dsId(env, "TASK_DS_ID")}/query`, {
+    filter: { and: ["✅ DONE", "📚 REFERENCE", "🤖 AI"].map((s) => ({ property: "ステータス", status: { does_not_equal: s } })) },
+    sorts: [{ timestamp: "created_time", direction: "ascending" }],
+    page_size: OPEN_MONSTERS,
+  });
+  return { monsters: (res.results || []).map((p) => monsterOf(p)), more: !!res.has_more };
+}
+
 // ---------- 共通 ----------
 const MAX_QUERY_PAGES = 5;
 
-async function queryAll(notion, dataSourceId, body) {
+async function queryAll(notion, dataSourceId, body, maxPages = MAX_QUERY_PAGES) {
   const out = [];
   let cursor;
-  for (let i = 0; i < MAX_QUERY_PAGES; i++) {
+  for (let i = 0; i < maxPages; i++) {
     const res = await notion("POST", `/data_sources/${dataSourceId}/query`, {
       ...body,
       page_size: 100,
