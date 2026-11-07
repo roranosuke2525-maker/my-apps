@@ -185,7 +185,24 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .price { font-family: var(--f-num); font-size: 12px; color: var(--mute); white-space: nowrap; }
 .kchip { display: inline-flex; gap: 4px; }
 .sealed .nm { color: var(--mute); }
-.saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; } .saveadd .btn { flex: 1; height: 40px; }
+.saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; }
+/* サイドバー：すべての画面。狭い画面は左から出す、広い画面は左に常に出す */
+#sidebk { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; }
+#side { position: fixed; top: 0; bottom: 0; left: 0; width: 248px; max-width: 82vw; z-index: 41; background: var(--card); border-right: 1px solid var(--line); padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px)); overflow: auto; display: flex; flex-direction: column; gap: 2px; transform: translateX(-100%); transition: transform .22s ease; }
+#side.open { transform: none; }
+#side > * { flex: none; }
+#side[hidden] { display: none; }
+#side .sh { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 10px; } #side .sh b { font-size: 15px; }
+#side .sg { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--mute); padding: 12px 10px 4px; }
+#side button[data-gotab], #side button[data-concierge], #side button[data-search], #side a { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; color: var(--ink); text-decoration: none; text-align: left; width: 100%; }
+#side button[aria-pressed="true"] { background: var(--sunk); font-weight: 600; }
+#side .badge { position: static; margin-left: auto; }
+@media (min-width: 1000px) {
+  #sidebk { display: none !important; }
+  #side { transform: none; left: max(0px, calc(50% - 380px - 260px)); border-right: 0; background: transparent; }
+  #side[hidden] { display: flex !important; }
+  #side .sh button, #menu, nav.tabs [data-tab="more"] { display: none; }
+} .saveadd .btn { flex: 1; height: 40px; }
 .btn.ok { background: var(--ok); color: #fff; }
 .btn:disabled { opacity: .5; }
 
@@ -740,8 +757,29 @@ nav.tabs { background: var(--bg); }
 .fab { box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 </style>
 
+<button type="button" id="sidebk" data-side="0" aria-label="閉じる" hidden></button>
+<aside id="side" aria-label="すべての画面" hidden>
+  <div class="sh"><b>今どこ</b><button type="button" class="iconbtn" data-side="0" aria-label="閉じる">×</button></div>
+  <div class="sg">毎日</div>
+  <button type="button" data-gotab="today">✓ 今日</button>
+  <button type="button" data-gotab="flow">☰ 流れ</button>
+  <button type="button" data-gotab="save">🏠 節約<span class="badge" id="sidesave" hidden></span></button>
+  <button type="button" data-gotab="triage">⬒ 仕分け</button>
+  <button type="button" data-gotab="ai">🤖 AI<span class="badge" id="sideai" hidden></span></button>
+  <div class="sg">読む・買う</div>
+  <button type="button" data-gotab="read">📖 読む<span class="badge" id="sideread" hidden></span></button>
+  <button type="button" data-gotab="shop">🛒 買う<span class="badge" id="sideshop" hidden></span></button>
+  <button type="button" data-gotab="news">📰 ニュース</button>
+  <div class="sg">しくみ</div>
+  <button type="button" data-gotab="log">🩺 運用</button>
+  <button type="button" data-gotab="db">🗄 DB</button>
+  <div class="sg">道具</div>
+  <button type="button" data-concierge="1">💡 提案</button>
+  <button type="button" data-search="1">🔍 検索</button>
+  <a href="widget/" target="_blank" rel="noopener">📱 ウィジェット</a>
+</aside>
 <div id="app">
-  <header class="top"><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
+  <header class="top"><button type="button" class="iconbtn" id="menu" data-side="1" aria-label="すべての画面"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>
@@ -2973,7 +3011,7 @@ nav.tabs { background: var(--bg); }
     }
     // 節約：区分なしの買い物・予算超え・封印の解除日
     if (typeof unsorted === "function") {
-      const un = unsorted(); if (un.length) out.push({ pri: 58, icon: "🏷", title: `区分がまだの買い物が ${un.length}件`, body: "🏠 家財／🧴 消耗品／🙋 じぶん（3月まで封印）に振り分けると、買ってよいものだけが残ります。", acts: [["tab:save", "節約で振り分ける"]] });
+      const un = unsorted(); if (un.length) out.push({ pri: 58, icon: "🏷", title: `区分がまだの買い物が ${un.length}件`, body: "🏠 家財／🧴 消耗品／🎮 娯楽（3月まで封印）に振り分けると、買ってよいものだけが残ります。", acts: [["tab:save", "節約で振り分ける"]] });
       const spent = sumP(boughtMonth()); if (S.saveCfg.budget && spent > S.saveCfg.budget) out.push({ pri: 75, icon: "💸", title: `今月の家財が予算を ${yen(spent - S.saveCfg.budget)} 超えています`, body: `予算 ${yen(S.saveCfg.budget)} に対して ${yen(spent)}。残りの家財は来月に回すか、予算を見直しましょう。`, acts: [["tab:save", "節約を見る"]] });
       if (daysLeft() <= 0 && sealed().length) out.push({ pri: 65, icon: "🔓", title: `封印の解除日です（${sealed().length}件）`, body: "欲しいものを1つずつ、買う・まだ待つ・手放すに決めましょう。", acts: [["tab:save", "封印を見る"]] });
       else if (daysLeft() > 0 && daysLeft() <= 7 && sealed().length) out.push({ pri: 40, icon: "🔓", title: `封印の解除まで あと ${daysLeft()}日`, body: `封印中 ${sealed().length}件・${yen(sumP(sealed()))}。家財が揃っているか先に確かめましょう。`, acts: [["tab:save", "節約を見る"]] });
@@ -3090,9 +3128,9 @@ nav.tabs { background: var(--bg); }
     } catch (err) { el.disabled = false; el.textContent = "💡 今すぐ提案してもらう"; toast(String(err.message || "起動できませんでした").slice(0, 120)); }
   }
   // ================= 節約：3月まで、家の必要なものだけ買う =================
-  // 区分（DB_タスク管理「買い物の区分」）：🏠 家財＝必要経費（買ってよい）／🧴 消耗品＝補充／🙋 じぶん＝欲しいもの（解除日まで封印・いつか）
-  const KINDS_BUY = [["🏠 家財", "🏠 家財"], ["🧴 消耗品", "🧴 消耗品"], ["🙋 じぶん", "🙋 じぶん（封印）"]];
-  const K = { home: "🏠 家財", stock: "🧴 消耗品", me: "🙋 じぶん" };
+  // 区分（DB_タスク管理「買い物の区分」）：🏠 家財＝必要経費（買ってよい）／🧴 消耗品＝補充／🎮 娯楽＝欲しいもの（解除日まで封印・いつか）
+  const KINDS_BUY = [["🏠 家財", "🏠 家財"], ["🧴 消耗品", "🧴 消耗品"], ["🎮 娯楽", "🎮 娯楽（封印）"]];
+  const K = { home: "🏠 家財", stock: "🧴 消耗品", me: "🎮 娯楽" };
   const APP_PAGE = "40662844acbe81b98894fc88719d6ea8"; // DB_アプリ「今どこ」：本文の「⚙️ 今どこの設定」に予算と解除日
   const yen = (n) => `¥${Math.round(n || 0).toLocaleString()}`;
   const sumP = (list) => list.reduce((a, t) => a + (t.price || 0), 0);
@@ -3124,12 +3162,12 @@ nav.tabs { background: var(--bg); }
         <div class="ttl2"><b>${unlocked ? "封印が解けました" : "3月まで超節約"}</b><span class="mute" style="font-size:12px">家の必要なものだけ</span><small>${unlocked ? "解除日を過ぎました" : `あと ${left}日`}</small></div>
         <div class="savenums">
           <div><small>🏠 家財 残り</small><b>${home.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(home))}</span></div>
-          <div><small>🙋 封印中</small><b>${seal.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(seal))}</span></div>
+          <div><small>🎮 封印中</small><b>${seal.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(seal))}</span></div>
           <div><small>今月 買った</small><b>${bought.length}<span class="yen">件</span></b><span class="yen">${yen(spent)}</span></div>
         </div>
         <button type="button" class="bud${budget && spent > budget ? " over" : ""}" data-savecfg="1" style="text-align:left"><span class="lb"><span>今月の家財の予算</span><b>${yen(spent)} / ${budget ? yen(budget) : "未設定"}</b></span><span class="bar"><i style="width:${pct}%"></i></span><span class="lb"><span>${budget && spent > budget ? `⚠ ${yen(spent - budget)} 超えています` : budget ? `残り ${yen(budget - spent)}` : "タップして予算を決める"}</span><span>${S.saveCfg.until.replace(/-/g, "/")} に解除</span></span></button>
       </div>
-      <div class="seg" id="saveseg">${[["home", "🏠 家財", home.length], ["seal", "🙋 封印", seal.length], ["sort", "区分なし", un.length], ["done", "今月", bought.length]].map(([k, n, x]) => `<button type="button" data-saveseg="${k}" aria-pressed="${S.saveSeg === k || (S.saveSeg === "home" && k === "home")}">${n}<span class="n">${x}</span></button>`).join("")}</div>
+      <div class="seg" id="saveseg">${[["home", "🏠 家財", home.length], ["seal", "🎮 封印", seal.length], ["sort", "区分なし", un.length], ["done", "今月", bought.length]].map(([k, n, x]) => `<button type="button" data-saveseg="${k}" aria-pressed="${S.saveSeg === k || (S.saveSeg === "home" && k === "home")}">${n}<span class="n">${x}</span></button>`).join("")}</div>
       <div class="card panel"><div class="scroll swipey" id="savelist"></div></div>`);
     const box = $("#savelist"); const seg = ["home", "seal", "sort", "done"].includes(S.saveSeg) ? S.saveSeg : "home";
     const rowB = (t, opts = {}) => `<div class="rw"><div class="row${t.kind === K.me ? " sealed" : ""}" data-id="${t.id}" style="--c:${t.kind === K.home ? "var(--s-done)" : t.kind === K.me ? "var(--mute)" : "var(--s-next)"}">${opts.check === false ? `<span class="dot"></span>` : `<button type="button" class="check" data-bought="${t.id}" aria-label="買った"></button>`}<button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc([t.next, t.date && t.kind !== K.me ? `${md(t.date)}（${WD[dow(t.date)]}）` : "", t.tag && t.tag !== "BUY" ? t.tag : ""].filter(Boolean).join("・") || `${ageOf(t)}日前から`)}</span></button><span class="price">${t.price != null ? yen(t.price) : "—"}</span><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="区分・日付を変える"><i aria-hidden="true">▾</i></button></div></div>`;
@@ -3137,13 +3175,13 @@ nav.tabs { background: var(--bg); }
     if (seg === "home") {
       html += `<div class="rules"><b>買ってよいもの＝家に必要な家財・設備・消耗品。</b>買う前の3つ：①家に要る？ ②今要る？ ③代わりで足りない？　○ を押すと「買った」になり今月の予算に入ります。</div>`;
       html += home.length ? home.sort((a, b) => (a.date || "9").localeCompare(b.date || "9") || (b.price || 0) - (a.price || 0)).map(rowB).join("") : `<div class="alldone"><b>家財のリストは空です</b><span>下の「家財を足す」から。揃ったら封印を解く日です</span></div>`;
-      html += `<div class="saveadd"><button type="button" class="btn pri" data-saveadd="home">＋ 家財を足す</button><button type="button" class="btn" data-saveadd="me">🙋 欲しいものを封印</button></div>`;
+      html += `<div class="saveadd"><button type="button" class="btn pri" data-saveadd="home">＋ 家財を足す</button><button type="button" class="btn" data-saveadd="me">🎮 欲しいものを封印</button></div>`;
     } else if (seg === "seal") {
       html += `<div class="rules"><b>${unlocked ? "解除日を過ぎました。上から1つずつ、買うか手放すか決めましょう。" : `自分の欲しいものは ${S.saveCfg.until.replace(/-/g, "/")} まで封印。`}</b>見るだけ・足すだけ。▾ から「やっぱり家財」にも変えられます。</div>`;
       html += seal.length ? seal.sort((a, b) => (b.price || 0) - (a.price || 0)).map((t) => rowB(t, { check: unlocked })).join("") : `<div class="alldone"><b>封印中のものはありません</b><span>欲しくなったら「欲しいものを封印」に入れて、3月に見直します</span></div>`;
-      html += `<div class="saveadd"><button type="button" class="btn" data-saveadd="me">🙋 欲しいものを封印</button></div>`;
+      html += `<div class="saveadd"><button type="button" class="btn" data-saveadd="me">🎮 欲しいものを封印</button></div>`;
     } else if (seg === "sort") {
-      html += `<div class="rules"><b>区分がまだの買い物。</b>▾ か ▾ の中のチップで 🏠 家財／🧴 消耗品／🙋 じぶん に振り分けます。じぶん は いつか・解除日の日付になります。</div>`;
+      html += `<div class="rules"><b>区分がまだの買い物。</b>▾ か ▾ の中のチップで 🏠 家財／🧴 消耗品／🎮 娯楽 に振り分けます。娯楽 は いつか・解除日の日付になります。</div>`;
       html += un.length ? un.map((t) => `<div class="rw"><div class="row" data-id="${t.id}" style="--c:var(--s-inbox)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || t.tag || "")}</span></button><span class="kchip">${KINDS_BUY.map(([k, n]) => `<button type="button" class="qc" data-savekind="${t.id}" data-kind="${k}">${n.slice(0, 2)}</button>`).join("")}</span></div></div>`).join("") : `<div class="alldone"><b>全部 区分が付いています</b></div>`;
     } else {
       html += `<div class="rules"><b>今月買った家財・消耗品（${yen(spent)}）。</b>価格が空のものは ▾ から入れると予算に数えます。</div>`;
@@ -3151,7 +3189,7 @@ nav.tabs { background: var(--bg); }
     }
     box.innerHTML = html;
   }
-  // 区分を変える（じぶん → いつか＋解除日、家財 → 日付なしなら次にやる）
+  // 区分を変える（娯楽 → いつか＋解除日、家財 → 日付なしなら次にやる）
   async function setKind(t, kind) {
     const props = { "買い物の区分": kind };
     if (kind === K.me) { props["ステータス"] = ST.some; Object.assign(props, dateProps(S.saveCfg.until)); }
@@ -3168,7 +3206,7 @@ nav.tabs { background: var(--bg); }
   function openSaveAdd(kind) {
     saveAddKind = kind;
     const me = kind === "me";
-    modal(`<h3>${me ? "🙋 欲しいものを封印する" : "🏠 家財を足す"}</h3><div class="form">
+    modal(`<h3>${me ? "🎮 欲しいものを封印する" : "🏠 家財を足す"}</h3><div class="form">
       <label for="sv-name">名前</label><input id="sv-name" type="text" maxlength="200" placeholder="${me ? "例）Switch2 のソフト" : "例）寝室のカーテン"}">
       <label for="sv-price">だいたいの価格（円）</label><input id="sv-price" type="number" inputmode="numeric" min="0" step="100" placeholder="例）12000">
       <label for="sv-next">${me ? "ひとこと（なぜ欲しい）" : "次の一歩"}</label><input id="sv-next" type="text" maxlength="200" placeholder="${me ? "例）子どもと遊びたい" : "例）窓の幅を測る"}">
@@ -3480,10 +3518,14 @@ nav.tabs { background: var(--bg); }
   }
   // ================= 描画 =================
   const main = $("#main");
+  function toggleSide(open) { const s = $("#side"), k = $("#sidebk"); if (!s) return; s.hidden = !open; k.hidden = !open; requestAnimationFrame(() => s.classList.toggle("open", open)); }
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    for (const b of document.querySelectorAll("#side [data-gotab]")) b.setAttribute("aria-pressed", String(b.dataset.gotab === S.tab));
+    const sideN = { sideai: mine, sideread: S.readList.filter(isRead).length, sideshop: stockSoon().length, sidesave: typeof saveAlerts === "function" ? saveAlerts() : 0 };
+    for (const [id, n] of Object.entries(sideN)) { const e = document.getElementById(id); if (e) { e.hidden = !n; e.textContent = n; } }
     const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -3516,9 +3558,10 @@ nav.tabs { background: var(--bg); }
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
     if (el.id === "reload" || el.id === "retry") { load(); return; }
-    if (d.tab === "more") { openMore(); return; }
+    if (d.side != null) { toggleSide(d.side === "1"); return; }
+    if (d.tab === "more") { toggleSide(true); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
-    if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
+    if (d.gotab) { closeModal(); toggleSide(false); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
@@ -3720,9 +3763,9 @@ nav.tabs { background: var(--bg); }
       mk("カーテン（寝室・遮光）", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "窓の幅と高さを測る", age: 3, kind: "🏠 家財", price: 18000 }),
       mk("玄関の傘立て", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", age: 9, kind: "🏠 家財", price: 3500 }),
       mk("見守りカメラ", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "KX-HC750-W か C10 かを決める", age: 2, kind: "🏠 家財", price: 12000 }),
-      mk("ヨッシー Switch2", ST.some, { tag: "TOY", w: "S", age: 20, kind: "🙋 じぶん", price: 7980, date: "2027-03-31" }),
-      mk("木製の豆皿", ST.some, { tag: "COFFEE", w: "S", age: 14, kind: "🙋 じぶん", price: 2400, date: "2027-03-31" }),
-      mk("スタジオ用スピーカースタンド", ST.some, { tag: "MUSIC", w: "M", age: 6, kind: "🙋 じぶん", price: 15800, date: "2027-03-31" }),
+      mk("ヨッシー Switch2", ST.some, { tag: "TOY", w: "S", age: 20, kind: "🎮 娯楽", price: 7980, date: "2027-03-31" }),
+      mk("木製の豆皿", ST.some, { tag: "COFFEE", w: "S", age: 14, kind: "🎮 娯楽", price: 2400, date: "2027-03-31" }),
+      mk("スタジオ用スピーカースタンド", ST.some, { tag: "MUSIC", w: "M", age: 6, kind: "🎮 娯楽", price: 15800, date: "2027-03-31" }),
       mk("コーヒー豆（次の候補）", ST.next, { tag: "BUY", waku: "☼ 朝", w: "S", age: 1, price: 1900 }));
     S.bought = [mk("食洗機用洗剤", ST.done, { tag: "BUY", date: d, age: 0, kind: "🧴 消耗品", price: 1280 }), mk("ダイニング用コンセント", ST.done, { tag: "BUILD", date: d, age: 2, kind: "🏠 家財", price: 4200 }), mk("ヒップシート", ST.done, { tag: "CHILD", date: addDays(d, -4), age: 4, kind: "🏠 家財", price: 9800 })];
     S.sugs = [

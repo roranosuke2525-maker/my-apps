@@ -1,9 +1,13 @@
   // ================= 描画 =================
   const main = $("#main");
+  function toggleSide(open) { const s = $("#side"), k = $("#sidebk"); if (!s) return; s.hidden = !open; k.hidden = !open; requestAnimationFrame(() => s.classList.toggle("open", open)); }
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    for (const b of document.querySelectorAll("#side [data-gotab]")) b.setAttribute("aria-pressed", String(b.dataset.gotab === S.tab));
+    const sideN = { sideai: mine, sideread: S.readList.filter(isRead).length, sideshop: stockSoon().length, sidesave: typeof saveAlerts === "function" ? saveAlerts() : 0 };
+    for (const [id, n] of Object.entries(sideN)) { const e = document.getElementById(id); if (e) { e.hidden = !n; e.textContent = n; } }
     const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -36,9 +40,10 @@
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
     if (el.id === "reload" || el.id === "retry") { load(); return; }
-    if (d.tab === "more") { openMore(); return; }
+    if (d.side != null) { toggleSide(d.side === "1"); return; }
+    if (d.tab === "more") { toggleSide(true); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
-    if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
+    if (d.gotab) { closeModal(); toggleSide(false); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
@@ -240,9 +245,9 @@
       mk("カーテン（寝室・遮光）", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "窓の幅と高さを測る", age: 3, kind: "🏠 家財", price: 18000 }),
       mk("玄関の傘立て", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", age: 9, kind: "🏠 家財", price: 3500 }),
       mk("見守りカメラ", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "KX-HC750-W か C10 かを決める", age: 2, kind: "🏠 家財", price: 12000 }),
-      mk("ヨッシー Switch2", ST.some, { tag: "TOY", w: "S", age: 20, kind: "🙋 じぶん", price: 7980, date: "2027-03-31" }),
-      mk("木製の豆皿", ST.some, { tag: "COFFEE", w: "S", age: 14, kind: "🙋 じぶん", price: 2400, date: "2027-03-31" }),
-      mk("スタジオ用スピーカースタンド", ST.some, { tag: "MUSIC", w: "M", age: 6, kind: "🙋 じぶん", price: 15800, date: "2027-03-31" }),
+      mk("ヨッシー Switch2", ST.some, { tag: "TOY", w: "S", age: 20, kind: "🎮 娯楽", price: 7980, date: "2027-03-31" }),
+      mk("木製の豆皿", ST.some, { tag: "COFFEE", w: "S", age: 14, kind: "🎮 娯楽", price: 2400, date: "2027-03-31" }),
+      mk("スタジオ用スピーカースタンド", ST.some, { tag: "MUSIC", w: "M", age: 6, kind: "🎮 娯楽", price: 15800, date: "2027-03-31" }),
       mk("コーヒー豆（次の候補）", ST.next, { tag: "BUY", waku: "☼ 朝", w: "S", age: 1, price: 1900 }));
     S.bought = [mk("食洗機用洗剤", ST.done, { tag: "BUY", date: d, age: 0, kind: "🧴 消耗品", price: 1280 }), mk("ダイニング用コンセント", ST.done, { tag: "BUILD", date: d, age: 2, kind: "🏠 家財", price: 4200 }), mk("ヒップシート", ST.done, { tag: "CHILD", date: addDays(d, -4), age: 4, kind: "🏠 家財", price: 9800 })];
     S.sugs = [

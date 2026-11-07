@@ -185,7 +185,24 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .price { font-family: var(--f-num); font-size: 12px; color: var(--mute); white-space: nowrap; }
 .kchip { display: inline-flex; gap: 4px; }
 .sealed .nm { color: var(--mute); }
-.saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; } .saveadd .btn { flex: 1; height: 40px; }
+.saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; }
+/* サイドバー：すべての画面。狭い画面は左から出す、広い画面は左に常に出す */
+#sidebk { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; }
+#side { position: fixed; top: 0; bottom: 0; left: 0; width: 248px; max-width: 82vw; z-index: 41; background: var(--card); border-right: 1px solid var(--line); padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px)); overflow: auto; display: flex; flex-direction: column; gap: 2px; transform: translateX(-100%); transition: transform .22s ease; }
+#side.open { transform: none; }
+#side > * { flex: none; }
+#side[hidden] { display: none; }
+#side .sh { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 10px; } #side .sh b { font-size: 15px; }
+#side .sg { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--mute); padding: 12px 10px 4px; }
+#side button[data-gotab], #side button[data-concierge], #side button[data-search], #side a { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; color: var(--ink); text-decoration: none; text-align: left; width: 100%; }
+#side button[aria-pressed="true"] { background: var(--sunk); font-weight: 600; }
+#side .badge { position: static; margin-left: auto; }
+@media (min-width: 1000px) {
+  #sidebk { display: none !important; }
+  #side { transform: none; left: max(0px, calc(50% - 380px - 260px)); border-right: 0; background: transparent; }
+  #side[hidden] { display: flex !important; }
+  #side .sh button, #menu, nav.tabs [data-tab="more"] { display: none; }
+} .saveadd .btn { flex: 1; height: 40px; }
 .btn.ok { background: var(--ok); color: #fff; }
 .btn:disabled { opacity: .5; }
 
@@ -740,8 +757,29 @@ nav.tabs { background: var(--bg); }
 .fab { box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 </style>
 
+<button type="button" id="sidebk" data-side="0" aria-label="閉じる" hidden></button>
+<aside id="side" aria-label="すべての画面" hidden>
+  <div class="sh"><b>今どこ</b><button type="button" class="iconbtn" data-side="0" aria-label="閉じる">×</button></div>
+  <div class="sg">毎日</div>
+  <button type="button" data-gotab="today">✓ 今日</button>
+  <button type="button" data-gotab="flow">☰ 流れ</button>
+  <button type="button" data-gotab="save">🏠 節約<span class="badge" id="sidesave" hidden></span></button>
+  <button type="button" data-gotab="triage">⬒ 仕分け</button>
+  <button type="button" data-gotab="ai">🤖 AI<span class="badge" id="sideai" hidden></span></button>
+  <div class="sg">読む・買う</div>
+  <button type="button" data-gotab="read">📖 読む<span class="badge" id="sideread" hidden></span></button>
+  <button type="button" data-gotab="shop">🛒 買う<span class="badge" id="sideshop" hidden></span></button>
+  <button type="button" data-gotab="news">📰 ニュース</button>
+  <div class="sg">しくみ</div>
+  <button type="button" data-gotab="log">🩺 運用</button>
+  <button type="button" data-gotab="db">🗄 DB</button>
+  <div class="sg">道具</div>
+  <button type="button" data-concierge="1">💡 提案</button>
+  <button type="button" data-search="1">🔍 検索</button>
+  <a href="widget/" target="_blank" rel="noopener">📱 ウィジェット</a>
+</aside>
 <div id="app">
-  <header class="top"><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
+  <header class="top"><button type="button" class="iconbtn" id="menu" data-side="1" aria-label="すべての画面"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>

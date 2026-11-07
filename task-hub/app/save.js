@@ -1,7 +1,7 @@
   // ================= 節約：3月まで、家の必要なものだけ買う =================
-  // 区分（DB_タスク管理「買い物の区分」）：🏠 家財＝必要経費（買ってよい）／🧴 消耗品＝補充／🙋 じぶん＝欲しいもの（解除日まで封印・いつか）
-  const KINDS_BUY = [["🏠 家財", "🏠 家財"], ["🧴 消耗品", "🧴 消耗品"], ["🙋 じぶん", "🙋 じぶん（封印）"]];
-  const K = { home: "🏠 家財", stock: "🧴 消耗品", me: "🙋 じぶん" };
+  // 区分（DB_タスク管理「買い物の区分」）：🏠 家財＝必要経費（買ってよい）／🧴 消耗品＝補充／🎮 娯楽＝欲しいもの（解除日まで封印・いつか）
+  const KINDS_BUY = [["🏠 家財", "🏠 家財"], ["🧴 消耗品", "🧴 消耗品"], ["🎮 娯楽", "🎮 娯楽（封印）"]];
+  const K = { home: "🏠 家財", stock: "🧴 消耗品", me: "🎮 娯楽" };
   const APP_PAGE = "40662844acbe81b98894fc88719d6ea8"; // DB_アプリ「今どこ」：本文の「⚙️ 今どこの設定」に予算と解除日
   const yen = (n) => `¥${Math.round(n || 0).toLocaleString()}`;
   const sumP = (list) => list.reduce((a, t) => a + (t.price || 0), 0);
@@ -33,12 +33,12 @@
         <div class="ttl2"><b>${unlocked ? "封印が解けました" : "3月まで超節約"}</b><span class="mute" style="font-size:12px">家の必要なものだけ</span><small>${unlocked ? "解除日を過ぎました" : `あと ${left}日`}</small></div>
         <div class="savenums">
           <div><small>🏠 家財 残り</small><b>${home.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(home))}</span></div>
-          <div><small>🙋 封印中</small><b>${seal.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(seal))}</span></div>
+          <div><small>🎮 封印中</small><b>${seal.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(seal))}</span></div>
           <div><small>今月 買った</small><b>${bought.length}<span class="yen">件</span></b><span class="yen">${yen(spent)}</span></div>
         </div>
         <button type="button" class="bud${budget && spent > budget ? " over" : ""}" data-savecfg="1" style="text-align:left"><span class="lb"><span>今月の家財の予算</span><b>${yen(spent)} / ${budget ? yen(budget) : "未設定"}</b></span><span class="bar"><i style="width:${pct}%"></i></span><span class="lb"><span>${budget && spent > budget ? `⚠ ${yen(spent - budget)} 超えています` : budget ? `残り ${yen(budget - spent)}` : "タップして予算を決める"}</span><span>${S.saveCfg.until.replace(/-/g, "/")} に解除</span></span></button>
       </div>
-      <div class="seg" id="saveseg">${[["home", "🏠 家財", home.length], ["seal", "🙋 封印", seal.length], ["sort", "区分なし", un.length], ["done", "今月", bought.length]].map(([k, n, x]) => `<button type="button" data-saveseg="${k}" aria-pressed="${S.saveSeg === k || (S.saveSeg === "home" && k === "home")}">${n}<span class="n">${x}</span></button>`).join("")}</div>
+      <div class="seg" id="saveseg">${[["home", "🏠 家財", home.length], ["seal", "🎮 封印", seal.length], ["sort", "区分なし", un.length], ["done", "今月", bought.length]].map(([k, n, x]) => `<button type="button" data-saveseg="${k}" aria-pressed="${S.saveSeg === k || (S.saveSeg === "home" && k === "home")}">${n}<span class="n">${x}</span></button>`).join("")}</div>
       <div class="card panel"><div class="scroll swipey" id="savelist"></div></div>`);
     const box = $("#savelist"); const seg = ["home", "seal", "sort", "done"].includes(S.saveSeg) ? S.saveSeg : "home";
     const rowB = (t, opts = {}) => `<div class="rw"><div class="row${t.kind === K.me ? " sealed" : ""}" data-id="${t.id}" style="--c:${t.kind === K.home ? "var(--s-done)" : t.kind === K.me ? "var(--mute)" : "var(--s-next)"}">${opts.check === false ? `<span class="dot"></span>` : `<button type="button" class="check" data-bought="${t.id}" aria-label="買った"></button>`}<button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc([t.next, t.date && t.kind !== K.me ? `${md(t.date)}（${WD[dow(t.date)]}）` : "", t.tag && t.tag !== "BUY" ? t.tag : ""].filter(Boolean).join("・") || `${ageOf(t)}日前から`)}</span></button><span class="price">${t.price != null ? yen(t.price) : "—"}</span><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="区分・日付を変える"><i aria-hidden="true">▾</i></button></div></div>`;
@@ -46,13 +46,13 @@
     if (seg === "home") {
       html += `<div class="rules"><b>買ってよいもの＝家に必要な家財・設備・消耗品。</b>買う前の3つ：①家に要る？ ②今要る？ ③代わりで足りない？　○ を押すと「買った」になり今月の予算に入ります。</div>`;
       html += home.length ? home.sort((a, b) => (a.date || "9").localeCompare(b.date || "9") || (b.price || 0) - (a.price || 0)).map(rowB).join("") : `<div class="alldone"><b>家財のリストは空です</b><span>下の「家財を足す」から。揃ったら封印を解く日です</span></div>`;
-      html += `<div class="saveadd"><button type="button" class="btn pri" data-saveadd="home">＋ 家財を足す</button><button type="button" class="btn" data-saveadd="me">🙋 欲しいものを封印</button></div>`;
+      html += `<div class="saveadd"><button type="button" class="btn pri" data-saveadd="home">＋ 家財を足す</button><button type="button" class="btn" data-saveadd="me">🎮 欲しいものを封印</button></div>`;
     } else if (seg === "seal") {
       html += `<div class="rules"><b>${unlocked ? "解除日を過ぎました。上から1つずつ、買うか手放すか決めましょう。" : `自分の欲しいものは ${S.saveCfg.until.replace(/-/g, "/")} まで封印。`}</b>見るだけ・足すだけ。▾ から「やっぱり家財」にも変えられます。</div>`;
       html += seal.length ? seal.sort((a, b) => (b.price || 0) - (a.price || 0)).map((t) => rowB(t, { check: unlocked })).join("") : `<div class="alldone"><b>封印中のものはありません</b><span>欲しくなったら「欲しいものを封印」に入れて、3月に見直します</span></div>`;
-      html += `<div class="saveadd"><button type="button" class="btn" data-saveadd="me">🙋 欲しいものを封印</button></div>`;
+      html += `<div class="saveadd"><button type="button" class="btn" data-saveadd="me">🎮 欲しいものを封印</button></div>`;
     } else if (seg === "sort") {
-      html += `<div class="rules"><b>区分がまだの買い物。</b>▾ か ▾ の中のチップで 🏠 家財／🧴 消耗品／🙋 じぶん に振り分けます。じぶん は いつか・解除日の日付になります。</div>`;
+      html += `<div class="rules"><b>区分がまだの買い物。</b>▾ か ▾ の中のチップで 🏠 家財／🧴 消耗品／🎮 娯楽 に振り分けます。娯楽 は いつか・解除日の日付になります。</div>`;
       html += un.length ? un.map((t) => `<div class="rw"><div class="row" data-id="${t.id}" style="--c:var(--s-inbox)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || t.tag || "")}</span></button><span class="kchip">${KINDS_BUY.map(([k, n]) => `<button type="button" class="qc" data-savekind="${t.id}" data-kind="${k}">${n.slice(0, 2)}</button>`).join("")}</span></div></div>`).join("") : `<div class="alldone"><b>全部 区分が付いています</b></div>`;
     } else {
       html += `<div class="rules"><b>今月買った家財・消耗品（${yen(spent)}）。</b>価格が空のものは ▾ から入れると予算に数えます。</div>`;
@@ -60,7 +60,7 @@
     }
     box.innerHTML = html;
   }
-  // 区分を変える（じぶん → いつか＋解除日、家財 → 日付なしなら次にやる）
+  // 区分を変える（娯楽 → いつか＋解除日、家財 → 日付なしなら次にやる）
   async function setKind(t, kind) {
     const props = { "買い物の区分": kind };
     if (kind === K.me) { props["ステータス"] = ST.some; Object.assign(props, dateProps(S.saveCfg.until)); }
@@ -77,7 +77,7 @@
   function openSaveAdd(kind) {
     saveAddKind = kind;
     const me = kind === "me";
-    modal(`<h3>${me ? "🙋 欲しいものを封印する" : "🏠 家財を足す"}</h3><div class="form">
+    modal(`<h3>${me ? "🎮 欲しいものを封印する" : "🏠 家財を足す"}</h3><div class="form">
       <label for="sv-name">名前</label><input id="sv-name" type="text" maxlength="200" placeholder="${me ? "例）Switch2 のソフト" : "例）寝室のカーテン"}">
       <label for="sv-price">だいたいの価格（円）</label><input id="sv-price" type="number" inputmode="numeric" min="0" step="100" placeholder="例）12000">
       <label for="sv-next">${me ? "ひとこと（なぜ欲しい）" : "次の一歩"}</label><input id="sv-next" type="text" maxlength="200" placeholder="${me ? "例）子どもと遊びたい" : "例）窓の幅を測る"}">
