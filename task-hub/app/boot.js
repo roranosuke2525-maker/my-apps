@@ -4,6 +4,7 @@
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
@@ -11,7 +12,7 @@
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
-    ({ today: renderToday, flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -89,6 +90,13 @@
     if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
+    if (d.saveseg) { S.saveSeg = d.saveseg; render(); return; }
+    if (d.savekind) { const t = known.get(d.savekind); if (!t) return; setKind(t, d.kind); return; }
+    if (d.saveadd) { openSaveAdd(d.saveadd); return; }
+    if (d.savego) { submitSaveAdd(); return; }
+    if (d.savecfg) { openSaveCfg(); return; }
+    if (d.savecfgok) { submitSaveCfg(); return; }
+    if (d.bought) { const t = known.get(d.bought); if (!t) return; buzz(); el.classList.add("on"); setTimeout(() => markBought(t), reduce ? 0 : 250); return; }
     if (d.sugok) { el.disabled = true; adoptSug(d.sugok); return; }
     if (d.sugno) { dismissSug(d.sugno); return; }
     if (d.sugrun) { askSuggest(el); return; }
@@ -139,7 +147,7 @@
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["today", "flow", "ai", "triage"];
+  const TABS = ["today", "flow", "save", "triage"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -180,7 +188,7 @@
     S.mode = "demo"; known.clear();
     const d = TODAY(); let n = 0;
     const id = () => `d${(++n).toString(16).padStart(31, "0")}`;
-    const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${id()}`, 名前: `（例）${name}`, ステータス: status, NEXT: o.next || "", "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), createdTime: new Date(Date.now() - (o.made ?? (o.age || 1)) * 86400e3).toISOString(), "userDefined:URL": o.url || "", プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
+    const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${id()}`, 名前: `（例）${name}`, ステータス: status, NEXT: o.next || "", "買い物の区分": o.kind || null, "価格": o.price ?? null, "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), createdTime: new Date(Date.now() - (o.made ?? (o.age || 1)) * 86400e3).toISOString(), "userDefined:URL": o.url || "", プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
     const P1 = "a".repeat(32), P2 = "b".repeat(32), P3 = "c".repeat(32);
     S.tasks = [
       mk("資源ごみを出す", ST.next, { date: d, waku: "☼ 朝", w: "S", tag: "HOME", next: "7:30までに玄関前へ" }),
@@ -228,6 +236,15 @@
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));
+    S.tasks.push(mk("リビング用ゴミ箱（45L・ペダル式）", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", next: "置き場所の幅を測る", age: 5, kind: "🏠 家財", price: 6800 }),
+      mk("カーテン（寝室・遮光）", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "窓の幅と高さを測る", age: 3, kind: "🏠 家財", price: 18000 }),
+      mk("玄関の傘立て", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", age: 9, kind: "🏠 家財", price: 3500 }),
+      mk("見守りカメラ", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "KX-HC750-W か C10 かを決める", age: 2, kind: "🏠 家財", price: 12000 }),
+      mk("ヨッシー Switch2", ST.some, { tag: "TOY", w: "S", age: 20, kind: "🙋 じぶん", price: 7980, date: "2027-03-31" }),
+      mk("木製の豆皿", ST.some, { tag: "COFFEE", w: "S", age: 14, kind: "🙋 じぶん", price: 2400, date: "2027-03-31" }),
+      mk("スタジオ用スピーカースタンド", ST.some, { tag: "MUSIC", w: "M", age: 6, kind: "🙋 じぶん", price: 15800, date: "2027-03-31" }),
+      mk("コーヒー豆（次の候補）", ST.next, { tag: "BUY", waku: "☼ 朝", w: "S", age: 1, price: 1900 }));
+    S.bought = [mk("食洗機用洗剤", ST.done, { tag: "BUY", date: d, age: 0, kind: "🧴 消耗品", price: 1280 }), mk("ダイニング用コンセント", ST.done, { tag: "BUILD", date: d, age: 2, kind: "🏠 家財", price: 4200 }), mk("ヒップシート", ST.done, { tag: "CHILD", date: addDays(d, -4), age: 4, kind: "🏠 家財", price: 9800 })];
     S.sugs = [
       { id: "a1".repeat(16), url: "https://www.notion.so/", name: "「保険の住所変更」は今日のPC枠で", kind: "📅 日付", reason: "2日遅れています。10分で終わる手続きなので、今日のPC枠に入れると流れが戻ります。", op: { set: { date: TODAY() } }, pri: 90, date: TODAY(), taskIds: [S.tasks.find((t) => t.name.includes("保険"))?.id].filter(Boolean), goalIds: [] },
       { id: "a2".repeat(16), url: "https://www.notion.so/", name: "目標「タスク管理が効率的に回っている」の一歩：週1の見直し15分を予定に入れる", kind: "🎯 目標の一歩", reason: "挑戦中の目標に、今週動いたタスクがありません。小さな一歩を1つ置くと進みます。", op: { create: { "名前": "（例）日曜の夜に15分、次にやるを見直す", NEXT: "次にやるを上から3件だけ見る", "分類タグ": "LEARN", "枠": "💻 PC", "重さ": "S", date: addDays(TODAY(), 3) } }, pri: 80, date: TODAY(), taskIds: [], goalIds: ["7".repeat(32)] },

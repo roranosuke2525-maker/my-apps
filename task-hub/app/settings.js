@@ -59,7 +59,7 @@
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], sugs: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
-    readList: [], readTag: "", readSeg: "list", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
+    readList: [], readTag: "", readSeg: "list", saveSeg: "home", bought: [], saveCfg: { budget: 30000, until: "2027-03-31" }, news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };

@@ -174,6 +174,18 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .btn.danger { color: var(--late); background: color-mix(in srgb, var(--late) 10%, transparent); }
 .btn.danger.arm { background: var(--late); color: #fff; }
 .delrow { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 11.5px; }
+/* 節約 */
+.savehero { padding: 14px 16px 12px; display: grid; gap: 10px; }
+.savehero .ttl2 { display: flex; align-items: baseline; gap: 8px; } .savehero .ttl2 b { font-size: 16px; } .savehero .ttl2 small { color: var(--mute); font-size: 12px; margin-left: auto; font-family: var(--f-num); }
+.savenums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.savenums > div { background: var(--sunk); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; } .savenums b { font-size: 17px; font-family: var(--f-num); font-weight: 600; } .savenums small { font-size: 10.5px; color: var(--mute); } .savenums .yen { font-size: 11px; color: var(--mute); font-family: var(--f-num); }
+.bud { display: grid; gap: 4px; } .bud .lb { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--mute); } .bud .lb b { color: var(--tx); font-family: var(--f-num); font-weight: 600; }
+.bud .bar { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; } .bud .bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; } .bud.over .bar i { background: var(--late); }
+.rules { padding: 10px 14px; display: grid; gap: 4px; font-size: 12.5px; color: var(--mute); } .rules b { color: var(--tx); font-size: 12.5px; }
+.price { font-family: var(--f-num); font-size: 12px; color: var(--mute); white-space: nowrap; }
+.kchip { display: inline-flex; gap: 4px; }
+.sealed .nm { color: var(--mute); }
+.saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; } .saveadd .btn { flex: 1; height: 40px; }
 .btn.ok { background: var(--ok); color: #fff; }
 .btn:disabled { opacity: .5; }
 
@@ -734,7 +746,8 @@ nav.tabs { background: var(--bg); }
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
-    <button type="button" data-tab="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg>AI<span class="badge" id="aibadge" hidden></span></button>
+    <button type="button" data-tab="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9 20v-6h6v6"/></svg>節約<span class="badge" id="savebadge" hidden></span></button>
+    <span hidden><span class="badge" id="aibadge" hidden></span></span>
     <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
     <button type="button" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>もっと<span class="badge dotb" id="morebadge" hidden></span><span id="readbadge" hidden></span><span id="shopbadge" hidden></span></button>
   </nav>
@@ -807,7 +820,7 @@ nav.tabs { background: var(--bg); }
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], sugs: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
-    readList: [], readTag: "", readSeg: "list", news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
+    readList: [], readTag: "", readSeg: "list", saveSeg: "home", bought: [], saveCfg: { budget: 30000, until: "2027-03-31" }, news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };
@@ -951,6 +964,7 @@ nav.tabs { background: var(--bg); }
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
       read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
+      kind: r["買い物の区分"] || null, price: r["価格"] == null || r["価格"] === "" ? null : Number(r["価格"]),
     };
     known.set(t.id, t);
     return t;
@@ -1020,7 +1034,7 @@ nav.tabs { background: var(--bg); }
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, sugs] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -1028,9 +1042,14 @@ nav.tabs { background: var(--bg); }
       rows(DS.app, { limit: 50 }),
       // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
+      // 今月に買った家財・消耗品（節約タブの予算）と、節約の設定（DB_アプリ「今どこ」の本文）
+      rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "買い物の区分", propertyType: "select", operator: "is_not_empty" }, { type: "property", property: "実行日", propertyType: "date", operator: "date_is_on_or_after", value: { type: "exact", value: `${TODAY().slice(0, 7)}-01` } }], sort: sortEdited, limit: 100 }),
+      loadSaveCfg(),
       // AIからの提案（提案中だけ）
       rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
     ]);
+    if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
+    if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
     if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
 
     S.extraErr = {};
@@ -1688,7 +1707,7 @@ nav.tabs { background: var(--bg); }
     deep: { label: "AIと深掘り（💬）", props: () => ({ "ステータス": ST.ai, "AIアクション": "💬" }) },
     thorough: { label: "AIに徹底調査（🔬）", props: () => ({ "ステータス": ST.ai, "AIアクション": "🔬" }) },
   };
-  const FIELD = { "📖 すぐ読む": "read", "ステータス": "status", "AIアクション": "ai", "date:実行日:start": "date", NEXT: "next", "枠": "waku", "重さ": "weight", "分類タグ": "tag", "名前": "name" };
+  const FIELD = { "買い物の区分": "kind", "価格": "price", "📖 すぐ読む": "read", "ステータス": "status", "AIアクション": "ai", "date:実行日:start": "date", NEXT: "next", "枠": "waku", "重さ": "weight", "分類タグ": "tag", "名前": "name" };
   function propsBefore(t, props) {
     const out = {};
     for (const k of Object.keys(props)) { if (k === "date:実行日:is_datetime") continue; const f = FIELD[k]; if (f) out[k] = t[f] ?? null; }
@@ -2212,8 +2231,8 @@ nav.tabs { background: var(--bg); }
   })();
 
   // ================= もっと（読む・買う・ニュース・運用・DB） =================
-  const MORE = [["read", "読む", "しおりを挟んだ資料", () => S.readList.filter(isRead).length], ["shop", "買う", "買い物リストと在庫", () => stockSoon().length], ["news", "ニュース", "今朝の見出し", () => 0], ["log", "運用", "使い方と診断", () => 0], ["db", "DB", "すべてのデータベース", () => 0]];
-  const MORE_ICON = { read: `<path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/>`, shop: `<path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/>`, news: `<path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/>`, log: `<circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`, db: `<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>` };
+  const MORE = [["ai", "AI", "AIに預けた・AIの番", () => myTurn().length], ["read", "読む", "しおりを挟んだ資料", () => S.readList.filter(isRead).length], ["shop", "買う", "買い物リストと在庫", () => stockSoon().length], ["news", "ニュース", "今朝の見出し", () => 0], ["log", "運用", "使い方と診断", () => 0], ["db", "DB", "すべてのデータベース", () => 0]];
+  const MORE_ICON = { ai: `<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/>`, read: `<path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/>`, shop: `<path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/>`, news: `<path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/>`, log: `<circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>`, db: `<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>` };
   const inMore = (tab) => MORE.some(([k]) => k === tab);
   function openMore() {
     modal(`<h3 class="mh">もっと</h3><div class="moregrid">${MORE.map(([k, n, d, badge]) => { const b = badge(); return `<button type="button" data-gotab="${k}" aria-pressed="${S.tab === k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${MORE_ICON[k]}</svg><b>${n}</b><small>${d}</small>${b ? `<i class="badge">${b}</i>` : ""}</button>`; }).join("")}</div><div class="form" style="padding-top:0"><button type="button" class="btn" data-mclose="1">閉じる</button></div>`);
@@ -2320,6 +2339,7 @@ nav.tabs { background: var(--bg); }
       <div class="qrow"><span class="ql">日付</span>${QUICK_DATES.map(([k, n]) => `<button type="button" class="qc${t.date === quickDate(k) ? " on" : ""}" data-qk="d:${k}">${n}<small>${md(quickDate(k))}</small></button>`).join("")}<label class="qc pick">📅 選ぶ<input type="date" data-qdate="1" value="${t.date || ""}" aria-label="日付を選ぶ"></label>${t.date ? `<button type="button" class="qc" data-qk="d:none">日付なし</button>` : ""}</div>
       <div class="qrow"><span class="ql">状態</span>${QUICK_ST.filter(([, v]) => v !== t.status).map(([k, , n]) => `<button type="button" class="qc" data-qk="s:${k}" style="--c:${STAGES[k === "doing" ? "next" : k].c}">${n}</button>`).join("")}<button type="button" class="qc ok" data-qk="s:${done ? "next" : "done"}">${done ? "↩ 戻す" : "✓ 済み"}</button></div>
       ${t.status === ST.ref || isRead(t) ? `<div class="qrow"><span class="ql">読む</span><button type="button" class="qc${isRead(t) ? " on" : ""}" data-readtoggle="${t.id}" style="--c:var(--s-ref)">${isRead(t) ? "📖 しおりを外す" : "📖 しおりを挟む（すぐ読む）"}</button>${t.status === ST.ref ? `<button type="button" class="qc" data-reader="${t.id}">読む画面で開く</button>` : ""}</div>` : ""}
+      ${t.tag === "BUY" || t.kind || t.price != null ? `<div class="qrow"><span class="ql">買い物</span>${KINDS_BUY.map(([k, n]) => `<button type="button" class="qc${t.kind === k ? " on" : ""}" data-savekind="${t.id}" data-kind="${k}">${n}</button>`).join("")}${t.price != null ? `<span class="price">¥${t.price.toLocaleString()}</span>` : ""}</div>` : ""}
       ${t.status === ST.ai ? "" : `<div class="qrow"><span class="ql">AI</span><button type="button" class="qc ai" data-qk="a:🔍">🔍 調べて</button><button type="button" class="qc ai" data-qk="a:💬">💬 一緒に分解</button><button type="button" class="qc ai" data-qk="a:🔬">🔬 徹底調査</button></div>`}
     </div>`;
   }
@@ -2951,6 +2971,13 @@ nav.tabs { background: var(--bg); }
       const pick = next.slice().sort((a, b) => (W8[a.weight] || 2) - (W8[b.weight] || 2) || ageOf(b) - ageOf(a)).slice(0, 3);
       out.push({ pri: 85, icon: "🎯", title: "今日やることが決まっていません", body: "次にやるから軽いもの・古いものを3つ選びました。今日に入れてみませんか。", items: pick, itemActs: [["d:today", "今日やる"], ["d:tomorrow", "明日"]] });
     }
+    // 節約：区分なしの買い物・予算超え・封印の解除日
+    if (typeof unsorted === "function") {
+      const un = unsorted(); if (un.length) out.push({ pri: 58, icon: "🏷", title: `区分がまだの買い物が ${un.length}件`, body: "🏠 家財／🧴 消耗品／🙋 じぶん（3月まで封印）に振り分けると、買ってよいものだけが残ります。", acts: [["tab:save", "節約で振り分ける"]] });
+      const spent = sumP(boughtMonth()); if (S.saveCfg.budget && spent > S.saveCfg.budget) out.push({ pri: 75, icon: "💸", title: `今月の家財が予算を ${yen(spent - S.saveCfg.budget)} 超えています`, body: `予算 ${yen(S.saveCfg.budget)} に対して ${yen(spent)}。残りの家財は来月に回すか、予算を見直しましょう。`, acts: [["tab:save", "節約を見る"]] });
+      if (daysLeft() <= 0 && sealed().length) out.push({ pri: 65, icon: "🔓", title: `封印の解除日です（${sealed().length}件）`, body: "欲しいものを1つずつ、買う・まだ待つ・手放すに決めましょう。", acts: [["tab:save", "封印を見る"]] });
+      else if (daysLeft() > 0 && daysLeft() <= 7 && sealed().length) out.push({ pri: 40, icon: "🔓", title: `封印の解除まで あと ${daysLeft()}日`, body: `封印中 ${sealed().length}件・${yen(sumP(sealed()))}。家財が揃っているか先に確かめましょう。`, acts: [["tab:save", "節約を見る"]] });
+    }
     const mine = myTurn();
     if (mine.length) out.push({ pri: 80, icon: "💬", title: `AIからの返事が ${mine.length}件 待っています`, body: "回答（💭）や判定（🔍✅）を返すと、次の定時処理でAIが続きを進めます。", acts: [["tab:ai", "AIの番を見る"]] });
     const oldIn = inbox.filter((t) => ageOf(t) >= 3);
@@ -3011,14 +3038,14 @@ nav.tabs { background: var(--bg); }
     const out = {};
     for (const [k, v] of Object.entries(set || {})) {
       if (k === "date") Object.assign(out, dateProps(v || null));
-      else if (["ステータス", "NEXT", "枠", "重さ", "分類タグ", "名前"].includes(k)) out[k] = v;
+      else if (["ステータス", "NEXT", "枠", "重さ", "分類タグ", "名前", "買い物の区分", "価格"].includes(k)) out[k] = v;
     }
     return out;
   }
   function sugSummary(s) {
     const op = s.op || {}; const t = sugTask(s);
     if (op.create) { const c = op.create; return `新しく作る：${c["名前"] || ""}${c.date ? `・${md(c.date)}` : ""}${c["枠"] ? `・${c["枠"]}` : ""}${c["重さ"] ? `・${c["重さ"]}` : ""}`; }
-    if (op.set) { const bits = []; if (op.set["ステータス"]) { const key = Object.keys(ST).find((k) => ST[k] === op.set["ステータス"]); bits.push(`→ ${STAGES[key === "doing" ? "next" : key]?.name || op.set["ステータス"]}`); } if ("date" in op.set) bits.push(op.set.date ? `${md(op.set.date)}（${WD[dow(op.set.date)]}）にやる` : "日付を外す"); if (op.set.NEXT) bits.push(`次の一歩：${op.set.NEXT}`); return `${t ? short(t.name, 18) : "対象のタスク"} ${bits.join("・")}`; }
+    if (op.set) { const bits = []; if (op.set["ステータス"]) { const key = Object.keys(ST).find((k) => ST[k] === op.set["ステータス"]); bits.push(`→ ${STAGES[key === "doing" ? "next" : key]?.name || op.set["ステータス"]}`); } if ("date" in op.set) bits.push(op.set.date ? `${md(op.set.date)}（${WD[dow(op.set.date)]}）にやる` : "日付を外す"); if (op.set.NEXT) bits.push(`次の一歩：${op.set.NEXT}`); if (op.set["買い物の区分"]) bits.push(`区分：${op.set["買い物の区分"]}`); return `${t ? short(t.name, 18) : "対象のタスク"} ${bits.join("・")}`; }
     return "";
   }
   function sugsHtml() {
@@ -3061,6 +3088,125 @@ nav.tabs { background: var(--bg); }
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       el.textContent = "起動しました（数分で届きます）"; toast("AIが提案を考えています。数分したら「↻」で読み直してください");
     } catch (err) { el.disabled = false; el.textContent = "💡 今すぐ提案してもらう"; toast(String(err.message || "起動できませんでした").slice(0, 120)); }
+  }
+  // ================= 節約：3月まで、家の必要なものだけ買う =================
+  // 区分（DB_タスク管理「買い物の区分」）：🏠 家財＝必要経費（買ってよい）／🧴 消耗品＝補充／🙋 じぶん＝欲しいもの（解除日まで封印・いつか）
+  const KINDS_BUY = [["🏠 家財", "🏠 家財"], ["🧴 消耗品", "🧴 消耗品"], ["🙋 じぶん", "🙋 じぶん（封印）"]];
+  const K = { home: "🏠 家財", stock: "🧴 消耗品", me: "🙋 じぶん" };
+  const APP_PAGE = "40662844acbe81b98894fc88719d6ea8"; // DB_アプリ「今どこ」：本文の「⚙️ 今どこの設定」に予算と解除日
+  const yen = (n) => `¥${Math.round(n || 0).toLocaleString()}`;
+  const sumP = (list) => list.reduce((a, t) => a + (t.price || 0), 0);
+  const isBuy = (t) => t.tag === "BUY" || !!t.kind;
+  const openBuy = () => S.tasks.filter((t) => isBuy(t) && ![ST.done, ST.ref].includes(t.status) && !t.parent?.length && !t.refill?.length);
+  const homeItems = () => openBuy().filter((t) => t.kind === K.home);
+  const sealed = () => S.tasks.filter((t) => t.kind === K.me && ![ST.done, ST.ref].includes(t.status));
+  const unsorted = () => openBuy().filter((t) => !t.kind);
+  const boughtMonth = () => S.bought.filter((t) => t.kind && t.kind !== K.me);
+  const daysLeft = () => diffDays(TODAY(), S.saveCfg.until);
+  // 設定（本文の行をそのまま持ち、書き換えは置き換えで）
+  async function loadSaveCfg() {
+    const res = await call("fetch", { id: APP_PAGE });
+    const txt = String(res?.text || "");
+    const b = txt.match(/家財の予算（月）[：:]\s*([\d,]+)/); const u = txt.match(/封印の解除日[：:]\s*(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+    return { budget: b ? Number(b[1].replace(/,/g, "")) : 30000, until: u ? `${u[1]}-${u[2].padStart(2, "0")}-${u[3].padStart(2, "0")}` : "2027-03-31", rawB: b?.[0] || "", rawU: u?.[0] || "" };
+  }
+  function saveAlerts() {
+    let n = unsorted().length;
+    const spent = sumP(boughtMonth()); if (S.saveCfg.budget && spent > S.saveCfg.budget) n++;
+    if (daysLeft() <= 0 && sealed().length) n++;
+    return n;
+  }
+  function renderSave(view) {
+    const home = homeItems(), seal = sealed(), un = unsorted(), bought = boughtMonth();
+    const spent = sumP(bought); const budget = S.saveCfg.budget || 0; const pct = budget ? Math.min(100, Math.round((spent / budget) * 100)) : 0; const left = daysLeft();
+    const unlocked = left <= 0;
+    view.insertAdjacentHTML("beforeend", `<div class="card savehero">
+        <div class="ttl2"><b>${unlocked ? "封印が解けました" : "3月まで超節約"}</b><span class="mute" style="font-size:12px">家の必要なものだけ</span><small>${unlocked ? "解除日を過ぎました" : `あと ${left}日`}</small></div>
+        <div class="savenums">
+          <div><small>🏠 家財 残り</small><b>${home.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(home))}</span></div>
+          <div><small>🙋 封印中</small><b>${seal.length}<span class="yen">件</span></b><span class="yen">${yen(sumP(seal))}</span></div>
+          <div><small>今月 買った</small><b>${bought.length}<span class="yen">件</span></b><span class="yen">${yen(spent)}</span></div>
+        </div>
+        <button type="button" class="bud${budget && spent > budget ? " over" : ""}" data-savecfg="1" style="text-align:left"><span class="lb"><span>今月の家財の予算</span><b>${yen(spent)} / ${budget ? yen(budget) : "未設定"}</b></span><span class="bar"><i style="width:${pct}%"></i></span><span class="lb"><span>${budget && spent > budget ? `⚠ ${yen(spent - budget)} 超えています` : budget ? `残り ${yen(budget - spent)}` : "タップして予算を決める"}</span><span>${S.saveCfg.until.replace(/-/g, "/")} に解除</span></span></button>
+      </div>
+      <div class="seg" id="saveseg">${[["home", "🏠 家財", home.length], ["seal", "🙋 封印", seal.length], ["sort", "区分なし", un.length], ["done", "今月", bought.length]].map(([k, n, x]) => `<button type="button" data-saveseg="${k}" aria-pressed="${S.saveSeg === k || (S.saveSeg === "home" && k === "home")}">${n}<span class="n">${x}</span></button>`).join("")}</div>
+      <div class="card panel"><div class="scroll swipey" id="savelist"></div></div>`);
+    const box = $("#savelist"); const seg = ["home", "seal", "sort", "done"].includes(S.saveSeg) ? S.saveSeg : "home";
+    const rowB = (t, opts = {}) => `<div class="rw"><div class="row${t.kind === K.me ? " sealed" : ""}" data-id="${t.id}" style="--c:${t.kind === K.home ? "var(--s-done)" : t.kind === K.me ? "var(--mute)" : "var(--s-next)"}">${opts.check === false ? `<span class="dot"></span>` : `<button type="button" class="check" data-bought="${t.id}" aria-label="買った"></button>`}<button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc([t.next, t.date && t.kind !== K.me ? `${md(t.date)}（${WD[dow(t.date)]}）` : "", t.tag && t.tag !== "BUY" ? t.tag : ""].filter(Boolean).join("・") || `${ageOf(t)}日前から`)}</span></button><span class="price">${t.price != null ? yen(t.price) : "—"}</span><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="区分・日付を変える"><i aria-hidden="true">▾</i></button></div></div>`;
+    let html = "";
+    if (seg === "home") {
+      html += `<div class="rules"><b>買ってよいもの＝家に必要な家財・設備・消耗品。</b>買う前の3つ：①家に要る？ ②今要る？ ③代わりで足りない？　○ を押すと「買った」になり今月の予算に入ります。</div>`;
+      html += home.length ? home.sort((a, b) => (a.date || "9").localeCompare(b.date || "9") || (b.price || 0) - (a.price || 0)).map(rowB).join("") : `<div class="alldone"><b>家財のリストは空です</b><span>下の「家財を足す」から。揃ったら封印を解く日です</span></div>`;
+      html += `<div class="saveadd"><button type="button" class="btn pri" data-saveadd="home">＋ 家財を足す</button><button type="button" class="btn" data-saveadd="me">🙋 欲しいものを封印</button></div>`;
+    } else if (seg === "seal") {
+      html += `<div class="rules"><b>${unlocked ? "解除日を過ぎました。上から1つずつ、買うか手放すか決めましょう。" : `自分の欲しいものは ${S.saveCfg.until.replace(/-/g, "/")} まで封印。`}</b>見るだけ・足すだけ。▾ から「やっぱり家財」にも変えられます。</div>`;
+      html += seal.length ? seal.sort((a, b) => (b.price || 0) - (a.price || 0)).map((t) => rowB(t, { check: unlocked })).join("") : `<div class="alldone"><b>封印中のものはありません</b><span>欲しくなったら「欲しいものを封印」に入れて、3月に見直します</span></div>`;
+      html += `<div class="saveadd"><button type="button" class="btn" data-saveadd="me">🙋 欲しいものを封印</button></div>`;
+    } else if (seg === "sort") {
+      html += `<div class="rules"><b>区分がまだの買い物。</b>▾ か ▾ の中のチップで 🏠 家財／🧴 消耗品／🙋 じぶん に振り分けます。じぶん は いつか・解除日の日付になります。</div>`;
+      html += un.length ? un.map((t) => `<div class="rw"><div class="row" data-id="${t.id}" style="--c:var(--s-inbox)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || t.tag || "")}</span></button><span class="kchip">${KINDS_BUY.map(([k, n]) => `<button type="button" class="qc" data-savekind="${t.id}" data-kind="${k}">${n.slice(0, 2)}</button>`).join("")}</span></div></div>`).join("") : `<div class="alldone"><b>全部 区分が付いています</b></div>`;
+    } else {
+      html += `<div class="rules"><b>今月買った家財・消耗品（${yen(spent)}）。</b>価格が空のものは ▾ から入れると予算に数えます。</div>`;
+      html += bought.length ? bought.sort((a, b) => (b.date || "").localeCompare(a.date || "")).map((t) => rowB(t, { check: false })).join("") : `<div class="alldone"><b>今月はまだ買っていません</b></div>`;
+    }
+    box.innerHTML = html;
+  }
+  // 区分を変える（じぶん → いつか＋解除日、家財 → 日付なしなら次にやる）
+  async function setKind(t, kind) {
+    const props = { "買い物の区分": kind };
+    if (kind === K.me) { props["ステータス"] = ST.some; Object.assign(props, dateProps(S.saveCfg.until)); }
+    else if (t.status === ST.some && t.kind === K.me) { props["ステータス"] = ST.next; Object.assign(props, dateProps(null)); }
+    closeModal();
+    await setProps(t, props, `「${short(t.name)}」→ ${kind}${kind === K.me ? `（${S.saveCfg.until.replace(/-/g, "/")} まで封印）` : ""}`);
+  }
+  async function markBought(t) {
+    const ok = await setProps(t, { "ステータス": ST.done, ...dateProps(TODAY()) }, `「${short(t.name)}」を買いました${t.price != null ? `（${yen(t.price)}）` : ""}`);
+    if (ok && t.kind && t.kind !== K.me && !S.bought.includes(t)) { S.bought.unshift(t); refresh(); }
+  }
+  // 足す：家財（次にやる）／欲しいもの（いつか・解除日）
+  let saveAddKind = "home";
+  function openSaveAdd(kind) {
+    saveAddKind = kind;
+    const me = kind === "me";
+    modal(`<h3>${me ? "🙋 欲しいものを封印する" : "🏠 家財を足す"}</h3><div class="form">
+      <label for="sv-name">名前</label><input id="sv-name" type="text" maxlength="200" placeholder="${me ? "例）Switch2 のソフト" : "例）寝室のカーテン"}">
+      <label for="sv-price">だいたいの価格（円）</label><input id="sv-price" type="number" inputmode="numeric" min="0" step="100" placeholder="例）12000">
+      <label for="sv-next">${me ? "ひとこと（なぜ欲しい）" : "次の一歩"}</label><input id="sv-next" type="text" maxlength="200" placeholder="${me ? "例）子どもと遊びたい" : "例）窓の幅を測る"}">
+      <p class="mute" style="margin:0;font-size:12px">${me ? `いつか に入り、${S.saveCfg.until.replace(/-/g, "/")} に見直す日付が付きます。今日の一覧には出ません` : "次にやる に入り、○ を押すと「買った」になって今月の予算に数えます"}</p>
+      <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-savego="1" style="flex:1">${me ? "封印する" : "足す"}</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
+    setTimeout(() => $("#sv-name")?.focus(), 50);
+  }
+  async function submitSaveAdd() {
+    const name = $("#sv-name").value.trim(); if (!name) { $("#sv-name").focus(); return; }
+    const price = $("#sv-price").value.trim(); const next = $("#sv-next").value.trim(); const me = saveAddKind === "me";
+    const btn = $("[data-savego]"); btn.disabled = true;
+    try {
+      const t = await createTask({ name, kind: "task", next: me ? "" : next, memo: me ? next : "", extra: { "分類タグ": "BUY", "買い物の区分": me ? K.me : K.home, ...(price ? { "価格": Number(price) } : {}), ...(me ? { "ステータス": ST.some, ...dateProps(S.saveCfg.until) } : { "ステータス": ST.next }) } });
+      t.kind = me ? K.me : K.home; t.price = price ? Number(price) : null; if (me) { t.status = ST.some; t.date = S.saveCfg.until; }
+      closeModal(); S.saveSeg = me ? "seal" : "home"; refresh(); toast(me ? `「${short(name)}」を封印しました（${S.saveCfg.until.replace(/-/g, "/")} まで）` : "家財に足しました");
+    } catch (err) { btn.disabled = false; toast(`入れられませんでした：${errText(err)}`); }
+  }
+  // 設定：予算と解除日（DB_アプリ「今どこ」の本文の行を書き換える）
+  function openSaveCfg() {
+    modal(`<h3>節約の設定</h3><div class="form">
+      <label for="sv-budget">今月の家財の予算（円・月）</label><input id="sv-budget" type="number" inputmode="numeric" min="0" step="1000" value="${S.saveCfg.budget || ""}">
+      <label for="sv-until">封印の解除日</label><input id="sv-until" type="date" value="${S.saveCfg.until}">
+      <p class="mute" style="margin:0;font-size:12px">Notion の DB_アプリ「今どこ」の本文「⚙️ 今どこの設定」に保存します</p>
+      <div style="display:flex;gap:8px"><button type="button" class="btn pri" data-savecfgok="1" style="flex:1">保存</button><button type="button" class="btn" data-mclose="1">やめる</button></div></div>`);
+  }
+  async function submitSaveCfg() {
+    const budget = Number($("#sv-budget").value || 0); const until = $("#sv-until").value || S.saveCfg.until;
+    const before = { ...S.saveCfg }; S.saveCfg = { ...S.saveCfg, budget, until }; closeModal(); refresh();
+    if (S.mode === "demo") { toast("設定を変えました（見本）"); return; }
+    const ups = [];
+    if (before.rawB) ups.push({ old_str: before.rawB, new_str: `家財の予算（月）：${budget.toLocaleString()}` });
+    if (before.rawU) ups.push({ old_str: before.rawU, new_str: `封印の解除日：${until.replace(/-/g, "/")}` });
+    try {
+      if (ups.length) await call("update", { page_id: APP_PAGE, command: "update_content", content_updates: ups, allow_async: false }, { read: false });
+      else await call("update", { page_id: APP_PAGE, command: "insert_content", content: `\n## ⚙️ 今どこの設定\n\n- 家財の予算（月）：${budget.toLocaleString()}\n- 封印の解除日：${until.replace(/-/g, "/")}\n`, position: { type: "end" }, allow_async: false }, { read: false });
+      S.saveCfg.rawB = `家財の予算（月）：${budget.toLocaleString()}`; S.saveCfg.rawU = `封印の解除日：${until.replace(/-/g, "/")}`;
+      toast("設定を保存しました");
+    } catch (err) { S.saveCfg = before; refresh(); toast(`保存できませんでした：${errText(err)}`); }
   }
   // ================= 運用：使い方（運用マップの要約と図解）と、診断（週次レポート＋いまの健康診断と直し方） =================
   const MAP_PAGE = "3f662844acbe8183834dfcb4cff0883f"; // Notion運用マップ
@@ -3338,6 +3484,7 @@ nav.tabs { background: var(--bg); }
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
@@ -3345,7 +3492,7 @@ nav.tabs { background: var(--bg); }
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
-    ({ today: renderToday, flow: renderFlow, ai: renderAi, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -3423,6 +3570,13 @@ nav.tabs { background: var(--bg); }
     if (d.readtag !== undefined && el.classList.contains("chip")) { S.readTag = d.readtag; render(); return; }
     if (d.skind) { SQ.kind = d.skind; for (const b of document.querySelectorAll("[data-skind]")) b.setAttribute("aria-pressed", String(b === el)); drawSearch(); return; }
     if (d.cact) { conciergeAct(d.cact); return; }
+    if (d.saveseg) { S.saveSeg = d.saveseg; render(); return; }
+    if (d.savekind) { const t = known.get(d.savekind); if (!t) return; setKind(t, d.kind); return; }
+    if (d.saveadd) { openSaveAdd(d.saveadd); return; }
+    if (d.savego) { submitSaveAdd(); return; }
+    if (d.savecfg) { openSaveCfg(); return; }
+    if (d.savecfgok) { submitSaveCfg(); return; }
+    if (d.bought) { const t = known.get(d.bought); if (!t) return; buzz(); el.classList.add("on"); setTimeout(() => markBought(t), reduce ? 0 : 250); return; }
     if (d.sugok) { el.disabled = true; adoptSug(d.sugok); return; }
     if (d.sugno) { dismissSug(d.sugno); return; }
     if (d.sugrun) { askSuggest(el); return; }
@@ -3473,7 +3627,7 @@ nav.tabs { background: var(--bg); }
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["today", "flow", "ai", "triage"];
+  const TABS = ["today", "flow", "save", "triage"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -3514,7 +3668,7 @@ nav.tabs { background: var(--bg); }
     S.mode = "demo"; known.clear();
     const d = TODAY(); let n = 0;
     const id = () => `d${(++n).toString(16).padStart(31, "0")}`;
-    const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${id()}`, 名前: `（例）${name}`, ステータス: status, NEXT: o.next || "", "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), createdTime: new Date(Date.now() - (o.made ?? (o.age || 1)) * 86400e3).toISOString(), "userDefined:URL": o.url || "", プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
+    const mk = (name, status, o = {}) => toTask({ url: `https://www.notion.so/${id()}`, 名前: `（例）${name}`, ステータス: status, NEXT: o.next || "", "買い物の区分": o.kind || null, "価格": o.price ?? null, "date:実行日:start": o.date || null, 枠: o.waku || null, 重さ: o.w || null, 分類タグ: o.tag || null, AIアクション: o.ai || null, 最終更新日時: new Date(Date.now() - (o.age || 1) * 86400e3).toISOString(), createdTime: new Date(Date.now() - (o.made ?? (o.age || 1)) * 86400e3).toISOString(), "userDefined:URL": o.url || "", プロジェクト: o.pj ? JSON.stringify([`https://www.notion.so/${o.pj}`]) : "[]" });
     const P1 = "a".repeat(32), P2 = "b".repeat(32), P3 = "c".repeat(32);
     S.tasks = [
       mk("資源ごみを出す", ST.next, { date: d, waku: "☼ 朝", w: "S", tag: "HOME", next: "7:30までに玄関前へ" }),
@@ -3562,6 +3716,15 @@ nav.tabs { background: var(--bg); }
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));
+    S.tasks.push(mk("リビング用ゴミ箱（45L・ペダル式）", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", next: "置き場所の幅を測る", age: 5, kind: "🏠 家財", price: 6800 }),
+      mk("カーテン（寝室・遮光）", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "窓の幅と高さを測る", age: 3, kind: "🏠 家財", price: 18000 }),
+      mk("玄関の傘立て", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", age: 9, kind: "🏠 家財", price: 3500 }),
+      mk("見守りカメラ", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "KX-HC750-W か C10 かを決める", age: 2, kind: "🏠 家財", price: 12000 }),
+      mk("ヨッシー Switch2", ST.some, { tag: "TOY", w: "S", age: 20, kind: "🙋 じぶん", price: 7980, date: "2027-03-31" }),
+      mk("木製の豆皿", ST.some, { tag: "COFFEE", w: "S", age: 14, kind: "🙋 じぶん", price: 2400, date: "2027-03-31" }),
+      mk("スタジオ用スピーカースタンド", ST.some, { tag: "MUSIC", w: "M", age: 6, kind: "🙋 じぶん", price: 15800, date: "2027-03-31" }),
+      mk("コーヒー豆（次の候補）", ST.next, { tag: "BUY", waku: "☼ 朝", w: "S", age: 1, price: 1900 }));
+    S.bought = [mk("食洗機用洗剤", ST.done, { tag: "BUY", date: d, age: 0, kind: "🧴 消耗品", price: 1280 }), mk("ダイニング用コンセント", ST.done, { tag: "BUILD", date: d, age: 2, kind: "🏠 家財", price: 4200 }), mk("ヒップシート", ST.done, { tag: "CHILD", date: addDays(d, -4), age: 4, kind: "🏠 家財", price: 9800 })];
     S.sugs = [
       { id: "a1".repeat(16), url: "https://www.notion.so/", name: "「保険の住所変更」は今日のPC枠で", kind: "📅 日付", reason: "2日遅れています。10分で終わる手続きなので、今日のPC枠に入れると流れが戻ります。", op: { set: { date: TODAY() } }, pri: 90, date: TODAY(), taskIds: [S.tasks.find((t) => t.name.includes("保険"))?.id].filter(Boolean), goalIds: [] },
       { id: "a2".repeat(16), url: "https://www.notion.so/", name: "目標「タスク管理が効率的に回っている」の一歩：週1の見直し15分を予定に入れる", kind: "🎯 目標の一歩", reason: "挑戦中の目標に、今週動いたタスクがありません。小さな一歩を1つ置くと進みます。", op: { create: { "名前": "（例）日曜の夜に15分、次にやるを見直す", NEXT: "次にやるを上から3件だけ見る", "分類タグ": "LEARN", "枠": "💻 PC", "重さ": "S", date: addDays(TODAY(), 3) } }, pri: 80, date: TODAY(), taskIds: [], goalIds: ["7".repeat(32)] },

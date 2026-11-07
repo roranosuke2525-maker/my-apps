@@ -14,14 +14,14 @@
     const out = {};
     for (const [k, v] of Object.entries(set || {})) {
       if (k === "date") Object.assign(out, dateProps(v || null));
-      else if (["ステータス", "NEXT", "枠", "重さ", "分類タグ", "名前"].includes(k)) out[k] = v;
+      else if (["ステータス", "NEXT", "枠", "重さ", "分類タグ", "名前", "買い物の区分", "価格"].includes(k)) out[k] = v;
     }
     return out;
   }
   function sugSummary(s) {
     const op = s.op || {}; const t = sugTask(s);
     if (op.create) { const c = op.create; return `新しく作る：${c["名前"] || ""}${c.date ? `・${md(c.date)}` : ""}${c["枠"] ? `・${c["枠"]}` : ""}${c["重さ"] ? `・${c["重さ"]}` : ""}`; }
-    if (op.set) { const bits = []; if (op.set["ステータス"]) { const key = Object.keys(ST).find((k) => ST[k] === op.set["ステータス"]); bits.push(`→ ${STAGES[key === "doing" ? "next" : key]?.name || op.set["ステータス"]}`); } if ("date" in op.set) bits.push(op.set.date ? `${md(op.set.date)}（${WD[dow(op.set.date)]}）にやる` : "日付を外す"); if (op.set.NEXT) bits.push(`次の一歩：${op.set.NEXT}`); return `${t ? short(t.name, 18) : "対象のタスク"} ${bits.join("・")}`; }
+    if (op.set) { const bits = []; if (op.set["ステータス"]) { const key = Object.keys(ST).find((k) => ST[k] === op.set["ステータス"]); bits.push(`→ ${STAGES[key === "doing" ? "next" : key]?.name || op.set["ステータス"]}`); } if ("date" in op.set) bits.push(op.set.date ? `${md(op.set.date)}（${WD[dow(op.set.date)]}）にやる` : "日付を外す"); if (op.set.NEXT) bits.push(`次の一歩：${op.set.NEXT}`); if (op.set["買い物の区分"]) bits.push(`区分：${op.set["買い物の区分"]}`); return `${t ? short(t.name, 18) : "対象のタスク"} ${bits.join("・")}`; }
     return "";
   }
   function sugsHtml() {

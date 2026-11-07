@@ -17,6 +17,13 @@
       const pick = next.slice().sort((a, b) => (W8[a.weight] || 2) - (W8[b.weight] || 2) || ageOf(b) - ageOf(a)).slice(0, 3);
       out.push({ pri: 85, icon: "🎯", title: "今日やることが決まっていません", body: "次にやるから軽いもの・古いものを3つ選びました。今日に入れてみませんか。", items: pick, itemActs: [["d:today", "今日やる"], ["d:tomorrow", "明日"]] });
     }
+    // 節約：区分なしの買い物・予算超え・封印の解除日
+    if (typeof unsorted === "function") {
+      const un = unsorted(); if (un.length) out.push({ pri: 58, icon: "🏷", title: `区分がまだの買い物が ${un.length}件`, body: "🏠 家財／🧴 消耗品／🙋 じぶん（3月まで封印）に振り分けると、買ってよいものだけが残ります。", acts: [["tab:save", "節約で振り分ける"]] });
+      const spent = sumP(boughtMonth()); if (S.saveCfg.budget && spent > S.saveCfg.budget) out.push({ pri: 75, icon: "💸", title: `今月の家財が予算を ${yen(spent - S.saveCfg.budget)} 超えています`, body: `予算 ${yen(S.saveCfg.budget)} に対して ${yen(spent)}。残りの家財は来月に回すか、予算を見直しましょう。`, acts: [["tab:save", "節約を見る"]] });
+      if (daysLeft() <= 0 && sealed().length) out.push({ pri: 65, icon: "🔓", title: `封印の解除日です（${sealed().length}件）`, body: "欲しいものを1つずつ、買う・まだ待つ・手放すに決めましょう。", acts: [["tab:save", "封印を見る"]] });
+      else if (daysLeft() > 0 && daysLeft() <= 7 && sealed().length) out.push({ pri: 40, icon: "🔓", title: `封印の解除まで あと ${daysLeft()}日`, body: `封印中 ${sealed().length}件・${yen(sumP(sealed()))}。家財が揃っているか先に確かめましょう。`, acts: [["tab:save", "節約を見る"]] });
+    }
     const mine = myTurn();
     if (mine.length) out.push({ pri: 80, icon: "💬", title: `AIからの返事が ${mine.length}件 待っています`, body: "回答（💭）や判定（🔍✅）を返すと、次の定時処理でAIが続きを進めます。", acts: [["tab:ai", "AIの番を見る"]] });
     const oldIn = inbox.filter((t) => ageOf(t) >= 3);

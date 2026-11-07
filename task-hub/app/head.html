@@ -174,6 +174,18 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .btn.danger { color: var(--late); background: color-mix(in srgb, var(--late) 10%, transparent); }
 .btn.danger.arm { background: var(--late); color: #fff; }
 .delrow { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 11.5px; }
+/* 節約 */
+.savehero { padding: 14px 16px 12px; display: grid; gap: 10px; }
+.savehero .ttl2 { display: flex; align-items: baseline; gap: 8px; } .savehero .ttl2 b { font-size: 16px; } .savehero .ttl2 small { color: var(--mute); font-size: 12px; margin-left: auto; font-family: var(--f-num); }
+.savenums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.savenums > div { background: var(--sunk); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; } .savenums b { font-size: 17px; font-family: var(--f-num); font-weight: 600; } .savenums small { font-size: 10.5px; color: var(--mute); } .savenums .yen { font-size: 11px; color: var(--mute); font-family: var(--f-num); }
+.bud { display: grid; gap: 4px; } .bud .lb { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--mute); } .bud .lb b { color: var(--tx); font-family: var(--f-num); font-weight: 600; }
+.bud .bar { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; } .bud .bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; } .bud.over .bar i { background: var(--late); }
+.rules { padding: 10px 14px; display: grid; gap: 4px; font-size: 12.5px; color: var(--mute); } .rules b { color: var(--tx); font-size: 12.5px; }
+.price { font-family: var(--f-num); font-size: 12px; color: var(--mute); white-space: nowrap; }
+.kchip { display: inline-flex; gap: 4px; }
+.sealed .nm { color: var(--mute); }
+.saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; } .saveadd .btn { flex: 1; height: 40px; }
 .btn.ok { background: var(--ok); color: #fff; }
 .btn:disabled { opacity: .5; }
 
@@ -734,7 +746,8 @@ nav.tabs { background: var(--bg); }
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>
     <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
-    <button type="button" data-tab="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg>AI<span class="badge" id="aibadge" hidden></span></button>
+    <button type="button" data-tab="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9 20v-6h6v6"/></svg>節約<span class="badge" id="savebadge" hidden></span></button>
+    <span hidden><span class="badge" id="aibadge" hidden></span></span>
     <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
     <button type="button" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>もっと<span class="badge dotb" id="morebadge" hidden></span><span id="readbadge" hidden></span><span id="shopbadge" hidden></span></button>
   </nav>

@@ -136,6 +136,7 @@
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
       read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
+      kind: r["買い物の区分"] || null, price: r["価格"] == null || r["価格"] === "" ? null : Number(r["価格"]),
     };
     known.set(t.id, t);
     return t;
@@ -205,7 +206,7 @@
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, sugs] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -213,9 +214,14 @@
       rows(DS.app, { limit: 50 }),
       // 済みにした補充タスク（最終補充日の集計が読めないときに、こちらから補充した日を出す）
       rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "補充対象", propertyType: "relation", operator: "is_not_empty" }], sort: sortEdited, limit: 100 }),
+      // 今月に買った家財・消耗品（節約タブの予算）と、節約の設定（DB_アプリ「今どこ」の本文）
+      rows(DS.task, { filters: [statusFilter(ST.done), { type: "property", property: "買い物の区分", propertyType: "select", operator: "is_not_empty" }, { type: "property", property: "実行日", propertyType: "date", operator: "date_is_on_or_after", value: { type: "exact", value: `${TODAY().slice(0, 7)}-01` } }], sort: sortEdited, limit: 100 }),
+      loadSaveCfg(),
       // AIからの提案（提案中だけ）
       rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
     ]);
+    if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
+    if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
     if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
 
     S.extraErr = {};
