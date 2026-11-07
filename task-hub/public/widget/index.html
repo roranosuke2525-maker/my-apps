@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>今どこ ウィジェット</title>
+<meta name="theme-color" content="#0f1115">
+<style>
+:root { color-scheme: dark; }
+body { margin: 0; background: #0f1115; color: #e8eaee; font-family: -apple-system, "Hiragino Sans", sans-serif; line-height: 1.6; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.mute { color: #9aa0a8; font-size: 14px; }
+ol { padding-left: 22px; } li { margin: 10px 0; }
+.btn { display: inline-block; padding: 12px 18px; border-radius: 12px; background: #1b1f26; color: #e8eaee; text-decoration: none; font-size: 15px; border: 0; font-family: inherit; }
+.btn.pri { background: #8fb8a5; color: #0f1115; font-weight: 600; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+pre { background: #14171c; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 12px; font-size: 11.5px; overflow: auto; max-height: 40vh; white-space: pre; }
+.card { background: #14171c; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 14px 16px; margin: 14px 0; }
+.card b { display: block; margin-bottom: 4px; }
+#ok { color: #8fb8a5; }
+</style>
+</head>
+<body>
+<main>
+<h1>今どこ ウィジェット</h1>
+<p class="mute">iPhone のホーム画面・ロック画面に「今日の残り・遅れ・まず これ」を出し、○ を押すと済み、→ を押すと明日にずらせます。無料アプリ <b>Scriptable</b> で動きます。</p>
+
+<div class="card"><b>1. Scriptable を入れる</b><a class="btn" href="https://apps.apple.com/jp/app/scriptable/id1405459188" target="_blank" rel="noopener">App Store で Scriptable を開く</a></div>
+
+<div class="card"><b>2. スクリプトを取り込む（どちらか）</b>
+<div class="row"><a class="btn pri" href="imadoko-widget.scriptable" download="今どこ.scriptable">ファイルを保存して Scriptable で開く</a><button type="button" class="btn" id="copy">コードをコピー</button><span id="ok" class="mute"></span></div>
+<p class="mute">コピーした場合：Scriptable を開き「＋」→ 貼り付け → 左上の名前を「今どこ」にして完了。</p></div>
+
+<div class="card"><b>3. 一度実行して合言葉を入れる</b><p class="mute">Scriptable で「今どこ」を実行すると合言葉（アプリと同じ）を聞きます。この iPhone の Keychain にだけ保存されます。</p></div>
+
+<div class="card"><b>4. ウィジェットを置く</b><p class="mute">ホーム画面を長押し →「＋」→ Scriptable → 大きさを選ぶ → 置いたウィジェットを長押し →「ウィジェットを編集」→ Script に「今どこ」。ロック画面も同じ手順（丸・四角・1行）。15分ごとに自動で更新されます。</p></div>
+
+<details><summary class="mute">コードを見る</summary><pre id="code">読みこみ中…</pre></details>
+</main>
+<script>
+(async () => {
+  const pre = document.getElementById("code"); let code = "";
+  try { code = await (await fetch("imadoko-widget.js", { cache: "no-store" })).text(); pre.textContent = code; } catch { pre.textContent = "読めませんでした"; }
+  document.getElementById("copy").onclick = async () => { try { await navigator.clipboard.writeText(code); document.getElementById("ok").textContent = "コピーしました"; } catch { document.getElementById("ok").textContent = "下の「コードを見る」から選んでコピーしてください"; } };
+})();
+</script>
+</body>
+</html>

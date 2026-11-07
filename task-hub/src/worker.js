@@ -20,11 +20,13 @@ async function page(request, env, url) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/w/")) return widgetAct(request, env, url).catch((err) => html(actPage("⚠️", "できませんでした", err.publicMessage || "サーバーでエラーが起きました", url.origin), err.status || 500));
     if (!url.pathname.startsWith("/api/") || url.pathname === "/api/version") return page(request, env, url);
     try {
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います", code: "bad_key" }, 401);
       if (url.pathname === "/api/ping" && request.method === "GET") return json({ ok: true });
+      if (url.pathname === "/api/widget" && request.method === "GET") return json(await widgetData(env, url.origin));
       if (url.pathname === "/api/notion" && request.method === "POST") {
         const body = await readJson(request);
         return json(await runTool(notionClient(env), body.tool, body.input || {}));
@@ -60,6 +62,69 @@ export async function fireRoutine(env, which = "research") {
     throw httpError(res.status === 429 ? 429 : 502, msg, res.status === 429 ? "rate_limited" : "run_error");
   }
   return { ok: true, session_url: typeof data.claude_code_session_url === "string" ? data.claude_code_session_url : "" };
+}
+
+// ---------- ウィジェット（iPhone の Scriptable から読む） ----------
+// GET /api/widget（合言葉つき）：今日の残り・遅れ・済み・AIの提案の数と、行ごとの「済み」「明日へ」の署名つきURL
+// GET /w/act?op=done|tomorrow|undone&id=…&d=YYYY-MM-DD&s=署名：ウィジェットの✓を押したときに Safari で開く。合言葉は URL に出さず、
+// 合言葉から作った HMAC（その日と翌日まで有効）で守る
+const WAKU_ORDER = ["☼ 朝", "💻 PC", "🏠 家・外", "作業中"];
+const SUG_DS = "bceda4df-aaa1-409b-9bb3-93f7ba88fd90";
+const TASK_DS = "21762844-acbe-8075-bbe6-000bcaf22801";
+async function hmac(key, s) {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(s));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 24);
+}
+const signOf = (env, op, id, d) => hmac(env.APP_KEY, `${op}|${id}|${d}`);
+async function actUrl(env, origin, op, id, d) { return `${origin}/w/act?op=${op}&id=${id}&d=${d}&s=${await signOf(env, op, id, d)}`; }
+const listOf = (v) => { try { const a = JSON.parse(v || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
+export async function widgetData(env, origin) {
+  const notion = notionClient(env); const today = jstToday();
+  const q = (ds, filter, sort, limit) => queryTool(notion, { data: { mode: "rows", data_source_url: `collection://${ds}`, filter: { type: "group", operator: "and", filters: filter }, ...(sort ? { sort } : {}), limit } });
+  const st = (s) => ({ type: "property", property: "ステータス", propertyType: "status", operator: "status_is", value: { type: "is_option", value: s } });
+  const [next, doing, done, sug] = await Promise.all([
+    q(TASK_DS, [st("⏭ NEXT"), { type: "property", property: "実行日", propertyType: "date", operator: "date_is_on_or_before", value: { type: "relative", value: "today" } }], [{ property: "実行日", direction: "ascending" }], 100),
+    q(TASK_DS, [st("▶️ DOING")], null, 20),
+    q(TASK_DS, [st("✅ DONE"), { type: "group", operator: "or", filters: [{ type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: { type: "relative", value: "today" } }, { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is", value: { type: "relative", value: "today" } }] }], null, 100),
+    q(SUG_DS, [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], null, 30).catch(() => ({ results: [] })),
+  ]);
+  const own = (r) => !listOf(r["親タスク"]).length;
+  const seen = new Set();
+  const rows = [...(doing.results || []), ...(next.results || [])].filter(own).filter((r) => !seen.has(r.url) && seen.add(r.url));
+  const tasks = [];
+  for (const r of rows) {
+    const id = normalizeId(r.url); const date = r["date:実行日:start"] ? String(r["date:実行日:start"]).slice(0, 10) : null;
+    tasks.push({ id, name: String(r["名前"] || "（無題）").replace(/<[^>]+>/g, ""), next: String(r.NEXT || "").replace(/<[^>]+>/g, "").slice(0, 80), waku: r["枠"] || "", weight: r["重さ"] || "", date, late: !!date && date < today, doing: r["ステータス"] === "▶️ DOING",
+      done: await actUrl(env, origin, "done", id, today), tomorrow: await actUrl(env, origin, "tomorrow", id, today), open: `${origin}/#open=${id}` });
+  }
+  tasks.sort((a, b) => (b.doing - a.doing) || (b.late - a.late) || (WAKU_ORDER.indexOf(a.waku) - WAKU_ORDER.indexOf(b.waku)) || a.name.localeCompare(b.name, "ja"));
+  const doneN = (done.results || []).filter(own).length; const total = tasks.length + doneN;
+  return { date: today, build: BUILD, remaining: tasks.length, late: tasks.filter((t) => t.late).length, done: doneN, pct: total ? Math.round((doneN / total) * 100) : 0, sugs: (sug.results || []).length, tasks: tasks.slice(0, 12), app: `${origin}/` };
+}
+function html(body, status = 200) { return new Response(body, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }); }
+const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function actPage(mark, title, body, origin, undo) {
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>今どこ</title><meta name="theme-color" content="#0f1115">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#e8eaee;font-family:-apple-system,"Hiragino Sans",sans-serif;text-align:center}main{padding:24px}b{display:block;font-size:64px;line-height:1}h1{font-size:20px;margin:14px 0 6px}p{color:#9aa0a8;margin:0 0 22px;font-size:15px;overflow-wrap:anywhere}a{display:inline-block;margin:4px;padding:12px 18px;border-radius:12px;background:#1b1f26;color:#e8eaee;text-decoration:none;font-size:15px}a.pri{background:#8fb8a5;color:#0f1115;font-weight:600}</style></head>
+<body><main><b>${mark}</b><h1>${escH(title)}</h1><p>${escH(body)}</p><a class="pri" href="${escH(origin)}/">今どこを開く</a>${undo ? `<a href="${escH(undo)}">元に戻す</a>` : ""}</main></body></html>`;
+}
+async function widgetAct(request, env, url) {
+  checkConfig(env);
+  if (url.pathname !== "/w/act") throw httpError(404, "ページがありません", "not_found");
+  const op = url.searchParams.get("op") || "", id = normalizeId(url.searchParams.get("id") || ""), d = url.searchParams.get("d") || "", s = url.searchParams.get("s") || "";
+  const today = jstToday();
+  if (!["done", "tomorrow", "undone"].includes(op)) throw httpError(400, "知らない操作です", "bad_request");
+  if (![today, addDay(today, -1)].includes(d)) throw httpError(403, "このリンクは期限切れです。ウィジェットを更新してからもう一度押してください", "expired");
+  if (!constantTimeEqual(s, await signOf(env, op, id, d))) throw httpError(403, "リンクが正しくありません", "bad_sig");
+  const notion = notionClient(env);
+  const page = await notion("GET", `/pages/${id}`);
+  const name = (page.properties?.["名前"]?.title || []).map((x) => x.plain_text).join("") || "（無題）";
+  const props = op === "done" ? { "ステータス": "✅ DONE" } : op === "undone" ? { "ステータス": "⏭ NEXT" } : { "date:実行日:start": addDay(today, 1), "date:実行日:is_datetime": 0 };
+  await notion("PATCH", `/pages/${id}`, { properties: toProps(props, page.properties || {}) });
+  if (op === "done") return html(actPage("✓", "済みにしました", name, url.origin, await actUrl(env, url.origin, "undone", id, today)));
+  if (op === "undone") return html(actPage("↩", "次にやるに戻しました", name, url.origin));
+  return html(actPage("→", "明日にずらしました", name, url.origin));
 }
 
 // ---------- 設定・合言葉 ----------

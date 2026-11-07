@@ -169,3 +169,29 @@ test("今すぐ提案：which=suggest は別の定期実行（SUGGEST_ROUTINE_ID
     assert.equal(none.status, 500); assert.equal((await none.json()).code, "no_routine");
   } finally { s.done(); }
 });
+
+test("ウィジェット：今日の一覧と署名つきの操作URL、✓で済み・期限切れと偽の署名は断る", async () => {
+  const s = setup();
+  try {
+    const get = (path, key = KEY) => worker.fetch(new Request(`https://app.test${path}`, { headers: key ? { Authorization: `Bearer ${key}` } : {} }), s.env);
+    assert.equal((await get("/api/widget", "")).status, 401);
+    const r = await get("/api/widget"); assert.equal(r.status, 200);
+    const d = await r.json();
+    assert.equal(d.remaining, 1); assert.equal(d.late, 1); assert.equal(d.tasks[0].name, "保険の住所変更"); assert.equal(d.tasks[0].waku, "💻 PC"); assert.equal(d.tasks[0].late, true);
+    assert.match(d.tasks[0].done, /^https:\/\/app\.test\/w\/act\?op=done&id=2{32}&d=\d{4}-\d{2}-\d{2}&s=[0-9a-f]{24}$/);
+    assert.equal(d.tasks[0].open, "https://app.test/#open=" + "2".repeat(32));
+    // ✓ を押す → DONE になり、元に戻すリンクつきの画面
+    const act = await worker.fetch(new Request(d.tasks[0].done), s.env);
+    assert.equal(act.status, 200); const body = await act.text();
+    assert.match(body, /済みにしました/); assert.match(body, /op=undone/);
+    assert.equal(s.fake.pages["2".repeat(32)].properties["ステータス"].status.name, "✅ DONE");
+    // 明日へ
+    const tm = await worker.fetch(new Request(d.tasks[0].tomorrow), s.env); assert.equal(tm.status, 200);
+    assert.match(s.fake.pages["2".repeat(32)].properties["実行日"].date.start, /^\d{4}-\d{2}-\d{2}$/);
+    // 偽の署名・古い日付
+    assert.equal((await worker.fetch(new Request(d.tasks[0].done.replace(/s=[0-9a-f]+$/, "s=" + "0".repeat(24))), s.env)).status, 403);
+    assert.equal((await worker.fetch(new Request(d.tasks[0].done.replace(/d=\d{4}-\d{2}-\d{2}/, "d=2020-01-01")), s.env)).status, 403);
+    // 合言葉が無くても /w/ は画面を返す（JSON ではない）
+    assert.equal((await worker.fetch(new Request("https://app.test/w/act?op=x"), s.env)).status, 400);
+  } finally { s.done(); }
+});
