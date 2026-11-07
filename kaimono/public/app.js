@@ -554,15 +554,40 @@ async function allToList() {
   for (const x of soon) if (await toList(x.id)) ok++;
   toast(`${ok}品を補充リストに入れました`);
 }
-// 「補充した」は取り消しが面倒なので、いつも確かめてから記録する
-const okRestock = (names) => confirm(`${names.length > 1 ? `${names.length}品（${names.slice(0, 3).join("・")}${names.length > 3 ? "…" : ""}）` : `「${names[0]}」`}を補充した（買った）として記録しますか？\n最終補充日が今日になります。`);
+// 「補充した」は取り消しが面倒なので、いつも確かめてから記録する。
+// そのとき買った個数を選ぶ：1個の日数×個数を、残っていた分に足す（使い切っていたなら今日から数える）
+const newLeft = (x, n, carry) => (x.days == null ? null : (carry && x.left > 0 ? x.left : 0) + x.days * n);
+function askRestock(xs) {
+  return new Promise((resolve) => {
+    const st = { n: Object.fromEntries(xs.map((x) => [x.id, 1])), carry: true };
+    const box = document.createElement("div"); box.className = "rqwrap";
+    const draw = () => {
+      box.innerHTML = `<div class="sheet-bg" data-rq="no"></div><div class="sheet rq" role="dialog" aria-label="補充した個数"><h2>補充した（買った）</h2>
+        <p class="note">買った個数を選ぶと、そのぶん残りが増えます（1個の日数×個数）。</p>
+        <div class="rqlist">${xs.map((x) => { const n = st.n[x.id]; const nl = newLeft(x, n, st.carry); return `<div class="rqrow">${thumb(x)}<span class="rqname">${esc(x.name)}<small>${x.days == null ? "使う数・量が未入力（残りは計算しません）" : `${esc(leftTx(x.left) || "—")} → <b>${esc(leftTx(nl))}</b>（1個${x.days}日）`}</small></span><span class="stepper"><button type="button" class="btn sm" data-rq="dec|${x.id}" aria-label="減らす" ${n <= 1 ? "disabled" : ""}>−</button><b>×${n}</b><button type="button" class="btn sm" data-rq="inc|${x.id}" aria-label="増やす" ${n >= 20 ? "disabled" : ""}>＋</button></span></div>`; }).join("")}</div>
+        <label class="check"><input type="checkbox" data-rq="carry" ${st.carry ? "" : "checked"}>使い切っていた（残りに足さず、今日から数える）</label>
+        <div class="row-end"><button type="button" class="btn ghost" data-rq="no">やめる</button><button type="button" class="btn ok" data-rq="yes">${xs.length > 1 ? `${xs.length}品を` : ""}記録する</button></div></div>`;
+    };
+    const done = (v) => { box.remove(); document.body.classList.remove("modal"); resolve(v); };
+    box.addEventListener("click", (e) => {
+      const el = e.target.closest("[data-rq]"); if (!el) return;
+      e.stopPropagation();
+      const [k, id] = el.dataset.rq.split("|");
+      if (k === "no") done(null);
+      else if (k === "yes") done({ counts: st.n, carry: st.carry });
+      else if (k === "carry") { st.carry = !el.checked; draw(); }
+      else if (k === "inc" || k === "dec") { st.n[id] = Math.max(1, Math.min(20, st.n[id] + (k === "inc" ? 1 : -1))); draw(); }
+    });
+    draw(); document.body.append(box); document.body.classList.add("modal");
+  });
+}
 async function restock(id, btn) {
   const x = S.stock.find((s) => s.id === id); if (!x) return;
-  if (!okRestock([x.name])) return;
+  const ans = await askRestock([x]); if (!ans) return;
   if (btn) btn.disabled = true;
   try {
     setSync("busy");
-    const res = await api("POST", `/api/stock/${id}/restocked`);
+    const res = await api("POST", `/api/stock/${id}/restocked`, { count: ans.counts[id], carry: ans.carry });
     S.lists = S.lists.filter((t) => !res.done.includes(t.id));
     Object.assign(x, res.stock);
     saveSnap(); setSync("ok"); render();
@@ -574,13 +599,14 @@ async function bulk(kind, btn) {
   const ids = [...(S.pick || [])]; const xs = S.stock.filter((x) => ids.includes(x.id));
   if (!xs.length) { toast("品を選んでください"); return; }
   if (kind === "trash" && !confirm(`${xs.length}品を在庫から消しますか？\n（Notion のゴミ箱に入り、30日はそこから戻せます）`)) return;
-  if (kind === "restock" && !okRestock(xs.map((x) => x.name))) return;
+  let ans = null;
+  if (kind === "restock" && !(ans = await askRestock(xs))) return;
   btn.disabled = true; let ok = 0;
   for (const x of xs) {
     btn.textContent = `${ok + 1}/${xs.length}…`;
     try {
       if (kind === "list") { if (!x.open?.length && (await toList(x.id))) ok++; else if (x.open?.length) ok++; }
-      else if (kind === "restock") { await api("POST", `/api/stock/${x.id}/restocked`).then((res) => { S.lists = S.lists.filter((t) => !res.done.includes(t.id)); Object.assign(x, res.stock); }); ok++; }
+      else if (kind === "restock") { await api("POST", `/api/stock/${x.id}/restocked`, { count: ans.counts[x.id], carry: ans.carry }).then((res) => { S.lists = S.lists.filter((t) => !res.done.includes(t.id)); Object.assign(x, res.stock); }); ok++; }
       else if (kind === "trash") { await api("DELETE", `/api/stock/${x.id}`); S.stock = S.stock.filter((s) => s.id !== x.id); ok++; }
     } catch (err) { toast(`「${x.name}」：${err.message}`); }
   }
@@ -1085,7 +1111,7 @@ function renderRefills(ts) {
     const x = S.stock.find((s) => t.refill.includes(s.id));
     return `<div class="item ritem"><button type="button" class="tick" data-finish="${t.id}" aria-label="「${esc(t.name)}」を買えた"><span class="box" aria-hidden="true"></span></button><button type="button" class="tick rname" ${x ? `data-act="${x.id}"` : `data-finish="${t.id}"`}>${x ? thumb(x) : ""}<span class="tx">${esc(t.name.replace(/^補充:/, ""))}</span>${x ? `<span class="qty" style="color:${leftColor(x)}">${esc(leftTx(x.left))}</span>` : ""}</button><button type="button" class="more${t.at ? " on" : ""}" data-whenopen="${t.id}" aria-label="「${esc(t.name)}」の時刻と通知">⏰</button>${t.link ? `<a class="more" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="注文ページを開く">🛒</a>` : ""}<button type="button" class="more rx" data-rcancel="${t.id}" aria-label="「${esc(t.name)}」を補充リストから外す" title="外す（今回は買わない）">✖</button></div>${t.at || S.whenFor === t.id ? `<div class="rwhen">${whenBar(t.id, t.at)}</div>` : ""}`;
   }).join("")}</div>` : `<div class="empty small">補充リストは空です。上の欄か、在庫の 🛒 で足せます</div>`}</div>
-  ${ts.length ? `<p class="note pad">買えたら ○ で済み（最終補充日が今日に）。✖ で外す（今回は買わない）。名前をタップすると、直す・別の商品に変える・ネットで買う も選べます。</p>` : ""}`;
+  ${ts.length ? `<p class="note pad">買えたら ○ で、買った個数を選んで記録（そのぶん残りが増える）。✖ で外す（今回は買わない）。名前をタップすると、直す・別の商品に変える・ネットで買う も選べます。</p>` : ""}`;
 }
 // 足す欄の候補：まだリストにない在庫の品。打ちかけなら名前で絞り、空なら切れそうな順
 function refillSugHtml(q) {
@@ -1405,7 +1431,10 @@ document.addEventListener("click", (e) => {
   if (d.clear) { const t = listOf(d.clear); if (t) clearBasket(t); return; }
   if (d.finish) {
     const t = listOf(d.finish); if (!t) return;
-    if (t.refill.length && !okRestock([t.name.replace(/^補充:/, "")])) return;
+    // 在庫の品につながった補充タスクは、個数を選んで補充した記録にする
+    const sx = t.refill.length && S.stock.find((x) => t.refill.includes(x.id));
+    if (sx) { restock(sx.id, el); return; }
+    if (t.refill.length && !confirm(`「${t.name.replace(/^補充:/, "")}」を補充した（買った）として記録しますか？`)) return;
     finishList(t, t.refill.length ? "補充した" : "買い物おわり"); return;
   }
   if (d.sug) {

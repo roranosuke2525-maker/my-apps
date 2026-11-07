@@ -11,6 +11,7 @@ const OPEN = [ST.next, ST.doing, ST.inbox, ST.wait];
 const CATS = ["日用品", "消耗品", "食品", "育児", "サプリ", "美容"];
 const FREQS = ["毎日", "毎週", "毎月"];
 const PER_DAYS = { 毎日: 1, 毎週: 7, 毎月: 30 };
+const MAN_END = "切れる予定日（補充で更新）"; // 補充した個数・残りを足した切れる日（切れる予定日の式は、これと通常の計算の遅いほう）
 const WAKU_HOME = "🏠 家・外";
 const WAKU_NET = "☼ 朝";
 const ITEM_MAX = 200;
@@ -68,7 +69,7 @@ export default {
       if (sub && m === "DELETE") return json(await removeSubtask(notion, env, sub[1]));
       if (p === "/api/stock" && m === "POST") return json(await addStock(notion, env, await readJson(request)));
       if (stock?.[2] === "refill" && m === "POST") return json(await refill(notion, env, stock[1]));
-      if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1]));
+      if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1], await readJson(request).catch(() => ({}))));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
       if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
       if (p === "/api/lookup" && m === "POST") return json(await lookupPage((await readJson(request))?.url));
@@ -226,6 +227,7 @@ function stockOf(page, today, restockedOn) {
     jan: propText(p.JAN),
     image: imageOf(p["画像"]),
     store: propText(p["店"]),
+    man: propDate(p[MAN_END]),
   };
   const formulaEnd = formulaDate(p["切れる予定日"]);
   const base = [x.bought, x.rollup, restockedOn].filter(Boolean).sort().at(-1) || null;
@@ -234,6 +236,7 @@ function stockOf(page, today, restockedOn) {
   x.base = base;
   const fresher = restockedOn && (!x.rollup || restockedOn > x.rollup); // 補充した直後は計算式がまだ古い
   x.end = formulaEnd && !fresher ? formulaEnd : base && x.days != null ? addDays(base, x.days) : null;
+  if (x.man && (!x.end || x.man > x.end)) x.end = x.man;
   x.left = x.end ? diffDays(today, x.end) : null;
   return x;
 }
@@ -586,14 +589,25 @@ async function refill(notion, env, id) {
 }
 
 // 補充した：開いている補充タスクを済みにする（なければ済みの補充タスクを1つ作って、最終補充日を今日にする）
-async function restocked(notion, env, id) {
+// count：買った個数（1〜20）。carry：残っていた分に足す（false なら今日から数える）
+async function restocked(notion, env, id, body = {}) {
   const page = await stockPage(notion, env, id);
   const today = todayJst();
   const x = stockOf(page, today);
+  const count = Math.round(Number(body?.count ?? 1));
+  if (!Number.isFinite(count) || count < 1 || count > 20) throw httpError(400, "個数は1〜20で選んでください");
+  const carry = body?.carry !== false;
+  let man = null;
+  if (x.days != null) {
+    const from = carry && x.end && x.end > today ? x.end : today;
+    man = addDays(from, x.days * count);
+    await notion("PATCH", `/pages/${x.id}`, { properties: { [MAN_END]: { date: { start: man } } } });
+  }
   let open = await openRefills(notion, env, x.id);
   if (!open.length) open = [(await refill(notion, env, x.id)).task];
   for (const t of open) await notion("PATCH", `/pages/${t.id}`, { properties: doneProps({ refill: [x.id] }) });
   const after = stockOf(page, today, today);
+  if (man) { after.man = man; after.end = man; after.left = diffDays(today, man); }
   after.open = [];
   return { stock: after, done: open.map((t) => t.id) };
 }
@@ -638,6 +652,7 @@ function stockProps(body, { edit = false } = {}) {
     props["画像"] = { files: img ? [{ name: "商品画像", type: "external", external: { url: img } }] : [] };
   }
   if (!edit || body?.bought) props["購入日（手入力）"] = { date: { start: dateOf(body?.bought) || todayJst() } };
+  if (edit && body?.bought) props[MAN_END] = { date: null }; // 商品を変えて買い直した：前の延ばした分は消す
   // 空の値は作るときには送らない
   if (!edit) for (const [k, v] of Object.entries(props)) if (v.select === null || v.number === null || v.url === null || v.files?.length === 0 || v.rich_text?.length === 0) delete props[k];
   return props;
@@ -689,6 +704,8 @@ async function fixRefill(notion, env, id, body) {
   if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.TASK_DS_ID)) throw httpError(403, "DB_タスク管理 の行ではありません");
   const t = taskOf(page);
   if (!t.refill.length) throw httpError(403, "補充タスクではありません");
+  // 補充を直したら、個数で延ばした切れる日は消して、ふつうの計算（購入日・最終補充日から）に戻す
+  if (["date", "reopen", "trash"].includes(body?.action)) for (const sid of t.refill) await notion("PATCH", `/pages/${sid}`, { properties: { [MAN_END]: { date: null } } }).catch(() => {});
   if (body?.action === "date") {
     const d = dateOf(body?.date);
     if (!d || d > todayJst()) throw httpError(400, "補充した日が正しくありません");

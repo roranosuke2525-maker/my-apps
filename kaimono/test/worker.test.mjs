@@ -291,14 +291,26 @@ test("補充：リストへ（補充タスクを作る・二重に作らない�
   const done = await api("POST", `/api/stock/${D1}/restocked`);
   assert.deepEqual(done.data.done, [r.data.task.id]);
   assert.equal(t.properties["ステータス"].status.name, "✅ DONE");
-  assert.equal(done.data.stock.left, 10);
+  assert.equal(done.data.stock.left, 11); // 残っていた1日に、1個ぶん（10日）を足す
   assert.equal(done.data.stock.base, today);
+  assert.equal(pages.get(D1).properties["切れる予定日（補充で更新）"].date.start, addDays(today, 11));
 
   // 補充タスクがなくても「補充した」は記録できる（済みの補充タスクを作る）
   const d3 = await api("POST", `/api/stock/${D3}/restocked`);
   assert.equal(d3.data.done.length, 1);
   assert.equal(pages.get(d3.data.done[0]).properties["ステータス"].status.name, "✅ DONE");
   assert.equal((await api("POST", `/api/stock/${L1}/refill`)).status, 403);
+});
+
+test("補充した：個数ぶん残りが増える。使い切っていたら今日から数える", async () => {
+  const x3 = await api("POST", `/api/stock/${D2}/restocked`, { count: 3, carry: false });
+  const days = x3.data.stock.days;
+  assert.ok(days > 0);
+  assert.equal(x3.data.stock.left, days * 3);
+  const more = await api("POST", `/api/stock/${D2}/restocked`, { count: 2 });
+  assert.equal(more.data.stock.left, days * 5); // 残り（3個ぶん）に2個ぶんを足す
+  assert.equal((await api("POST", `/api/stock/${D2}/restocked`, { count: 0 })).status, 400);
+  assert.equal((await api("POST", `/api/stock/${D2}/restocked`, { count: 99 })).status, 400);
 });
 
 test("在庫の登録", async () => {
@@ -597,6 +609,7 @@ test("補充した日を実行日に残す。過去の補充は日付を直す�
   assert.ok(h.some((x) => x.id === tid && x.stock === D1 && x.date === today));
   assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "date", date: "2026-10-20" })).data.date, "2026-10-20");
   assert.equal(pages.get(tid).properties["実行日"].date.start, "2026-10-20");
+  assert.equal(pages.get(D1).properties["切れる予定日（補充で更新）"].date, null); // 直したら個数で延ばした分は消える
   assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "date", date: "2999-01-01" })).status, 400); // 未来の日は入れない
   assert.equal((await api("PATCH", `/api/refills/${tid}`, { action: "reopen" })).data.reopened, true);
   assert.equal(pages.get(tid).properties["ステータス"].status.name, "⏭ NEXT");
