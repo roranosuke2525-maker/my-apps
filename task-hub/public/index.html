@@ -186,24 +186,25 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .kchip { display: inline-flex; gap: 4px; }
 .sealed .nm { color: var(--mute); }
 .saveadd { display: flex; gap: 8px; padding: 8px 14px 12px; margin-bottom: 64px; }
-/* サイドバー：すべての画面。狭い画面は左から出す、広い画面は左に常に出す */
-#sidebk { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; }
-#side { position: fixed; top: 0; bottom: 0; left: 0; width: 248px; max-width: 82vw; z-index: 41; background: var(--card); border-right: 1px solid var(--line); padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(16px + env(safe-area-inset-bottom, 0px)); overflow: auto; display: flex; flex-direction: column; gap: 2px; transform: translateX(-100%); transition: transform .22s ease; }
-#side.open { transform: none; }
+/* サイドバー：左に細いアイコンの列を常に出し、押すと名前つきで広がる（広い画面はマウスを乗せても広がる） */
+:root { --rail: 52px; }
+#app { grid-template-rows: auto 1fr; margin-left: var(--rail); max-width: calc(100% - var(--rail)); }
+#sidebk { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 40; }
+#side { position: fixed; top: 0; bottom: 0; left: 0; width: var(--rail); z-index: 41; background: var(--card); border-right: 1px solid var(--line); padding: calc(8px + env(safe-area-inset-top, 0px)) 6px calc(12px + env(safe-area-inset-bottom, 0px)); overflow: hidden auto; display: flex; flex-direction: column; gap: 2px; transition: width .2s ease; }
 #side > * { flex: none; }
-#side[hidden] { display: none; }
-#side .sh { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 10px; } #side .sh b { font-size: 15px; }
-#side .sg { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--mute); padding: 12px 10px 4px; }
-#side button[data-gotab], #side button[data-concierge], #side button[data-search], #side a { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; color: var(--ink); text-decoration: none; text-align: left; width: 100%; }
-#side button[aria-pressed="true"] { background: var(--sunk); font-weight: 600; }
-#side .badge { position: static; margin-left: auto; }
-@media (min-width: 1000px) {
-  #sidebk { display: none !important; }
-  #app { margin-left: max(260px, calc(50% - 380px)); }
-  #side { transform: none; left: max(0px, calc(50% - 380px - 260px)); border-right: 0; background: transparent; }
-  #side[hidden] { display: flex !important; }
-  #side .sh button, #menu, nav.tabs [data-tab="more"] { display: none; }
-} .saveadd .btn { flex: 1; height: 40px; }
+#side.open { width: 236px; box-shadow: 8px 0 30px rgba(0,0,0,.35); }
+#side .sh, #side button[data-gotab], #side button[data-concierge], #side button[data-search], #side a { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 9px; border-radius: 10px; font-size: 13.5px; color: var(--mute); text-decoration: none; text-align: left; width: 100%; position: relative; white-space: nowrap; overflow: hidden; }
+#side .sh { color: var(--ink); font-weight: 700; margin-bottom: 4px; }
+#side svg { width: 22px; height: 22px; flex: none; }
+#side span { opacity: 0; transition: opacity .15s; } #side.open span { opacity: 1; }
+#side .sg { height: 22px; margin: 6px 0 0; padding: 6px 9px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--mute); border-top: 1px solid var(--line); line-height: 14px; }
+#side button[aria-pressed="true"] { background: var(--sunk); color: var(--ink); }
+#side .badge { position: absolute; left: 24px; top: 5px; min-width: 15px; height: 15px; font-size: 9.5px; line-height: 15px; } #side.open .badge { position: static; margin-left: auto; min-width: 18px; height: 18px; font-size: 11px; line-height: 18px; }
+#side:not(.open) button:not(.sh) span, #side:not(.open) a span, #side:not(.open) .sg span { display: none; }
+.hero { grid-template-columns: 56px minmax(0, 1fr); } .hnext { min-width: 0; } .hnext .check.big { flex: none; }
+main { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+@media (hover: hover) and (min-width: 1000px) { #side:hover { width: 236px; } #side:hover span { opacity: 1; display: inline; } #side:hover .badge { position: static; margin-left: auto; } #sidebk { display: none !important; } }
+.saveadd .btn { flex: 1; height: 40px; }
 .btn.ok { background: var(--ok); color: #fff; }
 .btn:disabled { opacity: .5; }
 
@@ -759,37 +760,30 @@ nav.tabs { background: var(--bg); }
 </style>
 
 <button type="button" id="sidebk" data-side="0" aria-label="閉じる" hidden></button>
-<aside id="side" aria-label="すべての画面" hidden>
-  <div class="sh"><b>今どこ</b><button type="button" class="iconbtn" data-side="0" aria-label="閉じる">×</button></div>
-  <div class="sg">毎日</div>
-  <button type="button" data-gotab="today">✓ 今日</button>
-  <button type="button" data-gotab="flow">☰ 流れ</button>
-  <button type="button" data-gotab="save">🏠 節約<span class="badge" id="sidesave" hidden></span></button>
-  <button type="button" data-gotab="triage">⬒ 仕分け</button>
-  <button type="button" data-gotab="ai">🤖 AI<span class="badge" id="sideai" hidden></span></button>
-  <div class="sg">読む・買う</div>
-  <button type="button" data-gotab="read">📖 読む<span class="badge" id="sideread" hidden></span></button>
-  <button type="button" data-gotab="shop">🛒 買う<span class="badge" id="sideshop" hidden></span></button>
-  <button type="button" data-gotab="news">📰 ニュース</button>
-  <div class="sg">しくみ</div>
-  <button type="button" data-gotab="log">🩺 運用</button>
-  <button type="button" data-gotab="db">🗄 DB</button>
-  <div class="sg">道具</div>
-  <button type="button" data-concierge="1">💡 提案</button>
-  <button type="button" data-search="1">🔍 検索</button>
-  <a href="widget/" target="_blank" rel="noopener">📱 ウィジェット</a>
+<aside id="side" aria-label="すべての画面">
+  <button type="button" class="sh" data-side="t" aria-label="メニューを開く"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>今どこ</span></button>
+  <div class="sg"><span>毎日</span></div>
+  <button type="button" data-gotab="today" title="今日"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>今日</span></button>
+  <button type="button" data-gotab="flow" title="流れ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg><span>流れ</span></button>
+  <button type="button" data-gotab="save" title="節約"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9 20v-6h6v6"/></svg><span>節約</span><b class="badge" id="sidesave" hidden></b></button>
+  <button type="button" data-gotab="triage" title="仕分け"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg><span>仕分け</span></button>
+  <button type="button" data-gotab="ai" title="AI"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg><span>AI</span><b class="badge" id="sideai" hidden></b></button>
+  <div class="sg"><span>読む・買う</span></div>
+  <button type="button" data-gotab="read" title="読む"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg><span>読む</span><b class="badge" id="sideread" hidden></b></button>
+  <button type="button" data-gotab="shop" title="買う"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg><span>買う</span><b class="badge" id="sideshop" hidden></b></button>
+  <button type="button" data-gotab="news" title="ニュース"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg><span>ニュース</span></button>
+  <div class="sg"><span>しくみ</span></div>
+  <button type="button" data-gotab="log" title="運用"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>運用</span></button>
+  <button type="button" data-gotab="db" title="DB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span>DB</span></button>
+  <div class="sg"><span>道具</span></div>
+  <button type="button" data-concierge="1" title="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span>提案</span></button>
+  <button type="button" data-search="1" title="検索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><span>検索</span></button>
+  <a href="widget/" target="_blank" rel="noopener" title="ウィジェット"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M10 18h4"/></svg><span>ウィジェット</span></a>
 </aside>
 <div id="app">
-  <header class="top"><button type="button" class="iconbtn" id="menu" data-side="1" aria-label="すべての画面"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
+  <header class="top"><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
-  <nav class="tabs" aria-label="画面">
-    <button type="button" data-tab="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>今日</button>
-    <button type="button" data-tab="flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>流れ</button>
-    <button type="button" data-tab="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9 20v-6h6v6"/></svg>節約<span class="badge" id="savebadge" hidden></span></button>
-    <span hidden><span class="badge" id="aibadge" hidden></span></span>
-    <button type="button" data-tab="triage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg>仕分け</button>
-    <button type="button" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>もっと<span class="badge dotb" id="morebadge" hidden></span><span id="readbadge" hidden></span><span id="shopbadge" hidden></span></button>
-  </nav>
+  <span hidden><span id="aibadge" hidden></span><span id="savebadge" hidden></span><span id="readbadge" hidden></span><span id="shopbadge" hidden></span></span>
   <button type="button" class="fab" id="add" aria-label="新しく入れる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
 <div id="page" hidden></div>
@@ -3519,7 +3513,7 @@ nav.tabs { background: var(--bg); }
   }
   // ================= 描画 =================
   const main = $("#main");
-  function toggleSide(open) { const s = $("#side"), k = $("#sidebk"); if (!s) return; s.hidden = !open; k.hidden = !open; requestAnimationFrame(() => s.classList.toggle("open", open)); }
+  function toggleSide(open) { const s = $("#side"), k = $("#sidebk"); if (!s) return; k.hidden = !open; s.classList.toggle("open", open); }
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
@@ -3559,7 +3553,9 @@ nav.tabs { background: var(--bg); }
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
     if (el.id === "reload" || el.id === "retry") { load(); return; }
-    if (d.side != null) { toggleSide(d.side === "1"); return; }
+    if (d.side != null) { toggleSide(d.side === "t" ? !$("#side").classList.contains("open") : d.side === "1"); return; }
+    // たたんだ列を押したら、どこでも広げる（広げてから選ぶ）
+    if (el.closest("#side") && !$("#side").classList.contains("open") && !el.closest(".sh")) { toggleSide(true); return; }
     if (d.tab === "more") { toggleSide(true); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
     if (d.gotab) { closeModal(); toggleSide(false); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
@@ -3605,8 +3601,8 @@ nav.tabs { background: var(--bg); }
     if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inT = !!el.closest(".tips"); if (!inT && el.closest("#modal")) closeModal(); const back = openQuick.back; openQuick.back = false; applyQuick(t, d.qk).then(() => { if (inT && !$("#modal").hidden) openConcierge(); else if (back) openSearch(); }); return; }
     if (d.mopen) { closeModal(); openTask(d.mopen); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }
-    if (d.concierge) { openConcierge(); return; }
-    if (d.search) { openSearch(); return; }
+    if (d.concierge) { toggleSide(false); openConcierge(); return; }
+    if (d.search) { toggleSide(false); openSearch(); return; }
     if (d.readseg) { S.readSeg = d.readseg; render(); return; }
     if (d.reader) { openReader(d.reader); return; }
     if (d.readdone) { const t = known.get(d.readdone); if (!t) return; if (el.closest(".rdbar")) readDoneAndNext(t); else setRead(t, false); return; }
