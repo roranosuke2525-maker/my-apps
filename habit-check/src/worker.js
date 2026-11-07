@@ -1085,7 +1085,8 @@ async function getBattle(notion, env) {
     let carry = null;
     if (prev?.defeated && prev.boss && typeof prev.hp === "number") {
       const pf = fight(prev, { ...all, muscle }, startOf(i - 1), petType, stats, equip);
-      carry = { date: start, ratio: pf.defeatedOn === start ? pf.leftover : 0 };
+      // 計算し直した撃破日が記録とずれたとき（そうびの付け替えなど）は、その日の攻撃をまるごと次のボスへ（0 にはしない）
+      carry = { date: start, ratio: pf.defeatedOn === start ? pf.leftover : 1 };
     }
     boss = fight(current, { ...all, muscle }, start, petType, stats, equip, carry);
     if (boss.defeatedOn) {
@@ -1180,12 +1181,12 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     if (date === today) todayDamage = total;
     // 攻撃は1件ずつ（key：画面が「もう見た攻撃」を覚えるための名前）
     // 習慣はその日の分をまとめて1件（型ごとに仲間が攻撃）。あとからチェックが増えたら、画面は増えた分だけ見せる
-    if (d.habit) {
+    if (d.habit >= 0.5) {
       const types = Object.fromEntries(Object.entries(d.habitTypes || {}).filter(([, v]) => v > 0).map(([t, v]) => [t, Math.round(v)]));
       log.push({ key: `${date}|h`, date, kind: "habit", damage: Math.round(d.habit), types });
     }
-    if (d.muscle) log.push({ key: `${date}|m`, date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
-    for (const t of d.tasks) log.push({ key: `t|${t.id}`, date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
+    if (d.muscle >= 0.5) log.push({ key: `${date}|m`, date, kind: "muscle", damage: Math.round(d.muscle), score: d.muscleInfo?.score ?? null, diff: d.muscleInfo?.diff ?? null });
+    for (const t of d.tasks) if (t.damage >= 0.5) log.push({ key: `t|${t.id}`, date, kind: "task", name: t.name, title: t.title, stars: t.stars, family: t.family, shape: t.shape, colors: t.colors, damage: Math.round(t.damage) });
     if (!defeatedOn && damage >= chapter.hp) {
       defeatedOn = date;
       // 倒した日の攻撃のうち、HP を削りきったあとの残り（次のボスへ持ちこす割合）
