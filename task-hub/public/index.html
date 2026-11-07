@@ -199,6 +199,7 @@ table.grid tr.click:hover td { background: var(--sunk); }
 #side .badge { position: static; margin-left: auto; }
 @media (min-width: 1000px) {
   #sidebk { display: none !important; }
+  #app { margin-left: max(260px, calc(50% - 380px)); }
   #side { transform: none; left: max(0px, calc(50% - 380px - 260px)); border-right: 0; background: transparent; }
   #side[hidden] { display: flex !important; }
   #side .sh button, #menu, nav.tabs [data-tab="more"] { display: none; }
