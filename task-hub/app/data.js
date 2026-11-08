@@ -136,6 +136,7 @@
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
       read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
+      goals: (list(r["関連目標"]) || []).map(idOf).filter(Boolean),
       kind: r["買い物の区分"] || null, price: r["価格"] == null || r["価格"] === "" ? null : Number(r["価格"]),
     };
     known.set(t.id, t);

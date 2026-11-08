@@ -173,6 +173,13 @@ table.grid tr.click:hover td { background: var(--sunk); }
 .btn.pri { background: var(--accent); color: #fff; }
 .btn.danger { color: var(--late); background: color-mix(in srgb, var(--late) 10%, transparent); }
 .btn.danger.arm { background: var(--late); color: #fff; }
+.nlens { padding: 2px 12px 6px; display: grid; gap: 6px; flex: none; border-bottom: 1px solid var(--line); }
+.nlens .seg button { font-size: 12px; }
+.ngroups { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; } .ngroups::-webkit-scrollbar { display: none; }
+.ngroups .qc { flex: none; height: 32px; font-size: 12px; } .ngroups .qc small { margin-left: 5px; font-family: var(--f-num); color: var(--mute); } .ngroups .qc.on { background: var(--ink); color: var(--bg); } .ngroups .qc.on small { color: inherit; opacity: .7; }
+.nhint { margin: 0; font-size: 11.5px; color: var(--mute); line-height: 1.5; }
+.sech .qc.arm { background: var(--late); color: #fff; }
+.sech .qc + .qc { margin-left: 4px; }
 .delrow { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 11.5px; }
 /* 節約 */
 .savehero { padding: 14px 16px 12px; display: grid; gap: 10px; }
@@ -822,7 +829,7 @@ nav.tabs { background: var(--bg); }
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], sugs: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
-    readList: [], readTag: "", readSeg: "list", saveSeg: "home", bought: [], saveCfg: { budget: 30000, until: "2027-03-31" }, news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
+    readList: [], readTag: "", readSeg: "list", saveSeg: "home", nextLens: "age", nextGroup: "", bought: [], saveCfg: { budget: 30000, until: "2027-03-31" }, news: null, newsDay: "", newsArea: "", newsHide: false, shopSeg: "list", shopHide: false, shopTarget: "", stockCat: "", stock: [], refillDone: {},
     bodies: {}, // id → { raw, edited }（AIの番・あなたの番の要約用）
     undo: [],
   };
@@ -966,6 +973,7 @@ nav.tabs { background: var(--bg); }
       refill: (list(r["補充対象"]) || []).map(idOf).filter(Boolean),
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
       read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
+      goals: (list(r["関連目標"]) || []).map(idOf).filter(Boolean),
       kind: r["買い物の区分"] || null, price: r["価格"] == null || r["価格"] === "" ? null : Number(r["価格"]),
     };
     known.set(t.id, t);
@@ -1845,6 +1853,52 @@ nav.tabs { background: var(--bg); }
     return `<table class="grid"><thead><tr><th>名前</th><th>ステータス</th><th>実行日</th><th>枠</th><th>重さ</th><th>分類</th><th>AI</th><th>次の一歩</th></tr></thead><tbody>${items.map((t) => `<tr class="click" data-open="${t.id}"><td>${esc(short(t.name, 22))}</td><td>${esc(t.status)}</td><td class="${metaOf(t).late ? "late" : ""}">${t.date ? md(t.date) : ""}</td><td>${esc(t.waku || "")}</td><td>${esc(t.weight || "")}</td><td>${esc(t.tag || "")}</td><td>${esc(t.ai || "")}</td><td>${esc(short(t.next || "", 20))}</td></tr>`).join("")}</tbody></table>`;
   }
 
+  // ================= 次にやる：いろんな見方で分けて、決めやすくする =================
+  // 見方（レンズ）ごとにグループへ分け、グループを選ぶと絞れる。グループごとに「まとめて動かす」ボタンと決め方のヒント
+  const AGE_G = [["3日以内", 0, 3], ["1週間以内", 4, 7], ["2週間以内", 8, 14], ["1か月以内", 15, 30], ["1か月以上", 31, 1e9]];
+  const NEXT_LENS = {
+    age: { name: "滞留", hint: "古いほど下に。2週間以上動いていないものは、やらないなら いつか へ、迷うなら AI に調べてもらう",
+      key: (t) => (AGE_G.find(([, a, b]) => ageOf(t) >= a && ageOf(t) <= b) || AGE_G[4])[0], order: AGE_G.map((g) => g[0]),
+      acts: (g) => (["2週間以内", "1か月以内", "1か月以上"].includes(g) ? [["some", "全部 いつかへ"]] : [["today", "全部 今日に"]]) },
+    tag: { name: "ジャンル", hint: "同じジャンルはまとめて片づけると速い。気分が乗るジャンルから1つ選んで今日に",
+      key: (t) => t.tag || "分類なし", acts: () => [["today", "全部 今日に"], ["some", "全部 いつかへ"]] },
+    waku: { name: "場所", hint: "今いる場所でできるものだけを見る。☼ 朝はスマホで5〜15分、💻 PC は机で、🏠 家・外 は体を動かす",
+      key: (t) => t.waku || "枠なし", order: [...WAKU, "枠なし"], acts: () => [["today", "全部 今日に"]] },
+    weight: { name: "重さ", hint: "S は5分で終わる。S を先に片づけると数が減って頭が軽くなる。XL は分解しないと進まない",
+      key: (t) => ({ S: "S 5分", M: "M 30分", L: "L 1〜2時間", XL: "XL 半日以上" }[t.weight] || "重さなし"), order: ["S 5分", "M 30分", "L 1〜2時間", "XL 半日以上", "重さなし"],
+      acts: (g) => (g.startsWith("XL") ? [["deep", "全部 AIと分解"]] : g.startsWith("S") ? [["today", "全部 今日に"]] : [["tomorrow", "全部 明日に"]]) },
+    link: { name: "つながり", hint: "目標につながるものは優先。単発で古いものは手放しても困らないことが多い",
+      key: (t) => (t.goals?.length ? "🎯 目標につながる" : t.projects?.length ? "📁 プロジェクトの一部" : "単発"), order: ["🎯 目標につながる", "📁 プロジェクトの一部", "単発"],
+      acts: (g) => (g === "単発" ? [["some", "全部 いつかへ"]] : [["today", "全部 今日に"]]) },
+    ready: { name: "準備", hint: "次の一歩が空のものは手が止まる。開いて一歩を書くか、AI と分解する",
+      key: (t) => (t.ai === "🔍✅" ? "🔍✅ 調べ終わった" : t.next ? "一歩あり" : "一歩なし"), order: ["一歩あり", "🔍✅ 調べ終わった", "一歩なし"],
+      acts: (g) => (g === "一歩なし" ? [["deep", "全部 AIと分解"]] : [["today", "全部 今日に"]]) },
+  };
+  function nextGroups(items) {
+    const L = NEXT_LENS[S.nextLens] || NEXT_LENS.age; const m = new Map();
+    for (const t of items) { const g = L.key(t); if (!m.has(g)) m.set(g, []); m.get(g).push(t); }
+    const ord = L.order || [...m.keys()].sort((a, b) => m.get(b).length - m.get(a).length || a.localeCompare(b, "ja"));
+    return ord.filter((g) => m.has(g)).map((g) => [g, m.get(g).sort((a, b) => ageOf(b) - ageOf(a))]);
+  }
+  function nextLensBar(items) {
+    const groups = nextGroups(items); if (S.nextGroup && !groups.some(([g]) => g === S.nextGroup)) S.nextGroup = "";
+    return `<div class="nlens"><div class="seg">${Object.entries(NEXT_LENS).map(([k, l]) => `<button type="button" data-nlens="${k}" aria-pressed="${S.nextLens === k}">${l.name}</button>`).join("")}</div>
+      <div class="ngroups"><button type="button" class="qc${S.nextGroup ? "" : " on"}" data-ngroup="">すべて<small>${items.length}</small></button>${groups.map(([g, l]) => `<button type="button" class="qc${S.nextGroup === g ? " on" : ""}" data-ngroup="${esc(g)}">${esc(g)}<small>${l.length}</small></button>`).join("")}</div>
+      <p class="nhint">${esc((NEXT_LENS[S.nextLens] || NEXT_LENS.age).hint)}</p></div>`;
+  }
+  function nextLensList(items) {
+    const L = NEXT_LENS[S.nextLens] || NEXT_LENS.age;
+    const groups = nextGroups(items).filter(([g]) => !S.nextGroup || g === S.nextGroup);
+    return groups.map(([g, list]) => `<div class="sech"><span>${esc(g)}</span><small>${list.length}</small>${L.acts(g).map(([mv, n]) => `<button type="button" class="qc" data-nbulk="${esc(`${S.nextLens}|${g}|${mv}`)}">${n}</button>`).join("")}</div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}`).join("");
+  }
+  // まとめて動かす（2回押しで確定）
+  async function nextBulk(el, spec) {
+    const [lens, g, mv] = spec.split("|"); const L = NEXT_LENS[lens]; const mvDef = MOVES[mv]; if (!L || !mvDef) return;
+    const list = inStage("next").filter((t) => L.key(t) === g); if (!list.length) return;
+    if (!el.classList.contains("arm")) { el.classList.add("arm"); const was = el.textContent; el.textContent = `${list.length}件を${mvDef.label.replace(/（.*）/, "")}？`; setTimeout(() => { if (el.isConnected) { el.classList.remove("arm"); el.textContent = was; } }, 3000); return; }
+    for (const t of list) await setProps(t, mvDef.props(t), `${g} の ${list.length}件 → ${mvDef.label}`, { undo: false, quiet: t !== list[0] });
+  }
+
   // ================= 流れ（GTD） =================
   // 本流：集める → 決める → 日を決める → やる → 終わる。待ち・いつか・資料は横の置き場。AI は独立した AI タブで扱う
   const FLOW_MAIN = ["inbox", "next", "plan", "today", "done"];
@@ -1878,6 +1932,7 @@ nav.tabs { background: var(--bg); }
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
     if (S.stageView === "board") { box.outerHTML = `<div class="board">${groupBy(items, S.stage).map(([g, list]) => `<div class="col"><h4><span>${esc(g)}</span><span class="num mute">${list.length}</span></h4>${list.slice(0, 12).map((t) => `<button type="button" class="bcard" data-open="${t.id}">${esc(t.name)}<span class="sub">${esc(t.next || metaOf(t).tx)}</span></button>`).join("")}${list.length > 12 ? `<span class="mute" style="font-size:11px;padding:2px 4px">ほか ${list.length - 12}件</span>` : ""}</div>`).join("")}</div>`; return; }
     if (S.stageView === "table") { box.className = "tablewrap"; box.innerHTML = tableHtml(items); return; }
+    if (S.stage === "next") { box.insertAdjacentHTML("beforebegin", nextLensBar(items)); box.innerHTML = nextLensList(items); return; }
     box.innerHTML = items.map((t, i) => rowHtml(t, i, { check: !["done", "ref"].includes(S.stage) })).join("");
   }
 
@@ -3524,6 +3579,9 @@ nav.tabs { background: var(--bg); }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
+    if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
+    if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
+    if (d.nbulk) { nextBulk(el, d.nbulk); return; }
     if (d.sview) { S.stageView = d.sview; render(); return; }
     if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }

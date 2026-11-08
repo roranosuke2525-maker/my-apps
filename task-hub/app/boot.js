@@ -42,6 +42,9 @@
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
+    if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
+    if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
+    if (d.nbulk) { nextBulk(el, d.nbulk); return; }
     if (d.sview) { S.stageView = d.sview; render(); return; }
     if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
