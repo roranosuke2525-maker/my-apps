@@ -757,6 +757,11 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 .csug, .quick, .g-role, .g-node, .g-card, .hc-i, .fix, .ask { box-shadow: none; }
 nav.tabs { background: var(--bg); }
 .fab { box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+/* 右に重なる層（タスクのページ・引っぱり更新・お知らせ）は列の分だけ右へ寄せる。下のタブが無くなったので＋と お知らせ は下に寄せる */
+#page { left: var(--rail); }
+#ptr { left: calc(50% + var(--rail) / 2); }
+#toast { left: calc(50% + var(--rail) / 2); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - var(--rail) - 24px); }
+.fab { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 </style>
 
 <button type="button" id="sidebk" data-side="0" aria-label="閉じる" hidden></button>
