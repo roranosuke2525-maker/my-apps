@@ -636,3 +636,17 @@ test("買い物セット：作る（使う・並び）・読み込みに出る�
   assert.equal((await api("DELETE", `/api/sets/${made.data.set.id}`)).status, 200);
   assert.equal(pg.in_trash, true);
 });
+
+test("新商品：Google ニュースの RSS を読み、コンビニ・外食だけの話を外し、商品名を拾う", async () => {
+  const { parseNewsRss, productNames } = await import("../src/worker.js");
+  const item = (t, src, d = "Sat, 07 Nov 2026 01:00:00 GMT") => `<item><title>${t} - ${src}</title><link>https://news.google.com/rss/articles/x${t.length}</link><pubDate>${d}</pubDate><source url="https://x">${src}</source></item>`;
+  const xml = `<rss><channel>${item("ロッテの新アイス「アジアに恋して」発売", "ウォーカープラス")}${item("ファミマ限定の新作アイス「かぼちゃ」", "Yahoo!ニュース")}${item("コンビニ・スーパーで買える新作アイス「雪見だいふく」", "サンキュ！")}${item("今週新発売のまとめ！『ピノ ビター』、『MOW ストロベリー』など", "もぐナビ")}</channel></rss>`;
+  const r = parseNewsRss(xml, "ice");
+  assert.equal(r.length, 3);
+  assert.equal(r[0].title, "ロッテの新アイス「アジアに恋して」発売");
+  assert.equal(r[0].source, "ウォーカープラス");
+  assert.deepEqual(r[0].names, ["アジアに恋して"]);
+  assert.deepEqual(r[2].names, ["ピノ ビター", "MOW ストロベリー"]);
+  assert.equal(r[0].date, "2026-11-07T01:00:00.000Z");
+  assert.deepEqual(productNames("【まとめ】「新商品まとめ」"), []);
+});

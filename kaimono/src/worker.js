@@ -72,6 +72,7 @@ export default {
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1], await readJson(request).catch(() => ({}))));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
       if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
+      if (p === "/api/news" && m === "GET") return json(await loadNews(env, url.searchParams.get("cat") || "all", url.searchParams.get("fresh") === "1"));
       if (p === "/api/lookup" && m === "POST") return json(await lookupPage((await readJson(request))?.url));
       if (jan && m === "GET") return json(await lookupJan(env, jan[1]));
       if (p === "/api/identify" && m === "POST") return json(await identify(env, await readJson(request)));
@@ -698,6 +699,61 @@ async function refillHistory(notion, env) {
   };
 }
 const jstOf = (iso) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 10);
+// ---------- 新商品：スーパーで買えるお菓子・アイス・飲み物などの新発売ニュース ----------
+// Google ニュースの検索 RSS（個人のフィードリーダーとしての利用）。カテゴリごとに3時間 KV に置く
+const NEWS_CATS = {
+  sweets: { label: "お菓子", q: "新発売 (お菓子 OR スナック OR チョコレート OR グミ OR クッキー OR ポテトチップス)" },
+  ice: { label: "アイス", q: "新発売 (アイス OR アイスクリーム)" },
+  drink: { label: "飲み物", q: "新発売 (飲料 OR 炭酸 OR ドリンク OR ジュース OR お茶)" },
+  food: { label: "食品", q: "新発売 (冷凍食品 OR カップ麺 OR 調味料 OR パン OR ヨーグルト OR レトルト)" },
+};
+const NEWS_TTL = 3 * 3600;
+// コンビニ・外食だけの話は外す（「コンビニ・スーパーで買える」のように両方書いてあれば残す）
+const NEWS_SKIP = /セブン|ファミマ|ファミリーマート|ローソン|ミニストップ|スタバ|スターバックス|マクドナルド|マック|ドトール|タリーズ|ミスド|ミスタードーナツ|ケンタッキー|コメダ|サーティワン|ゴディバ|店舗限定|カフェ|レストラン|決算|株価|適時開示|7プレミアム|セブンプレミアム/;
+async function loadNews(env, cat, fresh = false) {
+  const cats = cat === "all" ? Object.keys(NEWS_CATS) : NEWS_CATS[cat] ? [cat] : null;
+  if (!cats) throw httpError(400, "カテゴリが正しくありません");
+  const lists = await Promise.all(cats.map((c) => newsOf(env, c, fresh)));
+  const seen = new Set(); const items = [];
+  for (const it of lists.flat().sort((a, b) => (b.date || "").localeCompare(a.date || ""))) {
+    const k = it.title.replace(/[\s【】「」『』！!？?・、。]/g, "").slice(0, 30);
+    if (seen.has(k)) continue;
+    seen.add(k); items.push(it);
+  }
+  return { items: items.slice(0, 60), cats: Object.fromEntries(Object.entries(NEWS_CATS).map(([k, v]) => [k, v.label])) };
+}
+async function newsOf(env, cat, fresh) {
+  const key = `news:${cat}`;
+  if (!fresh) { const hit = await env.SUBS.get(key, "json").catch(() => null); if (hit) return hit; }
+  const q = `${NEWS_CATS[cat].q} when:14d`;
+  const res = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ja&gl=JP&ceid=JP:ja`, { headers: { "User-Agent": "Mozilla/5.0 (kaimono app)" } });
+  if (!res.ok) throw httpError(502, `ニュースを読めませんでした（${res.status}）`);
+  const items = parseNewsRss(await res.text(), cat);
+  await env.SUBS.put(key, JSON.stringify(items), { expirationTtl: NEWS_TTL }).catch(() => {});
+  return items;
+}
+export function parseNewsRss(xml, cat) {
+  const un = (x) => String(x || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&").trim();
+  const out = [];
+  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const get = (tag) => un(m[1].match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1]);
+    const source = get("source");
+    let title = get("title");
+    if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3));
+    const link = get("link");
+    if (!title || !/^https:\/\//.test(link)) continue;
+    if (NEWS_SKIP.test(title) && !/スーパー|市販/.test(title)) continue;
+    const t = Date.parse(get("pubDate"));
+    out.push({ title, link, source, cat, date: Number.isFinite(t) ? new Date(t).toISOString() : null, names: productNames(title) });
+  }
+  return out.slice(0, 40);
+}
+// 見出しから商品名らしいところ（「」『』の中）を取る。リストに入れるときの名前の候補
+export function productNames(title) {
+  const m = [...title.matchAll(/[「『]([^」』]{2,40})[」』]/g)].map((x) => x[1].normalize("NFKC").trim()).filter((x) => !/まとめ|発売|新商品|新作|ランキング/.test(x));
+  return [...new Set(m)].slice(0, 4);
+}
+
 // 過去の補充を直す：補充した日を変える／補充リストに戻す（まだ買っていなかった）／記録ごと消す（間違えて補充した）
 async function fixRefill(notion, env, id, body) {
   const page = await notion("GET", `/pages/${normalizeId(id)}`);

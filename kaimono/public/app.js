@@ -901,6 +901,7 @@ function render() {
   const v = $("#view");
   const keep = document.activeElement?.id === "addin" ? { v: $("#addin").value, s: $("#addin").selectionStart } : null;
   if (S.tab === "price") v.innerHTML = renderPrices();
+  else if (S.tab === "news") v.innerHTML = renderNews();
   else if (S.tab === "list") v.innerHTML = renderList();
   else if (S.tab === "stock") v.innerHTML = renderStock();
   else v.innerHTML = renderAlert();
@@ -1542,7 +1543,7 @@ function showLogin() {
 // ---------- はじまり ----------
 (function boot() {
   const qs = new URLSearchParams(location.search);
-  if (["list", "stock", "price", "alert"].includes(qs.get("tab"))) S.tab = qs.get("tab");
+  if (["list", "stock", "price", "news", "alert"].includes(qs.get("tab"))) S.tab = qs.get("tab");
   if (/^[0-9a-f]{32}$/.test(qs.get("list") || "")) S.wantList = qs.get("list");
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (!memoryKey) { showLogin(); return; }

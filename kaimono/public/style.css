@@ -414,3 +414,13 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .qbox .qin { width: 40px; min-width: 0; text-align: center; border: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; font-size: 16px; }
 .qty.one { background: transparent; color: var(--mute); font-weight: 500; }
 .item.editing .qbox .qin { width: 36px; }
+
+/* 🆕 新商品 */
+.news { display: flex; flex-direction: column; gap: 8px; }
+.nitem { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ntitle { display: flex; gap: 8px; color: var(--ink); text-decoration: none; font-size: 14px; line-height: 1.45; font-weight: 700; }
+.nicon { flex: none; font-size: 18px; }
+.nmeta { display: flex; justify-content: space-between; font-size: 11px; color: var(--mute); padding-left: 26px; }
+.nnames { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 26px; }
+.nnames .chip.on { background: var(--pri-soft); color: var(--pri); border-color: var(--pri); }
+.nnames .chip.ghost { text-decoration: none; color: inherit; }
