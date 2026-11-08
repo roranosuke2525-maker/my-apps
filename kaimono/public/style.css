@@ -406,3 +406,11 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .stepper { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .stepper b { min-width: 28px; text-align: center; }
 .rsug .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+
+/* 数量の欄（デフォルト1） */
+.qbox { display: inline-flex; align-items: center; flex: none; border: 1px solid var(--line); border-radius: 10px; background: var(--card); overflow: hidden; }
+.addbox .qbox { box-shadow: var(--shadow); }
+.qbox .qb { border: 0; background: transparent; width: 28px; min-height: 38px; font-size: 16px; color: var(--pri); cursor: pointer; }
+.qbox .qin { width: 40px; min-width: 0; text-align: center; border: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; font-size: 16px; }
+.qty.one { background: transparent; color: var(--mute); font-weight: 500; }
+.item.editing .qbox .qin { width: 36px; }

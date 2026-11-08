@@ -1005,7 +1005,15 @@ async function deleteSet(id) {
 }
 document.addEventListener("submit", (e) => { if (e.target.dataset?.setform) { e.preventDefault(); saveSetForm(e.target); } });
 
-const addBox = (ph) => `<form class="addbox" id="addform"><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="done" placeholder="${esc(ph)}" aria-label="買うもの"><button type="submit" class="btn pri">入れる</button></form><div class="suggest" id="suggest"></div>`;
+const qtyBox = (id, v = "1") => `<span class="qbox"><button type="button" class="qb" data-qstep="${id}|-1" aria-label="減らす">−</button><input id="${id}" class="qin" type="text" inputmode="decimal" maxlength="8" value="${esc(v)}" aria-label="数量" autocomplete="off"><button type="button" class="qb" data-qstep="${id}|1" aria-label="増やす">＋</button></span>`;
+const addBox = (ph) => `<form class="addbox" id="addform"><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="done" placeholder="${esc(ph)}" aria-label="買うもの">${qtyBox("addqty")}<button type="submit" class="btn pri">入れる</button></form><div class="suggest" id="suggest"></div>`;
+// 数量の欄：空や1なら名前だけ（＝1個）。「6枚」のような単位つきもそのまま。名前に数量が書いてあればそちらを使う
+const withQty = (name, qty) => { const q = String(qty || "").replace(/\s+/g, "").replace(/^[x×＊*]/, ""); return !q || q === "1" || A.splitQty(name).qty ? name : `${name} ${q}`; };
+function stepQty(id, d) {
+  const i = $(`#${id}`); if (!i) return;
+  const m = i.value.match(/^(\d+(?:\.\d+)?)(.*)$/); const n = m ? Number(m[1]) : 1; const unit = m ? m[2] : "";
+  i.value = `${Math.max(1, Math.round(n + d))}${unit}`;
+}
 
 function renderUsual() {
   const lists = usualLists();
@@ -1099,10 +1107,11 @@ function itemRow(i) {
     return `<div class="item${on ? " picked" : ""}"><button type="button" class="tick" data-lpick="${i.id}" aria-pressed="${on}"><span class="pickbox${on ? " on" : ""}" aria-hidden="true"></span><span class="tx">${esc(q.name)}</span>${q.qty ? `<span class="qty">${esc(q.qty)}</span>` : ""}${i.checked ? `<small class="mute">かご</small>` : ""}</button></div>`;
   }
   if (S.edit === i.id) {
-    return `<form class="item editing" data-editform="${i.id}"><input id="editin" value="${esc(i.text)}" maxlength="200" aria-label="品目の名前" enterkeyhint="done"><button type="submit" class="btn pri sm">直す</button><button type="button" class="btn danger sm" data-del="${i.id}">消す</button></form>`;
+    const eq = A.splitQty(i.text);
+    return `<form class="item editing" data-editform="${i.id}"><input id="editin" value="${esc(eq.name)}" maxlength="200" aria-label="品目の名前" enterkeyhint="done">${qtyBox("editqty", eq.qty || "1")}<button type="submit" class="btn pri sm">直す</button><button type="button" class="btn danger sm" data-del="${i.id}">消す</button></form>`;
   }
   const q = A.splitQty(i.text);
-  return `<div class="item${i.checked ? " on" : ""}${i.id.startsWith("tmp") ? " pending" : ""}"><button type="button" class="tick" data-toggle="${i.id}" aria-pressed="${i.checked}"><span class="box" aria-hidden="true"></span><span class="tx">${esc(q.name)}</span>${q.qty ? `<span class="qty">${esc(q.qty)}</span>` : ""}</button><button type="button" class="more" data-edit="${i.id}" aria-label="「${esc(q.name)}」を直す">⋯</button></div>`;
+  return `<div class="item${i.checked ? " on" : ""}${i.id.startsWith("tmp") ? " pending" : ""}"><button type="button" class="tick" data-toggle="${i.id}" aria-pressed="${i.checked}"><span class="box" aria-hidden="true"></span><span class="tx">${esc(q.name)}</span><span class="qty${q.qty ? "" : " one"}">${esc(q.qty || "1")}</span></button><button type="button" class="more" data-edit="${i.id}" aria-label="「${esc(q.name)}」を直す">⋯</button></div>`;
 }
 // 補充リスト：その場で足す欄つき。1件ずつ ✖ で外せる（補充タブとそのほかタブの両方で使う）
 function renderRefills(ts) {
@@ -1437,11 +1446,13 @@ document.addEventListener("click", (e) => {
     if (t.refill.length && !confirm(`「${t.name.replace(/^補充:/, "")}」を補充した（買った）として記録しますか？`)) return;
     finishList(t, t.refill.length ? "補充した" : "買い物おわり"); return;
   }
+  if (d.qstep) { const [id, n] = d.qstep.split("|"); stepQty(id, Number(n)); return; }
   if (d.sug) {
     const i = $("#addin"); const parts = A.splitInput(i.value);
     if (!/[、,，;\n]\s*$/.test(i.value)) parts.pop();
     i.value = "";
-    addTexts([...parts, d.sug]);
+    const q = $("#addqty"); const qv = q?.value; if (q) q.value = "1";
+    addTexts([...parts, d.sug].map((x) => withQty(x, qv)));
     return;
   }
   if (d.radd) { refillAdd(d.radd, el); return; }
@@ -1497,9 +1508,9 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("submit", (e) => {
   const f = e.target; e.preventDefault();
-  if (f.id === "addform") { const i = $("#addin"); const texts = A.splitInput(i.value); i.value = ""; addTexts(texts); i.focus(); return; }
+  if (f.id === "addform") { const i = $("#addin"); const q = $("#addqty"); const texts = A.splitInput(i.value).map((x) => withQty(x, q?.value)); i.value = ""; if (q) q.value = "1"; addTexts(texts); i.focus(); return; }
   if (f.id === "planextra") { const v = $("#pextra").value; const add = A.splitInput(v); if (add.length) { S.plan.extra.push(...add); savePlan(); render(); $("#pextra")?.focus(); } return; }
-  if (f.dataset.editform) { renameItem(f.dataset.editform, $("#editin").value); return; }
+  if (f.dataset.editform) { renameItem(f.dataset.editform, withQty(A.splitQty($("#editin").value).name, A.splitQty($("#editin").value).qty || $("#editqty")?.value)); return; }
   if (f.id === "sheetform") { saveSheet(); return; }
   if (f.id === "pushform") { pushSave(f); return; }
   if (f.id === "login-form") {
