@@ -1,13 +1,9 @@
   // ================= 描画 =================
   const main = $("#main");
-  function toggleSide(open) { const s = $("#side"), k = $("#sidebk"); if (!s) return; k.hidden = !open; s.classList.toggle("open", open); }
   function render() {
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
-    for (const b of document.querySelectorAll("#side [data-gotab]")) b.setAttribute("aria-pressed", String(b.dataset.gotab === S.tab));
-    const sideN = { sideai: mine, sideread: S.readList.filter(isRead).length, sideshop: stockSoon().length, sidesave: typeof saveAlerts === "function" ? saveAlerts() : 0 };
-    for (const [id, n] of Object.entries(sideN)) { const e = document.getElementById(id); if (e) { e.hidden = !n; e.textContent = n; } }
     const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -40,12 +36,9 @@
     const d = el.dataset;
     if (el.id === "add") { openCapture(); return; }
     if (el.id === "reload" || el.id === "retry") { load(); return; }
-    if (d.side != null) { toggleSide(d.side === "t" ? !$("#side").classList.contains("open") : d.side === "1"); return; }
-    // たたんだ列を押したら、どこでも広げる（広げてから選ぶ）
-    if (el.closest("#side") && !$("#side").classList.contains("open") && !el.closest(".sh")) { toggleSide(true); return; }
-    if (d.tab === "more") { toggleSide(true); return; }
+    if (d.tab === "more") { openMore(); return; }
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
-    if (d.gotab) { closeModal(); toggleSide(false); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
+    if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
@@ -88,8 +81,8 @@
     if (d.qk) { const host = el.closest("[data-qt]"); const t = host && known.get(host.dataset.qt); if (!t) return; const inT = !!el.closest(".tips"); if (!inT && el.closest("#modal")) closeModal(); const back = openQuick.back; openQuick.back = false; applyQuick(t, d.qk).then(() => { if (inT && !$("#modal").hidden) openConcierge(); else if (back) openSearch(); }); return; }
     if (d.mopen) { closeModal(); openTask(d.mopen); return; }
     if (d.stagestep) { stageStep(+d.stagestep); return; }
-    if (d.concierge) { toggleSide(false); openConcierge(); return; }
-    if (d.search) { toggleSide(false); openSearch(); return; }
+    if (d.concierge) { openConcierge(); return; }
+    if (d.search) { openSearch(); return; }
     if (d.readseg) { S.readSeg = d.readseg; render(); return; }
     if (d.reader) { openReader(d.reader); return; }
     if (d.readdone) { const t = known.get(d.readdone); if (!t) return; if (el.closest(".rdbar")) readDoneAndNext(t); else setRead(t, false); return; }
