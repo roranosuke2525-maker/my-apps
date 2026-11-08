@@ -639,7 +639,7 @@ test("買い物セット：作る（使う・並び）・読み込みに出る�
 
 test("新商品：Google ニュースの RSS を読み、コンビニ・外食だけの話を外し、商品名を拾う", async () => {
   const { parseNewsRss, productNames } = await import("../src/worker.js");
-  const item = (t, src, d = "Sat, 07 Nov 2026 01:00:00 GMT") => `<item><title>${t} - ${src}</title><link>https://news.google.com/rss/articles/x${t.length}</link><pubDate>${d}</pubDate><source url="https://x">${src}</source></item>`;
+  const item = (t, src, d = new Date(Date.parse("2026-11-07T01:00:00Z") > Date.now() - 20 * 864e5 ? "2026-11-07T01:00:00Z" : Date.now()).toUTCString()) => `<item><title>${t} - ${src}</title><link>https://news.google.com/rss/articles/x${t.length}</link><pubDate>${d}</pubDate><source url="https://x">${src}</source></item>`;
   const xml = `<rss><channel>${item("ロッテの新アイス「アジアに恋して」発売", "ウォーカープラス")}${item("ファミマ限定の新作アイス「かぼちゃ」", "Yahoo!ニュース")}${item("コンビニ・スーパーで買える新作アイス「雪見だいふく」", "サンキュ！")}${item("今週新発売のまとめ！『ピノ ビター』、『MOW ストロベリー』など", "もぐナビ")}</channel></rss>`;
   const r = parseNewsRss(xml, "ice");
   assert.equal(r.length, 3);
@@ -647,6 +647,14 @@ test("新商品：Google ニュースの RSS を読み、コンビニ・外食�
   assert.equal(r[0].source, "ウォーカープラス");
   assert.deepEqual(r[0].names, ["アジアに恋して"]);
   assert.deepEqual(r[2].names, ["ピノ ビター", "MOW ストロベリー"]);
-  assert.equal(r[0].date, "2026-11-07T01:00:00.000Z");
   assert.deepEqual(productNames("【まとめ】「新商品まとめ」"), []);
+  // Bing ニュースの形：リンクは url= の先、画像つき、古い記事は外す
+  const now = new Date().toUTCString();
+  const bing = `<rss><channel><item><title>新発売の「ピノ ビター」…</title><link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;url=https%3a%2f%2fnews.example.jp%2fa%2f1&amp;mkt=ja-jp</link><description>森永乳業が『ピノ ビター』を発売</description><pubDate>${now}</pubDate><News:Source>Yahoo!ニュース</News:Source><News:Image>http://www.bing.com/th?id=ONUT.x&amp;pid=News</News:Image></item><item><title>古い記事</title><link>https://old.example.jp/</link><pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate></item></channel></rss>`;
+  const b2 = parseNewsRss(bing, "ice");
+  assert.equal(b2.length, 1);
+  assert.equal(b2[0].link, "https://news.example.jp/a/1");
+  assert.equal(b2[0].source, "Yahoo!ニュース");
+  assert.equal(b2[0].image, "https://www.bing.com/th?id=ONUT.x&pid=News&w=240&h=160&c=14");
+  assert.deepEqual(b2[0].names, ["ピノ ビター"]);
 });

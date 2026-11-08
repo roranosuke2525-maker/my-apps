@@ -1,4 +1,4 @@
-// かいもの：🆕 新商品タブ。スーパーで買えるお菓子・アイス・飲み物・食品の新発売ニュース（Google ニュースの検索 RSS）。
+// かいもの：🆕 新商品タブ。スーパーで買えるお菓子・アイス・飲み物・食品の新発売ニュース（Bing ニュースの RSS）。
 // 見出しの「」『』から商品名を拾い、タップでちょい買いに入れられる。app.js の S・api・esc・toast などを使う。
 const N = { items: null, cats: {}, cat: "all", loading: false, err: "", added: new Set() };
 const NEWS_ICON = { sweets: "🍪", ice: "🍨", drink: "🥤", food: "🍜" };
@@ -24,13 +24,13 @@ function renderNews() {
   if (!N.items) return `${head}<div class="empty small">読みこみ中…</div>`;
   if (N.err && !N.items.length) return `${head}<div class="card"><p class="note err">${esc(N.err)}</p></div>`;
   const xs = N.items.filter((x) => N.cat === "all" || x.cat === N.cat);
-  if (!xs.length) return `${head}<div class="empty small">この2週間の新発売ニュースは見つかりませんでした</div>`;
+  if (!xs.length) return `${head}<div class="empty small">この1週間の新発売ニュースは見つかりませんでした</div>`;
   return `${head}<div class="news">${xs.map((x) => `<div class="card nitem">
-      <a class="ntitle" href="${esc(x.link)}" target="_blank" rel="noopener"><span class="nicon" aria-hidden="true">${NEWS_ICON[x.cat] || "🆕"}</span><span>${esc(x.title)}</span></a>
+      <a class="ntitle" href="${esc(x.link)}" target="_blank" rel="noopener">${x.image ? `<img class="nimg" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : `<span class="nicon" aria-hidden="true">${NEWS_ICON[x.cat] || "🆕"}</span>`}<span><b>${esc(x.title)}</b>${x.desc ? `<small>${esc(x.desc)}…</small>` : ""}</span></a>
       <div class="nmeta"><span>${esc(x.source || "")}</span><span>${esc(agoTx(x.date))}</span></div>
       ${x.names?.length ? `<div class="nnames">${x.names.map((n) => { const on = N.added.has(n); return `<button type="button" class="chip${on ? " on" : ""}" data-newsadd="${esc(n)}" ${on ? "disabled" : ""}>${on ? "✓" : "＋"} ${esc(n)}</button>`; }).join("")}<a class="chip ghost" href="${esc(googleUrl(x.names[0]))}" target="_blank" rel="noopener">🔎</a></div>` : ""}
     </div>`).join("")}</div>
-    <p class="note pad">＋ を押すと ⚡ ちょい買い に入ります。見出しをタップすると記事が開きます。2週間以内の新発売ニュースを、3時間ごとに読み直します（Google ニュースより）。</p>`;
+    <p class="note pad">＋ を押すと ⚡ ちょい買い に入ります。見出しをタップすると記事が開きます。この1週間の新発売ニュースを、3時間ごとに読み直します（Bing ニュースより）。</p>`;
 }
 async function newsAdd(name) {
   const seg = S.seg; S.seg = "quick";

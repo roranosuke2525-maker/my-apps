@@ -700,36 +700,40 @@ async function refillHistory(notion, env) {
 }
 const jstOf = (iso) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 10);
 // ---------- 新商品：スーパーで買えるお菓子・アイス・飲み物などの新発売ニュース ----------
-// Google ニュースの検索 RSS（個人のフィードリーダーとしての利用）。カテゴリごとに3時間 KV に置く
+// Bing ニュースの RSS（直近1週間）。Google ニュースは Cloudflare からだと 503 で断られるため使わない。カテゴリごとに3時間 KV に置く
 const NEWS_CATS = {
-  sweets: { label: "お菓子", q: "新発売 (お菓子 OR スナック OR チョコレート OR グミ OR クッキー OR ポテトチップス)" },
-  ice: { label: "アイス", q: "新発売 (アイス OR アイスクリーム)" },
-  drink: { label: "飲み物", q: "新発売 (飲料 OR 炭酸 OR ドリンク OR ジュース OR お茶)" },
-  food: { label: "食品", q: "新発売 (冷凍食品 OR カップ麺 OR 調味料 OR パン OR ヨーグルト OR レトルト)" },
+  sweets: { label: "お菓子", q: ["新発売 お菓子", "新発売 チョコ", "新発売 スナック菓子"] },
+  ice: { label: "アイス", q: ["新発売 アイス", "新商品 アイス"] },
+  drink: { label: "飲み物", q: ["新発売 飲料", "新発売 炭酸", "新発売 ドリンク"] },
+  food: { label: "食品", q: ["新発売 冷凍食品", "新発売 カップ麺", "新発売 スーパー 食品"] },
 };
 const NEWS_TTL = 3 * 3600;
 // コンビニ・外食だけの話は外す（「コンビニ・スーパーで買える」のように両方書いてあれば残す）
-const NEWS_SKIP = /セブン|ファミマ|ファミリーマート|ローソン|ミニストップ|スタバ|スターバックス|マクドナルド|マック|ドトール|タリーズ|ミスド|ミスタードーナツ|ケンタッキー|コメダ|サーティワン|ゴディバ|店舗限定|カフェ|レストラン|決算|株価|適時開示|7プレミアム|セブンプレミアム/;
+const NEWS_SKIP = /セブン|ファミマ|ファミリーマート|ローソン|ミニストップ|スタバ|スターバックス|マクドナルド|マック|ドトール|タリーズ|ミスド|ミスタードーナツ|ケンタッキー|コメダ|サーティワン|ゴディバ|店舗限定|カフェ|レストラン|決算|株価|適時開示|7プレミアム|セブンプレミアム|JAL|ANA|通販限定|ふるさと納税/;
 async function loadNews(env, cat, fresh = false) {
   const cats = cat === "all" ? Object.keys(NEWS_CATS) : NEWS_CATS[cat] ? [cat] : null;
   if (!cats) throw httpError(400, "カテゴリが正しくありません");
-  const lists = await Promise.all(cats.map((c) => newsOf(env, c, fresh)));
+  const lists = await Promise.all(cats.map((c) => newsOf(env, c, fresh).catch((err) => { console.log("news", c, err.message); return []; })));
+  const all = lists.flat();
+  if (!all.length) throw httpError(502, "ニュースを読めませんでした。少しして「↻ 新しく」を押してください");
   const seen = new Set(); const items = [];
-  for (const it of lists.flat().sort((a, b) => (b.date || "").localeCompare(a.date || ""))) {
-    const k = it.title.replace(/[\s【】「」『』！!？?・、。]/g, "").slice(0, 30);
-    if (seen.has(k)) continue;
-    seen.add(k); items.push(it);
+  for (const it of all.sort((a, b) => (b.date || "").localeCompare(a.date || ""))) {
+    const k = it.title.replace(/[\s【】「」『』！!？?・、。.…]/g, "").slice(0, 24);
+    if (seen.has(k) || seen.has(it.link)) continue;
+    seen.add(k); seen.add(it.link); items.push(it);
   }
-  return { items: items.slice(0, 60), cats: Object.fromEntries(Object.entries(NEWS_CATS).map(([k, v]) => [k, v.label])) };
+  return { items: items.slice(0, 80), cats: Object.fromEntries(Object.entries(NEWS_CATS).map(([k, v]) => [k, v.label])) };
 }
 async function newsOf(env, cat, fresh) {
-  const key = `news:${cat}`;
+  const key = `news2:${cat}`;
   if (!fresh) { const hit = await env.SUBS.get(key, "json").catch(() => null); if (hit) return hit; }
-  const q = `${NEWS_CATS[cat].q} when:14d`;
-  const res = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ja&gl=JP&ceid=JP:ja`, { headers: { "User-Agent": "Mozilla/5.0 (kaimono app)" } });
-  if (!res.ok) throw httpError(502, `ニュースを読めませんでした（${res.status}）`);
-  const items = parseNewsRss(await res.text(), cat);
-  await env.SUBS.put(key, JSON.stringify(items), { expirationTtl: NEWS_TTL }).catch(() => {});
+  const got = await Promise.all(NEWS_CATS[cat].q.map(async (q) => {
+    const res = await fetch(`https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=rss&setlang=ja&cc=JP&qft=interval%3d%228%22`, { headers: { "User-Agent": "Mozilla/5.0 (kaimono app)", "Accept-Language": "ja" } });
+    if (!res.ok) throw httpError(502, `ニュースを読めませんでした（${res.status}）`);
+    return parseNewsRss(await res.text(), cat);
+  }).map((p) => p.catch(() => [])));
+  const items = got.flat();
+  if (items.length) await env.SUBS.put(key, JSON.stringify(items), { expirationTtl: NEWS_TTL }).catch(() => {});
   return items;
 }
 export function parseNewsRss(xml, cat) {
@@ -737,20 +741,33 @@ export function parseNewsRss(xml, cat) {
   const out = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
     const get = (tag) => un(m[1].match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1]);
-    const source = get("source");
+    const source = get("News:Source") || get("source");
     let title = get("title");
     if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3));
-    const link = get("link");
-    if (!title || !/^https:\/\//.test(link)) continue;
-    if (NEWS_SKIP.test(title) && !/スーパー|市販/.test(title)) continue;
+    title = title.replace(/\s*(\.\.\.|…)$/, "…");
+    let link = get("link");
+    try { const u = new URL(link); if (/bing\.com$/.test(u.hostname) && u.searchParams.get("url")) link = u.searchParams.get("url"); } catch { link = ""; }
+    if (!title || !/^https?:\/\//.test(link)) continue;
+    link = link.replace(/^http:/, "https:");
+    const desc = get("description").replace(/<[^>]+>/g, "").replace(/\s+/g, " ");
+    if (NEWS_SKIP.test(title) && !/スーパー|市販/.test(title + desc)) continue;
+    const img = get("News:Image");
     const t = Date.parse(get("pubDate"));
-    out.push({ title, link, source, cat, date: Number.isFinite(t) ? new Date(t).toISOString() : null, names: productNames(title) });
+    if (Number.isFinite(t) && Date.now() - t > 21 * 864e5) continue; // 古い記事（まとめページの使い回しなど）は出さない
+    const names = productNames(title);
+    out.push({
+      title, link, source, cat,
+      desc: desc.slice(0, 90),
+      image: img ? `${img.replace(/^http:/, "https:")}&w=240&h=160&c=14` : "",
+      date: Number.isFinite(t) ? new Date(t).toISOString() : null,
+      names: names.length ? names : productNames(desc).slice(0, 2),
+    });
   }
   return out.slice(0, 40);
 }
 // 見出しから商品名らしいところ（「」『』の中）を取る。リストに入れるときの名前の候補
 export function productNames(title) {
-  const m = [...title.matchAll(/[「『]([^」』]{2,40})[」』]/g)].map((x) => x[1].normalize("NFKC").trim()).filter((x) => !/まとめ|発売|新商品|新作|ランキング/.test(x));
+  const m = [...title.matchAll(/[「『]([^」』]{2,40})[」』]/g)].map((x) => x[1].normalize("NFKC").trim()).filter((x) => !/まとめ|発売|新商品|新作|ランキング|コンビニアイス/.test(x));
   return [...new Set(m)].slice(0, 4);
 }
 
