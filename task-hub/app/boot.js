@@ -12,7 +12,7 @@
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
     const view = $(".view", main);
-    ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, over: renderOver, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -42,6 +42,10 @@
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
+    if (d.ovz) { OV.z = d.ovz; OV.sel = ""; render(); return; }
+    if (d.ovh) { OV.h = d.ovh; render(); return; }
+    if (d.ovsel) { OV.sel = d.ovsel; render(); return; }
+    if (d.ovclear) { OV.sel = ""; render(); return; }
     if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
     if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
     if (d.nbulk) { nextBulk(el, d.nbulk); return; }
@@ -150,7 +154,7 @@
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["today", "flow", "save", "triage", "ai", "read", "shop", "news", "log", "db"];
+  const TABS = ["today", "over", "flow", "save", "triage", "ai", "read", "shop", "news", "log", "db"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -276,7 +280,7 @@
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["today", "flow", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["today", "over", "flow", "save", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
   // ウィジェットから：#open=<id> でそのタスクのページを開く（render が # をタブ名に書き換える前に読む）
   const openAt = (location.hash.match(/^#open=([0-9a-f]{32})$/) || [])[1];
   render();

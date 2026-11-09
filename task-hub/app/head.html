@@ -749,12 +749,19 @@ nav.tabs .badge { background: var(--accent); color: var(--bg); box-shadow: none;
 nav.tabs { background: var(--bg); }
 .fab { box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 /* 下のタブ：全部の画面を小さく並べて常に見せる（10個） */
-nav.tabs { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 0; padding-left: max(2px, env(safe-area-inset-left, 0px)); padding-right: max(2px, env(safe-area-inset-right, 0px)); padding-top: 4px; }
+nav.tabs { grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 0; padding-left: max(2px, env(safe-area-inset-left, 0px)); padding-right: max(2px, env(safe-area-inset-right, 0px)); padding-top: 4px; }
 nav.tabs button { padding: 4px 0 3px; font-size: 9px !important; letter-spacing: 0; gap: 2px; min-width: 0; }
 nav.tabs button span:not(.badge) { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%; }
 nav.tabs button svg { width: 19px; height: 19px; }
 nav.tabs .badge { top: 0; right: calc(50% - 18px); min-width: 14px; height: 14px; font-size: 9px; padding: 0 3px; }
 nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
+/* 俯瞰（立体） */
+.ovctl { display: grid; gap: 4px; flex: none; } .ovctl .seg button { font-size: 12px; }
+.ovcard { flex: none; padding: 6px 8px 8px; }
+#ovcv { display: block; width: 100%; height: min(38vh, 290px); touch-action: none; cursor: grab; }
+.ovlegend { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: center; font-size: 11px; color: var(--mute); }
+.ovlegend span { display: inline-flex; align-items: center; gap: 4px; } .ovlegend i { width: 8px; height: 8px; border-radius: 2px; background: var(--c); } .ovlegend b { font-family: var(--f-num); color: var(--ink); font-weight: 600; }
+.ovhint { margin: 4px 0 0; text-align: center; font-size: 10.5px; }
 </style>
 
 <div id="app">
@@ -762,13 +769,14 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today" title="今日"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>今日</span></button>
+    <button type="button" data-tab="over" title="俯瞰"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span>俯瞰</span></button>
     <button type="button" data-tab="flow" title="流れ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg><span>流れ</span></button>
     <button type="button" data-tab="save" title="節約"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9 20v-6h6v6"/></svg><span>節約</span><span class="badge" id="savebadge" hidden></span></button>
     <button type="button" data-tab="triage" title="仕分け"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="6" width="12" height="14" rx="2"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></svg><span>仕分け</span></button>
     <button type="button" data-tab="ai" title="AI"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 9.5l1.5 1.5L13 8.5"/></svg><span>AI</span><span class="badge" id="aibadge" hidden></span></button>
     <button type="button" data-tab="read" title="読む"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg><span>読む</span><span class="badge" id="readbadge" hidden></span></button>
     <button type="button" data-tab="shop" title="買う"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg><span>買う</span><span class="badge" id="shopbadge" hidden></span></button>
-    <button type="button" data-tab="news" title="ニュース"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg><span>ニュース</span></button>
+    <button type="button" data-tab="news" title="ニュース"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg><span>新聞</span></button>
     <button type="button" data-tab="log" title="運用"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>運用</span></button>
     <button type="button" data-tab="db" title="DB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span>DB</span></button>
   </nav>
