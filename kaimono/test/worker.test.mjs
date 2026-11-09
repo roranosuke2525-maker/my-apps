@@ -418,6 +418,16 @@ test("テンプレートに足す", async () => {
   assert.equal((await api("POST", "/api/templates", { name: "" })).status, 400);
 });
 
+test("気になる新商品：残す・同じ記事は1件・外す", async () => {
+  const item = { link: "https://n.example.jp/a", title: "「ピノ ビター」新発売", source: "Yahoo!ニュース", cat: "ice", names: ["ピノ ビター"], date: "2026-11-07T00:00:00.000Z" };
+  assert.equal((await api("POST", "/api/newsfav", { item })).data.favs.length, 1);
+  const again = await api("POST", "/api/newsfav", { item: { ...item, title: "「ピノ ビター」新発売！" } });
+  assert.equal(again.data.favs.length, 1);
+  assert.equal((await api("GET", "/api/newsfav")).data.favs[0].names[0], "ピノ ビター");
+  assert.equal((await api("POST", "/api/newsfav", { item: { link: "javascript:alert(1)" } })).status, 400);
+  assert.equal((await api("DELETE", "/api/newsfav", { link: item.link })).data.favs.length, 0);
+});
+
 test("いつもの品を直す・外す（テンプレート以外の行は触らない）", async () => {
   const id = (await api("POST", "/api/templates", { name: "豆腐", store: "ヤオコー", qty: 2, unit: "丁" })).data.template.id;
   const ed = await api("PATCH", `/api/templates/${id}`, { name: "木綿豆腐", qty: 3, unit: "丁", aisle: "卵・乳製品・豆腐", store: "ベイシア" });
@@ -678,4 +688,8 @@ test("新商品：Google ニュースの RSS を読み、コンビニ・外食�
   assert.equal(b2[0].source, "Yahoo!ニュース");
   assert.equal(b2[0].image, "https://www.bing.com/th?id=ONUT.x&pid=News&w=240&h=160&c=14");
   assert.deepEqual(b2[0].names, ["ピノ ビター"]);
+  // タバコ・時事ネタは出さない
+  const it = (t, d = "") => `<item><title>${t}</title><link>https://n.example.jp/${encodeURIComponent(t)}</link><description>${d}</description><pubDate>${now}</pubDate></item>`;
+  const mix = parseNewsRss(`<rss>${it("加熱式たばこの新フレーバーを発売")}${it("新しいスティックを発売", "IQOS 用の新商品")}${it("サントリー、炭酸飲料が出荷1億本を突破")}${it("値上げの秋、新発売のお菓子は")}${it("湖池屋「プライドポテト 秋の塩」新発売")}</rss>`, "sweets");
+  assert.deepEqual(mix.map((x) => x.title), ["湖池屋「プライドポテト 秋の塩」新発売"]);
 });

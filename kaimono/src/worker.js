@@ -75,6 +75,9 @@ export default {
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1], await readJson(request).catch(() => ({}))));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
       if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
+      if (p === "/api/newsfav" && m === "GET") return json({ favs: await newsFavs(env) });
+      if (p === "/api/newsfav" && m === "POST") return json(await saveNewsFav(env, await readJson(request)));
+      if (p === "/api/newsfav" && m === "DELETE") return json(await removeNewsFav(env, await readJson(request)));
       if (p === "/api/news" && m === "GET") return json(await loadNews(env, url.searchParams.get("cat") || "all", url.searchParams.get("fresh") === "1"));
       if (p === "/api/lookup" && m === "POST") return json(await lookupPage((await readJson(request))?.url));
       if (jan && m === "GET") return json(await lookupJan(env, jan[1]));
@@ -745,6 +748,10 @@ const NEWS_CATS = {
 const NEWS_TTL = 3 * 3600;
 // コンビニ・外食だけの話は外す（「コンビニ・スーパーで買える」のように両方書いてあれば残す）
 const NEWS_SKIP = /セブン|ファミマ|ファミリーマート|ローソン|ミニストップ|スタバ|スターバックス|マクドナルド|マック|ドトール|タリーズ|ミスド|ミスタードーナツ|ケンタッキー|コメダ|サーティワン|ゴディバ|店舗限定|カフェ|レストラン|決算|株価|適時開示|7プレミアム|セブンプレミアム|JAL|ANA|通販限定|ふるさと納税/;
+// タバコの話は見出し・説明のどちらにあっても外す
+const NEWS_TOBACCO = /タバコ|たばこ|煙草|葉巻|喫煙|禁煙|加熱式|電子たばこ|アイコス|IQOS|プルーム|Ploom|\bglo\b|ニコチン|\bJT\b|日本たばこ|フィリップ・?モリス|\bBAT\b/i;
+// 時事ネタ（経済・政治・事件・会社の話）は見出しで外す。新商品そのものの話だけ残す
+const NEWS_CURRENT = /首相|政府|政権|選挙|国会|大臣|知事|事件|逮捕|容疑|事故|訴訟|裁判|株価|株式|決算|業績|増益|減益|赤字|黒字|売上|売り上げ|シェア|円安|円高|関税|物価|値上げ|値下げ|価格改定|経済|景気|市場規模|戦略|買収|M&A|提携|合併|社長|就任|人事|工場|出荷|突破|億本|億個|万本|万個|販売数|調査|アンケート|ランキング|統計|リコール|回収|自主回収|異物|食中毒/;
 async function loadNews(env, cat, fresh = false) {
   const cats = cat === "all" ? Object.keys(NEWS_CATS) : NEWS_CATS[cat] ? [cat] : null;
   if (!cats) throw httpError(400, "カテゴリが正しくありません");
@@ -760,7 +767,7 @@ async function loadNews(env, cat, fresh = false) {
   return { items: items.slice(0, 80), cats: Object.fromEntries(Object.entries(NEWS_CATS).map(([k, v]) => [k, v.label])) };
 }
 async function newsOf(env, cat, fresh) {
-  const key = `news2:${cat}`;
+  const key = `news3:${cat}`;
   if (!fresh) { const hit = await env.SUBS.get(key, "json").catch(() => null); if (hit) return hit; }
   const got = await Promise.all(NEWS_CATS[cat].q.map(async (q) => {
     const res = await fetch(`https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=rss&setlang=ja&cc=JP&qft=interval%3d%228%22`, { headers: { "User-Agent": "Mozilla/5.0 (kaimono app)", "Accept-Language": "ja" } });
@@ -786,6 +793,7 @@ export function parseNewsRss(xml, cat) {
     link = link.replace(/^http:/, "https:");
     const desc = get("description").replace(/<[^>]+>/g, "").replace(/\s+/g, " ");
     if (NEWS_SKIP.test(title) && !/スーパー|市販/.test(title + desc)) continue;
+    if (NEWS_TOBACCO.test(title + desc) || NEWS_CURRENT.test(title)) continue;
     const img = get("News:Image");
     const t = Date.parse(get("pubDate"));
     if (Number.isFinite(t) && Date.now() - t > 21 * 864e5) continue; // 古い記事（まとめページの使い回しなど）は出さない
@@ -799,6 +807,28 @@ export function parseNewsRss(xml, cat) {
     });
   }
   return out.slice(0, 40);
+}
+// 気になる新商品：端末をまたいで残す（KV の newsfav・新しい順・100件まで）
+async function newsFavs(env) { return (await env.SUBS.get("newsfav", "json").catch(() => null)) || []; }
+async function saveNewsFav(env, body) {
+  const x = body?.item || {};
+  const link = String(x.link || "");
+  if (!/^https:\/\/\S{1,1900}$/.test(link)) throw httpError(400, "記事の URL が正しくありません");
+  const fav = {
+    link, title: clean(String(x.title || "").slice(0, 300), 300, "見出し") || "（見出しなし）", source: clean(String(x.source || "").slice(0, 60), 60, "出どころ"), cat: NEWS_CATS[x.cat] ? x.cat : "",
+    image: /^https:\/\/\S{1,1900}$/.test(x.image || "") ? x.image : "", desc: clean(String(x.desc || "").slice(0, 200), 200, "説明"), date: dateOf(x.date) ? x.date : null,
+    names: (Array.isArray(x.names) ? x.names : []).map((n) => clean(String(n).slice(0, 60), 60, "商品名")).filter(Boolean).slice(0, 4),
+    memo: clean(body?.memo, 200, "メモ"), savedAt: new Date().toISOString(),
+  };
+  const list = (await newsFavs(env)).filter((f) => f.link !== link);
+  list.unshift(fav);
+  await env.SUBS.put("newsfav", JSON.stringify(list.slice(0, 100)));
+  return { favs: list.slice(0, 100) };
+}
+async function removeNewsFav(env, body) {
+  const list = (await newsFavs(env)).filter((f) => f.link !== String(body?.link || ""));
+  await env.SUBS.put("newsfav", JSON.stringify(list));
+  return { favs: list };
 }
 // 見出しから商品名らしいところ（「」『』の中）を取る。リストに入れるときの名前の候補
 export function productNames(title) {
