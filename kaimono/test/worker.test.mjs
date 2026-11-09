@@ -418,6 +418,27 @@ test("テンプレートに足す", async () => {
   assert.equal((await api("POST", "/api/templates", { name: "" })).status, 400);
 });
 
+test("いつもの品を直す・外す（テンプレート以外の行は触らない）", async () => {
+  const id = (await api("POST", "/api/templates", { name: "豆腐", store: "ヤオコー", qty: 2, unit: "丁" })).data.template.id;
+  const ed = await api("PATCH", `/api/templates/${id}`, { name: "木綿豆腐", qty: 3, unit: "丁", aisle: "卵・乳製品・豆腐", store: "ベイシア" });
+  assert.deepEqual([ed.data.template.name, ed.data.template.qty, ed.data.template.store], ["木綿豆腐", 3, "ベイシア"]);
+  assert.equal((await api("PATCH", `/api/templates/${id}`, { qty: 0 })).status, 400);
+  assert.equal((await api("PATCH", `/api/templates/${L1}`, { name: "x" })).status, 403);
+  assert.equal((await api("DELETE", `/api/templates/${id}`)).status, 200);
+  assert.equal(pages.get(id).in_trash, true);
+});
+
+test("買い物おわり：残りを消すと、かごに入っていない品（子タスク）だけゴミ箱へ", async () => {
+  const add = await api("POST", `/api/lists/${L1}/items`, { items: ["卵", "牛乳"] });
+  const [egg, milk] = add.data.items.map((i) => i.id);
+  await api("PATCH", `/api/subtasks/${egg}`, { checked: true });
+  const r = await api("POST", `/api/lists/${L1}/done`, { rest: "drop" });
+  assert.equal(r.data.dropped, 1);
+  assert.equal(pages.get(milk).in_trash, true);
+  assert.notEqual(pages.get(egg).in_trash, true);
+  assert.equal(pages.get(L1).properties["ステータス"].status.name, "✅ DONE");
+});
+
 test("買い物のリマインド：30分前と時刻ちょうどに1度ずつ。通知をオフにした端末には送らない", async () => {
   const at = "2026-10-31T10:00:00+09:00";
   pages.set(hex(70), task(hex(70), { name: "🛒 ヤオコー 10/31", at }));

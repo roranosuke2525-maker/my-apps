@@ -430,3 +430,22 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .nimg { flex: none; width: 72px; height: 54px; object-fit: cover; border-radius: 8px; background: var(--bg); }
 .nitem:has(.nimg) .nmeta, .nitem:has(.nimg) .nnames { padding-left: 80px; }
 .ntitle small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* いつもの買い物の流れ ① 準備 → ② 買う → ③ おわり */
+.steps { list-style: none; display: flex; gap: 4px; margin: 0 0 10px; padding: 0; counter-reset: s; }
+.steps li { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; color: var(--mute); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 5px 4px; }
+.steps li b { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--line); color: var(--ink); font-size: 11px; }
+.steps li.on { color: var(--pri); border-color: var(--pri); font-weight: 700; background: var(--pri-soft); }
+.steps li.on b { background: var(--pri); color: var(--pri-ink); }
+.steps li.done b { background: var(--pri-soft); color: var(--pri); }
+.endshop { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 10px; font-size: 15px; }
+.endshop small, .sheet.rq .btn small { font-size: 11px; font-weight: 500; opacity: 0.85; display: block; }
+.sheet.rq > .btn { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.lfoot { position: sticky; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 3; }
+.padd { margin: 10px 0 4px; }
+.padd input#pextra { flex: 1; min-width: 0; }
+.tplform { flex-wrap: wrap; gap: 6px; padding: 8px 4px; background: var(--pri-soft); border-radius: 10px; }
+.tplform > input[name="name"] { flex: 1 1 100%; }
+.tplform label { display: flex; flex-direction: column; font-size: 11px; color: var(--mute); flex: 1 1 28%; min-width: 0; }
+.tplform label input, .tplform label select { width: 100%; min-width: 0; }
+.tplform .row-end { flex: 1 1 100%; margin: 2px 0 0; }

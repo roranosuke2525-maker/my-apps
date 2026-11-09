@@ -49,7 +49,7 @@ export default {
       if (p === "/api/lists" && m === "POST") return json(await createList(notion, env, await readJson(request)));
       if (list?.[2] === "items" && m === "POST") return json(await addItems(notion, env, list[1], await readJson(request)));
       if (list?.[2] === "clear" && m === "POST") return json(await clearChecked(notion, env, list[1]));
-      if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1]));
+      if (list?.[2] === "done" && m === "POST") return json(await finishList(notion, env, list[1], await readJson(request).catch(() => ({}))));
       if (list?.[2] === "cancel" && m === "POST") return json(await cancelRefill(notion, env, list[1]));
       if (p === "/api/sets" && m === "POST") return json(await saveSet(notion, env, null, await readJson(request)));
       const setm = p.match(/^\/api\/sets\/([0-9a-f-]{32,36})$/i);
@@ -62,6 +62,9 @@ export default {
       if (p === "/api/sites" && m === "DELETE") return json(await removeSite(env, await readJson(request)));
       if (list?.[2] === "when" && m === "PATCH") return json(await setWhen(notion, env, list[1], await readJson(request)));
       if (list?.[2] === "remind" && m === "PUT") return json(await setRemind(notion, env, list[1], await readJson(request)));
+      const tplm = p.match(/^\/api\/templates\/([0-9a-f-]{32,36})$/i);
+      if (tplm && m === "PATCH") return json(await editTemplate(notion, env, tplm[1], await readJson(request)));
+      if (tplm && m === "DELETE") return json(await removeTemplate(notion, env, tplm[1]));
       if (p === "/api/templates" && m === "POST") return json(await addTemplate(notion, env, await readJson(request)));
       if (item && m === "PATCH") return json(await updateItem(notion, env, item[1], await readJson(request)));
       if (item && m === "DELETE") return json(await removeItem(notion, env, item[1]));
@@ -558,10 +561,42 @@ async function addTemplate(notion, env, body) {
   return { template: templateOf(page) };
 }
 
-async function finishList(notion, env, id) {
+// 買い物おわり。rest: "drop" なら、まだかごに入っていない品（子タスク）をゴミ箱へ（ちょい買いへ回した後など）
+async function finishList(notion, env, id, body = {}) {
   const t = await listPage(notion, env, id);
+  let dropped = 0;
+  if (body?.rest === "drop") {
+    for (const k of await childTasks(notion, env, t.id)) {
+      if (k.status === ST.done) continue;
+      await notion("PATCH", `/pages/${k.id}`, { in_trash: true }); dropped++;
+    }
+  }
   await notion("PATCH", `/pages/${t.id}`, { properties: doneProps(t) });
-  return { done: t.id };
+  return { done: t.id, dropped };
+}
+
+// テンプレート（いつもの品）を直す・外す
+async function templatePage(notion, env, id) {
+  const page = await notion("GET", `/pages/${normalizeId(id)}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.TEMPLATE_DS_ID)) throw httpError(403, "DB_買い物テンプレート の行ではありません");
+  return page;
+}
+async function editTemplate(notion, env, id, body) {
+  await templatePage(notion, env, id);
+  const props = {};
+  if (body?.name !== undefined) { const name = clean(body.name, NAME_MAX, "名前"); if (!name) throw httpError(400, "名前を入れてください"); props["名前"] = { title: rich(name) }; }
+  if (body?.store !== undefined) props["店"] = { select: { name: clean(body.store, 30, "店") || "その他" } };
+  if (body?.aisle !== undefined) { const a = clean(body.aisle, 30, "売り場"); props["売り場"] = { select: a ? { name: a } : null }; }
+  if (body?.qty !== undefined) { const q = Number(body.qty); if (!(q > 0 && q < 1000)) throw httpError(400, "いつもの数が正しくありません"); props["いつもの数"] = { number: q }; }
+  if (body?.unit !== undefined) { const u = clean(body.unit, 10, "単位"); props["単位"] = { rich_text: u ? rich(u) : [] }; }
+  if (!Object.keys(props).length) throw httpError(400, "変える内容がありません");
+  const page = await notion("PATCH", `/pages/${normalizeId(id)}`, { properties: props });
+  return { template: templateOf(page) };
+}
+async function removeTemplate(notion, env, id) {
+  await templatePage(notion, env, id);
+  await notion("PATCH", `/pages/${normalizeId(id)}`, { in_trash: true });
+  return { removed: normalizeId(id) };
 }
 // 補充タスクを済みにするときは、実行日に今日を入れて補充した日を決める（後でページを触っても完了日がずれないように）
 const doneProps = (t) => ({ "ステータス": { status: { name: ST.done } }, ...(t.refill?.length ? { "実行日": { date: { start: todayJst() } } } : {}) });

@@ -293,11 +293,11 @@ function clearBasket(t) {
   for (const i of done) enqueue({ k: "del", item: i.id, kind: i.kind });
   toast(`かごの ${done.length}品 をリストから消しました`);
 }
-async function finishList(t, label = "買い物おわり") {
+async function finishList(t, label = "買い物おわり", body = {}) {
   if (Q.length) { toast("保存が終わってからもう一度押してください"); flush(); return; }
   try {
     setSync("busy");
-    await api("POST", `/api/lists/${t.id}/done`);
+    await api("POST", `/api/lists/${t.id}/done`, body);
     S.lists = S.lists.filter((x) => x.id !== t.id);
     delete S.over[`list:${t.id}`]; saveOver();
     for (const x of S.stock) if (x.open?.includes(t.id)) { x.open = x.open.filter((y) => y !== t.id); if (t.refill.includes(x.id)) markRestocked(x); }
@@ -521,6 +521,73 @@ async function createPlan(btn) {
     toast(`「${name}」を作りました（${texts.length}品${res.list.at ? `・${fmtAt(res.list.at)} 🔔 ${remindText(before)}` : ""}）`);
   } catch (err) { btn.disabled = false; setSync("err"); toast(`作れませんでした：${err.message}`); }
 }
+function tplEditRow(x) {
+  const aisles = A.AISLES.map((a) => a.name);
+  return `<form class="prow tplform" data-tplform="${x.id}"><input name="name" value="${esc(x.name)}" maxlength="100" aria-label="名前" required>
+    <label>いつもの数 <input name="qty" type="number" inputmode="decimal" min="0.1" step="any" value="${esc(x.qty)}"></label>
+    <label>単位 <input name="unit" value="${esc(x.unit || "")}" maxlength="10" placeholder="個・袋"></label>
+    <label>売り場 <select name="aisle"><option value="">（自動）</option>${aisles.map((n) => `<option ${n === x.aisle ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+    <label>店 ${storeSelect("store", x.store, { blank: false })}</label>
+    <div class="row-end"><button type="button" class="btn danger sm" data-tpldel="${x.id}">🗑 外す</button><button type="button" class="btn ghost sm" data-tpledit="all">やめる</button><button type="submit" class="btn pri sm">保存</button></div></form>`;
+}
+async function saveTemplate(f) {
+  const id = f.dataset.tplform; const el = f.elements;
+  const body = { name: el.name.value, qty: el.qty.value, unit: el.unit.value, aisle: el.aisle.value, store: el.store.value === "__add" ? undefined : el.store.value };
+  try {
+    const r = await api("PATCH", `/api/templates/${id}`, body);
+    const k = S.templates.findIndex((x) => x.id === id); if (k >= 0) S.templates[k] = { ...S.templates[k], ...r.template };
+    S.tplEdit = "all"; saveSnap(); render(); toast(`「${r.template.name}」を直しました`);
+  } catch (err) { toast(`直せませんでした：${err.message}`); }
+}
+async function deleteTemplate(id) {
+  const x = S.templates.find((t) => t.id === id); if (!x) return;
+  if (!confirm(`「${x.name}」をいつもの品から外しますか？（Notion のゴミ箱に入り、30日は戻せます）`)) return;
+  try {
+    await api("DELETE", `/api/templates/${id}`);
+    S.templates = S.templates.filter((t) => t.id !== id); delete S.plan.counts[id];
+    S.tplEdit = "all"; savePlan(); saveSnap(); render(); toast(`「${x.name}」を外しました`);
+  } catch (err) { toast(`外せませんでした：${err.message}`); }
+}
+// 入れた名前をいつもの品（テンプレート）に登録して、今回の分にも入れる
+async function newTemplate(btn) {
+  const i = $("#pextra"); const v = withQty(i.value.trim(), $("#pqty")?.value); if (!i.value.trim()) { toast("品の名前を入れてください"); i.focus(); return; }
+  const q = A.splitQty(v); const a = A.aisleOf(q.name);
+  btn.disabled = true;
+  try {
+    const res = await api("POST", "/api/templates", { name: q.name, store: S.plan.store || "その他", aisle: a.order < A.AISLES.length - 1 ? a.name : "", qty: parseFloat(q.qty) || 1, unit: q.qty.replace(/^[\d.]+/, "") });
+    S.templates.push(res.template); S.plan.counts[res.template.id] = res.template.qty;
+    i.value = ""; savePlan(); saveSnap(); render(); toast(`「${q.name}」をいつもの品に登録して入れました`);
+  } catch (err) { btn.disabled = false; toast(`登録できませんでした：${err.message}`); }
+}
+// ③ 買い物おわり：まだかごに入っていない品があれば、ちょい買いへ回すか消すかを選ぶ
+function askEnd(t) {
+  const rest = (t.items || []).filter((i) => !i.checked);
+  return new Promise((resolve) => {
+    const box = document.createElement("div"); box.className = "rqwrap";
+    box.innerHTML = `<div class="sheet-bg" data-end="no"></div><div class="sheet rq" role="dialog" aria-label="買い物おわり"><h2>③ 買い物おわり</h2>
+      ${rest.length ? `<p class="note">まだかごに入っていない品が <b>${rest.length}品</b> あります：${esc(rest.slice(0, 5).map((i) => A.splitQty(i.text).name).join("・"))}${rest.length > 5 ? "…" : ""}</p>
+        <button type="button" class="btn pri" data-end="move">⚡ 残りはちょい買いへ回しておわる<small>次のついでに買う</small></button>
+        <button type="button" class="btn" data-end="drop">残りは買わない（消して）おわる</button>`
+      : `<p class="note">ぜんぶかごに入りました。このリストを済みにします。</p><button type="button" class="btn ok" data-end="done">✓ おわる（済みにする）</button>`}
+      <button type="button" class="btn ghost" data-end="no">まだ買い物中</button></div>`;
+    const done = (v) => { box.remove(); document.body.classList.remove("modal"); resolve(v); };
+    box.addEventListener("click", (e) => { const el = e.target.closest("[data-end]"); if (!el) return; e.stopPropagation(); done(el.dataset.end === "no" ? null : el.dataset.end); });
+    document.body.append(box); document.body.classList.add("modal");
+  });
+}
+async function endShopping(id) {
+  const t = listOf(id); if (!t) return;
+  const how = await askEnd(t); if (!how) return;
+  const rest = (t.items || []).filter((i) => !i.checked).map((i) => i.text);
+  if (how === "move" && rest.length) {
+    const seg = S.seg; S.seg = "quick";
+    try { await addTexts(rest); } finally { S.seg = seg; }
+  }
+  // 足した品やチェックの保存が終わるのを待ってから済みにする
+  for (let k = 0; k < 40 && Q.length; k++) { await flush(); if (Q.length) await new Promise((r) => setTimeout(r, 300)); }
+  await finishList(t, how === "move" ? `残り${rest.length}品はちょい買いへ` : how === "drop" ? `残り${rest.length}品は買わない` : "おつかれさま", { rest: how === "done" ? "" : "drop" });
+}
+
 async function addToTemplate(k, btn) {
   const text = S.plan.extra[k]; if (!text) return;
   const q = A.splitQty(text); const a = A.aisleOf(q.name);
@@ -530,7 +597,7 @@ async function addToTemplate(k, btn) {
     S.templates.push(res.template);
     S.plan.extra.splice(k, 1); S.plan.counts[res.template.id] = res.template.qty;
     savePlan(); saveSnap(); render();
-    toast(`「${q.name}」をテンプレートに足しました`);
+    toast(`「${q.name}」をいつもの品に登録しました`);
   } catch (err) { btn.disabled = false; toast(`足せませんでした：${err.message}`); }
 }
 
@@ -1016,14 +1083,16 @@ function stepQty(id, d) {
   i.value = `${Math.max(1, Math.round(n + d))}${unit}`;
 }
 
+// いつもの買い物の流れ：① 準備（テンプレから選ぶ）→ ② 買う（かごに入れたらタップ）→ ③ おわり
+const stepsBar = (n) => `<ol class="steps">${["準備する", "買う", "おわり"].map((x, k) => `<li class="${k + 1 === n ? "on" : k + 1 < n ? "done" : ""}"><b>${k + 1 < n ? "✓" : k + 1}</b>${x}</li>`).join("")}</ol>`;
 function renderUsual() {
   const lists = usualLists();
-  if (S.planning || !lists.length) return renderPlan(lists.length > 0);
+  if (S.planning || !lists.length) return stepsBar(1) + renderPlan(lists.length > 0);
   if (!lists.some((t) => t.id === S.cur)) S.cur = lists[0].id;
   const t = listOf(S.cur);
   const chips = lists.map((x) => `<button type="button" class="lchip" data-cur="${x.id}" aria-pressed="${S.cur === x.id}">${esc(x.name.replace(/^🛒\s*/, ""))}<span class="n">${leftOf(x)}</span></button>`).join("")
     + `<button type="button" class="lchip add" data-plan="1">＋ 準備する</button>`;
-  return `<div class="lchips">${chips}</div>${listView(t, "その場で足す（牛乳、卵）")}`;
+  return `${stepsBar(2)}<div class="lchips">${chips}</div><p class="note pad">② 買い物中：かごに入れた品をタップ（✓ で色が変わる）。終わったら下の「③ 買い物おわり」。</p>${listView(t, "その場で足す（牛乳、卵）")}`;
 }
 function renderQuick() {
   const t = quickList();
@@ -1046,7 +1115,8 @@ function listView(t, ph) {
   // チェックした品は消さずに、その場で色を反転して残す（並びは変えない）
   const body = items.length ? groups(items) : `<div class="empty small">上の欄から入れてください。「、」で区切るとまとめて入ります</div>`;
   const bk = items.length && !todo.length ? `<div class="empty small">🎉 ぜんぶかごに入りました</div>` : "";
-  const foot = `<div class="lfoot">${basket.length ? `<button type="button" class="btn" data-clear="${t.id}">チェック済み${basket.length}品をリストから消す</button>` : ""}${items.length && !todo.length ? `<button type="button" class="btn ok" data-finish="${t.id}">買い物おわり（済みにする）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
+  const isQuick = kindOf(t) === "quick";
+  const foot = `<div class="lfoot">${items.length && !isQuick ? `<button type="button" class="btn ok endshop" data-endshop="${t.id}">③ 買い物おわり<small>${todo.length ? `かご ${basket.length}/${items.length}品・残りはあとで選べます` : "ぜんぶかごに入りました 🎉"}</small></button>` : ""}${isQuick && basket.length ? `<button type="button" class="btn" data-clear="${t.id}">かごに入れた${basket.length}品を消す（買えた）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
   return `${when}${addBox(ph)}${setChips(t.id)}<div class="card list">${tools}${prog}${body}${bk}</div>${foot}`;
 }
 
@@ -1062,21 +1132,26 @@ function renderPlan(canBack) {
   const rows = xs.map((x) => {
     const a = aisleOfTpl(x); const n = S.plan.counts[x.id] || 0;
     const h = a.name !== g ? `<div class="ghead"><span>${a.icon}</span>${esc((g = a.name))}</div>` : "";
+    if (S.tplEdit === x.id) return h + tplEditRow(x);
+    if (S.tplEdit) return `${h}<div class="prow"><span class="pname"><span class="tx">${esc(x.name)}</span><small>いつも ${x.qty}${esc(x.unit)}</small></span><button type="button" class="btn ghost sm" data-tpledit="${x.id}">✏️ 直す</button><button type="button" class="more" data-tpldel="${x.id}" aria-label="「${esc(x.name)}」をいつもの品から外す">🗑</button></div>`;
     return `${h}<div class="prow${n ? " on" : ""}"><button type="button" class="pname" data-ptoggle="${x.id}"><span class="box" aria-hidden="true"></span><span class="tx">${esc(x.name)}</span><small>いつも ${x.qty}${esc(x.unit)}</small></button>
       <div class="step"><button type="button" data-pstep="${x.id}|-1" aria-label="${esc(x.name)}を1つ減らす">−</button><b>${n}${n && x.unit ? `<small>${esc(x.unit)}</small>` : ""}</b><button type="button" data-pstep="${x.id}|1" aria-label="${esc(x.name)}を1つ増やす">＋</button></div></div>`;
   }).join("");
-  const extra = S.plan.extra.map((e, k) => `<div class="prow on"><span class="pname"><span class="tx">${esc(e)}</span><small>今回だけ</small></span><button type="button" class="btn ghost sm" data-tpladd="${k}">＋テンプレへ</button><button type="button" class="more" data-pextradel="${k}" aria-label="外す">×</button></div>`).join("");
+  const extra = S.plan.extra.map((e, k) => `<div class="prow on"><span class="pname"><span class="tx">${esc(e)}</span><small>今回だけ</small></span><button type="button" class="btn ghost sm" data-tpladd="${k}" title="次からもいつもの品に出す">⭐ いつもの品に</button><button type="button" class="more" data-pextradel="${k}" aria-label="外す">×</button></div>`).join("");
   const picked = planPicked().length + S.plan.extra.length;
-  return `<div class="card plan"><div class="phead"><h2>🛒 準備：今回なにを何個？</h2>${canBack ? `<button type="button" class="btn ghost sm" data-plan="0">やめる</button>` : ""}</div>
-    <p class="note">名前をタップでいつもの数、−／＋で数を決めます。品は Notion の DB_買い物テンプレート で整えられます。</p>
+  const editing = !!S.tplEdit;
+  return `<div class="card plan"><div class="phead"><h2>① 今回買うものを選ぶ</h2>${canBack ? `<button type="button" class="btn ghost sm" data-plan="0">やめる</button>` : ""}</div>
+    <p class="note">${editing ? "いつもの品（テンプレート）を直しています。✏️ で名前・数・売り場、🗑 で外す。終わったら「✓ 編集おわり」。" : "店を選んで、いつもの品をタップ（数は −／＋）。セットのボタンでまとめて入れることもできます。"}</p>
     <div class="chips">${stores.map((n) => `<button type="button" class="chip" data-pstore="${esc(n)}" aria-pressed="${n === S.plan.store}">${esc(n)}</button>`).join("")}<button type="button" class="chip" data-storeadd="plan">＋ 店</button></div>
     ${setChips("plan")}
-    ${xs.length ? "" : `<p class="note">「${esc(S.plan.store)}」のテンプレートはまだありません。下の欄に入れて「＋テンプレへ」で増やせます</p>`}
+    <div class="ltools"><b>⭐ いつもの品</b><span class="mute">${xs.length}品</span><button type="button" class="btn ${editing ? "pri" : "ghost"} sm" data-tpledit="${editing ? "" : "all"}">${editing ? "✓ 編集おわり" : "✏️ いつもの品を編集"}</button></div>
+    ${xs.length ? "" : `<p class="note">「${esc(S.plan.store)}」のいつもの品はまだありません。下の欄に名前を入れて「⭐ いつもの品に登録」で増やせます</p>`}
     <div class="list">${rows}</div>
     ${extra ? `<div class="ghead"><span>✍️</span>今回だけ</div>${extra}` : ""}
-    <form class="addbox" id="planextra"><input id="pextra" type="text" maxlength="200" autocomplete="off" enterkeyhint="done" placeholder="テンプレにない品（例：ケーキ）" aria-label="テンプレにない品"><button type="submit" class="btn">足す</button></form></div>
+    <form class="addbox padd" id="planextra"><input id="pextra" type="text" maxlength="200" autocomplete="off" enterkeyhint="done" placeholder="ほかの品（例：ケーキ、ヨーグルト 4個）" aria-label="ほかの品">${qtyBox("pqty")}</form>
+    <div class="row-end"><button type="submit" form="planextra" class="btn sm">＋ 今回だけ</button><button type="button" class="btn sm" data-tplnew="1">⭐ いつもの品に登録して入れる</button></div></div>
     <div class="card pfoot">${whenBar("plan", S.plan.at, { open: true, label: "いつ買う？ " })}
-    <div class="row-end">${picked ? `<button type="button" class="btn ghost" data-planclear="1">選び直す</button>` : ""}<button type="button" class="btn pri" data-plancreate="1" ${picked ? "" : "disabled"}>${picked}品でリストを作る</button></div></div>`;
+    <div class="row-end">${picked ? `<button type="button" class="btn ghost" data-planclear="1">選び直す</button>` : ""}<button type="button" class="btn pri" data-plancreate="1" ${picked ? "" : "disabled"}>${picked ? `② この${picked}品で買い物リストを作る →` : "品を選んでください"}</button></div></div>`;
 }
 
 function renderOther() {
@@ -1414,6 +1489,10 @@ document.addEventListener("click", (e) => {
   if (d.pstore) { S.plan.store = d.pstore; savePlan(); render(); return; }
   if (d.ptoggle) { planToggle(d.ptoggle); return; }
   if (d.pstep) { const [id, n] = d.pstep.split("|"); planStep(id, +n); return; }
+  if (d.endshop) { endShopping(d.endshop); return; }
+  if (d.tpledit !== undefined) { S.tplEdit = d.tpledit; render(); return; }
+  if (d.tpldel) { deleteTemplate(d.tpldel); return; }
+  if (d.tplnew) { newTemplate(el); return; }
   if (d.pextradel) { S.plan.extra.splice(+d.pextradel, 1); savePlan(); render(); return; }
   if (d.tpladd) { addToTemplate(+d.tpladd, el); return; }
   if (d.planclear) { S.plan.counts = {}; S.plan.extra = []; S.plan.sets = {}; savePlan(); render(); return; }
@@ -1510,7 +1589,8 @@ document.addEventListener("click", (e) => {
 document.addEventListener("submit", (e) => {
   const f = e.target; e.preventDefault();
   if (f.id === "addform") { const i = $("#addin"); const q = $("#addqty"); const texts = A.splitInput(i.value).map((x) => withQty(x, q?.value)); i.value = ""; if (q) q.value = "1"; addTexts(texts); i.focus(); return; }
-  if (f.id === "planextra") { const v = $("#pextra").value; const add = A.splitInput(v); if (add.length) { S.plan.extra.push(...add); savePlan(); render(); $("#pextra")?.focus(); } return; }
+  if (f.id === "planextra") { const v = $("#pextra").value; const qv = $("#pqty")?.value; const add = A.splitInput(v).map((x) => withQty(x, qv)); if (add.length) { S.plan.extra.push(...add); savePlan(); render(); $("#pextra")?.focus(); } return; }
+  if (f.dataset.tplform) { saveTemplate(f); return; }
   if (f.dataset.editform) { renameItem(f.dataset.editform, withQty(A.splitQty($("#editin").value).name, A.splitQty($("#editin").value).qty || $("#editqty")?.value)); return; }
   if (f.id === "sheetform") { saveSheet(); return; }
   if (f.id === "pushform") { pushSave(f); return; }
