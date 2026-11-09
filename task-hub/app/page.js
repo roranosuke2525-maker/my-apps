@@ -45,6 +45,7 @@
       const pj = S.projects.filter((p) => t.projects.includes(p.id));
       return `${quickHtml(t)}<dl class="props"><dt>ステータス</dt><dd>${sel("ステータス", ALL_STATUSES, t.status, false)}</dd>
         <dt>AIアクション</dt><dd>${sel("AIアクション", AIA, t.ai)} <span class="mute" style="font-size:11.5px">${t.ai ? AI_LABEL[t.ai] : ""}</span></dd>
+        <dt>最終更新</dt><dd class="mute" style="font-size:12.5px">${esc(updTx(t, true))}</dd>
         <dt>実行日</dt><dd><input type="date" data-prop="date:実行日:start" value="${t.date || ""}" aria-label="実行日">${t.date ? `<button type="button" class="mute" data-cleardate="1" style="font-size:12px;padding:0 6px">外す</button>` : ""}</dd>
         <dt>次の一歩</dt><dd><input type="text" data-prop="NEXT" value="${esc(t.next || "")}" placeholder="（空）" aria-label="次の一歩"></dd>
         <dt>枠</dt><dd>${sel("枠", WAKU, t.waku)}</dd><dt>重さ</dt><dd>${sel("重さ", WEIGHTS, t.weight)}</dd><dt>分類タグ</dt><dd>${sel("分類タグ", TAGS, t.tag)}</dd>

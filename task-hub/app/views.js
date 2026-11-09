@@ -117,6 +117,13 @@
 
   // ================= 一覧の行 =================
   const TODAY_TXT = () => { const d = TODAY(); return `${+d.slice(5, 7)}月${+d.slice(8)}日（${WD[dow(d)]}）`; };
+  // 最終更新：今日なら時刻、昨日、それ以外は月/日
+  function updTx(t, long = false) {
+    if (!t.edited) return "";
+    const ms = Date.parse(t.edited); const d = jst(ms); const n = diffDays(d, TODAY());
+    const s = n <= 0 ? jstTime(ms) : n === 1 ? "昨日" : md(d);
+    return long ? `${md(d)}（${WD[dow(d)]}）${jstTime(ms)}${n > 1 ? `・${n}日前` : n === 1 ? "・昨日" : "・今日"}` : `${s} 更新`;
+  }
   function metaOf(t) {
     const d = TODAY();
     if (t.date) return t.date < d && t.status !== ST.done ? { tx: `遅れ ${diffDays(t.date, d)}日`, late: true } : { tx: t.date === d ? "今日" : `${md(t.date)}（${WD[dow(t.date)]}）` };
@@ -129,7 +136,7 @@
     const nmPre = t.status === ST.doing ? `<i class="doing" aria-label="作業中">▶</i>` : "";
     const sub = t.ai && t.status === ST.ai ? `<span class="ai-mark">${t.ai}</span> ${esc(AI_LABEL[t.ai] || "")}` : esc(t.next || t.tag || "");
     return `<div class="rw"><span class="sw l" aria-hidden="true">✓ 済み</span><span class="sw r" aria-hidden="true">明日 →</span><div class="row" data-id="${t.id}" style="--c:${STAGES[st]?.c || "var(--mute)"}">${check ? `<button type="button" class="check${t.status === ST.done ? " on" : ""}" data-done="${t.id}" aria-label="済みにする">✓</button>` : leadHtml(t)}
-      <button type="button" class="main" data-open="${t.id}"><span class="nm">${nmPre}${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(m.tx)}<i aria-hidden="true">▾</i></button></div></div>`;
+      <button type="button" class="main" data-open="${t.id}"><span class="nm">${nmPre}${esc(t.name)}</span><span class="sub">${sub}</span></button>${t.link ? `<a class="lnk" href="${esc(t.link)}" target="_blank" rel="noopener" aria-label="URLを開く">🔗</a>` : ""}<button type="button" class="meta qbtn${m.late ? " late" : ""}" data-quick="${t.id}" aria-label="日付・状態を変える"><span>${esc(m.tx)}<i aria-hidden="true">▾</i></span>${t.edited ? `<small class="upd">${esc(updTx(t))}</small>` : ""}</button></div></div>`;
   }
   function stageItems(k) {
     const items = inStage(k).slice(); const d = TODAY();
@@ -145,7 +152,7 @@
     return [...m];
   }
   function tableHtml(items) {
-    return `<table class="grid"><thead><tr><th>名前</th><th>ステータス</th><th>実行日</th><th>枠</th><th>重さ</th><th>分類</th><th>AI</th><th>次の一歩</th></tr></thead><tbody>${items.map((t) => `<tr class="click" data-open="${t.id}"><td>${esc(short(t.name, 22))}</td><td>${esc(t.status)}</td><td class="${metaOf(t).late ? "late" : ""}">${t.date ? md(t.date) : ""}</td><td>${esc(t.waku || "")}</td><td>${esc(t.weight || "")}</td><td>${esc(t.tag || "")}</td><td>${esc(t.ai || "")}</td><td>${esc(short(t.next || "", 20))}</td></tr>`).join("")}</tbody></table>`;
+    return `<table class="grid"><thead><tr><th>名前</th><th>ステータス</th><th>実行日</th><th>枠</th><th>重さ</th><th>分類</th><th>AI</th><th>次の一歩</th><th>最終更新</th></tr></thead><tbody>${items.map((t) => `<tr class="click" data-open="${t.id}"><td>${esc(short(t.name, 22))}</td><td>${esc(t.status)}</td><td class="${metaOf(t).late ? "late" : ""}">${t.date ? md(t.date) : ""}</td><td>${esc(t.waku || "")}</td><td>${esc(t.weight || "")}</td><td>${esc(t.tag || "")}</td><td>${esc(t.ai || "")}</td><td>${esc(short(t.next || "", 20))}</td><td class="mute">${esc(updTx(t))}</td></tr>`).join("")}</tbody></table>`;
   }
 
   // ================= 次にやる：いろんな見方で分けて、決めやすくする =================

@@ -94,6 +94,8 @@ nav.tabs .badge { position: absolute; top: 2px; right: calc(50% - 22px); min-wid
 .row .sub { font-size: 11.5px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .meta { font-size: 11.5px; color: var(--mute); white-space: nowrap; text-align: right; }
 .row .meta.late { color: var(--late); font-weight: 700; }
+.row .meta { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 1px; }
+.row .meta .upd { font-size: 10px; font-weight: 400; color: var(--mute); opacity: .8; font-family: var(--f-num); }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--c, var(--mute)); }
 .check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--c, var(--line)); flex: none; display: grid; place-items: center; color: transparent; font-size: 13px; transition: .2s; }
 .check:hover { background: color-mix(in srgb, var(--c) 15%, transparent); }
