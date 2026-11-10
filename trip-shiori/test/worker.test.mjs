@@ -63,13 +63,20 @@ beforeEach(() => {
 
   globalThis.fetch = async (url, init = {}) => {
     if (String(url).startsWith("https://overpass.test")) {
-      calls.push({ method: "POST", path: "overpass", body: init.body });
-      return new Response(JSON.stringify({ elements: [
+      const q = decodeURIComponent(String(init.body).slice(5));
+      calls.push({ method: "POST", path: "overpass", body: q });
+      // ランドは敷地の形で取れる。シーは形が無い（空）→ 四角で取り直す
+      const isSea = q.includes("35.6236") || q.includes("ディズニーシー");
+      const areaQuery = q.includes("area.p");
+      const elements = !isSea ? [
         { type: "node", lat: 35.633, lon: 139.880, tags: { tourism: "attraction", name: "カリブの海賊" } },
         { type: "way", center: { lat: 35.632, lon: 139.881 }, tags: { amenity: "toilets", changing_table: "yes" } },
-        { type: "node", lat: 35.627, lon: 139.885, tags: { amenity: "restaurant", name: "Cafe", "name:ja": "カフェ・ポルトフィーノ" } },
+        { type: "node", lat: 35.6331, lon: 139.8801, tags: { shop: "gift", name: "東京ディズニーランドホテル ショップ" } },
         { type: "node", tags: { amenity: "cafe", name: "座標なし" } },
-      ] }), { status: 200 });
+      ] : areaQuery ? [] : [
+        { type: "node", lat: 35.627, lon: 139.885, tags: { amenity: "restaurant", name: "Cafe", "name:ja": "カフェ・ポルトフィーノ" } },
+      ];
+      return new Response(JSON.stringify({ elements }), { status: 200 });
     }
     const u = new URL(url.replace(env.NOTION_API_BASE, "https://x"));
     const path = u.pathname;
@@ -227,8 +234,15 @@ test("詳しい地図のデータ：座標の無いものは捨て、日本語�
   const res = await req("GET", "/api/pois");
   assert.equal(res.status, 200);
   const data = await res.json();
-  assert.deepEqual(data.pois.map((p) => [p.n, p.k]), [["カリブの海賊", "ride"], ["トイレ", "toilet"], ["カフェ・ポルトフィーノ", "food"]]);
+  // パークの外（ホテル）は捨てる。シーは敷地の形が無いので四角で取り直す
+  assert.deepEqual(data.pois.map((p) => [p.n, p.k, p.p]), [["カリブの海賊", "ride", "land"], ["トイレ", "toilet", "land"], ["カフェ・ポルトフィーノ", "food", "sea"]]);
+  assert.equal(calls.filter((c) => c.path === "overpass").length, 3);
   assert.equal(data.pois[1].ct, 1);
   assert.match(data.attribution, /OpenStreetMap/);
   assert.equal(poiKind({ shop: "gift" }), "shop");
+  // ランドだけの旅行ならシーは取りに行かない
+  calls = [];
+  const only = await worker.fetch(new Request("https://app.test/api/pois", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, TRIP_PARKS: "land" });
+  assert.deepEqual((await only.json()).pois.map((p) => p.p), ["land", "land"]);
+  assert.equal(calls.filter((c) => c.path === "overpass").length, 1);
 });
