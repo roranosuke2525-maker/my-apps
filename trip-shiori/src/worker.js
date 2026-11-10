@@ -38,6 +38,12 @@ export default {
         const body = await readJson(request);
         return json(await updateItem(notion, env, blockMatch[1], body));
       }
+      if (blockMatch && request.method === "DELETE") {
+        return json(await deleteItem(notion, env, blockMatch[1]));
+      }
+      if (url.pathname === "/api/pois" && request.method === "GET") {
+        return json(await getPois(env));
+      }
       return json({ error: "not found" }, 404);
     } catch (err) {
       const status = err.status || 500;
@@ -175,6 +181,77 @@ async function updateItem(notion, env, id, body) {
   if (!Object.keys(patch).length) throw httpError(400, "変更がありません");
   const updated = await notion("PATCH", `/blocks/${id}`, { to_do: patch });
   return { id: updated.id, text: blockText(updated), checked: !!updated.to_do?.checked };
+}
+
+// 消す（Notion のゴミ箱へ。30日は戻せる）。日付のまとまり（11/12 など）は丸ごと消えるので消さない
+async function deleteItem(notion, env, id) {
+  const block = await assertWritable(notion, env, id);
+  if (block.type !== "to_do") throw httpError(400, "チェックボックス以外は消せません");
+  if (block.parent?.type === "page_id" && DATE_HEAD.test(blockText(block))) {
+    throw httpError(400, "日付のまとまりはアプリからは消せません（Notion で消してください）");
+  }
+  await notion("DELETE", `/blocks/${id}`);
+  return { id, deleted: true };
+}
+
+// ---------- 詳しい地図（OpenStreetMap のデータ） ----------
+// パークの範囲の施設（アトラクション・食べ物・ショップ・トイレ・ベビー）を Overpass API から取り、1週間キャッシュする
+const OVERPASS = "https://overpass-api.de/api/interpreter";
+const POI_BBOX = "35.6205,139.8735,35.6390,139.8935"; // ランドとシーを両方含む範囲
+const POI_QUERY = `[out:json][timeout:40];
+(
+  nwr["tourism"="attraction"](${POI_BBOX});
+  nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|toilets|baby_hatch)$"](${POI_BBOX});
+  nwr["shop"](${POI_BBOX});
+  nwr["changing_table"="yes"](${POI_BBOX});
+  nwr["baby_feeding"](${POI_BBOX});
+);
+out center tags;`;
+
+export function poiKind(tags) {
+  if (tags.amenity === "toilets") return "toilet";
+  if (tags.changing_table === "yes" && !tags.amenity) return "baby";
+  if (tags.baby_feeding || /ベビー|授乳/u.test(tags.name || "")) return "baby";
+  if (/^(restaurant|cafe|fast_food|bar|pub|ice_cream)$/.test(tags.amenity || "")) return "food";
+  if (tags.shop) return "shop";
+  return "ride";
+}
+
+async function getPois(env) {
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = new Request("https://trip-shiori.cache/pois-v1");
+  const hit = cache && (await cache.match(key));
+  if (hit) return hit.json();
+  const res = await fetch(env.OVERPASS_URL || OVERPASS, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "trip-shiori/1.0 (personal trip planner)" },
+    body: `data=${encodeURIComponent(POI_QUERY)}`,
+  });
+  if (!res.ok) throw httpError(502, "地図のデータ（OpenStreetMap）を取れませんでした。少し待ってからもう一度");
+  const data = await res.json();
+  const pois = [];
+  for (const e of data.elements || []) {
+    const tags = e.tags || {};
+    const lat = e.lat ?? e.center?.lat;
+    const lon = e.lon ?? e.center?.lon;
+    if (lat == null || lon == null) continue;
+    const kind = poiKind(tags);
+    const name = tags["name:ja"] || tags.name || (kind === "toilet" ? "トイレ" : "");
+    if (!name) continue;
+    pois.push({
+      n: name,
+      k: kind,
+      lat: Math.round(lat * 1e6) / 1e6,
+      lon: Math.round(lon * 1e6) / 1e6,
+      ...(tags.changing_table === "yes" ? { ct: 1 } : {}),
+      ...(tags.wheelchair === "yes" ? { wc: 1 } : {}),
+    });
+  }
+  const out = { pois, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
+  if (cache) {
+    await cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=604800", "Content-Type": "application/json" } }));
+  }
+  return out;
 }
 
 async function addItem(notion, env, parentId, body) {

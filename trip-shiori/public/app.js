@@ -100,6 +100,7 @@ async function doFlush() {
     try {
       if (op.op === "check") await api("PATCH", `/api/blocks/${op.id}`, { checked: op.checked });
       if (op.op === "edit") await api("PATCH", `/api/blocks/${op.id}`, { text: op.text });
+      if (op.op === "delete") await api("DELETE", `/api/blocks/${op.id}`);
       if (op.op === "add") {
         const made = await api("POST", `/api/blocks/${op.parent}/children`, { text: op.text });
         replaceId(op.tempId, made.id);
@@ -177,6 +178,33 @@ function addGroup(text) {
   state.open.add(g.id);
   queue({ op: "group", text, tempId: g.id });
   return g;
+}
+
+// 消す。まだ送っていない項目なら、送る予定ごと取り消す
+function removeItem(item) {
+  const kids = flatten([item]).length - 1;
+  const msg = kids > 0 ? `「${item.label}」と、その下の${kids}件を消しますか？` : `「${item.label}」を消しますか？`;
+  if (!confirm(`${msg}\n（Notion のゴミ箱に入り、30日は戻せます）`)) return false;
+  const drop = (list) => {
+    const i = list.indexOf(item);
+    if (i >= 0) { list.splice(i, 1); return true; }
+    return list.some((n) => drop(n.items || n.children || []));
+  };
+  if (!drop(state.trip.groups)) drop(state.trip.days);
+  if (isTemp(item.id)) {
+    const gone = new Set(flattenIds(item));
+    state.outbox = state.outbox.filter((o) => !gone.has(o.tempId) && !gone.has(o.id) && !gone.has(o.parent));
+    save(OUTBOX_STORAGE, state.outbox);
+    save(CACHE_STORAGE, state.trip);
+    render();
+    return true;
+  }
+  queue({ op: "delete", id: item.id });
+  return true;
+}
+
+function flattenIds(item) {
+  return [item.id, ...(item.items || item.children || []).flatMap(flattenIds)];
 }
 
 function isPlacesGroup(g) {
@@ -313,7 +341,7 @@ function render() {
   renderTabs();
   const day = state.trip.days.find((d) => d.id === state.tab);
   const scroll = $("main").scrollTop;
-  $("view").replaceChildren(...(day ? renderDay(day) : state.tab === "map" ? renderMap() : renderPrep()));
+  $("view").replaceChildren(...(day ? renderDay(day) : state.tab === "map" ? renderMap() : renderPrep()).filter(Boolean));
   $("main").scrollTop = scroll;
   renderSync();
 }
@@ -383,16 +411,33 @@ function renderPrep() {
       el("div", { class: "group-head" },
         el("button", { type: "button", class: "group-title", onclick: () => openEditor(g) }, g.label),
         el("span", { class: `count${flat.length && done === flat.length ? " all" : ""}` }, `${done}/${flat.length}`),
+        pmButtons(g),
       ),
-      g.items.length ? renderList(g.items, 0) : null,
+      g.items.length ? renderList(g.items, 0, true) : null,
       addForm(g.id, `＋ ${g.label}に足す`, (text) => addItem(g, text, false), "mini"),
     );
   });
   return [
     addForm("new-group", "＋ 親（まとまり）を足す　例）👕 服装", (text) => addGroup(text), "mini parent"),
     ...cards,
-    el("p", { class: "hint" }, "丸で済み。項目を押すと、文字を直したり、その下（子）に足したりできます。"),
+    el("p", { class: "hint" }, "＋でその下（子）に足す、−で消す。項目を押すと文字を直せます。"),
   ];
+}
+
+// 行の右の ＋（この下に足す）と −（消す）
+function pmButtons(item) {
+  const open = state.addUnder === item.id;
+  return el("span", { class: "pm" },
+    el("button", {
+      type: "button", class: `pm-btn plus${open ? " on" : ""}`, "aria-label": `${item.label}の下に足す`, "aria-expanded": String(open),
+      onclick: () => {
+        if (item.items) { document.querySelector(`[data-for="${item.id}"] input`)?.focus(); return; }
+        state.addUnder = open ? "" : item.id;
+        render();
+        if (!open) setTimeout(() => document.querySelector(`[data-for="under-${item.id}"] input`)?.focus(), 0);
+      },
+    }, "＋"),
+    el("button", { type: "button", class: "pm-btn minus", "aria-label": `${item.label}を消す`, onclick: () => removeItem(item) }, "−"));
 }
 
 // ---------- マップ（自作の模式図） ----------
@@ -462,10 +507,17 @@ function renderMap() {
     },
   }, input, el("button", { type: "submit", class: "primary" }, "＋ 追加"));
 
+  const mode = mapMode();
+  const modeSeg = el("div", { class: "seg small", role: "tablist" }, [["simple", "かんたん図"], ["detail", "詳しい地図"]].map(([m, label]) =>
+    el("button", { type: "button", role: "tab", "aria-selected": String(mode === m), onclick: () => { setMapMode(m); render(); } }, label)));
+
   return [
     seg,
-    el("div", { class: "card map-card" }, parkSvg(park, pins)),
-    el("p", { class: "legend" },
+    renderSearch(),
+    modeSeg,
+    el("div", { class: `card map-card${mode === "detail" ? " detail" : ""}` }, mode === "detail" ? detailMap(pins) : parkSvg(park, pins)),
+    mode === "detail" ? el("p", { class: "legend" }, "🎢 アトラクション　🍴 食べ物　🛍 ショップ　🚻 トイレ　🍼 ベビー　🍺 ビール　（地図：OpenStreetMap）") : null,
+    mode === "detail" ? null : el("p", { class: "legend" },
       el("span", {}, el("i", { style: "background:#9278d6" }), "行きたい"),
       el("span", {}, el("i", { style: "background:var(--accent)" }), "予定"),
       el("span", {}, "※ 自作の目安図（公式マップではありません）")),
@@ -549,11 +601,14 @@ function flatten(items) {
   return items.flatMap((i) => [...(i.checked === null ? [] : [i]), ...flatten(i.children || [])]);
 }
 
-function renderList(items, depth) {
+function renderList(items, depth, editable = false) {
   return el("ul", { class: `list depth-${depth}` }, items.map((item) =>
     el("li", { class: item.checked ? "done" : "" },
-      checkRow(item),
-      item.children?.length ? renderList(item.children, depth + 1) : null,
+      editable && item.checked !== null ? el("div", { class: "row-pm" }, checkRow(item), pmButtons(item)) : checkRow(item),
+      item.children?.length ? renderList(item.children, depth + 1, editable) : null,
+      editable && state.addUnder === item.id
+        ? addForm(`under-${item.id}`, `＋ ${item.label}の下に足す`, (text) => addItem(item, text, false), "mini under")
+        : null,
     )));
 }
 
@@ -577,6 +632,7 @@ function openEditor(item, day) {
   const textInput = el("input", { type: "text", value: item.label, maxlength: "190", "aria-label": "内容" });
   const close = () => { sheet.remove(); render(); };
   const isGroup = !!item.items;
+  const canDelete = isGroup || item.checked !== null;
   const canHaveChildren = isGroup || item.checked !== null;
   const childInput = el("input", { type: "text", placeholder: "例）日焼け止め", maxlength: "190", enterkeyhint: "done", "aria-label": "下に足すもの",
     onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addChild(); } } });
@@ -619,6 +675,8 @@ function openEditor(item, day) {
         el("button", { type: "button", class: "chip strong", onclick: addChild }, "足す")),
       added) : null,
     el("div", { class: "sheet-actions" },
+      canDelete ? el("button", { type: "button", class: "ghost danger", onclick: () => { if (removeItem(item)) close(); } }, "消す") : null,
+      el("span", { class: "spacer" }),
       el("button", { type: "button", class: "ghost", onclick: close }, "やめる"),
       el("button", { type: "submit", class: "primary" }, "保存")),
     ));
