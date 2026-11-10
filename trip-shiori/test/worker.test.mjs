@@ -14,6 +14,7 @@ const env = {
   HIDE_GROUPS: "Notionにしおりとしてまとめる",
   NOTION_API_BASE: "https://notion.test/v1",
   OVERPASS_URL: "https://overpass.test/api",
+  THEMEPARKS_URL: "https://themeparks.test/v1",
   ASSETS: { fetch: async () => new Response("asset") },
 };
 
@@ -62,6 +63,20 @@ beforeEach(() => {
   ids.outside = add(PAGE, "to_do", "BとDの合算　公式アプリと同期できたりする？");
 
   globalThis.fetch = async (url, init = {}) => {
+    if (String(url).startsWith("https://themeparks.test")) {
+      const path = String(url).replace("https://themeparks.test/v1", "");
+      calls.push({ method: "GET", path: `themeparks${path}` });
+      if (path.endsWith("/children")) return new Response(JSON.stringify({ children: [
+        { id: "tdl-id", name: "Tokyo Disneyland", entityType: "PARK" },
+        { id: "tds-id", name: "Tokyo DisneySea", entityType: "PARK" },
+        { id: "hotel", name: "Tokyo Disneyland Hotel", entityType: "HOTEL" },
+      ] }));
+      if (path === "/entity/tdl-id/schedule") return new Response(JSON.stringify({ schedule: [
+        { date: "2026-11-12", type: "OPERATING", openingTime: "2026-11-12T09:00:00+09:00", closingTime: "2026-11-12T21:00:00+09:00" },
+        { date: "2026-11-12", type: "EXTRA_HOURS", openingTime: "2026-11-12T08:45:00+09:00", closingTime: "2026-11-12T09:00:00+09:00" },
+      ] }));
+      return new Response("{}", { status: 404 });
+    }
     if (String(url).startsWith("https://overpass.test")) {
       const q = decodeURIComponent(String(init.body).slice(5));
       calls.push({ method: "POST", path: "overpass", body: q });
@@ -245,4 +260,13 @@ test("詳しい地図のデータ：座標の無いものは捨て、日本語�
   const only = await worker.fetch(new Request("https://app.test/api/pois", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, TRIP_PARKS: "land" });
   assert.deepEqual((await only.json()).pois.map((p) => p.p), ["land", "land"]);
   assert.equal(calls.filter((c) => c.path === "overpass").length, 1);
+});
+
+test("開園時間：ランドの予定から開園・閉園・早く入れる時間を返す（今回のパークだけ）", async () => {
+  const res = await worker.fetch(new Request("https://app.test/api/hours", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, TRIP_PARKS: "land" });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.deepEqual(data.hours.land["2026-11-12"], { open: "9:00", close: "21:00", early: "8:45" });
+  assert.equal(data.hours.sea, undefined);
+  assert.match(data.attribution, /ThemeParks\.wiki/);
 });

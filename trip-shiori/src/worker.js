@@ -41,6 +41,9 @@ export default {
       if (blockMatch && request.method === "DELETE") {
         return json(await deleteItem(notion, env, blockMatch[1]));
       }
+      if (url.pathname === "/api/hours" && request.method === "GET") {
+        return json(await getHours(env));
+      }
       if (url.pathname === "/api/pois" && request.method === "GET") {
         return json(await getPois(env));
       }
@@ -278,6 +281,48 @@ async function getPois(env) {
     await cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=604800", "Content-Type": "application/json" } }));
   }
   return out;
+}
+
+// ---------- パークの開園・閉園時間（ThemeParks.wiki） ----------
+// 東京ディズニーリゾートの下からランド／シーの id を探し、その予定（開園・閉園・早く入れる時間）を返す。3時間キャッシュ
+const THEMEPARKS = "https://api.themeparks.wiki/v1";
+const TDR_ID = "faff60df-c766-4470-8adb-dee78e813f42";
+const PARK_NAME = { land: /disneyland/i, sea: /disneysea/i };
+
+async function cachedJson(url, ttl, base) {
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = new Request(`https://trip-shiori.cache/${encodeURIComponent(url)}`);
+  const hit = cache && (await cache.match(key));
+  if (hit) return hit.json();
+  const res = await fetch(base + url, { headers: { "User-Agent": "trip-shiori/1.0 (personal trip planner)" } });
+  if (!res.ok) throw httpError(502, "開園時間（ThemeParks.wiki）を取れませんでした");
+  const data = await res.json();
+  if (cache) await cache.put(key, new Response(JSON.stringify(data), { headers: { "Cache-Control": `max-age=${ttl}` } }));
+  return data;
+}
+
+function hhmm(iso) {
+  const m = String(iso || "").match(/T(\d{2}):(\d{2})/);
+  return m ? `${Number(m[1])}:${m[2]}` : null;
+}
+
+async function getHours(env) {
+  const base = env.THEMEPARKS_URL || THEMEPARKS;
+  const children = await cachedJson(`/entity/${TDR_ID}/children`, 30 * 86400, base);
+  const out = {};
+  for (const park of tripParks(env)) {
+    const ent = (children.children || []).find((c) => c.entityType === "PARK" && PARK_NAME[park].test(c.name || ""));
+    if (!ent) continue;
+    const sched = await cachedJson(`/entity/${ent.id}/schedule`, 3 * 3600, base);
+    const days = {};
+    for (const s of sched.schedule || []) {
+      const d = (days[s.date] ||= {});
+      if (s.type === "OPERATING") { d.open = hhmm(s.openingTime); d.close = hhmm(s.closingTime); }
+      else if (s.type === "EXTRA_HOURS") { d.early = hhmm(s.openingTime); }
+    }
+    out[park] = days;
+  }
+  return { hours: out, fetchedAt: new Date().toISOString(), attribution: "Powered by ThemeParks.wiki" };
 }
 
 async function addItem(notion, env, parentId, body) {
