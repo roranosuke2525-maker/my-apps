@@ -11,6 +11,11 @@
 - [CLAUDE.md](CLAUDE.md) — 全アプリ共通の作り・Claude Code の進め方（容量を節約する約束）
 - [docs/spec-template.md](docs/spec-template.md) — Claude Code に渡す仕様書の型
 
+## 作り方
+
+- [CLAUDE.md](CLAUDE.md) — 全アプリ共通の作り・Claude Code の進め方（容量を節約する約束）
+- [docs/spec-template.md](docs/spec-template.md) — Claude Code に渡す仕様書の型
+
 ## 道具
 
 - `tools/notion.mjs` — Notion の連携ツールが無いセッション（定期実行など）から、環境変数 NOTION_TOKEN で Notion を読み書きする（道具名・JSON は Notion の連携ツールと同じ）。🛠 アプリ修正の定期実行が使う
