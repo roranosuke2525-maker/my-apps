@@ -78,10 +78,16 @@ async function getTrip(notion, env) {
   return {
     title: env.TITLE || pageTitle(page),
     pageUrl: `https://www.notion.so/${normalizeId(env.PAGE_ID)}`,
+    parks: tripParks(env),
     days,
     groups,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+function tripParks(env) {
+  const list = (env.TRIP_PARKS || "land,sea").split(",").map((s) => s.trim()).filter((s) => s === "land" || s === "sea");
+  return list.length ? list : ["land", "sea"];
 }
 
 // ページ直下のうち「ToDo」見出しから次の見出しまで（見出しが無ければ全部）の、チェックボックスのまとまり

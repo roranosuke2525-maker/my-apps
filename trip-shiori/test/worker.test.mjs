@@ -140,6 +140,9 @@ test("しおりを読む：日付は日程に、ほかは準備に。隠した�
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.equal(data.title, "11/12～11/14 旅行");
+  assert.deepEqual(data.parks, ["land", "sea"]);
+  const only = await worker.fetch(new Request("https://app.test/api/trip", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, TRIP_PARKS: "land" });
+  assert.deepEqual((await only.json()).parks, ["land"]);
   assert.deepEqual(data.days.map((d) => d.date), ["2026-11-12", "2026-11-14"]);
   const d12 = data.days[0];
   assert.equal(d12.items[0].time, "7:00");

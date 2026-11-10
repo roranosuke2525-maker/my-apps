@@ -56,6 +56,7 @@ iPhone（ホーム画面のアプリ） ──合言葉──▶ Cloudflare Work
 - アプリを開くには合言葉（APP_KEY）が必要。合言葉は端末のブラウザにだけ保存される
 - Cloudflare Workers の無料枠で動く
 - 次の旅行では `wrangler.toml` の `PAGE_ID`・`TITLE`・`TRIP_YEAR`・`MAP_AREA` を変えるだけで使い回せる
+- ランドとシーは分けて扱う。使うパークは `wrangler.toml` の `TRIP_PARKS`（今回は `land` だけ。シーの日は `sea`、両方なら `land,sea` で切り替えのボタンが出る）。地図・検索は今のパークのものだけ出す。今回行かないパークの「行きたい場所」は別の欄に残る
 
 ## セットアップ（PCのブラウザだけでできる）
 

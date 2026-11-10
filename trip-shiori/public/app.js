@@ -245,7 +245,7 @@ function addPlace(text) {
   const g = state.trip.groups.find(isPlacesGroup) || addGroup(PLACES_LABEL);
   addItem(g, text, false);
   const hit = TripPlaces.findPlace(text);
-  if (hit && TripPlaces.AREA_BY_ID[hit.area].park !== state.park) {
+  if (hit && TripPlaces.AREA_BY_ID[hit.area].park !== state.park && tripParks().includes(TripPlaces.AREA_BY_ID[hit.area].park)) {
     state.park = TripPlaces.AREA_BY_ID[hit.area].park;
     save(PARK_STORAGE, state.park);
     render();
@@ -500,16 +500,23 @@ function mapPins() {
   return pins;
 }
 
+// 今回の旅行で使うパーク（Worker の TRIP_PARKS）。今のパークが外れていたら最初のパークに
+function tripParks() {
+  return state.trip?.parks?.length ? state.trip.parks : ["land", "sea"];
+}
+
 function renderMap() {
   const { PARKS, AREA_BY_ID } = TripPlaces;
+  if (!tripParks().includes(state.park)) { state.park = tripParks()[0]; save(PARK_STORAGE, state.park); }
   const all = mapPins();
   const placed = all.filter((p) => p.place);
   const unknown = all.filter((p) => !p.place && p.kind === "want");
   const park = PARKS[state.park] || PARKS.land;
   const pins = placed.filter((p) => AREA_BY_ID[p.place.area].park === state.park);
+  const later = placed.filter((p) => p.kind === "want" && !tripParks().includes(AREA_BY_ID[p.place.area].park));
   pins.forEach((p, i) => { p.no = i + 1; });
 
-  const seg = el("div", { class: "seg", role: "tablist" }, Object.entries(PARKS).map(([id, pk]) => {
+  const seg = tripParks().length < 2 ? null : el("div", { class: "seg", role: "tablist" }, tripParks().map((id) => [id, PARKS[id]]).map(([id, pk]) => {
     const n = placed.filter((p) => AREA_BY_ID[p.place.area].park === id).length;
     return el("button", {
       type: "button", role: "tab", "aria-selected": String(state.park === id),
@@ -555,6 +562,13 @@ function renderMap() {
       ...(groups.length ? groups.flat() : [el("p", { class: "sub" }, "まだありません。下で足すと地図に番号が立ちます。")]),
       addRow,
     ),
+    later.length ? el("section", { class: "card area-card unknown" },
+      el("h3", {}, "今回は行かないパークの場所"),
+      el("p", { class: "sub" }, "シーに行く日に、Worker の TRIP_PARKS を変えると地図に出ます。"),
+      el("ul", { class: "list" }, later.map((p) => el("li", { class: p.item.checked ? "done" : "" },
+        el("div", { class: "row-pm" }, checkRow(p.item),
+          el("button", { type: "button", class: "trash-btn", "aria-label": `${p.item.label}を消す`, onclick: () => removeItem(p.item) }, trashIcon()))))),
+    ) : null,
     unknown.length ? el("section", { class: "card area-card unknown" },
       el("h3", {}, "場所がわからないもの"),
       el("p", { class: "sub" }, "押して名前を直すか、後ろに（エリア名）を付けると地図に出ます。例）ポップコーン（トゥーンタウン）"),

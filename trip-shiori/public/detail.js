@@ -93,9 +93,8 @@ function runSearch() {
   if (!q && kind === "all") return { kind, list: [] };
   const nq = norm(q);
   const list = searchIndex()
-    .filter((e) => matchKind(e, kind) && (!nq || norm(e.name).includes(nq)))
-    .sort((a, b) => (a.park === state.park ? 0 : 1) - (b.park === state.park ? 0 : 1)
-      || (a.lat != null ? 0 : 1) - (b.lat != null ? 0 : 1) // 地図に出るものを先に
+    .filter((e) => e.park === state.park && matchKind(e, kind) && (!nq || norm(e.name).includes(nq)))
+    .sort((a, b) => (a.lat != null ? 0 : 1) - (b.lat != null ? 0 : 1) // 地図に出るものを先に
       || a.name.localeCompare(b.name, "ja"));
   return { kind, list };
 }
@@ -137,7 +136,7 @@ function mapView(pins) {
     el("div", { class: "hit-top" },
       el("span", { class: "hit-icon", "aria-hidden": "true" }, (e.beer ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon),
       el("span", { class: "hit-name" }, e.name)),
-    el("div", { class: "hit-sub" }, [PARKS[e.park].name, area, e.ct ? "おむつ台" : "", e.lat == null ? "位置なし→Google" : ""].filter(Boolean).join("・")),
+    el("div", { class: "hit-sub" }, [area, e.ct ? "おむつ台" : "", e.lat == null ? "位置なし→Google" : ""].filter(Boolean).join("・")),
     e.kind !== "toilet" ? el("button", {
       type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`,
       onclick: (ev) => { ev.stopPropagation(); addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); },
@@ -236,7 +235,7 @@ function drawDetail(pins) {
   }
   detail.layer.clearLayers();
   const { KINDS } = TripPlaces;
-  const index = searchIndex().filter((e) => e.lat != null);
+  const index = searchIndex().filter((e) => e.lat != null && e.park === state.park);
   const { list } = runSearch();
   const highlight = new Set(list.map((e) => e.name));
   // すべての施設を小さなアイコンで。検索に当たったものは大きく
