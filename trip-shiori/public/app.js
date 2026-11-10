@@ -180,27 +180,56 @@ function addGroup(text) {
   return g;
 }
 
-// 消す。まだ送っていない項目なら、送る予定ごと取り消す
+// 消す：すぐ画面から消し、5秒の「元に戻す」のあとで Notion へ送る（Notion ではゴミ箱に入り30日は戻せる）
+let pendingDelete = null;
 function removeItem(item) {
-  const kids = flatten([item]).length - 1;
-  const msg = kids > 0 ? `「${item.label}」と、その下の${kids}件を消しますか？` : `「${item.label}」を消しますか？`;
-  if (!confirm(`${msg}\n（Notion のゴミ箱に入り、30日は戻せます）`)) return false;
-  const drop = (list) => {
-    const i = list.indexOf(item);
-    if (i >= 0) { list.splice(i, 1); return true; }
-    return list.some((n) => drop(n.items || n.children || []));
-  };
-  if (!drop(state.trip.groups)) drop(state.trip.days);
-  if (isTemp(item.id)) {
-    const gone = new Set(flattenIds(item));
+  commitDelete();
+  const loc = locate(item);
+  if (!loc) return false;
+  loc.list.splice(loc.index, 1);
+  pendingDelete = { item, ...loc, timer: setTimeout(commitDelete, 5000) };
+  save(CACHE_STORAGE, state.trip);
+  render();
+  const kids = flatten([item]).length - (item.checked === null ? 0 : 1);
+  toast(`「${item.label}」${kids > 0 ? `と下の${kids}件` : ""}を消しました`, "元に戻す", () => {
+    const p = pendingDelete;
+    if (!p || p.item !== item) return;
+    clearTimeout(p.timer);
+    pendingDelete = null;
+    p.list.splice(Math.min(p.index, p.list.length), 0, item);
+    save(CACHE_STORAGE, state.trip);
+    render();
+  });
+  return true;
+}
+
+function commitDelete() {
+  const p = pendingDelete;
+  if (!p) return;
+  pendingDelete = null;
+  clearTimeout(p.timer);
+  if (isTemp(p.item.id)) {
+    const gone = new Set(flattenIds(p.item));
     state.outbox = state.outbox.filter((o) => !gone.has(o.tempId) && !gone.has(o.id) && !gone.has(o.parent));
     save(OUTBOX_STORAGE, state.outbox);
     save(CACHE_STORAGE, state.trip);
-    render();
-    return true;
+    renderSync();
+    return;
   }
-  queue({ op: "delete", id: item.id });
-  return true;
+  queue({ op: "delete", id: p.item.id });
+}
+
+function locate(item) {
+  const find = (list) => {
+    const index = list.indexOf(item);
+    if (index >= 0) return { list, index };
+    for (const n of list) {
+      const hit = find(n.items || n.children || []);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return find(state.trip.groups) || find(state.trip.days);
 }
 
 function flattenIds(item) {
@@ -386,6 +415,7 @@ function renderDay(day) {
         el("div", { class: "tl-actions" },
           item.map ? el("a", { class: "map-btn", href: item.map, target: "_blank", rel: "noopener" }, pinIcon(), "地図") : null,
           item.link ? el("a", { class: "map-btn", href: item.link, target: "_blank", rel: "noopener" }, "リンク") : null,
+          item.checked !== null ? el("button", { type: "button", class: "trash-btn", "aria-label": `${item.label}を消す`, onclick: () => removeItem(item) }, trashIcon()) : null,
         ),
       ),
       dragHandle(item, day),
@@ -437,7 +467,15 @@ function pmButtons(item) {
         if (!open) setTimeout(() => document.querySelector(`[data-for="under-${item.id}"] input`)?.focus(), 0);
       },
     }, "＋"),
-    el("button", { type: "button", class: "pm-btn minus", "aria-label": `${item.label}を消す`, onclick: () => removeItem(item) }, "−"));
+    el("button", { type: "button", class: "pm-btn minus", "aria-label": `${item.label}を消す`, onclick: () => removeItem(item) }, trashIcon()));
+}
+
+function trashIcon() {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  n.setAttribute("viewBox", "0 0 24 24");
+  n.setAttribute("aria-hidden", "true");
+  n.innerHTML = '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>';
+  return n;
 }
 
 // ---------- マップ（自作の模式図） ----------
@@ -491,6 +529,7 @@ function renderMap() {
           p.place.name && TripPlaces.norm(p.place.name) !== TripPlaces.norm(p.item.label) ? el("div", { class: "pin-when" }, `→ ${p.place.name}`) : null,
         ),
         el("a", { class: "map-btn tight", href: placeSearch(p, park), target: "_blank", rel: "noopener" }, pinIcon(), "地図"),
+        p.kind === "want" ? el("button", { type: "button", class: "trash-btn", "aria-label": `${p.item.label}を消す`, onclick: () => removeItem(p.item) }, trashIcon()) : null,
       ))),
   ]);
 
@@ -557,27 +596,65 @@ function svg(tag, attrs = {}, ...kids) {
   return n;
 }
 
+// エリアの形：楕円をもとに、id から決まる揺らぎで丸みのある島の形にする（毎回同じ形）
+function blobPath(a, grow = 0) {
+  let seed = [...a.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
+  const n = 9;
+  const pts = Array.from({ length: n }, (_, i) => {
+    const t = (i / n) * Math.PI * 2;
+    const k = 0.9 + rnd() * 0.18;
+    return [a.x + Math.cos(t) * (a.w / 2 + grow) * k, a.y + Math.sin(t) * (a.h / 2 + grow) * k];
+  });
+  const p = (i) => pts[(i + n) % n];
+  let d = `M${p(0)[0].toFixed(2)} ${p(0)[1].toFixed(2)}`;
+  for (let i = 0; i < n; i++) {
+    const [p0, p1, p2, p3] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0].toFixed(2)} ${c1[1].toFixed(2)} ${c2[0].toFixed(2)} ${c2[1].toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+  }
+  return `${d} Z`;
+}
+
 function parkSvg(park, pins) {
   const w = park.water;
   const nodes = [
+    svg("defs", {},
+      svg("pattern", { id: "dots", width: 3, height: 3, patternUnits: "userSpaceOnUse" }, svg("circle", { cx: 1.5, cy: 1.5, r: 0.18, class: "map-dot" })),
+      svg("filter", { id: "soft", x: "-20%", y: "-20%", width: "140%", height: "140%" },
+        svg("feDropShadow", { dx: 0, dy: 0.6, stdDeviation: 0.7, "flood-color": "#5a4b8a", "flood-opacity": 0.14 }))),
     svg("rect", { x: 0, y: 0, width: 100, height: 100, rx: 6, class: "map-bg" }),
-    svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx + 9, ry: w.ry + 7, class: "map-plaza" }),
+    svg("rect", { x: 0, y: 0, width: 100, height: 100, rx: 6, fill: "url(#dots)" }),
   ];
-  for (const a of park.areas) nodes.push(svg("path", { d: `M${w.cx} ${w.cy} L${a.x} ${a.y}`, class: "map-link" }));
+  // 道（広場から各エリアへ・入口から広場へ）
+  const road = (d) => [svg("path", { d, class: "map-road" }), svg("path", { d, class: "map-road-line" })];
+  nodes.push(...road(`M50 99 L${w.cx} ${w.cy}`));
+  for (const a of park.areas) nodes.push(...road(`M${w.cx} ${w.cy} Q${(w.cx + a.x) / 2 + (a.y - w.cy) * 0.12} ${(w.cy + a.y) / 2 - (a.x - w.cx) * 0.12} ${a.x} ${a.y}`));
+  nodes.push(svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx + 8, ry: w.ry + 6, class: "map-plaza" }));
   nodes.push(svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx, ry: w.ry, class: "map-water" }));
-  nodes.push(svg("text", { x: 50, y: 98.5, class: "map-gate-label" }, "▲ 入口"));
+  nodes.push(svg("path", { d: `M${w.cx - w.rx * 0.5} ${w.cy - 0.6} q1.5 -1 3 0 t3 0 M${w.cx - 1} ${w.cy + 1.6} q1.5 -1 3 0 t3 0`, class: "map-wave" }));
+  // エリア：ふちのにじみ → 島 → イラスト → 名前
   for (const a of park.areas) {
-    const r = Math.min(a.w, a.h) * 0.48;
-    nodes.push(svg("rect", { x: a.x - a.w / 2, y: a.y - a.h / 2, width: a.w, height: a.h, rx: r, ry: r, fill: a.color, class: "map-area" }));
-    nodes.push(svg("text", { x: a.x, y: a.y - a.h / 2 + 4.2, class: "map-label" }, a.short || a.name));
+    nodes.push(svg("path", { d: blobPath(a, 1.6), fill: a.color, class: "map-halo" }));
+    nodes.push(svg("path", { d: blobPath(a), fill: a.color, class: "map-area", filter: "url(#soft)" }));
+    const size = Math.min(13, Math.min(a.w, a.h) * 0.62);
+    nodes.push(svg("image", { href: `img/areas/${a.id}.png`, x: a.x - size / 2, y: a.y - size / 2 - a.h * 0.06, width: size, height: size, class: "map-icon" }));
+    const label = a.short || a.name;
+    const lw = label.length * 2.5 + 3;
+    const ly = a.y - a.h / 2 + 0.6;
+    nodes.push(svg("rect", { x: a.x - lw / 2, y: ly - 2.2, width: lw, height: 4.2, rx: 2.1, class: "map-pill" }));
+    nodes.push(svg("text", { x: a.x, y: ly + 0.9, class: "map-label" }, label));
   }
+  nodes.push(svg("image", { href: "img/areas/gate.png", x: 45.5, y: 90, width: 9, height: 9, class: "map-icon" }));
+  // ピン
   for (const a of park.areas) {
     const here = pins.filter((p) => p.place.area === a.id);
     here.forEach((p, i) => {
-      const cols = Math.max(1, Math.floor((a.w - 2) / 7));
+      const cols = Math.max(1, Math.floor((a.w - 2) / 6.6));
       const rows = Math.ceil(here.length / cols);
-      const x = a.x - ((Math.min(here.length, cols) - 1) * 7) / 2 + (i % cols) * 7;
-      const y = a.y + 2 - ((rows - 1) * 7) / 2 + Math.floor(i / cols) * 7;
+      const x = a.x - ((Math.min(here.length, cols) - 1) * 6.6) / 2 + (i % cols) * 6.6;
+      const y = a.y + a.h * 0.22 - ((rows - 1) * 6.6) / 2 + Math.floor(i / cols) * 6.6;
       const c = pinColor(p);
       nodes.push(svg("g", {
         class: `map-pin ${p.kind}${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`,
@@ -590,8 +667,8 @@ function parkSvg(park, pins) {
           document.getElementById(`pin-${p.item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
         },
       },
-      svg("path", { d: "M0 3.6 C-1.2 2.2 -3.2 1 -3.2 -1 A3.2 3.2 0 1 1 3.2 -1 C3.2 1 1.2 2.2 0 3.6 Z", class: "drop", stroke: c }),
-      svg("text", { y: 0.1, fill: c }, String(p.no))));
+      svg("path", { d: "M0 3.6 C-1.2 2.2 -3.2 1 -3.2 -1 A3.2 3.2 0 1 1 3.2 -1 C3.2 1 1.2 2.2 0 3.6 Z", class: "drop", fill: c }),
+      svg("text", { y: 0.1 }, String(p.no))));
     });
   }
   return svg("svg", { viewBox: "0 0 100 100", class: "park-map", role: "img", "aria-label": `${park.name}の模式図` }, nodes);
@@ -789,12 +866,13 @@ function renderSync() {
 }
 
 let toastTimer;
-function toast(msg) {
+function toast(msg, actionLabel, action) {
   const t = $("toast");
-  t.textContent = msg;
+  t.replaceChildren(el("span", {}, msg),
+    actionLabel ? el("button", { type: "button", class: "toast-btn", onclick: () => { t.hidden = true; action(); } }, actionLabel) : null);
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
+  toastTimer = setTimeout(() => { t.hidden = true; }, actionLabel ? 5000 : 3500);
 }
 
 // ---------- はじまり ----------
@@ -820,6 +898,7 @@ $("reload").addEventListener("click", () => refresh());
 window.addEventListener("online", () => refresh());
 window.addEventListener("offline", () => renderSync());
 document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") commitDelete();
   if (document.visibilityState === "visible") { render(); refresh(); }
 });
 
