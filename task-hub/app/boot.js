@@ -43,9 +43,9 @@
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
     if (d.ovz) { OV.z = d.ovz; OV.sel = ""; render(); return; }
-    if (d.ovh) { OV.h = d.ovh; render(); return; }
-    if (d.ovsel) { OV.sel = d.ovsel; render(); return; }
-    if (d.ovclear) { OV.sel = ""; render(); return; }
+    if (d.ovgo != null) { $("#ovcv")?._face?.(Number(d.ovgo)); return; }
+    if (d.ovhome) { OV.x = 0; OV.zpos = 0; OV.pitch = 0.42; $("#ovcv")?._redraw?.(); return; }
+    if (d.ovwalk) return;
     if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
     if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
     if (d.nbulk) { nextBulk(el, d.nbulk); return; }
