@@ -1,7 +1,7 @@
 // Worker の動作確認。Notion API は偽物に差し替える。 npm test
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import worker, { mapQuery } from "../src/worker.js";
+import worker, { mapQuery, sortByTime } from "../src/worker.js";
 
 const PAGE = "41362844acbe805e80edd37ae516ecda";
 const KEY = "test-key-0123456789";
@@ -186,4 +186,10 @@ test("地図で探す場所の取り出し", () => {
   assert.equal(mapQuery("📍 クリッターカントリー"), "クリッターカントリー");
   assert.equal(mapQuery("センターストリートコーヒーハウス"), "センターストリートコーヒーハウス");
   assert.equal(mapQuery("三芳PA（上り）でトイレ休憩"), "三芳PA 上り");
+});
+
+test("予定は時刻順。時刻の無い行は直前の行にくっつく", () => {
+  const it = (time, label) => ({ time, label });
+  const out = sortByTime([it(null, "メモ"), it("13:30", "北斎"), it("7:15", "駅"), it(null, "ルート"), it("9:05", "PA")]);
+  assert.deepEqual(out.map((x) => x.label), ["メモ", "駅", "ルート", "PA", "北斎"]);
 });

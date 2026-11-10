@@ -167,7 +167,7 @@ function addItem(parent, text, withTime) {
   const item = { id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, text, label: t ? t[2] : text, time: t ? t[1].replace("：", ":") : null, checked: false, children: [] };
   const list = parent.items || parent.children;
   list.push(item);
-  if (withTime) list.sort(byTime);
+  if (withTime) sortByTime(list);
   queue({ op: "add", parent: parent.id, text, tempId: item.id });
 }
 
@@ -195,21 +195,42 @@ function addPlace(text) {
   }
 }
 
-function editItem(item) {
-  const text = prompt("文字を直す", item.text);
-  if (text === null) return;
-  const s = text.replace(/[\r\n]+/g, " ").trim();
-  if (!s || s === item.text) return;
-  item.text = s;
-  const t = item.time !== null ? s.match(/^(\d{1,2}[:：]\d{2})[\s　]*(.*)$/u) : null;
-  item.label = t ? t[2] : s;
-  if (t) item.time = t[1].replace("：", ":");
-  queue({ op: "edit", id: item.id, text: s });
+// 時刻順に並べる。時刻の無い行（ルートのメモなど）は直前の時刻つきの行にくっついて動く
+function sortByTime(items) {
+  const head = [];
+  const segs = [];
+  for (const i of items) {
+    if (i.time) segs.push([i]);
+    else (segs.length ? segs.at(-1) : head).push(i);
+  }
+  segs.sort((a, b) => minutes(a[0].time) - minutes(b[0].time));
+  items.splice(0, items.length, ...head, ...segs.flat());
 }
 
-function byTime(a, b) {
-  if (!a.time || !b.time) return 0;
-  return minutes(a.time) - minutes(b.time);
+function fmtTime(t) {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
+function shiftTime(t, delta) {
+  const v = Math.min(23 * 60 + 55, Math.max(0, minutes(t) + delta));
+  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`;
+}
+
+function composeText(time, label) {
+  return time ? `${fmtTime(time)}　${label}` : label;
+}
+
+// 時刻・文字を書き換えて送る（day を渡すと並べ直す）
+function saveItem(item, time, label, day) {
+  const text = composeText(day ? time : item.time, label); // 日程の外（マップなど）で直すときは時刻をそのまま残す
+  if (text === item.text) return;
+  item.text = text;
+  item.label = label;
+  if (day) item.time = time ? fmtTime(time) : null;
+  if (day) sortByTime(day.items);
+  queue({ op: "edit", id: item.id, text });
 }
 
 function minutes(t) {
@@ -269,6 +290,7 @@ function el(tag, attrs = {}, ...kids) {
 }
 
 function render() {
+  if (state.dragging) { state.needsRender = true; return; }
   const loggedIn = !!memoryKey;
   $("login").hidden = loggedIn;
   $("view").hidden = !loggedIn;
@@ -327,18 +349,19 @@ function renderDay(day) {
 
   const rows = day.items.map((item) => {
     const isNext = item === nextItem;
-    return el("li", { class: `tl-row${item.checked ? " done" : ""}${isNext ? " next" : ""}` },
-      el("div", { class: "tl-time" }, item.time || "—"),
+    return el("li", { class: `tl-row${item.checked ? " done" : ""}${isNext ? " next" : ""}`, "data-id": item.id },
+      el("button", { type: "button", class: "tl-time", onclick: () => openEditor(item, day), "aria-label": `${item.label}の時刻を変える` }, item.time || "—"),
       el("div", { class: "tl-dot", "aria-hidden": "true" }),
       el("div", { class: "tl-body" },
         isNext ? el("span", { class: "badge" }, "つぎ") : null,
-        checkRow(item),
+        checkRow(item, day),
         item.children.length ? renderList(item.children, 1) : null,
         el("div", { class: "tl-actions" },
           item.map ? el("a", { class: "map-btn", href: item.map, target: "_blank", rel: "noopener" }, pinIcon(), "地図") : null,
           item.link ? el("a", { class: "map-btn", href: item.link, target: "_blank", rel: "noopener" }, "リンク") : null,
         ),
       ),
+      dragHandle(item, day),
     );
   });
 
@@ -348,8 +371,8 @@ function renderDay(day) {
       el("span", { class: "count" }, `${done}/${day.items.length}`),
     ),
     day.items.length ? el("ol", { class: "timeline" }, rows) : el("div", { class: "card empty" }, "予定はまだありません"),
-    addForm(day.id, "例）16:00 ベビーセンター", (text) => addItem(day, text, true)),
-    el("p", { class: "hint" }, "丸を押すと済みに。文字を長押しで直せます。地図はGoogleマップで開きます。"),
+    timedAddForm(day),
+    el("p", { class: "hint" }, "丸で済み。時刻か文字を押すと直せます。右の ⋮⋮ を上下にドラッグすると時刻が5分ずつ動きます。"),
   ];
 }
 
@@ -357,27 +380,19 @@ function renderPrep() {
   const cards = state.trip.groups.filter((g) => !isPlacesGroup(g)).map((g) => {
     const flat = flatten(g.items);
     const done = flat.filter((i) => i.checked).length;
-    const open = state.open.has(g.id);
     return el("section", { class: "card group" },
       el("div", { class: "group-head" },
-        el("h2", {}, g.label),
+        el("button", { type: "button", class: "group-title", onclick: () => openEditor(g) }, g.label),
         el("span", { class: `count${flat.length && done === flat.length ? " all" : ""}` }, `${done}/${flat.length}`),
-        el("button", {
-          type: "button", class: "plus", "aria-label": `${g.label}に足す`, "aria-expanded": String(open),
-          onclick: () => { open ? state.open.delete(g.id) : state.open.add(g.id); render(); if (!open) setTimeout(() => document.querySelector(`[data-for="${g.id}"] input`)?.focus(), 0); },
-        }, open ? "×" : "＋"),
       ),
-      g.items.length ? renderList(g.items, 0) : el("p", { class: "sub" }, "まだ何もありません"),
-      open ? addForm(g.id, "足すものを入れる", (text) => addItem(g, text, false)) : null,
+      g.items.length ? renderList(g.items, 0) : null,
+      addForm(g.id, `＋ ${g.label}に足す`, (text) => addItem(g, text, false), "mini"),
     );
   });
   return [
+    addForm("new-group", "＋ 親（まとまり）を足す　例）👕 服装", (text) => addGroup(text), "mini parent"),
     ...cards,
-    el("section", { class: "card group add-group" },
-      el("h2", {}, "まとまりを足す"),
-      el("p", { class: "sub" }, "服装・買い物・お土産など。Notion のToDoの最後に入ります。"),
-      addForm("new-group", "例）👕 服装", (text) => addGroup(text)),
-    ),
+    el("p", { class: "hint" }, "丸で済み。項目を押すと、文字を直したり、その下（子）に足したりできます。"),
   ];
 }
 
@@ -513,33 +528,144 @@ function renderList(items, depth) {
     )));
 }
 
-function checkRow(item) {
-  if (item.checked === null) return el("div", { class: "note" }, item.label);
-  let timer = null;
-  let longPressed = false;
-  const start = () => { longPressed = false; timer = setTimeout(() => { longPressed = true; editItem(item); }, 550); };
-  const cancel = () => clearTimeout(timer);
-  return el("button", {
-    type: "button",
-    class: "check-row",
-    role: "checkbox",
-    "aria-checked": String(item.checked),
-    onpointerdown: start,
-    onpointerup: cancel,
-    onpointerleave: cancel,
-    onpointercancel: cancel,
-    oncontextmenu: (e) => e.preventDefault(),
-    onclick: () => { if (!longPressed) toggle(item); },
-  },
-  el("span", { class: "box", "aria-hidden": "true" }, item.checked ? "✓" : ""),
-  el("span", { class: "label" }, item.label),
-  isTemp(item.id) ? el("span", { class: "pending", title: "未送信" }, "…") : null);
+function checkRow(item, day) {
+  if (item.checked === null) return el("button", { type: "button", class: "note", onclick: () => openEditor(item) }, item.label);
+  return el("div", { class: "check-row" },
+    el("button", {
+      type: "button", class: "box", role: "checkbox", "aria-checked": String(item.checked), "aria-label": `${item.label}を済みにする`,
+      onclick: () => toggle(item),
+    }, item.checked ? "✓" : ""),
+    el("button", { type: "button", class: "label", onclick: () => openEditor(item, day) }, item.label,
+      isTemp(item.id) ? el("span", { class: "pending", title: "未送信" }, " …") : null),
+  );
 }
 
-function addForm(key, placeholder, onAdd) {
+// ---------- 直す画面（下から出るシート） ----------
+function openEditor(item, day) {
+  const timed = !!day;
+  let time = item.time ? item.time.padStart(5, "0") : "";
+  const timeInput = el("input", { type: "time", step: "300", value: time, "aria-label": "時刻" });
+  const textInput = el("input", { type: "text", value: item.label, maxlength: "190", "aria-label": "内容" });
+  const close = () => { sheet.remove(); render(); };
+  const isGroup = !!item.items;
+  const canHaveChildren = isGroup || item.checked !== null;
+  const childInput = el("input", { type: "text", placeholder: "例）日焼け止め", maxlength: "190", enterkeyhint: "done", "aria-label": "下に足すもの",
+    onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); addChild(); } } });
+  const added = el("div", { class: "added" });
+  function addChild() {
+    const t = childInput.value.replace(/[\r\n]+/g, " ").trim();
+    if (!t) return childInput.focus();
+    addItem(item, t, false);
+    added.append(el("span", { class: "added-chip" }, `✓ ${t}`));
+    childInput.value = "";
+    childInput.focus();
+  }
+  const nudge = (d) => {
+    const base = timeInput.value || item.time || "12:00";
+    timeInput.value = shiftTime(base, d).padStart(5, "0");
+  };
+  const sheet = el("div", { class: "sheet-wrap", onclick: (e) => { if (e.target === sheet) close(); } },
+    el("form", {
+      class: "sheet",
+      onsubmit: (e) => {
+        e.preventDefault();
+        const label = textInput.value.replace(/[\r\n]+/g, " ").trim();
+        if (!label) return textInput.focus();
+        if (isGroup) {
+          if (label !== item.label) { item.label = label; queue({ op: "edit", id: item.id, text: label }); }
+        } else saveItem(item, timed ? timeInput.value : null, label, day);
+        close();
+      },
+    },
+    el("div", { class: "sheet-grip", "aria-hidden": "true" }),
+    el("h2", {}, timed ? "予定を直す" : isGroup ? "まとまりを直す" : "項目を直す"),
+    timed ? el("label", { class: "field" }, el("span", {}, "時刻"),
+      el("div", { class: "time-row" }, timeInput,
+        el("button", { type: "button", class: "chip", onclick: () => nudge(-15) }, "−15分"),
+        el("button", { type: "button", class: "chip", onclick: () => nudge(15) }, "＋15分"),
+        el("button", { type: "button", class: "chip", onclick: () => { timeInput.value = ""; } }, "なし"))) : null,
+    el("label", { class: "field" }, el("span", {}, "内容"), textInput),
+    canHaveChildren ? el("div", { class: "field" }, el("span", {}, "この下（子）に足す"),
+      el("div", { class: "time-row" }, childInput,
+        el("button", { type: "button", class: "chip strong", onclick: addChild }, "足す")),
+      added) : null,
+    el("div", { class: "sheet-actions" },
+      el("button", { type: "button", class: "ghost", onclick: close }, "やめる"),
+      el("button", { type: "submit", class: "primary" }, "保存")),
+    ));
+  document.body.append(sheet);
+  setTimeout(() => (timed ? timeInput : textInput).focus(), 50);
+}
+
+// ---------- ドラッグで時刻を動かす（12px ごとに5分） ----------
+function dragHandle(item, day) {
+  const STEP_PX = 12;
+  let startY = 0;
+  let base = "";
+  let next = "";
+  let row = null;
+  const move = (e) => {
+    const dy = e.clientY - startY;
+    next = shiftTime(base, Math.round(dy / STEP_PX) * 5);
+    row.style.transform = `translateY(${dy}px)`;
+    row.querySelector(".tl-time").textContent = next;
+  };
+  const end = (e) => {
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    e.currentTarget.removeEventListener("pointermove", move);
+    row.classList.remove("dragging");
+    row.style.transform = "";
+    state.dragging = false;
+    if (next && next !== item.time) saveItem(item, next, item.label, day);
+    else if (state.needsRender) render();
+    state.needsRender = false;
+    render();
+  };
+  return el("button", {
+    type: "button", class: "drag", "aria-label": `${item.label}の時刻をドラッグで変える`,
+    onpointerdown: (e) => {
+      e.preventDefault();
+      row = e.currentTarget.closest(".tl-row");
+      startY = e.clientY;
+      base = item.time || nearTime(day, item) || "12:00";
+      next = "";
+      state.dragging = true;
+      row.classList.add("dragging");
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      e.currentTarget.addEventListener("pointermove", move);
+    },
+    onpointerup: end,
+    onpointercancel: end,
+  }, "⋮⋮");
+}
+
+function nearTime(day, item) {
+  const i = day.items.indexOf(item);
+  for (let k = i - 1; k >= 0; k--) if (day.items[k].time) return day.items[k].time;
+  return day.items.find((x) => x.time)?.time || null;
+}
+
+function timedAddForm(day) {
+  const timeInput = el("input", { type: "time", step: "300", "aria-label": "時刻" });
+  const textInput = el("input", { type: "text", placeholder: "例）ベビーセンター", maxlength: "190", enterkeyhint: "done", "aria-label": "予定" });
+  return el("form", {
+    class: "add-form timed",
+    "data-for": day.id,
+    onsubmit: (e) => {
+      e.preventDefault();
+      const label = textInput.value.replace(/[\r\n]+/g, " ").trim();
+      if (!label) return textInput.focus();
+      addItem(day, composeText(timeInput.value, label), true);
+      textInput.value = "";
+      timeInput.value = "";
+    },
+  }, timeInput, textInput, el("button", { type: "submit", class: "primary small" }, "足す"));
+}
+
+function addForm(key, placeholder, onAdd, cls = "") {
   const input = el("input", { type: "text", placeholder, maxlength: "200", enterkeyhint: "done", "aria-label": placeholder });
   return el("form", {
-    class: "add-form",
+    class: `add-form ${cls}`.trim(),
     "data-for": key,
     onsubmit: (e) => {
       e.preventDefault();
