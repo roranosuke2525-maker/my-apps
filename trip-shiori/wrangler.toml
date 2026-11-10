@@ -1,0 +1,25 @@
+name = "trip-shiori"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+# しおりの元にする Notion のページ（DB_タスク管理「11/12～11/14までのディズニーの旅行用のアプリ作成」）
+# 次の旅行では、ここを別のページのIDに変えるだけで使い回せる
+PAGE_ID = "41362844acbe805e80edd37ae516ecda"
+# 画面の上に出す名前（空ならページの名前）
+TITLE = "ディズニー旅行 11/12〜14"
+# 「11/12」のように年の無い日付を何年として読むか
+TRIP_YEAR = "2026"
+# 地図ボタンで検索するときに後ろに足す地名（駅や「〒」を含む行には足さない）
+MAP_AREA = "舞浜"
+# しおりに出さないまとまり（ページ直下のチェックボックスの文字の書き出し。カンマ区切り）
+HIDE_GROUPS = "Notionにしおりとしてまとめる,日付ごとに地図,服装や買い物など,BとDの合算"
+
+# 秘密の値は wrangler secret put で入れる（このファイルには書かない）
+#   NOTION_TOKEN : Notion 内部インテグレーションのシークレット（ntn_...）
+#   APP_KEY      : アプリを開くときの合言葉（16文字以上）
