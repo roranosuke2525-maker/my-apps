@@ -1,0 +1,18 @@
+name = "gemini-art"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# 描いた絵（30日で消える）と、調べ物の月の回数（usage:YYYY-MM）を置く
+[[kv_namespaces]]
+binding = "IMAGES"
+id = "419a84ee7d4a421aab1f36ebea5b960b"
+
+# [vars] を書くとダッシュボードの値は上書きされる。変えたいときだけ書く
+#   RESEARCH_MONTHLY_LIMIT : 調べ物の月の上限（既定 300）
+#   RESEARCH_MODEL         : 調べ物のモデル（既定 gemini-flash-latest）
+#   GEMINI_MODEL           : 絵のモデル（既定 gemini-2.5-flash-image）
+
+# 秘密の値は wrangler secret put（またはダッシュボードの「変数とシークレット」）で入れる。このファイルには書かない
+#   GEMINI_API_KEY : Google AI Studio のキー
+#   MCP_PATH_TOKEN : コネクタの URL に入れる合言葉（/mcp/<合言葉>）
+#   SCRIPT_TOKEN   : （任意）Claude Code のスクリプト用の合言葉

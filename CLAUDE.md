@@ -11,6 +11,7 @@
 | `ikuji-hub/` | 育児ハブ | アーティファクト版（MCP）のみ |
 | `shiori/` | しおり | Worker＋Notion API |
 | `task-hub/` | 今どこ | Worker＋Notion API（アーティファクト版も）。画面は `app/` を `scripts/build.mjs` でまとめる |
+| `gemini-art/` | Gemini（コネクタ） | Worker（MCP）。絵と調べ物。画面なし |
 | `tools/notion.mjs` | Notion の道具 | 連携ツールの無いセッション用（`task-hub/src/worker.js` を使う） |
 
 ## 決まった作り（新しいアプリもこの形）
