@@ -528,7 +528,7 @@ function renderMap() {
           p.kind === "plan" ? el("div", { class: "pin-when" }, `予定 ${p.when}`) : null,
           p.place.name && TripPlaces.norm(p.place.name) !== TripPlaces.norm(p.item.label) ? el("div", { class: "pin-when" }, `→ ${p.place.name}`) : null,
         ),
-        el("a", { class: "map-btn tight", href: placeSearch(p, park), target: "_blank", rel: "noopener" }, pinIcon(), "地図"),
+        el("button", { type: "button", class: "map-btn tight", onclick: () => flyToPin(p) }, pinIcon(), "地図"),
         p.kind === "want" ? el("button", { type: "button", class: "trash-btn", "aria-label": `${p.item.label}を消す`, onclick: () => removeItem(p.item) }, trashIcon()) : null,
       ))),
   ]);
@@ -546,20 +546,9 @@ function renderMap() {
     },
   }, input, el("button", { type: "submit", class: "primary" }, "＋ 追加"));
 
-  const mode = mapMode();
-  const modeSeg = el("div", { class: "seg small", role: "tablist" }, [["simple", "かんたん図"], ["detail", "詳しい地図"]].map(([m, label]) =>
-    el("button", { type: "button", role: "tab", "aria-selected": String(mode === m), onclick: () => { setMapMode(m); render(); } }, label)));
-
   return [
     seg,
-    renderSearch(),
-    modeSeg,
-    el("div", { class: `card map-card${mode === "detail" ? " detail" : ""}` }, mode === "detail" ? detailMap(pins) : parkSvg(park, pins)),
-    mode === "detail" ? el("p", { class: "legend" }, "🎢 アトラクション　🍴 食べ物　🛍 ショップ　🚻 トイレ　🍼 ベビー　🍺 ビール　（地図：OpenStreetMap）") : null,
-    mode === "detail" ? null : el("p", { class: "legend" },
-      el("span", {}, el("i", { style: "background:#9278d6" }), "行きたい"),
-      el("span", {}, el("i", { style: "background:var(--accent)" }), "予定"),
-      el("span", {}, "※ 自作の目安図（公式マップではありません）")),
+    mapView(pins),
     el("section", { class: "card place-sheet" },
       el("div", { class: "sheet-grip", "aria-hidden": "true" }),
       el("h2", {}, `行きたい場所（${park.name}）`),
@@ -580,10 +569,6 @@ function pinColor(p) {
   return TripPlaces.AREA_BY_ID[p.place.area].pin;
 }
 
-function placeSearch(p, park) {
-  const q = `${p.place.name || p.item.label} ${park.search}`;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
-}
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 function svg(tag, attrs = {}, ...kids) {
@@ -594,84 +579,6 @@ function svg(tag, attrs = {}, ...kids) {
   }
   for (const c of kids.flat()) if (c) n.append(c);
   return n;
-}
-
-// エリアの形：楕円をもとに、id から決まる揺らぎで丸みのある島の形にする（毎回同じ形）
-function blobPath(a, grow = 0) {
-  let seed = [...a.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
-  const n = 9;
-  const pts = Array.from({ length: n }, (_, i) => {
-    const t = (i / n) * Math.PI * 2;
-    const k = 0.9 + rnd() * 0.18;
-    return [a.x + Math.cos(t) * (a.w / 2 + grow) * k, a.y + Math.sin(t) * (a.h / 2 + grow) * k];
-  });
-  const p = (i) => pts[(i + n) % n];
-  let d = `M${p(0)[0].toFixed(2)} ${p(0)[1].toFixed(2)}`;
-  for (let i = 0; i < n; i++) {
-    const [p0, p1, p2, p3] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += ` C${c1[0].toFixed(2)} ${c1[1].toFixed(2)} ${c2[0].toFixed(2)} ${c2[1].toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
-  }
-  return `${d} Z`;
-}
-
-function parkSvg(park, pins) {
-  const w = park.water;
-  const nodes = [
-    svg("defs", {},
-      svg("pattern", { id: "dots", width: 3, height: 3, patternUnits: "userSpaceOnUse" }, svg("circle", { cx: 1.5, cy: 1.5, r: 0.18, class: "map-dot" })),
-      svg("filter", { id: "soft", x: "-20%", y: "-20%", width: "140%", height: "140%" },
-        svg("feDropShadow", { dx: 0, dy: 0.6, stdDeviation: 0.7, "flood-color": "#5a4b8a", "flood-opacity": 0.14 }))),
-    svg("rect", { x: 0, y: 0, width: 100, height: 100, rx: 6, class: "map-bg" }),
-    svg("rect", { x: 0, y: 0, width: 100, height: 100, rx: 6, fill: "url(#dots)" }),
-  ];
-  // 道（広場から各エリアへ・入口から広場へ）
-  const road = (d) => [svg("path", { d, class: "map-road" }), svg("path", { d, class: "map-road-line" })];
-  nodes.push(...road(`M50 99 L${w.cx} ${w.cy}`));
-  for (const a of park.areas) nodes.push(...road(`M${w.cx} ${w.cy} Q${(w.cx + a.x) / 2 + (a.y - w.cy) * 0.12} ${(w.cy + a.y) / 2 - (a.x - w.cx) * 0.12} ${a.x} ${a.y}`));
-  nodes.push(svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx + 8, ry: w.ry + 6, class: "map-plaza" }));
-  nodes.push(svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx, ry: w.ry, class: "map-water" }));
-  nodes.push(svg("path", { d: `M${w.cx - w.rx * 0.5} ${w.cy - 0.6} q1.5 -1 3 0 t3 0 M${w.cx - 1} ${w.cy + 1.6} q1.5 -1 3 0 t3 0`, class: "map-wave" }));
-  // エリア：ふちのにじみ → 島 → イラスト → 名前
-  for (const a of park.areas) {
-    nodes.push(svg("path", { d: blobPath(a, 1.6), fill: a.color, class: "map-halo" }));
-    nodes.push(svg("path", { d: blobPath(a), fill: a.color, class: "map-area", filter: "url(#soft)" }));
-    const size = Math.min(13, Math.min(a.w, a.h) * 0.62);
-    nodes.push(svg("image", { href: `img/areas/${a.id}.png`, x: a.x - size / 2, y: a.y - size / 2 - a.h * 0.06, width: size, height: size, class: "map-icon" }));
-    const label = a.short || a.name;
-    const lw = label.length * 2.5 + 3;
-    const ly = a.y - a.h / 2 + 0.6;
-    nodes.push(svg("rect", { x: a.x - lw / 2, y: ly - 2.2, width: lw, height: 4.2, rx: 2.1, class: "map-pill" }));
-    nodes.push(svg("text", { x: a.x, y: ly + 0.9, class: "map-label" }, label));
-  }
-  nodes.push(svg("image", { href: "img/areas/gate.png", x: 45.5, y: 90, width: 9, height: 9, class: "map-icon" }));
-  // ピン
-  for (const a of park.areas) {
-    const here = pins.filter((p) => p.place.area === a.id);
-    here.forEach((p, i) => {
-      const cols = Math.max(1, Math.floor((a.w - 2) / 6.6));
-      const rows = Math.ceil(here.length / cols);
-      const x = a.x - ((Math.min(here.length, cols) - 1) * 6.6) / 2 + (i % cols) * 6.6;
-      const y = a.y + a.h * 0.22 - ((rows - 1) * 6.6) / 2 + Math.floor(i / cols) * 6.6;
-      const c = pinColor(p);
-      nodes.push(svg("g", {
-        class: `map-pin ${p.kind}${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`,
-        transform: `translate(${x} ${y})`,
-        role: "button",
-        "aria-label": p.item.label,
-        onclick: () => {
-          state.focus = p.item.id;
-          render();
-          document.getElementById(`pin-${p.item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-        },
-      },
-      svg("path", { d: "M0 3.6 C-1.2 2.2 -3.2 1 -3.2 -1 A3.2 3.2 0 1 1 3.2 -1 C3.2 1 1.2 2.2 0 3.6 Z", class: "drop", fill: c }),
-      svg("text", { y: 0.1 }, String(p.no))));
-    });
-  }
-  return svg("svg", { viewBox: "0 0 100 100", class: "park-map", role: "img", "aria-label": `${park.name}の模式図` }, nodes);
 }
 
 function flatten(items) {
