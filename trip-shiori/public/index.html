@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>旅のしおり</title>
+  <meta name="theme-color" content="#1d2a5c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="しおり">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="head-row">
+      <div>
+        <span id="head-sub" class="head-sub">旅のしおり</span>
+        <h1 id="head-title">旅のしおり</h1>
+      </div>
+      <button type="button" id="reload" class="round-btn" aria-label="読み直す">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
+      </button>
+    </div>
+    <nav id="tabs" class="tabs" role="tablist" aria-label="日付と準備"></nav>
+  </header>
+
+  <main id="main">
+    <section id="login" class="view" hidden>
+      <div class="card login">
+        <h2>合言葉を入れてください</h2>
+        <p class="sub">Worker に設定した APP_KEY です。この端末にだけ保存されます。</p>
+        <form id="login-form">
+          <input id="key" type="password" autocomplete="current-password" required minlength="16" placeholder="合言葉" aria-label="合言葉">
+          <button type="submit" class="primary">ひらく</button>
+        </form>
+      </div>
+    </section>
+    <section id="view" class="view" hidden></section>
+  </main>
+
+  <footer id="foot" class="foot" hidden>
+    <span id="sync" class="sync"></span>
+    <span class="foot-links">
+      <a id="notion-link" href="#" target="_blank" rel="noopener">Notionで開く</a>
+      <button type="button" id="logout" class="link-btn">合言葉を消す</button>
+    </span>
+  </footer>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
