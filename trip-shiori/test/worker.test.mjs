@@ -1,7 +1,7 @@
 // Worker の動作確認。Notion API は偽物に差し替える。 npm test
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import worker, { mapQuery, sortByTime } from "../src/worker.js";
+import worker, { mapQuery, sortByTime, poiKind } from "../src/worker.js";
 
 const PAGE = "41362844acbe805e80edd37ae516ecda";
 const KEY = "test-key-0123456789";
@@ -13,6 +13,7 @@ const env = {
   MAP_AREA: "舞浜",
   HIDE_GROUPS: "Notionにしおりとしてまとめる",
   NOTION_API_BASE: "https://notion.test/v1",
+  OVERPASS_URL: "https://overpass.test/api",
   ASSETS: { fetch: async () => new Response("asset") },
 };
 
@@ -61,6 +62,15 @@ beforeEach(() => {
   ids.outside = add(PAGE, "to_do", "BとDの合算　公式アプリと同期できたりする？");
 
   globalThis.fetch = async (url, init = {}) => {
+    if (String(url).startsWith("https://overpass.test")) {
+      calls.push({ method: "POST", path: "overpass", body: init.body });
+      return new Response(JSON.stringify({ elements: [
+        { type: "node", lat: 35.633, lon: 139.880, tags: { tourism: "attraction", name: "カリブの海賊" } },
+        { type: "way", center: { lat: 35.632, lon: 139.881 }, tags: { amenity: "toilets", changing_table: "yes" } },
+        { type: "node", lat: 35.627, lon: 139.885, tags: { amenity: "restaurant", name: "Cafe", "name:ja": "カフェ・ポルトフィーノ" } },
+        { type: "node", tags: { amenity: "cafe", name: "座標なし" } },
+      ] }), { status: 200 });
+    }
     const u = new URL(url.replace(env.NOTION_API_BASE, "https://x"));
     const path = u.pathname;
     const body = init.body ? JSON.parse(init.body) : undefined;
@@ -86,6 +96,13 @@ beforeEach(() => {
         kids[parent] = list;
       }
       return ok({ results: made.map((id) => blocks[id]) });
+    }
+    if (init.method === "DELETE" && (m = path.match(/^\/blocks\/(\w+)$/))) {
+      const b = blocks[m[1]];
+      const pid = b.parent.page_id || b.parent.block_id;
+      kids[pid] = kids[pid].filter((x) => x !== m[1]);
+      delete blocks[m[1]];
+      return ok({ id: m[1], in_trash: true });
     }
     if (init.method === "PATCH" && (m = path.match(/^\/blocks\/(\w+)$/))) {
       const b = blocks[m[1]];
@@ -192,4 +209,23 @@ test("予定は時刻順。時刻の無い行は直前の行にくっつく", ()
   const it = (time, label) => ({ time, label });
   const out = sortByTime([it(null, "メモ"), it("13:30", "北斎"), it("7:15", "駅"), it(null, "ルート"), it("9:05", "PA")]);
   assert.deepEqual(out.map((x) => x.label), ["メモ", "駅", "ルート", "PA", "北斎"]);
+});
+
+test("消す：しおりの中の項目はゴミ箱へ。日付のまとまり・しおりの外は消さない", async () => {
+  const res = await req("DELETE", `/api/blocks/${ids.sunglasses}`);
+  assert.equal(res.status, 200);
+  assert.ok(!kids[ids.pouch].includes(ids.sunglasses));
+  assert.equal((await req("DELETE", `/api/blocks/${ids.d12}`)).status, 400);
+  assert.equal((await req("DELETE", `/api/blocks/${ids.outside}`)).status, 403);
+  assert.ok(blocks[ids.d12] && blocks[ids.outside]);
+});
+
+test("詳しい地図のデータ：座標の無いものは捨て、日本語名と種類をつける", async () => {
+  const res = await req("GET", "/api/pois");
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.deepEqual(data.pois.map((p) => [p.n, p.k]), [["カリブの海賊", "ride"], ["トイレ", "toilet"], ["カフェ・ポルトフィーノ", "food"]]);
+  assert.equal(data.pois[1].ct, 1);
+  assert.match(data.attribution, /OpenStreetMap/);
+  assert.equal(poiKind({ shop: "gift" }), "shop");
 });
