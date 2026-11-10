@@ -211,6 +211,8 @@ function renderHeader() {
   const player = state.data.player?.player;
   const isHabit = state.view === "habit";
   $("habit-tabs").hidden = !isHabit || !memoryKey;
+  // 習慣の画面は、タイトルの行をなくして「日・週…」のタブと Lv を1行にまとめる（チェックの欄を広く）
+  document.body.classList.toggle("habit-mode", isHabit && !!memoryKey);
   $("exp-row").hidden = isHabit || !memoryKey;
   $("head-title").textContent = VIEW_TITLES[state.view];
   const ym = (d) => `${Number(d.slice(0, 4))}年${Number(d.slice(5, 7))}月`;

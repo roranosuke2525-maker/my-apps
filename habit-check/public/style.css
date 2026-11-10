@@ -915,3 +915,20 @@ body.theater-open { overflow: hidden; }
 .report { position: relative; padding-right: 92px; }
 .report-undo { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); border: 1px solid var(--line); background: var(--card); color: var(--danger); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .report-undo:disabled { opacity: 0.5; }
+
+/* 習慣の画面：上の帯は「タブ＋Lv」の1行、日付の行・下のメニューも細く */
+body.habit-mode .top { padding-top: calc(env(safe-area-inset-top) + 2px); display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; }
+body.habit-mode .head-text { display: none; }
+body.habit-mode .head-row { grid-column: 2; grid-row: 1; }
+body.habit-mode .tabs { grid-column: 1; grid-row: 1; margin-top: 0; }
+body.habit-mode .tabs button { height: 34px; font-size: 13.5px; }
+body.habit-mode .pill { height: 26px; padding: 0 9px; font-size: 11px; }
+body.habit-mode .pill b { font-size: 14px; }
+body.habit-mode main { padding: 4px 10px 4px; }
+body.habit-mode .view { gap: 4px; }
+body.habit-mode .nav-row .icon-btn { width: 32px; height: 28px; }
+body.habit-mode .nav-title { font-size: 14px; }
+body.habit-mode #status { padding: 4px 10px; }
+body.habit-mode .note-row input, body.habit-mode .note-row .primary { min-height: 34px; }
+body.habit-mode .bottom button { height: 44px; gap: 0; font-size: 9.5px; }
+body.habit-mode .bottom button svg { width: 19px; height: 19px; }
