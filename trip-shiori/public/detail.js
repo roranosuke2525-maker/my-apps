@@ -26,7 +26,7 @@ try { detail.pois = JSON.parse(localStorage.getItem(POIS_STORAGE) || "null"); } 
 
 // ---------- データ ----------
 async function loadPois(force = false) {
-  const fresh = detail.pois && Date.now() - Date.parse(detail.pois.fetchedAt) < POI_MAX_AGE;
+  const fresh = detail.pois?.parks && Date.now() - Date.parse(detail.pois.fetchedAt) < POI_MAX_AGE;
   if (detail.loading || (fresh && !force)) return;
   detail.loading = true;
   detail.error = "";
@@ -49,7 +49,7 @@ function parkOf(lat, lon) {
 // 辞書（エリア・ビールの印）と OpenStreetMap（座標・トイレ）をまとめた検索用の一覧
 function searchIndex() {
   const { PLACE_INDEX, norm } = TripPlaces;
-  const osm = (detail.pois?.pois || []).map((p) => ({ ...p, key: norm(p.n), park: parkOf(p.lat, p.lon) }));
+  const osm = (detail.pois?.pois || []).map((p) => ({ ...p, key: norm(p.n), park: p.p || parkOf(p.lat, p.lon) }));
   const byKey = new Map();
   for (const p of osm) if (p.key && !byKey.has(p.key)) byKey.set(p.key, p);
   const used = new Set();

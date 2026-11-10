@@ -201,18 +201,39 @@ async function deleteItem(notion, env, id) {
 }
 
 // ---------- 詳しい地図（OpenStreetMap のデータ） ----------
-// パークの範囲の施設（アトラクション・食べ物・ショップ・トイレ・ベビー）を Overpass API から取り、1週間キャッシュする
+// パークの敷地の中の施設（アトラクション・食べ物・ショップ・トイレ・ベビー）だけを Overpass API から取り、1週間キャッシュする。
+// 敷地は OpenStreetMap の「テーマパーク」の形を使う。見つからないときだけ、園内に収まる狭い四角で取る
 const OVERPASS = "https://overpass-api.de/api/interpreter";
-const POI_BBOX = "35.6205,139.8735,35.6390,139.8935"; // ランドとシーを両方含む範囲
-const POI_QUERY = `[out:json][timeout:40];
+const PARK_AREA = {
+  land: { name: "^(東京ディズニーランド|Tokyo Disneyland)$", bbox: "35.6303,139.8768,35.6362,139.8838" },
+  sea: { name: "^(東京ディズニーシー|Tokyo DisneySea)$", bbox: "35.6236,139.8822,35.6296,139.8905" },
+};
+const OUTSIDE = /ホテル|hotel|イクスピアリ|ikspiari|ボン・?ヴォヤージュ|bon voyage|駅|station|リゾートライン|駐車場|parking/iu;
+
+function poiQuery(park, useBbox) {
+  const a = PARK_AREA[park];
+  const where = useBbox ? `(${a.bbox})` : "(area.p)";
+  return `[out:json][timeout:40];
+${useBbox ? "" : `area["tourism"="theme_park"]["name"~"${a.name}"]->.p;`}
 (
-  nwr["tourism"="attraction"](${POI_BBOX});
-  nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|toilets|baby_hatch)$"](${POI_BBOX});
-  nwr["shop"](${POI_BBOX});
-  nwr["changing_table"="yes"](${POI_BBOX});
-  nwr["baby_feeding"](${POI_BBOX});
+  nwr["tourism"="attraction"]${where};
+  nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|toilets|baby_hatch)$"]${where};
+  nwr["shop"]${where};
+  nwr["changing_table"="yes"]${where};
+  nwr["baby_feeding"]${where};
 );
 out center tags;`;
+}
+
+async function overpass(env, query) {
+  const res = await fetch(env.OVERPASS_URL || OVERPASS, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "trip-shiori/1.0 (personal trip planner)" },
+    body: `data=${encodeURIComponent(query)}`,
+  });
+  if (!res.ok) throw httpError(502, "地図のデータ（OpenStreetMap）を取れませんでした。少し待ってからもう一度");
+  return (await res.json()).elements || [];
+}
 
 export function poiKind(tags) {
   if (tags.amenity === "toilets") return "toilet";
@@ -224,36 +245,35 @@ export function poiKind(tags) {
 }
 
 async function getPois(env) {
+  const parks = tripParks(env);
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const key = new Request("https://trip-shiori.cache/pois-v1");
+  const key = new Request(`https://trip-shiori.cache/pois-v2-${parks.join("-")}`);
   const hit = cache && (await cache.match(key));
   if (hit) return hit.json();
-  const res = await fetch(env.OVERPASS_URL || OVERPASS, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "trip-shiori/1.0 (personal trip planner)" },
-    body: `data=${encodeURIComponent(POI_QUERY)}`,
-  });
-  if (!res.ok) throw httpError(502, "地図のデータ（OpenStreetMap）を取れませんでした。少し待ってからもう一度");
-  const data = await res.json();
   const pois = [];
-  for (const e of data.elements || []) {
-    const tags = e.tags || {};
-    const lat = e.lat ?? e.center?.lat;
-    const lon = e.lon ?? e.center?.lon;
-    if (lat == null || lon == null) continue;
-    const kind = poiKind(tags);
-    const name = tags["name:ja"] || tags.name || (kind === "toilet" ? "トイレ" : "");
-    if (!name) continue;
-    pois.push({
-      n: name,
-      k: kind,
-      lat: Math.round(lat * 1e6) / 1e6,
-      lon: Math.round(lon * 1e6) / 1e6,
-      ...(tags.changing_table === "yes" ? { ct: 1 } : {}),
-      ...(tags.wheelchair === "yes" ? { wc: 1 } : {}),
-    });
+  for (const park of parks) {
+    let elements = await overpass(env, poiQuery(park, false));
+    if (!elements.length) elements = await overpass(env, poiQuery(park, true)); // 敷地の形が見つからないとき
+    for (const e of elements) {
+      const tags = e.tags || {};
+      const lat = e.lat ?? e.center?.lat;
+      const lon = e.lon ?? e.center?.lon;
+      if (lat == null || lon == null) continue;
+      const kind = poiKind(tags);
+      const name = tags["name:ja"] || tags.name || (kind === "toilet" ? "トイレ" : "");
+      if (!name || OUTSIDE.test(`${name} ${tags.name || ""}`)) continue;
+      pois.push({
+        n: name,
+        k: kind,
+        p: park,
+        lat: Math.round(lat * 1e6) / 1e6,
+        lon: Math.round(lon * 1e6) / 1e6,
+        ...(tags.changing_table === "yes" ? { ct: 1 } : {}),
+        ...(tags.wheelchair === "yes" ? { wc: 1 } : {}),
+      });
+    }
   }
-  const out = { pois, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
+  const out = { pois, parks, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
   if (cache) {
     await cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=604800", "Content-Type": "application/json" } }));
   }
