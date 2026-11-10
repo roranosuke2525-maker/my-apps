@@ -1,7 +1,6 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク。しおりの中身は app.js が端末に保存する）
-const CACHE = "trip-shiori-v6";
-const SHELL = ["./", "index.html", "app.js", "style.css", "places.js", "detail.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "manifest.webmanifest", "icons/icon-192.png",
-  "img/areas/adventure.png", "img/areas/arabian.png", "img/areas/bazaar.png", "img/areas/critter.png", "img/areas/delta.png", "img/areas/discovery.png", "img/areas/fantasy.png", "img/areas/gate.png", "img/areas/harbor.png", "img/areas/island.png", "img/areas/mermaid.png", "img/areas/springs.png", "img/areas/tomorrow.png", "img/areas/toon.png", "img/areas/waterfront.png", "img/areas/western.png"];
+const CACHE = "trip-shiori-v7";
+const SHELL = ["./", "index.html", "app.js", "style.css", "places.js", "detail.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "manifest.webmanifest", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

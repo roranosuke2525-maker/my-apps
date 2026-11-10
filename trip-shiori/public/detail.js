@@ -3,7 +3,6 @@
 "use strict";
 
 const POIS_STORAGE = "trip-shiori-pois";
-const MODE_STORAGE = "trip-shiori-mapmode";
 const POI_MAX_AGE = 7 * 864e5;
 const PARK_BOUNDS = {
   land: [[35.6298, 139.8762], [35.6364, 139.8842]],
@@ -24,13 +23,6 @@ const detail = {
   fly: null,
 };
 try { detail.pois = JSON.parse(localStorage.getItem(POIS_STORAGE) || "null"); } catch { /* 無くても動く */ }
-
-function mapMode() {
-  try { return localStorage.getItem(MODE_STORAGE) || "simple"; } catch { return "simple"; }
-}
-function setMapMode(m) {
-  try { localStorage.setItem(MODE_STORAGE, m); } catch { /* 保存できなくても動く */ }
-}
 
 // ---------- データ ----------
 async function loadPois(force = false) {
@@ -101,76 +93,97 @@ function runSearch() {
   if (!q && kind === "all") return { kind, list: [] };
   const nq = norm(q);
   const list = searchIndex()
-    .filter((e) => matchKind(e, kind) && (!nq || norm(e.name).includes(nq)))
-    .sort((a, b) => (a.park === state.park ? 0 : 1) - (b.park === state.park ? 0 : 1) || a.name.localeCompare(b.name, "ja"));
+    .filter((e) => e.park === state.park && matchKind(e, kind) && (!nq || norm(e.name).includes(nq)))
+    .sort((a, b) => (a.lat != null ? 0 : 1) - (b.lat != null ? 0 : 1) // 地図に出るものを先に
+      || a.name.localeCompare(b.name, "ja"));
   return { kind, list };
 }
 
-// ---------- 検索の画面 ----------
-function renderSearch() {
+// ---------- 地図（検索を上に、結果を下に重ねる） ----------
+function mapView(pins) {
   const { KINDS, PARKS, AREA_BY_ID } = TripPlaces;
   const { kind, list } = runSearch();
-  if ((kind === "toilet" || kind === "baby") && !detail.pois && !detail.loading && !detail.error) setTimeout(() => loadPois(), 0);
   const input = el("input", {
-    type: "search", value: detail.q, placeholder: "さがす　例）トイレ・ビール・カレー・プーさん", enterkeyhint: "search", "aria-label": "施設をさがす",
-    oninput: (e) => { detail.q = e.target.value; clearTimeout(detail.t); detail.t = setTimeout(() => { render(); refocusSearch(); }, 250); },
+    type: "search", value: detail.q, placeholder: "さがす　例）トイレ・ビール・カレー", enterkeyhint: "search", "aria-label": "施設をさがす",
+    oninput: (e) => { detail.q = e.target.value; detail.cardsX = 0; clearTimeout(detail.t); detail.t = setTimeout(() => { render(); refocusSearch(); }, 300); },
+    onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); },
   });
+  const clear = detail.q || detail.kind !== "all"
+    ? el("button", { type: "button", class: "search-clear", "aria-label": "検索をやめる", onclick: () => { detail.q = ""; detail.kind = "all"; render(); } }, "×")
+    : null;
   const chips = el("div", { class: "kind-chips" },
-    [["all", "すべて"], ...Object.entries(KINDS).map(([k, v]) => [k, `${v.icon} ${v.name}`])].map(([k, label]) =>
+    Object.entries(KINDS).map(([k, v]) =>
       el("button", {
-        type: "button", class: "chip", "aria-pressed": String(detail.kind === k),
-        onclick: () => {
-          detail.kind = detail.kind === k ? "all" : k;
-          if (["toilet", "baby"].includes(detail.kind)) loadPois();
-          render();
-        },
-      }, label)));
+        type: "button", class: "chip", "aria-pressed": String(kind === k),
+        onclick: () => { detail.kind = detail.kind === k ? "all" : k; detail.cardsX = 0; render(); },
+      }, `${v.icon} ${v.name}`)));
 
-  const notes = [];
-  if ((kind === "toilet" || kind === "baby") && !detail.pois) {
-    notes.push(detail.loading ? "地図のデータを読み込み中…" : "トイレの位置は「詳しい地図」のデータ（OpenStreetMap）を読むと出ます。");
-  }
-  if (kind === "toilet") notes.push("トイレはどのエリアにもあり、ほぼすべてにおむつ交換台があります（下調べの目安）。");
-  if (kind === "beer") notes.push("🍺 は下調べでビールの取り扱いがあった店（目安）。季節で変わるので当日は公式アプリで。");
-  if (kind === "baby") notes.push("ベビーセンター：ランドはワールドバザール、シーはメディテレーニアンハーバー。授乳室はマーメイドラグーンなどにも（要確認）。");
-  if (detail.error) notes.push(detail.error);
+  const note =
+    detail.loading && !detail.pois ? "地図のデータを読み込み中…"
+      : detail.error ? detail.error
+        : kind === "beer" ? "🍺 は下調べの目安。当日は公式アプリで"
+          : kind === "toilet" ? "どのトイレにもほぼおむつ交換台あり（目安）"
+            : kind === "baby" ? "ベビーセンター：ランドはワールドバザール、シーはハーバー"
+              : "";
 
-  const rows = list.slice(0, 40).map((e) => {
+  const withPos = list.filter((e) => e.lat != null);
+  const cards = list.slice(0, 40).map((e) => {
     const area = e.area ? AREA_BY_ID[e.area].short || AREA_BY_ID[e.area].name : "";
-    return el("li", { class: "hit" },
+    return el("div", {
+      class: `hit-card${e.lat == null ? " nopos" : ""}`, role: "button", tabindex: "0",
+      onclick: () => showOnMap(e),
+    },
+    el("div", { class: "hit-top" },
       el("span", { class: "hit-icon", "aria-hidden": "true" }, (e.beer ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon),
-      el("div", { class: "hit-main" },
-        el("div", { class: "hit-name" }, e.name),
-        el("div", { class: "hit-sub" }, [PARKS[e.park].name, area, e.ct ? "おむつ交換台" : "", e.beer ? "ビール" : ""].filter(Boolean).join("・"))),
-      el("button", { type: "button", class: "map-btn tight", onclick: () => showOnMap(e) }, pinIcon(), "地図"),
-      e.kind !== "toilet" ? el("button", { type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`, onclick: () => { addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋") : null,
-    );
+      el("span", { class: "hit-name" }, e.name)),
+    el("div", { class: "hit-sub" }, [area, e.ct ? "おむつ台" : "", e.lat == null ? "位置なし→Google" : ""].filter(Boolean).join("・")),
+    e.kind !== "toilet" ? el("button", {
+      type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`,
+      onclick: (ev) => { ev.stopPropagation(); addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); },
+    }, "＋ 行きたい") : null);
   });
+  const searching = detail.q.trim() || kind !== "all";
 
-  return el("section", { class: "card search-card" },
-    el("div", { class: "search-row" }, input),
-    chips,
-    ...notes.map((n) => el("p", { class: "sub" }, n)),
-    list.length ? el("ul", { class: "list hits" }, rows) : (detail.q || detail.kind !== "all") ? el("p", { class: "sub" }, "見つかりませんでした") : null,
-    list.length > 40 ? el("p", { class: "sub" }, `ほか ${list.length - 40} 件。ことばを足して絞ってください`) : null,
-  );
+  return el("div", { class: "card map-card detail" },
+    el("div", { class: "map-wrap" },
+      detailMap(pins),
+      el("div", { class: "map-top" },
+        el("div", { class: "search-row" }, input, clear),
+        chips,
+        note ? el("div", { class: "map-note" }, note) : null),
+      searching ? el("div", { class: "map-bottom" },
+        el("div", { class: "hit-count" }, list.length ? `${list.length}件${withPos.length < list.length ? `（地図に出るのは${withPos.length}件）` : ""}` : "見つかりませんでした"),
+        cards.length ? keepScroll(el("div", { class: "hit-cards", onscroll: (e) => { detail.cardsX = e.target.scrollLeft; } }, cards)) : null) : null,
+    ));
+}
+
+// 描き直しても、結果のカードの横の位置をそのまま残す
+function keepScroll(node) {
+  requestAnimationFrame(() => { node.scrollLeft = detail.cardsX || 0; });
+  return node;
 }
 
 function refocusSearch() {
-  const i = document.querySelector('.search-card input[type="search"]');
+  const i = document.querySelector('.map-top input[type="search"]');
   if (i) { i.focus(); const v = i.value; i.setSelectionRange?.(v.length, v.length); }
 }
 
+// 一覧の「地図」：自分の地図でその場所へ。位置がわからなければ Google マップ
+function flyToPin(p) {
+  const key = TripPlaces.norm(p.place?.name || p.item.label);
+  const e = searchIndex().find((x) => TripPlaces.norm(x.name) === key);
+  showOnMap(e || { name: p.place?.name || p.item.label, park: state.park });
+}
+
 function showOnMap(e) {
-  if (e.park !== state.park) { state.park = e.park; save(PARK_STORAGE, e.park); }
+  if (e.park && e.park !== state.park) { state.park = e.park; save(PARK_STORAGE, e.park); }
   if (e.lat != null) {
-    setMapMode("detail");
     detail.fly = e;
     render();
     document.querySelector(".map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
-  const q = `${e.name} ${TripPlaces.PARKS[e.park].search}`;
+  const q = `${e.name} ${TripPlaces.PARKS[e.park || state.park].search}`;
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, "_blank", "noopener");
 }
 
@@ -211,13 +224,18 @@ function drawDetail(pins) {
     detail.shownPark = "";
   }
   setTimeout(() => detail.map.invalidateSize(), 0);
-  if (detail.shownPark !== state.park) {
-    detail.map.fitBounds(PARK_BOUNDS[state.park]);
+  const pad = { paddingTopLeft: [16, 110], paddingBottomRight: [16, 150], maxZoom: 18 };
+  const searchKey = `${state.park}|${detail.kind}|${detail.q.trim()}`;
+  if (detail.shownPark !== state.park || detail.lastKey !== searchKey) {
+    const hits = runSearch().list.filter((e) => e.lat != null && e.park === state.park);
+    if (hits.length && searchKey !== `${state.park}|all|`) detail.map.fitBounds(hits.map((e) => [e.lat, e.lon]), pad);
+    else detail.map.fitBounds(PARK_BOUNDS[state.park]);
     detail.shownPark = state.park;
+    detail.lastKey = searchKey;
   }
   detail.layer.clearLayers();
   const { KINDS } = TripPlaces;
-  const index = searchIndex().filter((e) => e.lat != null);
+  const index = searchIndex().filter((e) => e.lat != null && e.park === state.park);
   const { list } = runSearch();
   const highlight = new Set(list.map((e) => e.name));
   // すべての施設を小さなアイコンで。検索に当たったものは大きく
