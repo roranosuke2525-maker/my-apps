@@ -185,4 +185,5 @@ test("地図で探す場所の取り出し", () => {
   assert.equal(mapQuery("関越⇒外環でディズニーリゾートへ"), null);
   assert.equal(mapQuery("📍 クリッターカントリー"), "クリッターカントリー");
   assert.equal(mapQuery("センターストリートコーヒーハウス"), "センターストリートコーヒーハウス");
+  assert.equal(mapQuery("三芳PA（上り）でトイレ休憩"), "三芳PA 上り");
 });

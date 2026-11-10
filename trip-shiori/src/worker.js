@@ -139,15 +139,15 @@ export function mapQuery(label) {
     .replace(/[（(][^）)]*[）)]/gu, "")
     .replace(/[\s　]*(チェックイン|チェックアウト|集合|到着|出発)$/u, "")
     .trim();
-  const station = base.match(/^(\S+?駅)/u);
-  if (station) return station[1];
+  const station = base.match(/^(\S+?(?:駅|PA|SA))/u);
+  if (station) return /PA|SA/.test(station[1]) && paren && /[上下]り/u.test(paren[1]) ? `${station[1]} ${paren[1]}` : station[1];
   if (forced) return base;
   if (PLACE.test(base) && !/[⇒→]/u.test(base)) return base;
   return null;
 }
 
 function mapUrl(q, env) {
-  const area = env.MAP_AREA && !/駅|〒/u.test(q) ? ` ${env.MAP_AREA}` : "";
+  const area = env.MAP_AREA && !/駅|〒|PA|SA/u.test(q) ? ` ${env.MAP_AREA}` : "";
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + area)}`;
 }
 
