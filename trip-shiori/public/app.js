@@ -258,8 +258,7 @@ function defaultTab() {
   const today = todayStr();
   const hit = days.find((d) => d.date === today);
   if (hit) return hit.id;
-  if (days.length && today > days.at(-1).date) return days.at(-1).id;
-  return "prep";
+  return "map";
 }
 
 function headline() {
@@ -320,12 +319,12 @@ function render() {
 }
 
 function renderTabs() {
-  const tabs = state.trip.days.map((d) => {
+  const tabs = [tabBtn("map", el("span", { class: "tab-md" }, "マップ"), el("span", { class: "tab-w" }, "行きたい"))];
+  tabs.push(...state.trip.days.map((d) => {
     const { md, w } = shortDate(d.date);
     const isToday = d.date === todayStr();
     return tabBtn(d.id, el("span", { class: "tab-md" }, md), el("span", { class: "tab-w" }, isToday ? "今日" : w));
-  });
-  tabs.push(tabBtn("map", el("span", { class: "tab-md" }, "マップ"), el("span", { class: "tab-w" }, "行きたい")));
+  }));
   tabs.push(tabBtn("prep", el("span", { class: "tab-md" }, "準備"), el("span", { class: "tab-w" }, "もちもの")));
   $("tabs").replaceChildren(...tabs);
 }
@@ -436,33 +435,58 @@ function renderMap() {
   }));
 
   const byArea = park.areas.map((a) => ({ area: a, pins: pins.filter((p) => p.place.area === a.id) }));
-  const rows = byArea.filter((g) => g.pins.length).map((g) =>
-    el("section", { class: "card area-card", style: `border-left: 6px solid ${g.area.color}` },
-      el("h3", {}, g.area.name),
-      el("ul", { class: "list" }, g.pins.map((p) =>
-        el("li", { class: `pin-row${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`, id: `pin-${p.item.id}` },
-          el("span", { class: `pin-no ${p.kind}` }, String(p.no)),
-          el("div", { class: "pin-main" },
-            checkRow(p.item),
-            p.kind === "plan" ? el("div", { class: "pin-when" }, `予定 ${p.when}`) : null,
-            p.place.name && TripPlaces.norm(p.place.name) !== TripPlaces.norm(p.item.label) ? el("div", { class: "pin-when" }, `→ ${p.place.name}`) : null,
-          ),
-          el("a", { class: "map-btn tight", href: placeSearch(p, park), target: "_blank", rel: "noopener" }, pinIcon(), "地図"),
-        ))),
-    ));
+  const groups = byArea.filter((g) => g.pins.length).map((g) => [
+    el("div", { class: "area-sub" }, el("i", { style: `background:${g.area.color}` }), g.area.name),
+    el("ul", { class: "list" }, g.pins.map((p) =>
+      el("li", { class: `pin-row${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`, id: `pin-${p.item.id}` },
+        el("span", { class: "pin-no", style: `background:${pinColor(p)}` }, el("span", {}, String(p.no))),
+        el("div", { class: "pin-main" },
+          checkRow(p.item),
+          p.kind === "plan" ? el("div", { class: "pin-when" }, `予定 ${p.when}`) : null,
+          p.place.name && TripPlaces.norm(p.place.name) !== TripPlaces.norm(p.item.label) ? el("div", { class: "pin-when" }, `→ ${p.place.name}`) : null,
+        ),
+        el("a", { class: "map-btn tight", href: placeSearch(p, park), target: "_blank", rel: "noopener" }, pinIcon(), "地図"),
+      ))),
+  ]);
+
+  const input = el("input", { type: "text", placeholder: "例）カリブの海賊／ジャングル", maxlength: "190", enterkeyhint: "done", "aria-label": "行きたい場所" });
+  const addRow = el("form", {
+    class: "add-place", "data-for": "place",
+    onsubmit: (e) => {
+      e.preventDefault();
+      const t = input.value.replace(/[\r\n]+/g, " ").trim();
+      if (!t) return input.focus();
+      input.value = "";
+      addPlace(t);
+      setTimeout(() => document.querySelector('[data-for="place"] input')?.focus(), 0);
+    },
+  }, input, el("button", { type: "submit", class: "primary" }, "＋ 追加"));
 
   return [
     seg,
     el("div", { class: "card map-card" }, parkSvg(park, pins)),
-    el("p", { class: "hint" }, "位置関係の目安の自作図です（公式マップではありません）。番号を押すと下の行に移ります。"),
-    addForm("place", "例）カリブの海賊／ジャングル", (text) => addPlace(text)),
-    ...(rows.length ? rows : [el("div", { class: "card empty" }, `${park.name}の行きたい場所はまだありません`)]),
+    el("p", { class: "legend" },
+      el("span", {}, el("i", { style: "background:#9278d6" }), "行きたい"),
+      el("span", {}, el("i", { style: "background:var(--accent)" }), "予定"),
+      el("span", {}, "※ 自作の目安図（公式マップではありません）")),
+    el("section", { class: "card place-sheet" },
+      el("div", { class: "sheet-grip", "aria-hidden": "true" }),
+      el("h2", {}, `行きたい場所（${park.name}）`),
+      ...(groups.length ? groups.flat() : [el("p", { class: "sub" }, "まだありません。下で足すと地図に番号が立ちます。")]),
+      addRow,
+    ),
     unknown.length ? el("section", { class: "card area-card unknown" },
       el("h3", {}, "場所がわからないもの"),
-      el("p", { class: "sub" }, "名前を長押しで直すか、後ろに（エリア名）を付けると地図に出ます。例）ポップコーン（トゥーンタウン）"),
+      el("p", { class: "sub" }, "押して名前を直すか、後ろに（エリア名）を付けると地図に出ます。例）ポップコーン（トゥーンタウン）"),
       el("ul", { class: "list" }, unknown.map((p) => el("li", { class: p.item.checked ? "done" : "" }, checkRow(p.item)))),
     ) : null,
   ];
+}
+
+// ピンの色：行きたい場所はエリアの色を濃くしたもの、予定はピーチ
+function pinColor(p) {
+  if (p.kind === "plan") return "#f08c7d";
+  return TripPlaces.AREA_BY_ID[p.place.area].pin;
 }
 
 function placeSearch(p, park) {
@@ -485,12 +509,15 @@ function parkSvg(park, pins) {
   const w = park.water;
   const nodes = [
     svg("rect", { x: 0, y: 0, width: 100, height: 100, rx: 6, class: "map-bg" }),
-    svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx, ry: w.ry, class: "map-water" }),
-    svg("text", { x: 50, y: 98.5, class: "map-gate-label" }, "▲ 入口"),
+    svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx + 9, ry: w.ry + 7, class: "map-plaza" }),
   ];
+  for (const a of park.areas) nodes.push(svg("path", { d: `M${w.cx} ${w.cy} L${a.x} ${a.y}`, class: "map-link" }));
+  nodes.push(svg("ellipse", { cx: w.cx, cy: w.cy, rx: w.rx, ry: w.ry, class: "map-water" }));
+  nodes.push(svg("text", { x: 50, y: 98.5, class: "map-gate-label" }, "▲ 入口"));
   for (const a of park.areas) {
-    nodes.push(svg("rect", { x: a.x - a.w / 2, y: a.y - a.h / 2, width: a.w, height: a.h, rx: 5, fill: a.color, class: "map-area" }));
-    nodes.push(svg("text", { x: a.x, y: a.y - a.h / 2 + 4, class: "map-label" }, a.short || a.name));
+    const r = Math.min(a.w, a.h) * 0.48;
+    nodes.push(svg("rect", { x: a.x - a.w / 2, y: a.y - a.h / 2, width: a.w, height: a.h, rx: r, ry: r, fill: a.color, class: "map-area" }));
+    nodes.push(svg("text", { x: a.x, y: a.y - a.h / 2 + 4.2, class: "map-label" }, a.short || a.name));
   }
   for (const a of park.areas) {
     const here = pins.filter((p) => p.place.area === a.id);
@@ -499,9 +526,9 @@ function parkSvg(park, pins) {
       const rows = Math.ceil(here.length / cols);
       const x = a.x - ((Math.min(here.length, cols) - 1) * 7) / 2 + (i % cols) * 7;
       const y = a.y + 2 - ((rows - 1) * 7) / 2 + Math.floor(i / cols) * 7;
-      const focus = state.focus === p.item.id;
+      const c = pinColor(p);
       nodes.push(svg("g", {
-        class: `map-pin ${p.kind}${p.item.checked ? " done" : ""}${focus ? " focus" : ""}`,
+        class: `map-pin ${p.kind}${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`,
         transform: `translate(${x} ${y})`,
         role: "button",
         "aria-label": p.item.label,
@@ -510,7 +537,9 @@ function parkSvg(park, pins) {
           render();
           document.getElementById(`pin-${p.item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
         },
-      }, svg("circle", { r: 3.1 }), svg("text", { y: 1.1 }, String(p.no))));
+      },
+      svg("path", { d: "M0 3.6 C-1.2 2.2 -3.2 1 -3.2 -1 A3.2 3.2 0 1 1 3.2 -1 C3.2 1 1.2 2.2 0 3.6 Z", class: "drop", stroke: c }),
+      svg("text", { y: 0.1, fill: c }, String(p.no))));
     });
   }
   return svg("svg", { viewBox: "0 0 100 100", class: "park-map", role: "img", "aria-label": `${park.name}の模式図` }, nodes);

@@ -8,13 +8,13 @@ const PARKS = {
     search: "東京ディズニーランド",
     water: { cx: 50, cy: 52, rx: 9, ry: 6 }, // まん中の広場の池（目印）
     areas: [
-      { id: "bazaar", name: "ワールドバザール", color: "#f6d6a8", x: 50, y: 78, w: 26, h: 20 },
-      { id: "adventure", name: "アドベンチャーランド", short: "アドベンチャー", color: "#bfe3c0", x: 24, y: 70, w: 26, h: 20 },
-      { id: "western", name: "ウエスタンランド", short: "ウエスタン", color: "#f3c4a3", x: 18, y: 45, w: 24, h: 22 },
-      { id: "critter", name: "クリッターカントリー", short: "クリッター", color: "#d9cfae", x: 16, y: 20, w: 22, h: 16 },
-      { id: "fantasy", name: "ファンタジーランド", short: "ファンタジー", color: "#e3cdf2", x: 50, y: 24, w: 30, h: 22 },
-      { id: "toon", name: "トゥーンタウン", color: "#ffd1dc", x: 82, y: 22, w: 22, h: 18 },
-      { id: "tomorrow", name: "トゥモローランド", short: "トゥモロー", color: "#c7dcf7", x: 80, y: 62, w: 24, h: 26 },
+      { id: "bazaar", name: "ワールドバザール", color: "#f6d6a8", pin: "#e09a3e", x: 50, y: 78, w: 26, h: 20 },
+      { id: "adventure", name: "アドベンチャーランド", short: "アドベンチャー", color: "#bfe3c0", pin: "#4fa36a", x: 24, y: 70, w: 26, h: 20 },
+      { id: "western", name: "ウエスタンランド", short: "ウエスタン", color: "#f3c4a3", pin: "#d9774f", x: 18, y: 45, w: 24, h: 22 },
+      { id: "critter", name: "クリッターカントリー", short: "クリッター", color: "#d9cfae", pin: "#9c8648", x: 16, y: 20, w: 22, h: 16 },
+      { id: "fantasy", name: "ファンタジーランド", short: "ファンタジー", color: "#e3cdf2", pin: "#9278d6", x: 50, y: 24, w: 30, h: 22 },
+      { id: "toon", name: "トゥーンタウン", color: "#ffd1dc", pin: "#e06f95", x: 82, y: 22, w: 22, h: 18 },
+      { id: "tomorrow", name: "トゥモローランド", short: "トゥモロー", color: "#c7dcf7", pin: "#4f86d4", x: 80, y: 62, w: 24, h: 26 },
     ],
   },
   sea: {
@@ -22,14 +22,14 @@ const PARKS = {
     search: "東京ディズニーシー",
     water: { cx: 50, cy: 62, rx: 14, ry: 5 }, // 港（目印）
     areas: [
-      { id: "harbor", name: "メディテレーニアンハーバー", short: "ハーバー", color: "#f6d6a8", x: 50, y: 80, w: 32, h: 18 },
-      { id: "waterfront", name: "アメリカンウォーターフロント", short: "ウォーターフロント", color: "#c7dcf7", x: 84, y: 66, w: 24, h: 26 },
-      { id: "discovery", name: "ポートディスカバリー", short: "ディスカバリー", color: "#cfeef0", x: 84, y: 30, w: 22, h: 20 },
-      { id: "delta", name: "ロストリバーデルタ", short: "ロストリバー", color: "#bfe3c0", x: 58, y: 16, w: 26, h: 16 },
-      { id: "springs", name: "ファンタジースプリングス", short: "スプリングス", color: "#e3cdf2", x: 26, y: 14, w: 26, h: 16 },
-      { id: "arabian", name: "アラビアンコースト", short: "アラビアン", color: "#f3c4a3", x: 16, y: 40, w: 22, h: 20 },
-      { id: "mermaid", name: "マーメイドラグーン", short: "マーメイド", color: "#ffd1dc", x: 18, y: 66, w: 22, h: 18 },
-      { id: "island", name: "ミステリアスアイランド", short: "ミステリアス", color: "#d9cfae", x: 50, y: 44, w: 22, h: 18 },
+      { id: "harbor", name: "メディテレーニアンハーバー", short: "ハーバー", color: "#f6d6a8", pin: "#e09a3e", x: 50, y: 80, w: 32, h: 18 },
+      { id: "waterfront", name: "アメリカンウォーターフロント", short: "ウォーターフロント", color: "#c7dcf7", pin: "#4f86d4", x: 84, y: 66, w: 24, h: 26 },
+      { id: "discovery", name: "ポートディスカバリー", short: "ディスカバリー", color: "#cfeef0", pin: "#3fa7b0", x: 84, y: 30, w: 22, h: 20 },
+      { id: "delta", name: "ロストリバーデルタ", short: "ロストリバー", color: "#bfe3c0", pin: "#4fa36a", x: 58, y: 16, w: 26, h: 16 },
+      { id: "springs", name: "ファンタジースプリングス", short: "スプリングス", color: "#e3cdf2", pin: "#9278d6", x: 26, y: 14, w: 26, h: 16 },
+      { id: "arabian", name: "アラビアンコースト", short: "アラビアン", color: "#f3c4a3", pin: "#d9774f", x: 16, y: 40, w: 22, h: 20 },
+      { id: "mermaid", name: "マーメイドラグーン", short: "マーメイド", color: "#ffd1dc", pin: "#e06f95", x: 18, y: 66, w: 22, h: 18 },
+      { id: "island", name: "ミステリアスアイランド", short: "ミステリアス", color: "#d9cfae", pin: "#9c8648", x: 50, y: 44, w: 22, h: 18 },
     ],
   },
 };

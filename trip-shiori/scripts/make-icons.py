@@ -1,12 +1,12 @@
-"""アプリのアイコン（夜空の紺に金の星としおりのリボン）を作る。python3 scripts/make-icons.py"""
+"""アプリのアイコン（ミントに白い星とピーチのしおりのリボン）を作る。python3 scripts/make-icons.py"""
 import math
 from pathlib import Path
 from PIL import Image, ImageDraw
 
 OUT = Path(__file__).resolve().parent.parent / "public" / "icons"
-NIGHT = (29, 42, 92, 255)
-GOLD = (242, 193, 78, 255)
-PINK = (217, 79, 112, 255)
+NIGHT = (79, 176, 140, 255)
+GOLD = (255, 255, 255, 255)
+PINK = (240, 140, 125, 255)
 
 
 def star(cx, cy, r_out, r_in, n=5):
@@ -30,7 +30,7 @@ def icon(size: int, rounded: bool) -> Image.Image:
     # 大きな星と小さな星
     d.polygon(star(s * 0.44, s * 0.56, s * 0.26, s * 0.11), fill=GOLD)
     for cx, cy, r in ((0.20, 0.24, 0.035), (0.82, 0.62, 0.03), (0.72, 0.84, 0.022)):
-        d.polygon(star(s * cx, s * cy, s * r, s * r * 0.45), fill=(255, 255, 255, 230))
+        d.polygon(star(s * cx, s * cy, s * r, s * r * 0.45), fill=(255, 243, 223, 240))
     return img.resize((size, size), Image.LANCZOS)
 
 
