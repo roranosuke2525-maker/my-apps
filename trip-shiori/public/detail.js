@@ -71,7 +71,8 @@ const KIND_WORDS = [
   [/トイレ|お手洗い|化粧室|wc/iu, "toilet"],
   [/ビール|酒|アルコール|お酒|ワイン/u, "beer"],
   [/ベビー|授乳|おむつ|オムツ|ミルク|赤ちゃん/u, "baby"],
-  [/ショップ|お土産|おみやげ|グッズ/u, "shop"],
+  [/グッズ|お土産|おみやげ|土産/u, "goods"],
+  [/ショップ|お店/u, "shop"],
   [/レストラン|食事|ごはん|カフェ|軽食|食べ/u, "food"],
   [/アトラクション|乗り物|ライド/u, "ride"],
 ];
@@ -80,6 +81,7 @@ function matchKind(e, kind) {
   if (kind === "all") return true;
   if (kind === "beer") return e.beer;
   if (kind === "baby") return e.baby || (e.kind === "toilet" && e.ct);
+  if (kind === "goods") return e.kind === "shop";
   return e.kind === kind;
 }
 
@@ -90,46 +92,104 @@ function runSearch() {
   for (const [re, k] of KIND_WORDS) {
     if (q && re.test(q)) { kind = k; q = q.replace(re, "").trim(); break; }
   }
-  if (!q && kind === "all") return { kind, list: [] };
-  const nq = norm(q);
+  if (!q && kind === "all") return { kind, q, list: [] };
+  const nq = kind === "goods" ? "" : norm(q);
   const list = searchIndex()
     .filter((e) => e.park === state.park && matchKind(e, kind) && (!nq || norm(e.name).includes(nq)))
     .sort((a, b) => (a.lat != null ? 0 : 1) - (b.lat != null ? 0 : 1) // 地図に出るものを先に
       || a.name.localeCompare(b.name, "ja"));
-  return { kind, list };
+  return { kind, q, list };
 }
 
 // ---------- 地図（検索を上に、結果を下に重ねる） ----------
-function mapView(pins) {
-  const { KINDS, PARKS, AREA_BY_ID } = TripPlaces;
-  const { kind, list } = runSearch();
-  const input = el("input", {
-    type: "search", value: detail.q, placeholder: "さがす　例）トイレ・ビール・カレー", enterkeyhint: "search", "aria-label": "施設をさがす",
-    oninput: (e) => { detail.q = e.target.value; detail.cardsX = 0; clearTimeout(detail.t); detail.t = setTimeout(() => { render(); refocusSearch(); }, 300); },
-    onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); },
+// 検索欄は1つの入力欄を使い回し、入力中は画面全体を描き直さない（日本語の変換が途切れないように）
+function searchInput() {
+  if (detail.input) return detail.input;
+  const input = el("input", { type: "search", placeholder: "さがす　例）トイレ・ビール・カチューシャ", enterkeyhint: "search", "aria-label": "施設やグッズをさがす", autocomplete: "off" });
+  const changed = () => {
+    if (detail.composing) return;
+    clearTimeout(detail.t);
+    detail.t = setTimeout(() => { detail.q = input.value; detail.cardsX = 0; refreshSearch(); }, 250);
+  };
+  input.addEventListener("compositionstart", () => { detail.composing = true; });
+  input.addEventListener("compositionend", () => {
+    detail.composing = false;
+    changed();
+    if (state.needsRender) { state.needsRender = false; render(); input.focus(); } // 変換中に待たせた描き直し
   });
-  const clear = detail.q || detail.kind !== "all"
-    ? el("button", { type: "button", class: "search-clear", "aria-label": "検索をやめる", onclick: () => { detail.q = ""; detail.kind = "all"; render(); } }, "×")
-    : null;
+  input.addEventListener("input", changed);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) input.blur(); });
+  detail.input = input;
+  return input;
+}
+
+function mapView(pins) {
+  detail.lastPins = pins;
+  const input = searchInput();
+  if (document.activeElement !== input) input.value = detail.q;
+  return el("div", { class: "card map-card detail" },
+    el("div", { class: "map-wrap" },
+      detailMap(pins),
+      el("div", { class: "map-top" },
+        el("div", { class: `search-row${detail.q.trim() || detail.kind !== "all" ? " has-q" : ""}` }, input,
+          el("button", { type: "button", class: "search-clear", "aria-label": "検索をやめる", onclick: () => { detail.q = ""; input.value = ""; detail.kind = "all"; refreshSearch(); } }, "×")),
+        el("div", { class: "map-top-extra" }, ...searchExtras())),
+      el("div", { class: "map-bottom" }, ...searchResults()),
+    ));
+}
+
+// 検索が変わったら、種類のボタン・注意書き・結果のカード・地図のアイコンだけを入れ替える
+function refreshSearch() {
+  const top = document.querySelector(".map-top-extra");
+  const bottom = document.querySelector(".map-bottom");
+  if (!top || !bottom) return render();
+  top.replaceChildren(...searchExtras());
+  bottom.replaceChildren(...searchResults());
+  document.querySelector(".search-row")?.classList.toggle("has-q", !!(detail.q.trim() || detail.kind !== "all"));
+  if (window.L && detail.map) drawDetail(detail.lastPins || []);
+}
+
+function searchExtras() {
+  const { KINDS } = TripPlaces;
+  const { kind } = runSearch();
   const chips = el("div", { class: "kind-chips" },
     Object.entries(KINDS).map(([k, v]) =>
       el("button", {
         type: "button", class: "chip", "aria-pressed": String(kind === k),
-        onclick: () => { detail.kind = detail.kind === k ? "all" : k; detail.cardsX = 0; render(); },
+        onclick: () => { detail.kind = detail.kind === k ? "all" : k; detail.cardsX = 0; refreshSearch(); },
       }, `${v.icon} ${v.name}`)));
-
+  const h = todayHours();
   const note =
     detail.loading && !detail.pois ? "地図のデータを読み込み中…"
       : detail.error ? detail.error
         : kind === "beer" ? "🍺 は下調べの目安。当日は公式アプリで"
           : kind === "toilet" ? "どのトイレにもほぼおむつ交換台あり（目安）"
-            : kind === "baby" ? "ベビーセンター：ランドはワールドバザール、シーはハーバー"
-              : "";
+            : kind === "baby" ? "ベビーセンター：ワールドバザール（トゥモローランド寄り）"
+              : kind === "goods" ? "グッズの価格は公式のグッズ検索で。下のカードから開けます"
+                : h ? `きょうの${TripPlaces.PARKS[state.park].name}：${h}` : "";
+  return [chips, note ? el("div", { class: "map-note" }, note) : null].filter(Boolean);
+}
 
+function searchResults() {
+  const { KINDS, AREA_BY_ID } = TripPlaces;
+  const { kind, q, list } = runSearch();
+  const searching = !!(detail.q.trim() || kind !== "all");
+  if (!searching) return [];
   const withPos = list.filter((e) => e.lat != null);
-  const cards = list.slice(0, 40).map((e) => {
+  const cards = [];
+  // グッズ：公式のグッズ検索（価格つき）とディズニーストアを先頭に
+  if (kind === "goods" || q) {
+    const word = q || "";
+    cards.push(goodsCard("🎁", word ? `「${word}」のグッズを公式でさがす` : "公式のグッズ検索をひらく", "価格・販売店つき（公式サイト）",
+      `https://search.tokyodisneyresort.jp/search?query=${encodeURIComponent(word || "グッズ")}&category=2&site=IBRSO1WA&charset=UTF-8`, word));
+    if (kind === "goods") {
+      cards.push(goodsCard("🛒", word ? `「${word}」をディズニーストアでさがす` : "ディズニーストア.jp をひらく", "パークの外の通販",
+        `https://store.disney.co.jp/search/?q=${encodeURIComponent(word)}`, ""));
+    }
+  }
+  for (const e of list.slice(0, 40)) {
     const area = e.area ? AREA_BY_ID[e.area].short || AREA_BY_ID[e.area].name : "";
-    return el("div", {
+    cards.push(el("div", {
       class: `hit-card${e.lat == null ? " nopos" : ""}`, role: "button", tabindex: "0",
       onclick: () => showOnMap(e),
     },
@@ -140,21 +200,26 @@ function mapView(pins) {
     e.kind !== "toilet" ? el("button", {
       type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`,
       onclick: (ev) => { ev.stopPropagation(); addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); },
-    }, "＋ 行きたい") : null);
-  });
-  const searching = detail.q.trim() || kind !== "all";
+    }, "＋ 行きたい") : null));
+  }
+  const count = list.length
+    ? `${kind === "goods" ? "ショップ " : ""}${list.length}件${withPos.length < list.length ? `（地図に出るのは${withPos.length}件）` : ""}`
+    : kind === "goods" || q ? "" : "見つかりませんでした";
+  return [
+    count ? el("div", { class: "hit-count" }, count) : null,
+    cards.length ? keepScroll(el("div", { class: "hit-cards", onscroll: (e) => { detail.cardsX = e.target.scrollLeft; } }, cards)) : null,
+  ].filter(Boolean);
+}
 
-  return el("div", { class: "card map-card detail" },
-    el("div", { class: "map-wrap" },
-      detailMap(pins),
-      el("div", { class: "map-top" },
-        el("div", { class: "search-row" }, input, clear),
-        chips,
-        note ? el("div", { class: "map-note" }, note) : null),
-      searching ? el("div", { class: "map-bottom" },
-        el("div", { class: "hit-count" }, list.length ? `${list.length}件${withPos.length < list.length ? `（地図に出るのは${withPos.length}件）` : ""}` : "見つかりませんでした"),
-        cards.length ? keepScroll(el("div", { class: "hit-cards", onscroll: (e) => { detail.cardsX = e.target.scrollLeft; } }, cards)) : null) : null,
-    ));
+function goodsCard(icon, title, sub, href, word) {
+  return el("div", { class: "hit-card goods" },
+    el("a", { class: "goods-link", href, target: "_blank", rel: "noopener" },
+      el("div", { class: "hit-top" }, el("span", { class: "hit-icon", "aria-hidden": "true" }, icon), el("span", { class: "hit-name" }, title)),
+      el("div", { class: "hit-sub" }, sub)),
+    word ? el("button", {
+      type: "button", class: "chip strong small",
+      onclick: () => { addWish(word); toast(`「${word}」を買いたいものに足しました（価格は準備のタブで）`); },
+    }, "＋ 買いたいもの") : null);
 }
 
 // 描き直しても、結果のカードの横の位置をそのまま残す
@@ -163,9 +228,31 @@ function keepScroll(node) {
   return node;
 }
 
-function refocusSearch() {
-  const i = document.querySelector('.map-top input[type="search"]');
-  if (i) { i.focus(); const v = i.value; i.setSelectionRange?.(v.length, v.length); }
+// ---------- 開園・閉園時間 ----------
+const HOURS_STORAGE = "trip-shiori-hours";
+try { detail.hours = JSON.parse(localStorage.getItem(HOURS_STORAGE) || "null"); } catch { /* 無くても動く */ }
+
+async function loadHours() {
+  if (detail.hoursLoading || (detail.hours && Date.now() - Date.parse(detail.hours.fetchedAt) < 3 * 3600e3)) return;
+  detail.hoursLoading = true;
+  try {
+    detail.hours = await api("GET", "/api/hours");
+    try { localStorage.setItem(HOURS_STORAGE, JSON.stringify(detail.hours)); } catch { /* 無くても動く */ }
+    render();
+  } catch { /* 取れなくても他は動く */ } finally {
+    detail.hoursLoading = false;
+  }
+}
+
+// 例）「9:00〜21:00（8:45から入れる日も）」
+function hoursText(park, date) {
+  const d = detail.hours?.hours?.[park]?.[date];
+  if (!d?.open) return "";
+  return `${d.open}〜${d.close}${d.early ? `（ホテル宿泊者は${d.early}〜）` : ""}`;
+}
+
+function todayHours() {
+  return hoursText(state.park, todayStr());
 }
 
 // 一覧の「地図」：自分の地図でその場所へ。位置がわからなければ Google マップ
@@ -280,5 +367,14 @@ function poiPopup(e, pin) {
     e.ct ? el("div", {}, "おむつ交換台あり") : null,
     el("div", { class: "poi-pop-btns" },
       e.kind !== "toilet" && !pin ? el("button", { type: "button", class: "chip strong small", onclick: () => { addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋ 行きたい") : null,
-      el("a", { class: "chip small", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, target: "_blank", rel: "noopener" }, "Googleマップ")));
+      el("a", { class: "chip small", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, target: "_blank", rel: "noopener" }, "Googleマップ"),
+      officialHoursUrl(e) ? el("a", { class: "chip small", href: officialHoursUrl(e), target: "_blank", rel: "noopener" }, "営業時間（公式）") : null));
+}
+
+// 店ごとの営業時間は公式サイトにしか無いので、公式の一覧へ
+function officialHoursUrl(e) {
+  const park = e.park === "sea" ? "tds" : "tdl";
+  if (e.kind === "food") return `https://www.tokyodisneyresort.jp/${park}/restaurant/list/`;
+  if (e.kind === "shop") return `https://www.tokyodisneyresort.jp/${park}/shop/list/`;
+  return `https://www.tokyodisneyresort.jp/${park}/daily/calendar/`;
 }

@@ -58,6 +58,7 @@ const PLACE_LIST = {
 const KINDS = {
   ride: { name: "アトラクション", icon: "🎢" },
   food: { name: "食べ物", icon: "🍴" },
+  goods: { name: "グッズ", icon: "🎁" },
   shop: { name: "ショップ", icon: "🛍" },
   toilet: { name: "トイレ", icon: "🚻" },
   baby: { name: "ベビー", icon: "🍼" },

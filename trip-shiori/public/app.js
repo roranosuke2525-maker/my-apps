@@ -236,6 +236,30 @@ function flattenIds(item) {
   return [item.id, ...(item.items || item.children || []).flatMap(flattenIds)];
 }
 
+const WISH_LABEL = "🛍 買いたいもの";
+function isWishGroup(g) {
+  return /買いたいもの/u.test(g.label);
+}
+
+function addWish(text) {
+  const g = state.trip.groups.find(isWishGroup) || addGroup(WISH_LABEL);
+  addItem(g, text, false);
+}
+
+// 文の中の価格（¥2,800／2800円）
+function priceOf(text) {
+  const m = String(text || "").match(/[¥￥]\s?([\d,]+)|([\d,]+)\s?円/u);
+  return m ? Number((m[1] || m[2]).replace(/,/g, "")) : 0;
+}
+
+function yen(n) {
+  return `¥${n.toLocaleString("ja-JP")}`;
+}
+
+function groupOf(item) {
+  return state.trip.groups.find((g) => g === item || flattenIds(g).includes(item.id));
+}
+
 function isPlacesGroup(g) {
   return /行きたい場所/u.test(g.label);
 }
@@ -346,7 +370,7 @@ function el(tag, attrs = {}, ...kids) {
 }
 
 function render() {
-  if (state.dragging) { state.needsRender = true; return; }
+  if (state.dragging || (typeof detail !== "undefined" && detail.composing)) { state.needsRender = true; return; }
   const loggedIn = !!memoryKey;
   $("login").hidden = loggedIn;
   $("view").hidden = !loggedIn;
@@ -427,10 +451,20 @@ function renderDay(day) {
       el("div", {}, el("b", {}, md), el("span", {}, `（${w}）`), isToday ? el("span", { class: "today" }, "今日") : null),
       el("span", { class: "count" }, `${done}/${day.items.length}`),
     ),
+    dayHours(day),
     day.items.length ? el("ol", { class: "timeline" }, rows) : el("div", { class: "card empty" }, "予定はまだありません"),
     timedAddForm(day),
     el("p", { class: "hint" }, "丸で済み。時刻か文字を押すと直せます。右の ⋮⋮ を上下にドラッグすると時刻が5分ずつ動きます。"),
   ];
+}
+
+// その日のパークの開園・閉園（ThemeParks.wiki）
+function dayHours(day) {
+  const lines = tripParks().map((p) => [TripPlaces.PARKS[p].name, hoursText(p, day.date)]).filter(([, t]) => t);
+  if (!lines.length) return null;
+  return el("div", { class: "day-hours" },
+    ...lines.map(([n, t]) => el("span", {}, `🏰 ${n} ${t}`)),
+    el("a", { href: "https://themeparks.wiki/", target: "_blank", rel: "noopener" }, "Powered by ThemeParks.wiki"));
 }
 
 function renderPrep() {
@@ -440,6 +474,7 @@ function renderPrep() {
     return el("section", { class: "card group" },
       el("div", { class: "group-head" },
         el("button", { type: "button", class: "group-title", onclick: () => openEditor(g) }, g.label),
+        priceSum(flat),
         el("span", { class: `count${flat.length && done === flat.length ? " all" : ""}` }, `${done}/${flat.length}`),
         pmButtons(g),
       ),
@@ -452,6 +487,14 @@ function renderPrep() {
     ...cards,
     el("p", { class: "hint" }, "＋でその下（子）に足す、−で消す。項目を押すと文字を直せます。"),
   ];
+}
+
+// まとまりの中の価格の合計（買ったものは別に）
+function priceSum(items) {
+  const all = items.reduce((t, i) => t + priceOf(i.text), 0);
+  if (!all) return null;
+  const bought = items.filter((i) => i.checked).reduce((t, i) => t + priceOf(i.text), 0);
+  return el("span", { class: "price-sum" }, `計 ${yen(all)}${bought ? `（買った ${yen(bought)}）` : ""}`);
 }
 
 // 行の右の ＋（この下に足す）と −（消す）
@@ -627,7 +670,11 @@ function openEditor(item, day) {
   const timed = !!day;
   let time = item.time ? item.time.padStart(5, "0") : "";
   const timeInput = el("input", { type: "time", step: "300", value: time, "aria-label": "時刻" });
-  const textInput = el("input", { type: "text", value: item.label, maxlength: "190", "aria-label": "内容" });
+  const wish = !item.items && groupOf(item) && isWishGroup(groupOf(item));
+  const price0 = wish ? priceOf(item.label) : 0;
+  const baseLabel = wish ? item.label.replace(/[\s　]*([¥￥]\s?[\d,]+|[\d,]+\s?円)/u, "").trim() : item.label;
+  const textInput = el("input", { type: "text", value: baseLabel, maxlength: "190", "aria-label": "内容" });
+  const priceInput = el("input", { type: "number", inputmode: "numeric", min: "0", step: "10", value: price0 || "", placeholder: "例）2800", "aria-label": "価格（円）" });
   const close = () => { sheet.remove(); render(); };
   const isGroup = !!item.items;
   const canDelete = isGroup || item.checked !== null;
@@ -652,8 +699,9 @@ function openEditor(item, day) {
       class: "sheet",
       onsubmit: (e) => {
         e.preventDefault();
-        const label = textInput.value.replace(/[\r\n]+/g, " ").trim();
+        let label = textInput.value.replace(/[\r\n]+/g, " ").trim();
         if (!label) return textInput.focus();
+        if (wish && Number(priceInput.value) > 0) label = `${label}　${yen(Number(priceInput.value))}`;
         if (isGroup) {
           if (label !== item.label) { item.label = label; queue({ op: "edit", id: item.id, text: label }); }
         } else saveItem(item, timed ? timeInput.value : null, label, day);
@@ -668,6 +716,7 @@ function openEditor(item, day) {
         el("button", { type: "button", class: "chip", onclick: () => nudge(15) }, "＋15分"),
         el("button", { type: "button", class: "chip", onclick: () => { timeInput.value = ""; } }, "なし"))) : null,
     el("label", { class: "field" }, el("span", {}, "内容"), textInput),
+    wish ? el("label", { class: "field" }, el("span", {}, "価格（円・税込）"), priceInput) : null,
     canHaveChildren ? el("div", { class: "field" }, el("span", {}, "この下（子）に足す"),
       el("div", { class: "time-row" }, childInput,
         el("button", { type: "button", class: "chip strong", onclick: addChild }, "足す")),
@@ -825,4 +874,4 @@ document.addEventListener("visibilitychange", () => {
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 render();
-refresh();
+refresh().then(() => loadHours());
