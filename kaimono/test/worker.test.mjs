@@ -428,6 +428,14 @@ test("気になる新商品：残す・同じ記事は1件・外す", async () =
   assert.equal((await api("DELETE", "/api/newsfav", { link: item.link })).data.favs.length, 0);
 });
 
+test("読んだ記事：覚えて、未読に戻せる", async () => {
+  const a = "https://n.example.jp/1", b = "https://n.example.jp/2";
+  assert.deepEqual((await api("POST", "/api/newsread", { links: [a, b, "javascript:x"] })).data.read, [a, b]);
+  assert.deepEqual((await api("GET", "/api/newsread")).data.read, [a, b]);
+  assert.deepEqual((await api("POST", "/api/newsread", { links: [a], unread: true })).data.read, [b]);
+  assert.equal((await api("POST", "/api/newsread", { links: [] })).status, 400);
+});
+
 test("いつもの品を直す・外す（テンプレート以外の行は触らない）", async () => {
   const id = (await api("POST", "/api/templates", { name: "豆腐", store: "ヤオコー", qty: 2, unit: "丁" })).data.template.id;
   const ed = await api("PATCH", `/api/templates/${id}`, { name: "木綿豆腐", qty: 3, unit: "丁", aisle: "卵・乳製品・豆腐", store: "ベイシア" });

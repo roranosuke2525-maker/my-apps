@@ -75,6 +75,8 @@ export default {
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1], await readJson(request).catch(() => ({}))));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
       if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
+      if (p === "/api/newsread" && m === "GET") return json({ read: await newsRead(env) });
+      if (p === "/api/newsread" && m === "POST") return json(await markNewsRead(env, await readJson(request)));
       if (p === "/api/newsfav" && m === "GET") return json({ favs: await newsFavs(env) });
       if (p === "/api/newsfav" && m === "POST") return json(await saveNewsFav(env, await readJson(request)));
       if (p === "/api/newsfav" && m === "DELETE") return json(await removeNewsFav(env, await readJson(request)));
@@ -829,6 +831,17 @@ async function removeNewsFav(env, body) {
   const list = (await newsFavs(env)).filter((f) => f.link !== String(body?.link || ""));
   await env.SUBS.put("newsfav", JSON.stringify(list));
   return { favs: list };
+}
+// 読んだ記事：リンクを覚えておき、一覧から消す（KV の newsread・新しい順に600件まで）。unread: true で未読に戻す
+async function newsRead(env) { return (await env.SUBS.get("newsread", "json").catch(() => null)) || []; }
+async function markNewsRead(env, body) {
+  const links = (Array.isArray(body?.links) ? body.links : []).map(String).filter((l) => /^https:\/\/\S{1,1900}$/.test(l)).slice(0, 100);
+  if (!links.length) throw httpError(400, "記事を選んでください");
+  let list = (await newsRead(env)).filter((l) => !links.includes(l));
+  if (!body?.unread) list = [...links, ...list];
+  list = list.slice(0, 600);
+  await env.SUBS.put("newsread", JSON.stringify(list));
+  return { read: list };
 }
 // 見出しから商品名らしいところ（「」『』の中）を取る。リストに入れるときの名前の候補
 export function productNames(title) {

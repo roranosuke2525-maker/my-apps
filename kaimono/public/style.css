@@ -454,3 +454,16 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .favbtn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--mute); cursor: pointer; flex: none; }
 .favbtn.on { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); font-weight: 700; }
 .nitem.fav { box-shadow: inset 3px 0 0 var(--warn), var(--shadow); }
+.newsview { display: flex; margin: 0 0 8px; }
+.newsview button { flex: 1; }
+.ndate { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mute); }
+.ndate b { color: var(--ink); font-weight: 700; }
+.ndate span { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nacts { display: flex; justify-content: flex-end; gap: 6px; }
+.nitem:has(.nimg) .nnames { padding-left: 80px; }
+.nitem .nnames { padding-left: 0; }
+.nitem.read { opacity: 0.75; }
+.empty small { display: block; font-size: 12px; color: var(--mute); margin-top: 4px; }
+.nnames { align-items: center; }
+.nacts { margin-left: auto; }
+.nitem:has(.nimg) .nnames { padding-left: 0; }
