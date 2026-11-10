@@ -63,7 +63,7 @@ async function getTrip(notion, env) {
     const m = text.match(DATE_HEAD);
     if (m) {
       const date = `${year}-${pad(m[1])}-${pad(m[2])}`;
-      days.push({ id: b.id, label: text, date, items: b.children.map((c) => toItem(c, env, true)) });
+      days.push({ id: b.id, label: text, date, items: sortByTime(b.children.map((c) => toItem(c, env, true))) });
     } else {
       groups.push({ id: b.id, label: text, items: b.children.map((c) => toItem(c, env, false)) });
     }
@@ -129,6 +129,19 @@ function toItem(b, env, withTime) {
   return item;
 }
 
+// 時刻順に並べる。時刻の無い行（ルートのメモなど）は直前の時刻つきの行にくっついて動く
+export function sortByTime(items) {
+  const head = [];
+  const segs = [];
+  for (const i of items) {
+    if (i.time) segs.push([i]);
+    else (segs.length ? segs.at(-1) : head).push(i);
+  }
+  const min = (t) => t.split(":").reduce((h, m) => Number(h) * 60 + Number(m));
+  segs.sort((a, b) => min(a[0].time) - min(b[0].time));
+  return [...head, ...segs.flat()];
+}
+
 // 予定の文から地図で探す場所を取り出す（例：「ルームサービス（東京ディズニーランドホテル）」→ かっこの中）
 export function mapQuery(label) {
   const forced = label.includes("📍");
@@ -139,15 +152,15 @@ export function mapQuery(label) {
     .replace(/[（(][^）)]*[）)]/gu, "")
     .replace(/[\s　]*(チェックイン|チェックアウト|集合|到着|出発)$/u, "")
     .trim();
-  const station = base.match(/^(\S+?駅)/u);
-  if (station) return station[1];
+  const station = base.match(/^(\S+?(?:駅|PA|SA))/u);
+  if (station) return /PA|SA/.test(station[1]) && paren && /[上下]り/u.test(paren[1]) ? `${station[1]} ${paren[1]}` : station[1];
   if (forced) return base;
   if (PLACE.test(base) && !/[⇒→]/u.test(base)) return base;
   return null;
 }
 
 function mapUrl(q, env) {
-  const area = env.MAP_AREA && !/駅|〒/u.test(q) ? ` ${env.MAP_AREA}` : "";
+  const area = env.MAP_AREA && !/駅|〒|PA|SA/u.test(q) ? ` ${env.MAP_AREA}` : "";
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + area)}`;
 }
 
