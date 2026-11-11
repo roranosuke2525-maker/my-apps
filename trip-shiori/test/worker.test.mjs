@@ -87,6 +87,8 @@ beforeEach(() => {
         { type: "node", lat: 35.633, lon: 139.880, tags: { tourism: "attraction", name: "カリブの海賊" } },
         { type: "way", center: { lat: 35.632, lon: 139.881 }, tags: { amenity: "toilets", changing_table: "yes" } },
         { type: "node", lat: 35.6331, lon: 139.8801, tags: { shop: "gift", name: "東京ディズニーランドホテル ショップ" } },
+        { type: "way", center: { lat: 35.6325, lon: 139.8792 }, tags: { building: "yes", name: "Eastside Cafe" } },
+        { type: "way", center: { lat: 35.6326, lon: 139.8793 }, tags: { highway: "footway", name: "道" } },
         { type: "node", tags: { amenity: "cafe", name: "座標なし" } },
       ] : areaQuery ? [] : [
         { type: "node", lat: 35.627, lon: 139.885, tags: { amenity: "restaurant", name: "Cafe", "name:ja": "カフェ・ポルトフィーノ" } },
@@ -250,7 +252,8 @@ test("詳しい地図のデータ：座標の無いものは捨て、日本語�
   assert.equal(res.status, 200);
   const data = await res.json();
   // パークの外（ホテル）は捨てる。シーは敷地の形が無いので四角で取り直す
-  assert.deepEqual(data.pois.map((p) => [p.n, p.k, p.p]), [["カリブの海賊", "ride", "land"], ["トイレ", "toilet", "land"], ["カフェ・ポルトフィーノ", "food", "sea"]]);
+  assert.deepEqual(data.pois.map((p) => [p.n, p.k, p.p]), [["カリブの海賊", "ride", "land"], ["トイレ", "toilet", "land"], ["Eastside Cafe", "named", "land"], ["カフェ・ポルトフィーノ", "food", "sea"]]);
+  assert.equal(data.pois[3].en, "Cafe");
   assert.equal(calls.filter((c) => c.path === "overpass").length, 3);
   assert.equal(data.pois[1].ct, 1);
   assert.match(data.attribution, /OpenStreetMap/);
@@ -258,7 +261,7 @@ test("詳しい地図のデータ：座標の無いものは捨て、日本語�
   // ランドだけの旅行ならシーは取りに行かない
   calls = [];
   const only = await worker.fetch(new Request("https://app.test/api/pois", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, TRIP_PARKS: "land" });
-  assert.deepEqual((await only.json()).pois.map((p) => p.p), ["land", "land"]);
+  assert.deepEqual((await only.json()).pois.map((p) => p.p), ["land", "land", "land"]);
   assert.equal(calls.filter((c) => c.path === "overpass").length, 1);
 });
 

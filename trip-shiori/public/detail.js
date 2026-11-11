@@ -26,7 +26,7 @@ try { detail.pois = JSON.parse(localStorage.getItem(POIS_STORAGE) || "null"); } 
 
 // ---------- データ ----------
 async function loadPois(force = false) {
-  const fresh = detail.pois?.parks && Date.now() - Date.parse(detail.pois.fetchedAt) < POI_MAX_AGE;
+  const fresh = detail.pois?.v === 3 && Date.now() - Date.parse(detail.pois.fetchedAt) < POI_MAX_AGE;
   if (detail.loading || (fresh && !force)) return;
   detail.loading = true;
   detail.error = "";
@@ -47,24 +47,45 @@ function parkOf(lat, lon) {
 }
 
 // 辞書（エリア・ビールの印）と OpenStreetMap（座標・トイレ）をまとめた検索用の一覧
+// 辞書（エリア・お酒のメニュー）と OpenStreetMap（座標・トイレ）を合わせた一覧。
+// 店の名前は日本語名・英語名の両方で合わせ、名前だけの建物（k: named）も座標の手がかりにする
 function searchIndex() {
+  if (detail.indexFor === detail.pois && detail.index) return detail.index;
   const { PLACE_INDEX, norm } = TripPlaces;
-  const osm = (detail.pois?.pois || []).map((p) => ({ ...p, key: norm(p.n), park: p.p || parkOf(p.lat, p.lon) }));
+  const osm = (detail.pois?.pois || []).map((p) => ({
+    ...p, key: norm(p.n), enKey: p.en ? norm(p.en) : "", park: p.p || parkOf(p.lat, p.lon),
+  }));
   const byKey = new Map();
-  for (const p of osm) if (p.key && !byKey.has(p.key)) byKey.set(p.key, p);
+  // 店・アトラクションの印がある方を先に登録（名前だけの建物より優先）
+  for (const p of [...osm.filter((x) => x.k !== "named"), ...osm.filter((x) => x.k === "named")]) {
+    for (const k of [p.key, p.enKey]) if (k && !byKey.has(k)) byKey.set(k, p);
+  }
+  const near = (e) => osm.find((p) => p.park === e.park && [p.key, p.enKey].some((k) =>
+    k.length >= 4 && [e.key, e.enKey].some((x) => x.length >= 4 && (k.includes(x) || x.includes(k)))));
   const used = new Set();
   const out = PLACE_INDEX.map((e) => {
-    let hit = byKey.get(e.key);
-    if (!hit) hit = osm.find((p) => p.key.length >= 3 && (p.key.includes(e.key) || e.key.includes(p.key)));
+    const hit = byKey.get(e.key) || (e.enKey && byKey.get(e.enKey)) || near(e);
     if (hit) used.add(hit);
-    return { name: e.name, kind: e.kind, park: e.park, area: e.area, beer: e.beer, baby: e.kind === "baby", lat: hit?.lat, lon: hit?.lon, ct: hit?.ct };
+    return {
+      name: e.name, kind: e.kind, park: e.park, area: e.area, beer: e.beer, drinks: e.drinks, baby: e.kind === "baby",
+      lat: hit?.lat, lon: hit?.lon, ct: hit?.ct,
+    };
   });
   for (const p of osm) {
-    if (used.has(p)) continue;
+    if (used.has(p) || p.k === "named") continue;
     const place = TripPlaces.findPlace(p.n);
     out.push({ name: p.n, kind: p.k, park: p.park, area: place?.area || null, beer: false, baby: p.k === "baby", lat: p.lat, lon: p.lon, ct: p.ct, osm: true });
   }
+  detail.index = out;
+  detail.indexFor = detail.pois;
   return out;
+}
+
+// お酒のメニューを1行に（例：一番搾り ¥800 ほか・持ち歩き○）
+function drinksLine(d) {
+  if (!d) return "";
+  const first = d.menu[0];
+  return `${first[0].replace(/^キリン/, "").replace(/生ビール$/, "")} ¥${first[1].toLocaleString("ja-JP")}${d.menu.length > 1 ? ` ほか${d.menu.length - 1}` : ""}・${d.to ? "持ち歩き○" : "店内だけ"}`;
 }
 
 const KIND_WORDS = [
@@ -162,7 +183,7 @@ function searchExtras() {
   const note =
     detail.loading && !detail.pois ? "地図のデータを読み込み中…"
       : detail.error ? detail.error
-        : kind === "beer" ? "🍺 は下調べの目安。当日は公式アプリで"
+        : kind === "beer" ? `🍺 ${TripPlaces.DRINKS_SOURCE}。当日は公式アプリで`
           : kind === "toilet" ? "どのトイレにもほぼおむつ交換台あり（目安）"
             : kind === "baby" ? "ベビーセンター：ワールドバザール（トゥモローランド寄り）"
               : kind === "goods" ? "グッズの価格は公式のグッズ検索で。下のカードから開けます"
@@ -197,6 +218,7 @@ function searchResults() {
       el("span", { class: "hit-icon", "aria-hidden": "true" }, (e.beer ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon),
       el("span", { class: "hit-name" }, e.name)),
     el("div", { class: "hit-sub" }, [area, e.ct ? "おむつ台" : "", e.lat == null ? "位置なし→Google" : ""].filter(Boolean).join("・")),
+    e.drinks ? el("div", { class: "hit-drink" }, `🍺 ${drinksLine(e.drinks)}`) : null,
     e.kind !== "toilet" ? el("button", {
       type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`,
       onclick: (ev) => { ev.stopPropagation(); addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); },
@@ -365,6 +387,9 @@ function poiPopup(e, pin) {
     el("b", {}, `${(e.beer ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon} ${e.name}`),
     pin?.when ? el("div", {}, `予定 ${pin.when}`) : null,
     e.ct ? el("div", {}, "おむつ交換台あり") : null,
+    e.drinks ? el("ul", { class: "drink-menu" },
+      ...e.drinks.menu.map(([n, yen]) => el("li", {}, el("span", {}, n), el("b", {}, `¥${yen.toLocaleString("ja-JP")}`)))) : null,
+    e.drinks ? el("div", { class: "drink-note" }, [e.drinks.to ? "持ち歩き○" : "店内だけ", e.drinks.note, TripPlaces.DRINKS_SOURCE].filter(Boolean).join("・")) : null,
     el("div", { class: "poi-pop-btns" },
       e.kind !== "toilet" && !pin ? el("button", { type: "button", class: "chip strong small", onclick: () => { addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋ 行きたい") : null,
       el("a", { class: "chip small", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, target: "_blank", rel: "noopener" }, "Googleマップ"),
