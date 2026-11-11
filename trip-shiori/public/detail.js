@@ -156,29 +156,117 @@ function mapView(pins) {
           el("button", { type: "button", class: "search-clear", "aria-label": "検索をやめる", onclick: () => { detail.q = ""; input.value = ""; detail.kind = "all"; refreshSearch(); } }, "×")),
         el("div", { class: "map-top-extra" }, ...searchExtras())),
       el("div", { class: "map-bottom" }, ...searchResults()),
+      el("button", {
+        type: "button", class: `locate-btn${detail.watchId != null ? " on" : ""}`, "aria-label": "現在地を表示",
+        onclick: () => locateMe(),
+      }, locateIcon()),
     ));
 }
+
+// ---------- 現在地 ----------
+function locateIcon() {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  n.setAttribute("viewBox", "0 0 24 24");
+  n.setAttribute("aria-hidden", "true");
+  n.innerHTML = '<circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/>';
+  return n;
+}
+
+// 押すと位置を見張りはじめ、最初の1回だけそこへ寄る。見張っている間にもう一度押すと現在地へ戻る
+function locateMe() {
+  if (!navigator.geolocation) return toast("この端末では現在地が使えません");
+  detail.followOnce = true;
+  if (detail.me) centerOnMe();
+  if (detail.watchId != null) return;
+  startWatch();
+  document.querySelector(".locate-btn")?.classList.add("on");
+}
+
+function startWatch() {
+  detail.watchId = navigator.geolocation.watchPosition(
+    (p) => {
+      detail.me = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
+      drawMe();
+      if (detail.followOnce) centerOnMe();
+    },
+    (err) => {
+      stopWatch();
+      document.querySelector(".locate-btn")?.classList.remove("on");
+      toast(err.code === 1
+        ? "位置情報が許可されていません（設定 → プライバシー → 位置情報 → Safari の Web サイト）"
+        : "現在地がわかりませんでした。空の見える所でもう一度");
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+  );
+}
+
+function stopWatch() {
+  if (detail.watchId != null) navigator.geolocation.clearWatch(detail.watchId);
+  detail.watchId = null;
+}
+
+function centerOnMe() {
+  if (!detail.map || !detail.me) return;
+  detail.followOnce = false;
+  const { lat, lon } = detail.me;
+  detail.map.setView([lat, lon], Math.max(detail.map.getZoom(), 17));
+  const b = PARK_BOUNDS[state.park];
+  const inPark = lat >= b[0][0] - 0.002 && lat <= b[1][0] + 0.002 && lon >= b[0][1] - 0.002 && lon <= b[1][1] + 0.002;
+  if (!inPark) toast("いまはパークの外にいます");
+}
+
+function drawMe() {
+  const L = window.L;
+  if (!L || !detail.map || !detail.me) return;
+  const { lat, lon, acc } = detail.me;
+  if (!detail.meDot) {
+    detail.meRing = L.circle([lat, lon], { radius: acc, className: "me-ring", interactive: false }).addTo(detail.map);
+    detail.meDot = L.circleMarker([lat, lon], { radius: 7, className: "me-dot", interactive: false }).addTo(detail.map);
+  } else {
+    detail.meRing.setLatLng([lat, lon]).setRadius(acc);
+    detail.meDot.setLatLng([lat, lon]);
+  }
+}
+
+// 画面を離れたら見張りを止め、戻ったら続ける（電池のため）
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && detail.watchId != null) { stopWatch(); detail.resumeWatch = true; }
+  else if (document.visibilityState === "visible" && detail.resumeWatch) { detail.resumeWatch = false; startWatch(); }
+});
 
 // 検索が変わったら、種類のボタン・注意書き・結果のカード・地図のアイコンだけを入れ替える
 function refreshSearch() {
   const top = document.querySelector(".map-top-extra");
   const bottom = document.querySelector(".map-bottom");
   if (!top || !bottom) return render();
-  top.replaceChildren(...searchExtras());
+  const [chips, note] = searchExtras();
+  if (chips.parentNode !== top) top.prepend(chips);
+  for (const n of [...top.children]) if (n !== chips) n.remove();
+  if (note) top.append(note);
   bottom.replaceChildren(...searchResults());
   document.querySelector(".search-row")?.classList.toggle("has-q", !!(detail.q.trim() || detail.kind !== "all"));
   if (window.L && detail.map) drawDetail(detail.lastPins || []);
 }
 
-function searchExtras() {
+function kindChips(kind) {
   const { KINDS } = TripPlaces;
+  if (!detail.chips) {
+    detail.chips = el("div", { class: "kind-chips", onscroll: (e) => { detail.chipsX = e.target.scrollLeft; } },
+      Object.entries(KINDS).map(([k, v]) =>
+        el("button", {
+          type: "button", class: "chip", "data-kind": k,
+          onclick: () => { detail.kind = detail.kind === k ? "all" : k; detail.cardsX = 0; refreshSearch(); },
+        }, `${v.icon} ${v.name}`)));
+  }
+  for (const b of detail.chips.children) b.setAttribute("aria-pressed", String(b.dataset.kind === kind));
+  // 画面を描き直して並びを付け直したときも、横の位置を戻す
+  requestAnimationFrame(() => { if (detail.chips.scrollLeft !== (detail.chipsX || 0)) detail.chips.scrollLeft = detail.chipsX || 0; });
+  return detail.chips;
+}
+
+function searchExtras() {
   const { kind } = runSearch();
-  const chips = el("div", { class: "kind-chips" },
-    Object.entries(KINDS).map(([k, v]) =>
-      el("button", {
-        type: "button", class: "chip", "aria-pressed": String(kind === k),
-        onclick: () => { detail.kind = detail.kind === k ? "all" : k; detail.cardsX = 0; refreshSearch(); },
-      }, `${v.icon} ${v.name}`)));
+  const chips = kindChips(kind);
   const h = todayHours();
   const note =
     detail.loading && !detail.pois ? "地図のデータを読み込み中…"
@@ -333,6 +421,7 @@ function drawDetail(pins) {
     detail.shownPark = "";
   }
   setTimeout(() => detail.map.invalidateSize(), 0);
+  drawMe();
   const pad = { paddingTopLeft: [16, 110], paddingBottomRight: [16, 150], maxZoom: 18 };
   const searchKey = `${state.park}|${detail.kind}|${detail.q.trim()}`;
   if (detail.shownPark !== state.park || detail.lastKey !== searchKey) {

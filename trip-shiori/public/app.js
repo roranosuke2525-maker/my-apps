@@ -389,12 +389,12 @@ function render() {
     renderSync();
     return;
   }
-  const ids = [...state.trip.days.map((d) => d.id), "map", "prep"];
+  const ids = [...state.trip.days.map((d) => d.id), "map", "prep", "todo"];
   if (!ids.includes(state.tab)) state.tab = defaultTab();
   renderTabs();
   const day = state.trip.days.find((d) => d.id === state.tab);
   const scroll = $("main").scrollTop;
-  $("view").replaceChildren(...(day ? renderDay(day) : state.tab === "map" ? renderMap() : renderPrep()).filter(Boolean));
+  $("view").replaceChildren(...(day ? renderDay(day) : state.tab === "map" ? renderMap() : renderPrep(state.tab)).filter(Boolean));
   $("main").scrollTop = scroll;
   renderSync();
 }
@@ -407,6 +407,7 @@ function renderTabs() {
     return tabBtn(d.id, el("span", { class: "tab-md" }, md), el("span", { class: "tab-w" }, isToday ? "今日" : w));
   }));
   tabs.push(tabBtn("prep", el("span", { class: "tab-md" }, "準備"), el("span", { class: "tab-w" }, "もちもの")));
+  tabs.push(tabBtn("todo", el("span", { class: "tab-md" }, "当日"), el("span", { class: "tab-w" }, "TODO")));
   $("tabs").replaceChildren(...tabs);
 }
 
@@ -467,8 +468,17 @@ function dayHours(day) {
     el("a", { href: "https://themeparks.wiki/", target: "_blank", rel: "noopener" }, "Powered by ThemeParks.wiki"));
 }
 
-function renderPrep() {
-  const cards = state.trip.groups.filter((g) => !isPlacesGroup(g)).map((g) => {
+// 当日のTODOのまとまり（名前で見分ける。当日のタブで足したまとまりは頭に 📌 が付く）
+const DAY_OF = /todo|当日|やること|買いたいもの|お土産|おみやげ|📌/iu;
+function isDayOfGroup(g) {
+  return DAY_OF.test(g.label);
+}
+
+// 準備のタブ（mode: "prep"）と当日のタブ（mode: "todo"）。同じ作りで、まとまりを分けて出す
+function renderPrep(mode = "prep") {
+  const todo = mode === "todo";
+  const groups = state.trip.groups.filter((g) => !isPlacesGroup(g) && isDayOfGroup(g) === todo);
+  const cards = groups.map((g) => {
     const flat = flatten(g.items);
     const done = flat.filter((i) => i.checked).length;
     return el("section", { class: "card group" },
@@ -483,9 +493,11 @@ function renderPrep() {
     );
   });
   return [
-    addForm("new-group", "＋ 親（まとまり）を足す　例）👕 服装", (text) => addGroup(text), "mini parent"),
-    ...cards,
-    el("p", { class: "hint" }, "＋でその下（子）に足す、−で消す。項目を押すと文字を直せます。"),
+    todo
+      ? addForm("new-group-todo", "＋ 当日のまとまりを足す　例）お土産", (text) => addGroup(DAY_OF.test(text) ? text : `📌 ${text}`), "mini parent")
+      : addForm("new-group", "＋ 準備のまとまりを足す　例）👕 服装", (text) => addGroup(text), "mini parent"),
+    ...(cards.length ? cards : [el("div", { class: "card empty" }, todo ? "当日のTODOはまだありません" : "準備はまだありません")]),
+    el("p", { class: "hint" }, "＋でその下（子）に足す、🗑で消す。項目を押すと文字を直せます。"),
   ];
 }
 

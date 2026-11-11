@@ -1,5 +1,5 @@
 // 画面ファイルだけをキャッシュする（/api は常にネットワーク。しおりの中身は app.js が端末に保存する）
-const CACHE = "trip-shiori-v9";
+const CACHE = "trip-shiori-v10";
 const SHELL = ["./", "index.html", "app.js", "style.css", "places.js", "detail.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "manifest.webmanifest", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
