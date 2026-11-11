@@ -467,3 +467,23 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .nnames { align-items: center; }
 .nacts { margin-left: auto; }
 .nitem:has(.nimg) .nnames { padding-left: 0; }
+
+/* どこからでも ＋ で足す */
+.fab { position: fixed; right: max(16px, calc(50% - 320px + 16px)); bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 7; width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--pri); color: var(--pri-ink); font-size: 32px; line-height: 1; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); cursor: pointer; }
+.fab:active { transform: scale(0.95); }
+.lfoot { padding-right: 70px; }
+.qadd { position: fixed; inset: 0; z-index: 40; }
+.sheet.qa { gap: 10px; min-height: 60dvh; }
+.qadest { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qadest .chip[aria-pressed="true"] { background: var(--pri); color: var(--pri-ink); border-color: var(--pri); font-weight: 700; }
+.qasec { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.qasec .sgl { flex: 1 1 100%; font-size: 12px; color: var(--mute); }
+.qasec .chip.on { background: var(--pri-soft); color: var(--pri); border-color: var(--pri); }
+.qadone { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; background: var(--pri-soft); border-radius: 10px; }
+.qadone .chip .x { border: 0; background: transparent; color: var(--mute); margin-left: 4px; cursor: pointer; font-size: 14px; }
+.sheet.qa .row-end { margin-top: auto; justify-content: space-between; align-items: center; }
+.addbox .qbox { flex: none; }
+.addbox .qbox .qin { flex: none; width: 40px; }
+.qasec .chip, .qadone .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.qasec .chip { max-width: 70%; }
+.qadone .chip { background: var(--card); color: var(--pri); border-color: var(--pri); }

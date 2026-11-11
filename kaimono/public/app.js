@@ -975,6 +975,7 @@ function render() {
   if (keep && $("#addin")) { const i = $("#addin"); i.value = keep.v; i.focus(); i.setSelectionRange(keep.s, keep.s); renderSuggest(); }
   else if ($("#addin")) renderSuggest();
   if (S.edit) { const e = $("#editin"); if (e) { e.focus(); e.select(); } }
+  const fab = $("#fab"); if (fab) fab.hidden = !!S.lpick || !!S.pick || !!S.maint;
 }
 function badge(sel, n) { const b = $(sel); b.hidden = !n; b.textContent = n > 99 ? "99+" : n; }
 function appBadge(n) {
@@ -1615,6 +1616,7 @@ document.addEventListener("change", (e) => { if (e.target.id === "scanshot") { r
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && memoryKey && Date.now() - Date.parse(S.loadedAt || 0) > 60e3) load({ quiet: true }); });
 
 function showLogin() {
+  if ($("#fab")) $("#fab").hidden = true;
   $("#login").hidden = false; $("#view").hidden = true; document.body.classList.add("locked");
   setStatus("");
   $("#key")?.focus();
