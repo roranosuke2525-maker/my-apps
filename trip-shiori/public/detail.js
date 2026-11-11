@@ -434,13 +434,15 @@ function drawDetail(pins) {
   detail.layer.clearLayers();
   const { KINDS } = TripPlaces;
   const index = searchIndex().filter((e) => e.lat != null && e.park === state.park);
-  const { list } = runSearch();
+  const { kind, list } = runSearch();
+  const searching = !!(detail.q.trim() || kind !== "all");
   const highlight = new Set(list.map((e) => e.name));
-  // すべての施設を小さなアイコンで。検索に当たったものは大きく
+  // ふだんは全部の施設を小さなアイコンで。ジャンルを選んだり検索したりしている間は、当たった施設だけを大きく出す
   for (const e of index) {
     const big = highlight.has(e.name);
+    if (searching && !big) continue;
     const icon = L.divIcon({
-      className: `poi${big ? " hit" : ""}${highlight.size && !big ? " dim" : ""}`,
+      className: `poi${big ? " hit" : ""}`,
       html: `<span>${(e.beer ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon}</span>`,
       iconSize: big ? [28, 28] : [18, 18],
     });
@@ -452,7 +454,7 @@ function drawDetail(pins) {
   const byName = new Map(index.map((e) => [TripPlaces.norm(e.name), e]));
   for (const p of pins) {
     const e = p.place?.name && byName.get(TripPlaces.norm(p.place.name));
-    if (!e) continue;
+    if (!e || (searching && !highlight.has(e.name))) continue;
     const icon = L.divIcon({
       className: `num-pin${p.item.checked ? " done" : ""}`,
       html: `<span style="background:${pinColor(p)}"><i>${p.no}</i></span>`,
