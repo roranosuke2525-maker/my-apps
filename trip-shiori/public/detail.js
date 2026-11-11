@@ -62,23 +62,58 @@ function searchIndex() {
   }
   const near = (e) => osm.find((p) => p.park === e.park && [p.key, p.enKey].some((k) =>
     k.length >= 4 && [e.key, e.enKey].some((x) => x.length >= 4 && (k.includes(x) || x.includes(k)))));
+  // 名前の似ている度合い（2文字ずつの重なり）で一番近いもの。表記ゆれ（ガストン／ガストンの酒場 など）用
+  const similar = (e) => {
+    let best = null;
+    let score = 0;
+    for (const p of osm) {
+      if (p.park !== e.park || (p.k === "named" && best)) continue;
+      for (const k of [p.key, p.enKey]) for (const x of [e.key, e.enKey]) {
+        const d = dice(k, x);
+        if (d > score) { score = d; best = p; }
+      }
+    }
+    return score >= 0.7 ? best : null;
+  };
   const used = new Set();
   const out = PLACE_INDEX.map((e) => {
-    const hit = byKey.get(e.key) || (e.enKey && byKey.get(e.enKey)) || near(e);
+    let hit = byKey.get(e.key) || (e.enKey && byKey.get(e.enKey)) || near(e);
+    if (!hit || used.has(hit)) hit = similar(e) || hit;
     if (hit) used.add(hit);
     return {
       name: e.name, kind: e.kind, park: e.park, area: e.area, beer: e.beer, drinks: e.drinks, baby: e.kind === "baby",
       lat: hit?.lat, lon: hit?.lon, ct: hit?.ct,
     };
   });
+  const known = new Map(out.map((e) => [norm(e.name), e]));
   for (const p of osm) {
     if (used.has(p) || p.k === "named") continue;
+    // 辞書にある店と同じ・よく似た名前なら、別の店として足さない（座標が無ければ渡す）
+    const twin = known.get(p.key) || out.find((e) => e.park === p.park && dice(norm(e.name), p.key) >= 0.7);
+    if (twin) {
+      if (twin.lat == null) { twin.lat = p.lat; twin.lon = p.lon; twin.ct = p.ct; }
+      continue;
+    }
     const place = TripPlaces.findPlace(p.n);
     out.push({ name: p.n, kind: p.k, park: p.park, area: place?.area || null, beer: false, baby: p.k === "baby", lat: p.lat, lon: p.lon, ct: p.ct, osm: true });
   }
   detail.index = out;
   detail.indexFor = detail.pois;
   return out;
+}
+
+// 似ている度合い。「レストラン」「カフェ」のような どの店にもある言葉は外して比べる
+const GENERIC = /レストラン|カフェ|キッチン|ダイナー|ハウス|ショップ|ザ|restaurant|cafe|kitchen|diner|house|shop|the/giu;
+function dice(a0, b0) {
+  const a = String(a0 || "").replace(GENERIC, "");
+  const b = String(b0 || "").replace(GENERIC, "");
+  if (a.length < 2 || b.length < 2) return 0;
+  const grams = (s) => { const m = new Map(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; };
+  const A = grams(a);
+  const B = grams(b);
+  let hit = 0;
+  for (const [g, n] of A) hit += Math.min(n, B.get(g) || 0);
+  return (2 * hit) / (a.length - 1 + b.length - 1);
 }
 
 // お酒のメニューを1行に（例：一番搾り ¥800 ほか・持ち歩き○）
@@ -287,7 +322,7 @@ function searchResults() {
   const withPos = list.filter((e) => e.lat != null);
   const cards = [];
   // グッズ：公式のグッズ検索（価格つき）とディズニーストアを先頭に
-  if (kind === "goods" || q) {
+  if (kind === "goods" || (q && kind === "all")) {
     const word = q || "";
     cards.push(goodsCard("🎁", word ? `「${word}」のグッズを公式でさがす` : "公式のグッズ検索をひらく", "価格・販売店つき（公式サイト）",
       `https://search.tokyodisneyresort.jp/search?query=${encodeURIComponent(word || "グッズ")}&category=2&site=IBRSO1WA&charset=UTF-8`, word));
@@ -443,7 +478,7 @@ function drawDetail(pins) {
     if (searching && !big) continue;
     const icon = L.divIcon({
       className: `poi${big ? " hit" : ""}`,
-      html: `<span>${(e.beer ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon}</span>`,
+      html: `<span>${(e.beer || kind === "beer" ? KINDS.beer : KINDS[e.kind] || KINDS.ride).icon}</span>`,
       iconSize: big ? [28, 28] : [18, 18],
     });
     L.marker([e.lat, e.lon], { icon, title: e.name, zIndexOffset: big ? 500 : 0 })
