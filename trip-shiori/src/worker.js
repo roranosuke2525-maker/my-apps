@@ -224,6 +224,7 @@ ${useBbox ? "" : `area["tourism"="theme_park"]["name"~"${a.name}"]->.p;`}
   nwr["shop"]${where};
   nwr["changing_table"="yes"]${where};
   nwr["baby_feeding"]${where};
+  nwr["name"]${where};
 );
 out center tags;`;
 }
@@ -244,13 +245,14 @@ export function poiKind(tags) {
   if (tags.baby_feeding || /ベビー|授乳/u.test(tags.name || "")) return "baby";
   if (/^(restaurant|cafe|fast_food|bar|pub|ice_cream)$/.test(tags.amenity || "")) return "food";
   if (tags.shop) return "shop";
-  return "ride";
+  if (tags.tourism === "attraction" || tags.attraction) return "ride";
+  return "named"; // 名前だけの建物など。アプリの施設名と合わせるためだけに使う（地図にそのまま出さない）
 }
 
 async function getPois(env) {
   const parks = tripParks(env);
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const key = new Request(`https://trip-shiori.cache/pois-v2-${parks.join("-")}`);
+  const key = new Request(`https://trip-shiori.cache/pois-v3-${parks.join("-")}`);
   const hit = cache && (await cache.match(key));
   if (hit) return hit.json();
   const pois = [];
@@ -265,10 +267,12 @@ async function getPois(env) {
       const kind = poiKind(tags);
       const name = tags["name:ja"] || tags.name || (kind === "toilet" ? "トイレ" : "");
       if (!name || OUTSIDE.test(`${name} ${tags.name || ""}`)) continue;
+      if (kind === "named" && (tags.highway || tags.railway || tags.barrier || tags.natural || tags.waterway || tags.boundary)) continue;
       pois.push({
         n: name,
         k: kind,
         p: park,
+        ...(tags["name:en"] && tags["name:en"] !== name ? { en: tags["name:en"] } : tags.name && tags.name !== name ? { en: tags.name } : {}),
         lat: Math.round(lat * 1e6) / 1e6,
         lon: Math.round(lon * 1e6) / 1e6,
         ...(tags.changing_table === "yes" ? { ct: 1 } : {}),
@@ -276,7 +280,7 @@ async function getPois(env) {
       });
     }
   }
-  const out = { pois, parks, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
+  const out = { v: 3, pois, parks, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
   if (cache) {
     await cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=604800", "Content-Type": "application/json" } }));
   }
