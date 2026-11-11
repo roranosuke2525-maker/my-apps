@@ -4,8 +4,10 @@
 // キーは Worker の secret にだけ置く：GEMINI_API_KEY（Google AI Studio のキー）、MCP_PATH_TOKEN（URLの合言葉）
 // SCRIPT_TOKEN（任意）：Claude Code のスクリプト用の合言葉。コネクタとは別にしておけば、片方だけ入れ替えられる
 // 調べ物（research）：Gemini ＋ Google 検索。月の上限は RESEARCH_MONTHLY_LIMIT（既定300回）、回数は KV（IMAGES）の usage:YYYY-MM
+//   答えの文に [出典番号] を付け、出典は Google の転送用URLを本当のページのURLに直して返す（確かめる側の手間を減らす）
+//   rules（任意）：Notion の「🔎 Gemini 育成ノート」の注意書き。指示文（systemInstruction）の最後に足す
 
-const SERVER = { name: "gemini-art", version: "1.1.0" };
+const SERVER = { name: "gemini-art", version: "1.2.0" };
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const DEFAULT_MODEL = "gemini-2.5-flash-image";
 const RATIOS = ["1:1", "3:4", "4:3", "9:16", "16:9", "2:3", "3:2"];
@@ -13,6 +15,9 @@ const KEEP_SECONDS = 30 * 24 * 60 * 60;
 const MAX_INLINE = 1_500_000; // base64 がこれより大きい絵は、チャットには載せずリンクだけ返す
 const RESEARCH_MODEL = "gemini-flash-latest";
 const RESEARCH_LIMIT = 300;
+const RULES_MAX = 1500; // 育成ノートの注意書き（rules）の上限文字数
+const RESOLVE_MAX = 15; // 転送用URLを本当のURLに直す出典の数（先頭から）
+const RESOLVE_TIMEOUT_MS = 4000;
 const RESEARCH_GUIDE = [
   "あなたは調べ物の下調べ係。Google 検索で最新の情報を確かめ、日本語で次の形だけで答える。前置き・あいさつは書かない。",
   "## 結論（1〜2行）",
@@ -47,14 +52,19 @@ const TOOLS = [
   {
     name: "research",
     description:
-      "Google Gemini に Google 検索つきで調べ物を頼む（下調べ係）。結論・要点・候補・注意と、出典（タイトルとURL）を日本語で返す。" +
-      "Claude は返ってきた内容が足りているか確かめ、足りない所だけ自分で補う。月の上限を超えたときやエラーのときは isError で返るので、そのときは自分で調べる。" +
+      "Google Gemini に Google 検索つきで調べ物を頼む（下調べ係）。結論・要点・候補・注意と、出典（タイトル・サイト・URL）を日本語で返す。" +
+      "文の後ろの [1,3] は、その文の根拠になった出典の番号（出典の一覧の [番号] と対応）。出典の URL は本当のページの URL に直してある（直せなかったものは Google の転送用 URL のまま）。" +
+      "Claude は返ってきた内容が足りているか、出典のページで確かめ、足りない所だけ自分で補う。月の上限を超えたときやエラーのときは isError で返るので、そのときは自分で調べる。" +
       "個人名・住所・社内の情報は質問に入れず、一般的な言い方にする。",
     inputSchema: {
       type: "object",
       properties: {
         question: { type: "string", description: "調べたいこと（具体的に。例：『2026年 ドラム式洗濯機 10kg 静音 おすすめ 価格』）" },
         focus: { type: "string", description: "特に知りたい観点（例：価格の相場、比較の候補3つ、手続きの順番）" },
+        rules: {
+          type: "string",
+          description: "Geminiへの注意書き（Notionの🔎 Gemini 育成ノートの『Geminiへの注意書き』をそのまま渡す。1500字まで）",
+        },
       },
       required: ["question"],
     },
@@ -111,7 +121,8 @@ async function handle(msg, env, origin) {
         serverInfo: SERVER,
         instructions:
           "絵が必要なときは generate_image を使う。返ってきた URL を見本に渡すと、同じキャラで描き直せる。" +
-          "調べ物はまず research で Gemini に下調べさせ、足りない所だけ自分で補う。",
+          "調べ物はまず research で Gemini に下調べさせ、足りない所だけ自分で補う。" +
+          "Notion の「🔎 Gemini 育成ノート」に注意書きがあれば、それを rules に渡す。",
       });
     }
     case "ping":
@@ -193,18 +204,20 @@ export async function research(args, env) {
   if (!question) throw new Error("question が空です");
   if (question.length > 2000) throw new Error("question が長すぎます（2000文字まで）");
   const focus = String(args.focus || "").trim().slice(0, 500);
+  const rules = String(args.rules || "").trim().slice(0, RULES_MAX);
 
   const { used, limit, key } = await researchCount(env);
   if (used >= limit) throw new Error(`今月の上限（${limit}回）に達しました`);
 
   const today = new Date().toISOString().slice(0, 10);
   const text = `今日は ${today}。\n調べたいこと：${question}${focus ? `\n特に知りたいこと：${focus}` : ""}`;
+  const guide = rules ? `${RESEARCH_GUIDE}\n\n## 守ること（育成ノート）\n${rules}` : RESEARCH_GUIDE;
   const model = env.RESEARCH_MODEL || RESEARCH_MODEL;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: RESEARCH_GUIDE }] },
+      systemInstruction: { parts: [{ text: guide }] },
       contents: [{ role: "user", parts: [{ text }] }],
       tools: [{ google_search: {} }],
     }),
@@ -216,24 +229,105 @@ export async function research(args, env) {
   if (!answer) throw new Error(cand?.finishReason || data.promptFeedback?.blockReason || "答えが返ってきませんでした");
 
   const meta = cand.groundingMetadata || cand.grounding_metadata || {};
-  const seen = new Set();
-  const sources = [];
-  for (const c of meta.groundingChunks || meta.grounding_chunks || []) {
-    const w = c.web || {};
-    if (!w.uri || seen.has(w.uri)) continue;
-    seen.add(w.uri);
-    sources.push(`- ${w.title || "（タイトルなし）"}：${w.uri}`);
-  }
+  const { sources, numberOf } = collectSources(meta.groundingChunks || meta.grounding_chunks || []);
+  const cited = addCitations(answer, meta.groundingSupports || meta.grounding_supports || [], numberOf);
+  await Promise.all(sources.slice(0, RESOLVE_MAX).map(async (s) => void (s.url = await resolveUrl(s.uri))));
   const queries = meta.webSearchQueries || meta.web_search_queries || [];
 
   await env.IMAGES.put(key, String(used + 1), { expirationTtl: 40 * 24 * 60 * 60 });
   const tail = [
     `## 出典（${sources.length}件）`,
-    sources.length ? sources.join("\n") : "- （出典が返ってきませんでした）",
+    sources.length ? sources.map(sourceLine).join("\n") : "- （出典が返ってきませんでした）",
     queries.length ? `\n検索した言葉：${queries.join("／")}` : "",
     `\n（Gemini ${model}・今月 ${used + 1}／${limit} 回）`,
   ].filter(Boolean).join("\n");
-  return { content: [{ type: "text", text: `${answer}\n\n${tail}` }] };
+  return { content: [{ type: "text", text: `${cited}\n\n${tail}` }] };
+}
+
+// 出典に groundingChunks の順で 1..n の番号を振る（同じ URL は同じ番号）。numberOf[チャンクの位置] = 出典番号
+export function collectSources(chunks) {
+  const sources = [];
+  const byUri = new Map();
+  const numberOf = [];
+  chunks.forEach((c, i) => {
+    const w = (c && c.web) || {};
+    if (!w.uri) return;
+    if (!byUri.has(w.uri)) {
+      sources.push({ n: sources.length + 1, title: String(w.title || "").trim(), uri: w.uri, url: w.uri });
+      byUri.set(w.uri, sources.length);
+    }
+    numberOf[i] = byUri.get(w.uri);
+  });
+  return { sources, numberOf };
+}
+
+// 根拠（groundingSupports）の出典番号を、その文のすぐ後ろに「 [1,3]」の形で書き込む。
+// startIndex／endIndex はバイト数のことがあり日本語ではずれるので使わず、segment.text を答えの中から探す
+// （前に見つけた所の後ろから探し、無ければ全体から。見つからなければ書かない）
+export function addCitations(answer, supports, numberOf) {
+  const at = new Map(); // 書き込む位置 → 出典番号
+  let cursor = 0;
+  for (const s of supports || []) {
+    const raw = String(s?.segment?.text || "");
+    const idx = s?.groundingChunkIndices || s?.grounding_chunk_indices || [];
+    const nums = [...new Set(idx.map((i) => numberOf[i]).filter(Boolean))];
+    if (!raw.trim() || !nums.length) continue;
+    let found = null;
+    for (const part of raw === raw.trim() ? [raw] : [raw, raw.trim()]) {
+      let pos = answer.indexOf(part, cursor);
+      if (pos < 0) pos = answer.indexOf(part);
+      if (pos >= 0) {
+        found = { pos, part };
+        break;
+      }
+    }
+    if (!found) continue;
+    const end = found.pos + found.part.trimEnd().length; // 末尾の改行の後ろには書かない（見出しが崩れるため）
+    cursor = found.pos + found.part.length;
+    const set = at.get(end) || new Set();
+    for (const n of nums) set.add(n);
+    at.set(end, set);
+  }
+  let out = answer;
+  for (const end of [...at.keys()].sort((a, b) => b - a)) {
+    out = `${out.slice(0, end)} [${[...at.get(end)].sort((a, b) => a - b).join(",")}]${out.slice(end)}`;
+  }
+  return out;
+}
+
+// Google の転送用URL（vertexaisearch.cloud.google.com/grounding-api-redirect/…）を、行き先の本当のURLに直す。
+// 転送を1回だけ見る（中身は読まない）。時間切れ・エラー・転送でないときは元のURLのまま
+export async function resolveUrl(uri) {
+  try {
+    const res = await fetch(uri, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS) });
+    const loc = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    try {
+      res.body?.cancel().catch(() => {});
+    } catch {
+      // 中身を捨てられなくても答えには関係ない
+    }
+    if (loc) return new URL(loc, uri).href;
+  } catch {
+    // つながらない・時間切れ・行き先が読めない
+  }
+  return uri;
+}
+
+// 出典の1行：[n] タイトル（サイト）：URL。タイトルが無い・サイト名と同じなら [n] サイト：URL
+function sourceLine(s) {
+  const site = siteOf(s.url);
+  const title = s.title;
+  if (!site) return `[${s.n}] ${title || "（タイトルなし）"}：${s.url}`;
+  if (!title || title.toLowerCase().replace(/^www\./, "") === site) return `[${s.n}] ${site}：${s.url}`;
+  return `[${s.n}] ${title}（${site}）：${s.url}`;
+}
+
+function siteOf(u) {
+  try {
+    return new URL(u).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
 }
 
 async function researchCount(env) {
