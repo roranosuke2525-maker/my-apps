@@ -15,7 +15,7 @@
         <div class="g-roles">
           <div class="g-role" style="--c:var(--s-next)"><b>👤 自分</b><p>入れる・AIに預ける・<em>行き先を決める</em>・NEXTをやる</p></div>
           <div class="g-role" style="--c:var(--s-ai)"><b>🤖 AI</b><p>調べる・整理・質問・ToDoとNEXTを作る。<em>ステータスは変えない</em></p></div>
-          <div class="g-role" style="--c:var(--s-today)"><b>⏰ 時間</b><p>平日の日中は毎時AIが動く。朝ニュース・夜ジャーナル・月曜診断</p></div>
+          <div class="g-role" style="--c:var(--s-today)"><b>⏰ 時間</b><p>平日の日中は毎時AIが動く（12:52は休み）。朝ニュース・夜ジャーナル・月曜診断</p></div>
         </div></section>
 
       <section class="g-sec"><h3>① タスクの一生</h3>
@@ -90,7 +90,7 @@
     const now = new Date(Date.now() + 9 * 3600e3); const nh = now.getUTCHours() + now.getUTCMinutes() / 60;
     return `<div class="g-tl"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="1日の定期実行の時刻">
       <rect x="${X(7.87)}" y="40" width="${X(17.87) - X(7.87)}" height="16" rx="4" style="fill:var(--s-ai);opacity:.25"/>
-      <text x="${(X(7.87) + X(17.87)) / 2}" y="51.5" text-anchor="middle" style="fill:var(--ink);font-size:10px">🔍 AIリサーチ　平日 7:52〜17:52 毎時</text>
+      <text x="${(X(7.87) + X(17.87)) / 2 + 6}" y="51.5" text-anchor="middle" style="fill:var(--ink);font-size:9px">🔍 AIリサーチ　平日 7:52〜17:52 毎時（12:52は休み）</text>
       <line x1="${x0}" x2="${x1}" y1="64" y2="64" style="stroke:var(--line);stroke-width:2"/>
       ${[6, 9, 12, 15, 18, 21].map((h) => `<text x="${X(h)}" y="${H - 4}" text-anchor="middle" class="tk">${h}時</text><line x1="${X(h)}" x2="${X(h)}" y1="61" y2="67" style="stroke:var(--mute)"/>`).join("")}
       ${pts.map(([h, t, n, up]) => `<circle cx="${X(h)}" cy="64" r="3.5" style="fill:var(--s-today)"/><text x="${X(h) + (h > 18 ? -4 : 4)}" y="${up ? 82 : 28}" text-anchor="${h > 18 ? "end" : "start"}" style="fill:var(--ink);font-size:10px">${t} ${n}</text><line x1="${X(h)}" x2="${X(h)}" y1="${up ? 68 : 32}" y2="${up ? 74 : 60}" style="stroke:var(--s-today);opacity:.6"/>`).join("")}
@@ -140,7 +140,7 @@
       { no: "③", name: "処理している時間帯", val: "週次レポートで確認", st: "info", why: "ログから組み立てるので月曜の診断で見る" },
       { no: "④", name: "滞留", val: `収集 ${inbox.length}・動かないNEXT ${oldNext.length}`, st: lvl(inbox.length > 50, inbox.length > 20 || oldNext.length > 5), why: "収集50件超・7日以上動かないNEXTが5件超で黄信号",
         fix: oldNext.length || inbox.length > 20 ? { msg: oldNext.length ? "7日以上動いていない「次にやる」" : "収集箱を仕分ける", items: oldNext.slice(0, 4), acts: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]], all: inbox.length > 20 ? ["triage:inbox", "仕分けを始める"] : null } : null },
-      { no: "⑤", name: "AI処理の稼働", val: `今日の定時処理 ${runsToday}回・止まり気味 ${aiStuck.length}件`, st: lvl(false, (workday(TODAY()) && h >= 10 && !runsToday && S.logs.length) || aiStuck.length > 0), why: "平日の日中は毎時動く。AIの番が2日以上残るなら止まっているかも",
+      { no: "⑤", name: "AI処理の稼働", val: `今日の定時処理 ${runsToday}回・止まり気味 ${aiStuck.length}件`, st: lvl(false, (workday(TODAY()) && h >= 10 && !runsToday && S.logs.length) || aiStuck.length > 0), why: "平日の日中は毎時動く（12:52は休み）。AIの番が2日以上残るなら止まっているかも",
         fix: aiStuck.length ? { msg: "AIの番のまま2日以上たっている（定時処理の運用ログを確認）", items: aiStuck.slice(0, 4), acts: [["open", "開く"]], all: ["logseg:log", "運用ログを見る"] } : null },
       { no: "⑥", name: "流入と完了（今日）", val: `入った ${inflow}・済み ${S.doneToday.length}`, st: lvl(false, inflow > S.doneToday.length + 5), why: "入る数が出る数を上回り続けると溜まる" },
       { no: "⑦", name: "仕組み変更の回数", val: `この7日 ${changes}件`, st: lvl(false, changes > 3), why: "週3件超は仕組みいじりすぎ（目標は月0件）",

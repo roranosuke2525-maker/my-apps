@@ -58,13 +58,13 @@
   const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), `「${short(t.name)}」→ ${MOVES[key].label}${extra}`);
   const short = (s, n = 14) => (s.length > n ? `${s.slice(0, n)}…` : s);
   function setSync(st) { const el = $("#sync"); el.className = `sync ${st === "ok" ? "" : st}`; $("#synct").textContent = st === "busy" ? "書き込み中" : st === "err" ? "エラー" : S.mode === "demo" ? "見本" : S.loadedAt ? `${jstTime(S.loadedAt)} 更新` : ""; }
-  // 平日 7:52〜17:52 毎時（土日・祝日は動かない。祝日は振替休日・国民の休日を含む 2026〜2027年）
+  // 平日 7:52〜11:52・13:52〜17:52 毎時（12:52 は休み。土日・祝日は動かない。祝日は振替休日・国民の休日を含む 2026〜2027年）
   const HOLIDAYS = new Set(["2026-01-01", "2026-01-12", "2026-02-11", "2026-02-23", "2026-03-20", "2026-04-29", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-07-20", "2026-08-11", "2026-09-21", "2026-09-22", "2026-09-23", "2026-10-12", "2026-11-03", "2026-11-23",
     "2027-01-01", "2027-01-11", "2027-02-11", "2027-02-23", "2027-03-21", "2027-03-22", "2027-04-29", "2027-05-03", "2027-05-04", "2027-05-05", "2027-07-19", "2027-08-11", "2027-09-20", "2027-09-23", "2027-10-11", "2027-11-03", "2027-11-23"]);
   const workday = (d) => dow(d) >= 1 && dow(d) <= 5 && !HOLIDAYS.has(d);
   function nextRun() {
     const n = new Date(Date.now() + 9 * 3600e3); const h = n.getUTCHours(); const m = n.getUTCMinutes();
-    if (workday(TODAY()) && (h < 17 || (h === 17 && m < 52))) { const hh = h < 7 || (h === 7 && m < 52) ? 7 : m < 52 ? h : h + 1; return `今日 ${hh}:52`; }
+    if (workday(TODAY()) && (h < 17 || (h === 17 && m < 52))) { let hh = h < 7 || (h === 7 && m < 52) ? 7 : m < 52 ? h : h + 1; if (hh === 12) hh = 13; return `今日 ${hh}:52`; } // 12:52 は休み → 13:52
     let d = TODAY(); do { d = addDays(d, 1); } while (!workday(d));
     return `${md(d)}（${WD[dow(d)]}）7:52`;
   }
@@ -309,7 +309,7 @@
     const me = myTurn().sort((a, b) => (a.ai === "💭" ? 0 : 1) - (b.ai === "💭" ? 0 : 1) || (b.edited || "").localeCompare(a.edited || ""));
     const ai = aiTurn().sort((a, b) => AIA.indexOf(a.ai) - AIA.indexOf(b.ai) || (a.edited || "").localeCompare(b.edited || ""));
     const c = (arr, m) => arr.filter((t) => t.ai === m).length;
-    view.insertAdjacentHTML("beforeend", `<div class="aihead"><button type="button" class="card mine" data-aiseg="me"><div class="k">あなたの番</div><div class="n">${me.length}</div><div class="s">💭 回答 ${c(me, "💭")}・🔍✅ 判定 ${c(me, "🔍✅")}</div></button><button type="button" class="card" data-aiseg="ai"><div class="k">AIの番</div><div class="n">${ai.length}</div><div class="s">🔍 ${c(ai, "🔍")}・🔬 ${c(ai, "🔬")}・💬 ${c(ai, "💬")}</div></button><div class="card"><div class="k">次の定時処理</div><div class="n" style="font-size:16px;padding:4px 0 2px">${nextRun()}</div><div class="s">平日 7:52〜17:52 毎時・祝日休み</div><button type="button" class="btn runnow" data-runnow="1">▶ 今すぐ実行</button></div></div>
+    view.insertAdjacentHTML("beforeend", `<div class="aihead"><button type="button" class="card mine" data-aiseg="me"><div class="k">あなたの番</div><div class="n">${me.length}</div><div class="s">💭 回答 ${c(me, "💭")}・🔍✅ 判定 ${c(me, "🔍✅")}</div></button><button type="button" class="card" data-aiseg="ai"><div class="k">AIの番</div><div class="n">${ai.length}</div><div class="s">🔍 ${c(ai, "🔍")}・🔬 ${c(ai, "🔬")}・💬 ${c(ai, "💬")}</div></button><div class="card"><div class="k">次の定時処理</div><div class="n" style="font-size:16px;padding:4px 0 2px">${nextRun()}</div><div class="s">平日 7:52〜17:52 毎時（12:52・祝日は休み）</div><button type="button" class="btn runnow" data-runnow="1">▶ 今すぐ実行</button></div></div>
       <div class="seg">${[["me", "あなたの番", me.length], ["ai", "AIの番", ai.length], ["req", "依頼する", ""]].map(([k, n, x]) => `<button type="button" data-aiseg="${k}" aria-pressed="${S.aiSeg === k}">${n}<span class="n">${x}</span></button>`).join("")}</div>
       <div class="card panel"><div class="list" id="ailist"></div></div>`);
     const box = $("#ailist");
