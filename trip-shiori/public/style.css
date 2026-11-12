@@ -349,3 +349,12 @@ input:focus { outline: 2px solid var(--night-2); outline-offset: 1px; }
 .me-ring { fill: #2f7ff0; fill-opacity: .12; stroke: #2f7ff0; stroke-opacity: .35; stroke-width: 1; }
 
 .tabs button { flex: 1 0 50px; }
+
+/* ---------- メモ ---------- */
+.memo-form { display: flex; flex-direction: column; gap: 8px; }
+.memo-cats { display: flex; gap: 6px; flex-wrap: wrap; }
+.memo-cats .chip[aria-checked="true"] { background: var(--night); color: #fff; border-color: var(--night); }
+.memo-form textarea { width: 100%; font: inherit; font-size: 16px; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); resize: vertical; }
+.memo-form .primary { align-self: flex-end; border-radius: 999px; }
+.memo-group h2.group-title { padding: 0; margin: 0; }
+.tabs button { flex: 1 0 46px; }

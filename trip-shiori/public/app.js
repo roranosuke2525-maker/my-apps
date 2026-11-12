@@ -389,12 +389,12 @@ function render() {
     renderSync();
     return;
   }
-  const ids = [...state.trip.days.map((d) => d.id), "map", "prep", "todo"];
+  const ids = [...state.trip.days.map((d) => d.id), "map", "prep", "todo", "memo"];
   if (!ids.includes(state.tab)) state.tab = defaultTab();
   renderTabs();
   const day = state.trip.days.find((d) => d.id === state.tab);
   const scroll = $("main").scrollTop;
-  $("view").replaceChildren(...(day ? renderDay(day) : state.tab === "map" ? renderMap() : renderPrep(state.tab)).filter(Boolean));
+  $("view").replaceChildren(...(day ? renderDay(day) : state.tab === "map" ? renderMap() : state.tab === "memo" ? renderMemo() : renderPrep(state.tab)).filter(Boolean));
   $("main").scrollTop = scroll;
   renderSync();
 }
@@ -408,6 +408,7 @@ function renderTabs() {
   }));
   tabs.push(tabBtn("prep", el("span", { class: "tab-md" }, "準備"), el("span", { class: "tab-w" }, "もちもの")));
   tabs.push(tabBtn("todo", el("span", { class: "tab-md" }, "当日"), el("span", { class: "tab-w" }, "TODO")));
+  tabs.push(tabBtn("memo", el("span", { class: "tab-md" }, "メモ"), el("span", { class: "tab-w" }, "気づき")));
   $("tabs").replaceChildren(...tabs);
 }
 
@@ -468,6 +469,58 @@ function dayHours(day) {
     el("a", { href: "https://themeparks.wiki/", target: "_blank", rel: "noopener" }, "Powered by ThemeParks.wiki"));
 }
 
+// ---------- メモ（旅の気づき） ----------
+const MEMO_LABEL = "📝 旅の気づき";
+const MEMO_CATS = [["👍", "よかった"], ["💡", "次はこうする"], ["⚠️", "困った"]];
+function isMemoGroup(g) {
+  return /気づき/u.test(g.label);
+}
+
+function addMemo(cat, text) {
+  const g = state.trip.groups.find(isMemoGroup) || addGroup(MEMO_LABEL);
+  const day = state.trip.days.find((d) => d.date === todayStr());
+  addItem(g, `${cat} ${day ? `${shortDate(day.date).md} ` : ""}${text}`, false);
+}
+
+function renderMemo() {
+  const g = state.trip.groups.find(isMemoGroup);
+  const items = g ? g.items : [];
+  const cat = state.memoCat || "💡";
+  const input = el("textarea", { rows: "2", maxlength: "180", placeholder: "例）ベビーカーはワールドバザールで先に預けると楽", "aria-label": "気づいたこと" });
+  const form = el("form", {
+    class: "card memo-form",
+    onsubmit: (e) => {
+      e.preventDefault();
+      const t = input.value.replace(/[\r\n]+/g, " ").trim();
+      if (!t) return input.focus();
+      input.value = "";
+      addMemo(state.memoCat || "💡", t);
+    },
+  },
+  el("div", { class: "memo-cats", role: "radiogroup", "aria-label": "種類" }, MEMO_CATS.map(([icon, name]) =>
+    el("button", {
+      type: "button", class: "chip", role: "radio", "aria-checked": String(cat === icon),
+      onclick: () => { state.memoCat = icon; for (const b of document.querySelectorAll(".memo-cats .chip")) b.setAttribute("aria-checked", String(b.dataset.cat === icon)); },
+      "data-cat": icon,
+    }, `${icon} ${name}`))),
+  input,
+  el("button", { type: "submit", class: "primary" }, "メモする"));
+
+  const sections = [...MEMO_CATS, ["", "そのほか"]].map(([icon, name]) => {
+    const list = items.filter((i) => (icon ? i.label.startsWith(icon) : !MEMO_CATS.some(([c]) => i.label.startsWith(c))));
+    if (!list.length) return null;
+    return el("section", { class: "card group memo-group" },
+      el("div", { class: "group-head" }, el("h2", { class: "group-title" }, `${icon} ${name}`), el("span", { class: "count" }, `${list.length}件`)),
+      renderList(list, 0, true));
+  });
+
+  return [
+    form,
+    ...(sections.some(Boolean) ? sections : [el("div", { class: "card empty" }, "まだメモはありません。気づいたらその場で一言どうぞ")]),
+    el("p", { class: "hint" }, "旅行が終わったら（11/15の朝）、Claude がこのメモを読んで、次の旅行やアプリに活かすことを決めます。活かし終えたものには ✓ が付きます。"),
+  ];
+}
+
 // 当日のTODOのまとまり（名前で見分ける。当日のタブで足したまとまりは頭に 📌 が付く）
 const DAY_OF = /todo|当日|やること|買いたいもの|お土産|おみやげ|📌/iu;
 function isDayOfGroup(g) {
@@ -477,7 +530,7 @@ function isDayOfGroup(g) {
 // 準備のタブ（mode: "prep"）と当日のタブ（mode: "todo"）。同じ作りで、まとまりを分けて出す
 function renderPrep(mode = "prep") {
   const todo = mode === "todo";
-  const groups = state.trip.groups.filter((g) => !isPlacesGroup(g) && isDayOfGroup(g) === todo);
+  const groups = state.trip.groups.filter((g) => !isPlacesGroup(g) && !isMemoGroup(g) && isDayOfGroup(g) === todo);
   const cards = groups.map((g) => {
     const flat = flatten(g.items);
     const done = flat.filter((i) => i.checked).length;
