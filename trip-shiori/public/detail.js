@@ -195,6 +195,12 @@ function mapView(pins) {
         type: "button", class: `locate-btn${detail.watchId != null ? " on" : ""}`, "aria-label": "現在地を表示",
         onclick: () => locateMe(),
       }, locateIcon()),
+      el("button", {
+        type: "button", class: `block-btn${detail.blocking ? " on" : ""}${blockedIds().size ? " has" : ""}`, "aria-label": "通れない道を決める",
+        onclick: () => { detail.picking = null; detail.blocking = !detail.blocking; render(); },
+      }, "🚧"),
+      modeBanner(),
+      routeInfoBox(),
     ));
 }
 
@@ -223,6 +229,7 @@ function startWatch() {
       detail.me = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
       drawMe();
       if (detail.followOnce) centerOnMe();
+      maybeReroute();
     },
     (err) => {
       stopWatch();
@@ -344,7 +351,7 @@ function searchResults() {
     e.drinks ? el("div", { class: "hit-drink" }, `🍺 ${drinksLine(e.drinks)}`) : null,
     e.kind !== "toilet" ? el("button", {
       type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`,
-      onclick: (ev) => { ev.stopPropagation(); addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); },
+      onclick: (ev) => { ev.stopPropagation(); addPlace(e.name, { lat: e.lat, lon: e.lon, kind: e.kind }); toast(`「${e.name}」を行きたい場所に足しました`); },
     }, "＋ 行きたい") : null));
   }
   const count = list.length
@@ -402,6 +409,7 @@ function todayHours() {
 
 // 一覧の「地図」：自分の地図でその場所へ。位置がわからなければ Google マップ
 function flyToPin(p) {
+  if (p.coords) return showOnMap({ ...p.coords, name: p.want?.name || p.item.label, park: state.park, kind: "ride" });
   const key = TripPlaces.norm(p.place?.name || p.item.label);
   const e = searchIndex().find((x) => TripPlaces.norm(x.name) === key);
   showOnMap(e || { name: p.place?.name || p.item.label, park: state.park });
@@ -438,7 +446,17 @@ function ensureLeaflet() {
 }
 
 function detailMap(pins) {
-  if (!detail.box) detail.box = el("div", { class: "leaflet-box" });
+  if (!detail.box) {
+    detail.box = el("div", { class: "leaflet-box" });
+    // 指が地図に触れている間は画面の描き直しを待たせる（描き直すと押した場所が消えて、押しても届かないため）
+    const release = () => {
+      if (!detail.pressing) return;
+      detail.pressing = false;
+      if (state.needsRender) setTimeout(() => { state.needsRender = false; render(); }, 50);
+    };
+    detail.box.addEventListener("pointerdown", () => { detail.pressing = true; }, true);
+    for (const t of ["pointerup", "pointercancel"]) window.addEventListener(t, release, true);
+  }
   loadPois();
   ensureLeaflet().then(() => drawDetail(pins)).catch((err) => { detail.error = err.message; });
   return detail.box;
@@ -453,10 +471,13 @@ function drawDetail(pins) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
     }).addTo(detail.map);
     detail.layer = L.layerGroup().addTo(detail.map);
+    detail.map.on("click", onMapClick);
     detail.shownPark = "";
   }
   setTimeout(() => detail.map.invalidateSize(), 0);
   drawMe();
+  drawBlocked();
+  detail.box.classList.toggle("picking", !!(detail.picking || detail.blocking));
   const pad = { paddingTopLeft: [16, 110], paddingBottomRight: [16, 150], maxZoom: 18 };
   const searchKey = `${state.park}|${detail.kind}|${detail.q.trim()}`;
   if (detail.shownPark !== state.park || detail.lastKey !== searchKey) {
@@ -488,7 +509,9 @@ function drawDetail(pins) {
   // 行きたい場所・予定の番号ピン（座標がわかるものだけ）
   const byName = new Map(index.map((e) => [TripPlaces.norm(e.name), e]));
   for (const p of pins) {
-    const e = p.place?.name && byName.get(TripPlaces.norm(p.place.name));
+    const e = p.coords
+      ? { ...p.coords, name: p.want?.name || p.item.label, park: state.park, kind: p.place ? "ride" : "ride" }
+      : p.place?.name && byName.get(TripPlaces.norm(p.place.name));
     if (!e || (searching && !highlight.has(e.name))) continue;
     const icon = L.divIcon({
       className: `num-pin${p.item.checked ? " done" : ""}`,
@@ -517,7 +540,8 @@ function poiPopup(e, pin) {
       ...e.drinks.menu.map(([n, yen]) => el("li", {}, el("span", {}, n), el("b", {}, `¥${yen.toLocaleString("ja-JP")}`)))) : null,
     e.drinks ? el("div", { class: "drink-note" }, [e.drinks.to ? "持ち歩き○" : "店内だけ", e.drinks.note, TripPlaces.DRINKS_SOURCE].filter(Boolean).join("・")) : null,
     el("div", { class: "poi-pop-btns" },
-      e.kind !== "toilet" && !pin ? el("button", { type: "button", class: "chip strong small", onclick: () => { addPlace(e.name); toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋ 行きたい") : null,
+      el("button", { type: "button", class: "chip strong small", onclick: () => { detail.map.closePopup(); routeTo({ lat: e.lat, lon: e.lon, name: e.name }); } }, "🚶 ここへ行く"),
+      e.kind !== "toilet" && !pin ? el("button", { type: "button", class: "chip small", onclick: () => { addPlace(e.name, { lat: e.lat, lon: e.lon, kind: e.kind }); toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋ 行きたい") : null,
       el("a", { class: "chip small", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, target: "_blank", rel: "noopener" }, "Googleマップ"),
       officialHoursUrl(e) ? el("a", { class: "chip small", href: officialHoursUrl(e), target: "_blank", rel: "noopener" }, "営業時間（公式）") : null));
 }

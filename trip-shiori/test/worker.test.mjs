@@ -81,6 +81,13 @@ beforeEach(() => {
       const q = decodeURIComponent(String(init.body).slice(5));
       calls.push({ method: "POST", path: "overpass", body: q });
       // ランドは敷地の形で取れる。シーは形が無い（空）→ 四角で取り直す
+      if (q.includes('way["highway"')) {
+        return new Response(JSON.stringify({ elements: q.includes("ディズニーシー") || q.includes("35.6236") ? [] : [
+          { type: "way", tags: { highway: "footway" }, geometry: [{ lat: 35.6321234, lon: 139.8801234 }, { lat: 35.6325, lon: 139.8805 }] },
+          { type: "way", tags: { highway: "service", access: "private" }, geometry: [{ lat: 35.63, lon: 139.88 }, { lat: 35.631, lon: 139.881 }] },
+          { type: "way", tags: { highway: "steps" }, geometry: [{ lat: 35.6325, lon: 139.8805 }] },
+        ] }), { status: 200 });
+      }
       const isSea = q.includes("35.6236") || q.includes("ディズニーシー");
       const areaQuery = q.includes("area.p");
       const elements = !isSea ? [
@@ -272,4 +279,11 @@ test("開園時間：ランドの予定から開園・閉園・早く入れる�
   assert.deepEqual(data.hours.land["2026-11-12"], { open: "9:00", close: "21:00", early: "8:45" });
   assert.equal(data.hours.sea, undefined);
   assert.match(data.attribution, /ThemeParks\.wiki/);
+});
+
+test("歩ける道：敷地の中の道を緯度・経度の並びで返す（関係者用・点だけのものは捨てる）", async () => {
+  const res = await worker.fetch(new Request("https://app.test/api/paths", { headers: { Authorization: `Bearer ${KEY}` } }), { ...env, TRIP_PARKS: "land" });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.deepEqual(data.ways, [[35.63212, 139.88012, 35.6325, 139.8805]]);
 });
