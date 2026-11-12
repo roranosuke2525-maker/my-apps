@@ -358,3 +358,40 @@ input:focus { outline: 2px solid var(--night-2); outline-offset: 1px; }
 .memo-form .primary { align-self: flex-end; border-radius: 999px; }
 .memo-group h2.group-title { padding: 0; margin: 0; }
 .tabs button { flex: 1 0 46px; }
+
+/* ---------- 行きたい場所の状態・ルート・通行止め ---------- */
+.want-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
+.want-filter .chip[aria-pressed="true"] { background: var(--night); color: #fff; border-color: var(--night); }
+.want-line { display: flex; align-items: flex-start; gap: 6px; }
+.want-line .check-row { flex: 1; min-width: 0; }
+.status-sel {
+  font: inherit; font-size: 12px; font-weight: 700; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink);
+  padding: 4px 6px; margin-top: 7px; max-width: 8.5em; flex: none;
+}
+.add-place .status-sel { margin-top: 0; max-width: 7em; }
+.pin-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: -2px 0 6px 30px; }
+.pin-actions .map-btn.tight { margin: 0; }
+.pin-no.none { background: #cfc8bb; }
+.block-btn {
+  position: absolute; right: 10px; bottom: 196px; z-index: 600; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: var(--card); box-shadow: 0 2px 10px rgba(40, 40, 80, .22); font-size: 18px; filter: grayscale(.6);
+}
+.map-wrap:not(:has(.hit-card)) .block-btn { bottom: 74px; }
+.block-btn.has, .block-btn.on { filter: none; }
+.block-btn.on { box-shadow: 0 0 0 3px #e0623f, 0 2px 10px rgba(40, 40, 80, .22); }
+.mode-banner, .route-info {
+  position: absolute; left: 10px; right: 60px; z-index: 650; background: var(--card); color: var(--ink); border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(40, 40, 80, .22); padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700;
+}
+.mode-banner { top: 112px; border: 2px solid var(--night); }
+.mode-banner.block { border-color: #e0623f; }
+.mode-banner button { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 3px 9px; flex: none; }
+.mode-banner span, .route-msg { flex: 1; min-width: 0; }
+.route-info { bottom: 150px; }
+.map-wrap:not(:has(.hit-card)) .route-info { bottom: 28px; }
+.leaflet-box.picking { cursor: crosshair; }
+.route-line-bg { stroke: #fff; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; fill: none; opacity: .9; }
+.route-line { stroke: #2f7ff0; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.blocked-line { stroke: #e0623f; stroke-width: 7; stroke-dasharray: 2 6; stroke-linecap: round; fill: none; }
+
+.mode-banner { left: 56px; right: 10px; }

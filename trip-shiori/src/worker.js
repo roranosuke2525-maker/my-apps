@@ -44,6 +44,9 @@ export default {
       if (url.pathname === "/api/hours" && request.method === "GET") {
         return json(await getHours(env));
       }
+      if (url.pathname === "/api/paths" && request.method === "GET") {
+        return json(await getPaths(env));
+      }
       if (url.pathname === "/api/pois" && request.method === "GET") {
         return json(await getPois(env));
       }
@@ -281,6 +284,43 @@ async function getPois(env) {
     }
   }
   const out = { v: 3, pois, parks, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
+  if (cache) {
+    await cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=604800", "Content-Type": "application/json" } }));
+  }
+  return out;
+}
+
+// ---------- 園内の歩ける道（ルート用） ----------
+// OpenStreetMap の道（歩道・広場・階段・園内の通路）を、パークの敷地の中だけ取る。1週間キャッシュ
+const WALKABLE = "^(footway|pedestrian|path|steps|service|living_street|corridor|track|unclassified|residential|cycleway)$";
+
+function pathQuery(park, useBbox) {
+  const a = PARK_AREA[park];
+  const where = useBbox ? `(${a.bbox})` : "(area.p)";
+  return `[out:json][timeout:40];
+${useBbox ? "" : `area["tourism"="theme_park"]["name"~"${a.name}"]->.p;`}
+way["highway"~"${WALKABLE}"]${where};
+out geom;`;
+}
+
+async function getPaths(env) {
+  const parks = tripParks(env);
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = new Request(`https://trip-shiori.cache/paths-v1-${parks.join("-")}`);
+  const hit = cache && (await cache.match(key));
+  if (hit) return hit.json();
+  const ways = [];
+  for (const park of parks) {
+    let elements = await overpass(env, pathQuery(park, false));
+    if (!elements.length) elements = await overpass(env, pathQuery(park, true));
+    for (const e of elements) {
+      if (e.type !== "way" || !Array.isArray(e.geometry) || e.geometry.length < 2) continue;
+      if (e.tags?.access === "private" || e.tags?.access === "no") continue; // 関係者用の通路は使わない
+      // [緯度, 経度, 緯度, 経度, ...] を 1m ほどの細かさに丸めて詰める
+      ways.push(e.geometry.flatMap((g) => [Math.round(g.lat * 1e5) / 1e5, Math.round(g.lon * 1e5) / 1e5]));
+    }
+  }
+  const out = { v: 1, ways, parks, fetchedAt: new Date().toISOString(), attribution: "© OpenStreetMap contributors (ODbL)" };
   if (cache) {
     await cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=604800", "Content-Type": "application/json" } }));
   }

@@ -265,9 +265,11 @@ function isPlacesGroup(g) {
 }
 
 // 行きたい場所は「📍 行きたい場所」のまとまりに足す（無ければ作る）
-function addPlace(text) {
+// 行きたい場所に足す。opts: { status, lat, lon, kind }（検索や地図から足すときは位置も一緒に残す）
+function addPlace(text, opts = {}) {
   const g = state.trip.groups.find(isPlacesGroup) || addGroup(PLACES_LABEL);
-  addItem(g, text, false);
+  const status = opts.status || (opts.kind === "food" ? "🍴" : opts.kind === "shop" ? "🛍" : "🚶");
+  addItem(g, composeWant({ status, name: text, lat: opts.lat ?? null, lon: opts.lon ?? null }), false);
   const hit = TripPlaces.findPlace(text);
   if (hit && TripPlaces.AREA_BY_ID[hit.area].park !== state.park && tripParks().includes(TripPlaces.AREA_BY_ID[hit.area].park)) {
     state.park = TripPlaces.AREA_BY_ID[hit.area].park;
@@ -370,7 +372,7 @@ function el(tag, attrs = {}, ...kids) {
 }
 
 function render() {
-  if (state.dragging || (typeof detail !== "undefined" && detail.composing)) { state.needsRender = true; return; }
+  if (state.dragging || (typeof detail !== "undefined" && (detail.composing || detail.pressing))) { state.needsRender = true; return; }
   const loggedIn = !!memoryKey;
   $("login").hidden = loggedIn;
   $("view").hidden = !loggedIn;
@@ -597,7 +599,10 @@ function walk(items, fn, ctx) {
 function mapPins() {
   const pins = [];
   const want = state.trip.groups.find(isPlacesGroup);
-  if (want) walk(want.items, (i) => pins.push({ item: i, kind: "want", place: TripPlaces.findPlace(i.text) }));
+  if (want) walk(want.items, (i) => {
+    const w = parseWant(i.text);
+    pins.push({ item: i, kind: "want", want: w, place: TripPlaces.findPlace(w.name), coords: w.lat != null ? { lat: w.lat, lon: w.lon } : null });
+  });
   for (const d of state.trip.days) {
     const { md } = shortDate(d.date);
     walk(d.items, (i) => {
@@ -617,37 +622,41 @@ function renderMap() {
   const { PARKS, AREA_BY_ID } = TripPlaces;
   if (!tripParks().includes(state.park)) { state.park = tripParks()[0]; save(PARK_STORAGE, state.park); }
   const all = mapPins();
-  const placed = all.filter((p) => p.place);
-  const unknown = all.filter((p) => !p.place && p.kind === "want");
+  const parkOfPin = (p) => (p.coords ? parkOf(p.coords.lat, p.coords.lon) : p.place ? AREA_BY_ID[p.place.area].park : null);
   const park = PARKS[state.park] || PARKS.land;
-  const pins = placed.filter((p) => AREA_BY_ID[p.place.area].park === state.park);
-  const later = placed.filter((p) => p.kind === "want" && !tripParks().includes(AREA_BY_ID[p.place.area].park));
+  const pins = all.filter((p) => parkOfPin(p) === state.park);
+  const unknown = all.filter((p) => p.kind === "want" && !parkOfPin(p));
+  const later = all.filter((p) => p.kind === "want" && parkOfPin(p) && !tripParks().includes(parkOfPin(p)));
   pins.forEach((p, i) => { p.no = i + 1; });
 
   const seg = tripParks().length < 2 ? null : el("div", { class: "seg", role: "tablist" }, tripParks().map((id) => [id, PARKS[id]]).map(([id, pk]) => {
-    const n = placed.filter((p) => AREA_BY_ID[p.place.area].park === id).length;
+    const n = all.filter((p) => parkOfPin(p) === id).length;
     return el("button", {
       type: "button", role: "tab", "aria-selected": String(state.park === id),
       onclick: () => { state.park = id; state.focus = ""; save(PARK_STORAGE, id); render(); },
     }, pk.name, n ? el("span", { class: "seg-n" }, String(n)) : null);
   }));
 
-  const byArea = park.areas.map((a) => ({ area: a, pins: pins.filter((p) => p.place.area === a.id) }));
-  const groups = byArea.filter((g) => g.pins.length).map((g) => [
-    el("div", { class: "area-sub" }, el("i", { style: `background:${g.area.color}` }), g.area.name),
-    el("ul", { class: "list" }, g.pins.map((p) =>
-      el("li", { class: `pin-row${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`, id: `pin-${p.item.id}` },
-        el("span", { class: "pin-no", style: `background:${pinColor(p)}` }, el("span", {}, String(p.no))),
-        el("div", { class: "pin-main" },
-          checkRow(p.item),
-          p.kind === "plan" ? el("div", { class: "pin-when" }, `予定 ${p.when}`) : null,
-          p.place.name && TripPlaces.norm(p.place.name) !== TripPlaces.norm(p.item.label) ? el("div", { class: "pin-when" }, `→ ${p.place.name}`) : null,
-        ),
-        el("button", { type: "button", class: "map-btn tight", onclick: () => flyToPin(p) }, pinIcon(), "地図"),
-        p.kind === "want" ? el("button", { type: "button", class: "trash-btn", "aria-label": `${p.item.label}を消す`, onclick: () => removeItem(p.item) }, trashIcon()) : null,
-      ))),
+  // 状態で絞る（未定の管理）
+  const filter = state.wantFilter || "all";
+  const wants = pins.filter((p) => p.kind === "want");
+  const shown = pins.filter((p) => filter === "all" || (filter === "done" ? p.item.checked : p.kind === "want" && !p.item.checked && p.want.status === filter));
+  const filterChips = el("div", { class: "want-filter" },
+    [["all", "すべて", pins.length], ...WANT_STATUS.map(([e, n]) => [e, `${e} ${n.replace("（未定）", "")}`, wants.filter((p) => !p.item.checked && p.want.status === e).length]), ["done", "✓ 行った", pins.filter((p) => p.item.checked).length]]
+      .filter(([k, , n]) => k === "all" || n)
+      .map(([k, label, n]) => el("button", {
+        type: "button", class: "chip small", "aria-pressed": String(filter === k),
+        onclick: () => { state.wantFilter = filter === k ? "all" : k; render(); },
+      }, `${label} ${n}`)));
+
+  const groupsOf = [...park.areas.map((a) => ({ name: a.name, color: a.color, pins: shown.filter((p) => p.place?.area === a.id) })),
+    { name: "そのほか（地図で決めた場所）", color: "#cfc8bb", pins: shown.filter((p) => p.coords && !p.place) }];
+  const groups = groupsOf.filter((g) => g.pins.length).map((g) => [
+    el("div", { class: "area-sub" }, el("i", { style: `background:${g.color}` }), g.name),
+    el("ul", { class: "list" }, g.pins.map((p) => placeRow(p))),
   ]);
 
+  const statusSel = statusSelect(state.addStatus || "🚶", (v) => { state.addStatus = v; });
   const input = el("input", { type: "text", placeholder: "例）カリブの海賊／ジャングル", maxlength: "190", enterkeyhint: "done", "aria-label": "行きたい場所" });
   const addRow = el("form", {
     class: "add-place", "data-for": "place",
@@ -656,10 +665,12 @@ function renderMap() {
       const t = input.value.replace(/[\r\n]+/g, " ").trim();
       if (!t) return input.focus();
       input.value = "";
-      addPlace(t);
+      // 検索の一覧に位置があれば一緒に残す
+      const hit = searchIndex().find((x) => TripPlaces.norm(x.name) === TripPlaces.norm(TripPlaces.findPlace(t)?.name || t) && x.lat != null);
+      addPlace(t, { status: state.addStatus || "🚶", lat: hit?.lat, lon: hit?.lon });
       setTimeout(() => document.querySelector('[data-for="place"] input')?.focus(), 0);
     },
-  }, input, el("button", { type: "submit", class: "primary" }, "＋ 追加"));
+  }, statusSel, input, el("button", { type: "submit", class: "primary" }, "＋"));
 
   return [
     seg,
@@ -667,28 +678,52 @@ function renderMap() {
     el("section", { class: "card place-sheet" },
       el("div", { class: "sheet-grip", "aria-hidden": "true" }),
       el("h2", {}, `行きたい場所（${park.name}）`),
-      ...(groups.length ? groups.flat() : [el("p", { class: "sub" }, "まだありません。下で足すと地図に番号が立ちます。")]),
+      pins.length ? filterChips : null,
+      ...(groups.length ? groups.flat() : [el("p", { class: "sub" }, pins.length ? "この状態のものはありません" : "まだありません。下で足すと地図に番号が立ちます。")]),
       addRow,
     ),
+    unknown.length ? el("section", { class: "card area-card unknown" },
+      el("h3", {}, "場所が決まっていないもの"),
+      el("p", { class: "sub" }, "📍 を押して地図を押すと、その場所に番号が立ちます。"),
+      el("ul", { class: "list" }, unknown.map((p) => placeRow(p)))) : null,
     later.length ? el("section", { class: "card area-card unknown" },
       el("h3", {}, "今回は行かないパークの場所"),
       el("p", { class: "sub" }, "シーに行く日に、Worker の TRIP_PARKS を変えると地図に出ます。"),
-      el("ul", { class: "list" }, later.map((p) => el("li", { class: p.item.checked ? "done" : "" },
-        el("div", { class: "row-pm" }, checkRow(p.item),
-          el("button", { type: "button", class: "trash-btn", "aria-label": `${p.item.label}を消す`, onclick: () => removeItem(p.item) }, trashIcon()))))),
-    ) : null,
-    unknown.length ? el("section", { class: "card area-card unknown" },
-      el("h3", {}, "場所がわからないもの"),
-      el("p", { class: "sub" }, "押して名前を直すか、後ろに（エリア名）を付けると地図に出ます。例）ポップコーン（トゥーンタウン）"),
-      el("ul", { class: "list" }, unknown.map((p) => el("li", { class: p.item.checked ? "done" : "" }, checkRow(p.item)))),
-    ) : null,
+      el("ul", { class: "list" }, later.map((p) => placeRow(p)))) : null,
   ];
+}
+
+function statusSelect(value, onChange) {
+  return el("select", { class: "status-sel", "aria-label": "状態", onchange: (e) => onChange(e.target.value) },
+    WANT_STATUS.map(([e, n]) => el("option", { value: e, selected: e === value }, `${e} ${n}`)));
+}
+
+// 行きたい場所・予定の1行：番号・状態・名前・ルート・地図・場所を決める・消す
+function placeRow(p) {
+  const pos = p.coords || (p.place && searchIndex().find((x) => x.name === p.place.name && x.lat != null));
+  const target = pos ? { lat: pos.lat, lon: pos.lon, name: p.want?.name || p.item.label } : null;
+  return el("li", { class: `pin-row${p.item.checked ? " done" : ""}${state.focus === p.item.id ? " focus" : ""}`, id: `pin-${p.item.id}` },
+    p.no ? el("span", { class: "pin-no", style: `background:${pinColor(p)}` }, el("span", {}, String(p.no))) : el("span", { class: "pin-no none" }, el("span", {}, "?")),
+    el("div", { class: "pin-main" },
+      p.kind === "want"
+        ? el("div", { class: "want-line" }, statusSelect(p.want.status, (v) => { setWant(p.item, { status: v }); render(); }), checkRow(p.item, null, p.want.name))
+        : checkRow(p.item),
+      p.kind === "plan" ? el("div", { class: "pin-when" }, `予定 ${p.when}`) : null,
+      p.place?.name && TripPlaces.norm(p.place.name) !== TripPlaces.norm(p.want?.name || p.item.label) ? el("div", { class: "pin-when" }, `→ ${p.place.name}`) : null,
+      el("div", { class: "pin-actions" },
+        target ? el("button", { type: "button", class: "map-btn tight", onclick: () => { state.tab = "map"; routeTo(target); } }, "🚶 ルート") : null,
+        target ? el("button", { type: "button", class: "map-btn tight", onclick: () => flyToPin(p) }, pinIcon(), "地図") : null,
+        p.kind === "want" ? el("button", { type: "button", class: "map-btn tight", onclick: () => startPick(p.item) }, p.coords ? "📍 場所を直す" : "📍 場所を決める") : null,
+      ),
+    ),
+    p.kind === "want" ? el("button", { type: "button", class: "trash-btn", "aria-label": `${p.item.label}を消す`, onclick: () => removeItem(p.item) }, trashIcon()) : null,
+  );
 }
 
 // ピンの色：行きたい場所はエリアの色を濃くしたもの、予定はピーチ
 function pinColor(p) {
   if (p.kind === "plan") return "#f08c7d";
-  return TripPlaces.AREA_BY_ID[p.place.area].pin;
+  return p.place ? TripPlaces.AREA_BY_ID[p.place.area].pin : "#7a6bc4";
 }
 
 
@@ -718,14 +753,14 @@ function renderList(items, depth, editable = false) {
     )));
 }
 
-function checkRow(item, day) {
+function checkRow(item, day, labelText) {
   if (item.checked === null) return el("button", { type: "button", class: "note", onclick: () => openEditor(item) }, item.label);
   return el("div", { class: "check-row" },
     el("button", {
       type: "button", class: "box", role: "checkbox", "aria-checked": String(item.checked), "aria-label": `${item.label}を済みにする`,
       onclick: () => toggle(item),
     }, item.checked ? "✓" : ""),
-    el("button", { type: "button", class: "label", onclick: () => openEditor(item, day) }, item.label,
+    el("button", { type: "button", class: "label", onclick: () => openEditor(item, day) }, labelText ?? displayLabel(item),
       isTemp(item.id) ? el("span", { class: "pending", title: "未送信" }, " …") : null),
   );
 }
@@ -735,9 +770,10 @@ function openEditor(item, day) {
   const timed = !!day;
   let time = item.time ? item.time.padStart(5, "0") : "";
   const timeInput = el("input", { type: "time", step: "300", value: time, "aria-label": "時刻" });
+  const wantItem = !item.items && groupOf(item) && isPlacesGroup(groupOf(item));
   const wish = !item.items && groupOf(item) && isWishGroup(groupOf(item));
   const price0 = wish ? priceOf(item.label) : 0;
-  const baseLabel = wish ? item.label.replace(/[\s　]*([¥￥]\s?[\d,]+|[\d,]+\s?円)/u, "").trim() : item.label;
+  const baseLabel = wantItem ? parseWant(item.text).name : wish ? item.label.replace(/[\s　]*([¥￥]\s?[\d,]+|[\d,]+\s?円)/u, "").trim() : item.label;
   const textInput = el("input", { type: "text", value: baseLabel, maxlength: "190", "aria-label": "内容" });
   const priceInput = el("input", { type: "number", inputmode: "numeric", min: "0", step: "10", value: price0 || "", placeholder: "例）2800", "aria-label": "価格（円）" });
   const close = () => { sheet.remove(); render(); };
@@ -767,7 +803,9 @@ function openEditor(item, day) {
         let label = textInput.value.replace(/[\r\n]+/g, " ").trim();
         if (!label) return textInput.focus();
         if (wish && Number(priceInput.value) > 0) label = `${label}　${yen(Number(priceInput.value))}`;
-        if (isGroup) {
+        if (wantItem) {
+          setWant(item, { name: label });
+        } else if (isGroup) {
           if (label !== item.label) { item.label = label; queue({ op: "edit", id: item.id, text: label }); }
         } else saveItem(item, timed ? timeInput.value : null, label, day);
         close();
@@ -903,8 +941,8 @@ function renderSync() {
 let toastTimer;
 function toast(msg, actionLabel, action) {
   const t = $("toast");
-  t.replaceChildren(el("span", {}, msg),
-    actionLabel ? el("button", { type: "button", class: "toast-btn", onclick: () => { t.hidden = true; action(); } }, actionLabel) : null);
+  t.replaceChildren(...[el("span", {}, msg),
+    actionLabel ? el("button", { type: "button", class: "toast-btn", onclick: () => { t.hidden = true; action(); } }, actionLabel) : null].filter(Boolean));
   t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, actionLabel ? 5000 : 3500);
