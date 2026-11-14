@@ -277,10 +277,10 @@
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
   try { const h = location.hash.slice(1); if (["today", "flow", "save", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
-  // ウィジェットから：#open=<id> でそのタスクのページを開く（render が # をタブ名に書き換える前に読む）
+  // ウィジェット・Claude のリンク（/p/<id> → #open=<id>）から：そのページを開く（render が # をタブ名に書き換える前に読む）
   const openAt = (location.hash.match(/^#open=([0-9a-f]{32})$/) || [])[1];
   render();
-  Promise.resolve(load()).then(() => { if (openAt) { if (known.get(openAt)) openTask(openAt); else toast("そのタスクは今日の一覧にありません（↻ で読み直し）"); } });
+  Promise.resolve(load()).then(() => { if (openAt) openAny(openAt); });
   window.__imadoko = { S, ST, stageOf, render, parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
 })();
 </script>

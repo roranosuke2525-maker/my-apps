@@ -2383,7 +2383,38 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const id = /notion\.(so|site|com)/.test(href) ? idOf(href) : "";
     if (id && known.has(id)) { openTask(id); return; }
     const x = id && S.stock.find((r) => r.id === id); if (x) { openStock(id); return; }
+    if (id && S.mode !== "demo") { openAny(id); return; }
     openExternal(href);
+  }
+  // どの Notion ページでもこの画面で開く（Claude のリンク・/p/<ID>・検索欄に貼ったリンクから）
+  // タスクならいつものタスク画面、それ以外は項目と本文を出す。読めなければ Notion で開く
+  const DS_NAME = { [DS.task]: "DB_タスク管理", [DS.proj]: "DB_プロジェクト", [DS.diag]: "DB_診断レポート", [DS.log]: "DB_運用ログ", [DS.goal]: "DB_目標", [DS.sug]: "DB_AI提案", [DS.news]: "DB_ニュース", [DS.daily]: "DB_Daily", [DS.app]: "DB_アプリ" };
+  const flatId = (s) => String(s || "").replace(/-/g, "").toLowerCase();
+  async function openAny(id) {
+    id = flatId(id);
+    if (known.get(id)) { openTask(id); return; }
+    if (S.mode === "demo") { toast("見本では読み込み済みのタスクだけ開けます"); return; }
+    toast("ページを読みこみ中…");
+    let res;
+    try { res = await call("fetch", { id }, { read: true }); } catch (err) { toast(errText(err)); return; }
+    const tx = String(res.text || "");
+    const dsId = (tx.match(/<parent-data-source url="collection:\/\/([0-9a-f-]+)"(?:\s+name="([^"]*)")?/) || []);
+    let props = {}; try { const m = tx.match(/<properties>\n?([\s\S]*?)\n?<\/properties>/); if (m) props = JSON.parse(m[1]); } catch { props = {}; }
+    const url = props.url || `https://www.notion.so/${id}`;
+    if (dsId[1] && flatId(dsId[1]) === flatId(DS.task)) { const t = toTask({ ...props, url }); openTask(t.id); return; }
+    const title = res.title || text(props["名前"]) || text(props.title) || "（無題）";
+    const titleProp = Object.keys(props).find((k) => !/^(url|createdTime)$/.test(k) && text(props[k]) === title) || "title";
+    const show = (k, v0) => { let v = v0;
+      if (v == null || v === "" || k === titleProp || /^(url|createdTime)$/.test(k) || /:(end|is_datetime)$/.test(k)) return null;
+      const key = k.replace(/^date:(.+):start$/, "$1").replace(/^userDefined:/, "");
+      if (Array.isArray(v)) v = JSON.stringify(v);
+      if (typeof v === "string" && v.startsWith("[")) { try { const a = JSON.parse(v); if (Array.isArray(a)) return a.length ? [key, a.every((x) => /^https?:/.test(x)) ? `${a.length}件` : a.join("・")] : null; } catch { /* 文字のまま */ } }
+      if (v === "__YES__") return [key, "✓"]; if (v === "__NO__") return null;
+      return [key, /^\d{4}-\d{2}-\d{2}/.test(String(v)) && k.startsWith("date:") ? md(String(v).slice(0, 10)) : text(String(v))];
+    };
+    const fields = Object.entries(props).map(([k, v]) => show(k, v)).filter(Boolean).slice(0, 12);
+    const crumb = dsId[2] || DS_NAME[Object.keys(DS_NAME).find((k) => flatId(k) === flatId(dsId[1]))] || (dsId[1] ? "Notion のデータベース" : "Notion のページ");
+    openPage({ kind: "page", id, url, title, titleProp, fields, crumb });
   }
   // 外のページは Chrome で開く（iPhone・iPad は googlechromes://、Android は intent://）。Notion のページは Notion アプリに任せる
   // Chrome が入っていなくて開けなかったときは、少し待ってからいつものブラウザで開く
@@ -3513,13 +3544,22 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     return out;
   }
   function openSearch() {
-    modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す（名前・次の一歩・分類タグ）" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
+    modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す／Notionのリンクを貼って開く" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
       <div class="seg" id="skinds">${KINDS.map(([k, n]) => `<button type="button" data-skind="${k}" aria-pressed="${SQ.kind === k}">${n}</button>`).join("")}</div>
       <div class="sres" id="sres"></div></div>`);
     $("#modal .sheet").classList.add("tall");
     const i = $("#sq"); setTimeout(() => i.focus(), 50);
-    i.oninput = () => { SQ.q = i.value; drawSearch(); askNotion(); };
+    i.oninput = () => { const id = linkId(i.value); if (id) { SQ.q = ""; closeModal(); openAny(id); return; } SQ.q = i.value; drawSearch(); askNotion(); };
     drawSearch(); if (SQ.q) askNotion();
+  }
+  // 貼られた Notion（または今どこの /p/）のリンク・ページID からページIDを取り出す。ふつうの検索語なら ""
+  function linkId(v) {
+    const s = String(v || "").trim(); if (!s || /\s/.test(s)) return "";
+    if (!/^https?:\/\//i.test(s)) return /^[0-9a-f]{32}$/i.test(s.replace(/-/g, "")) && s.replace(/-/g, "").length === 32 ? s.replace(/-/g, "").toLowerCase() : "";
+    let u; try { u = new URL(s); } catch { return ""; }
+    if (!/(^|\.)notion\.(so|site|com)$/i.test(u.hostname) && u.hostname !== location.hostname) return "";
+    const m = u.pathname.replace(/-/g, "").match(/([0-9a-f]{32})\/?$/i) || (u.hash.match(/open=([0-9a-f]{32})/i));
+    return m ? m[1].toLowerCase() : "";
   }
   let askTimer;
   function askNotion() {
@@ -3545,7 +3585,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   function drawSearch() {
     const box = $("#sres"); if (!box) return;
     const q = SQ.q.trim();
-    if (!q) { box.innerHTML = `<div class="empty">名前・次の一歩・分類タグで探せます。\n済みや古い資料も Notion から探します</div>`; return; }
+    if (!q) { box.innerHTML = `<div class="empty">名前・次の一歩・分類タグで探せます。\n済みや古い資料も Notion から探します。\nNotion のリンクを貼ると、そのページをここで開きます</div>`; return; }
     const local = localHits(q); const ids = new Set(local.map((t) => t.id));
     const all = [...local, ...SQ.remote.filter((t) => !ids.has(t.id))].filter(kindOk);
     const order = { [ST.doing]: 0, [ST.next]: 1, [ST.inbox]: 2, [ST.wait]: 3, [ST.ai]: 4, [ST.some]: 5, [ST.ref]: 6, [ST.done]: 7 };
@@ -3834,10 +3874,10 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
   try { const h = location.hash.slice(1); if (["today", "flow", "save", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
-  // ウィジェットから：#open=<id> でそのタスクのページを開く（render が # をタブ名に書き換える前に読む）
+  // ウィジェット・Claude のリンク（/p/<id> → #open=<id>）から：そのページを開く（render が # をタブ名に書き換える前に読む）
   const openAt = (location.hash.match(/^#open=([0-9a-f]{32})$/) || [])[1];
   render();
-  Promise.resolve(load()).then(() => { if (openAt) { if (known.get(openAt)) openTask(openAt); else toast("そのタスクは今日の一覧にありません（↻ で読み直し）"); } });
+  Promise.resolve(load()).then(() => { if (openAt) openAny(openAt); });
   window.__imadoko = { S, ST, stageOf, render, parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
 })();
 </script>

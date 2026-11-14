@@ -15,13 +15,22 @@
     return out;
   }
   function openSearch() {
-    modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す（名前・次の一歩・分類タグ）" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
+    modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す／Notionのリンクを貼って開く" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
       <div class="seg" id="skinds">${KINDS.map(([k, n]) => `<button type="button" data-skind="${k}" aria-pressed="${SQ.kind === k}">${n}</button>`).join("")}</div>
       <div class="sres" id="sres"></div></div>`);
     $("#modal .sheet").classList.add("tall");
     const i = $("#sq"); setTimeout(() => i.focus(), 50);
-    i.oninput = () => { SQ.q = i.value; drawSearch(); askNotion(); };
+    i.oninput = () => { const id = linkId(i.value); if (id) { SQ.q = ""; closeModal(); openAny(id); return; } SQ.q = i.value; drawSearch(); askNotion(); };
     drawSearch(); if (SQ.q) askNotion();
+  }
+  // 貼られた Notion（または今どこの /p/）のリンク・ページID からページIDを取り出す。ふつうの検索語なら ""
+  function linkId(v) {
+    const s = String(v || "").trim(); if (!s || /\s/.test(s)) return "";
+    if (!/^https?:\/\//i.test(s)) return /^[0-9a-f]{32}$/i.test(s.replace(/-/g, "")) && s.replace(/-/g, "").length === 32 ? s.replace(/-/g, "").toLowerCase() : "";
+    let u; try { u = new URL(s); } catch { return ""; }
+    if (!/(^|\.)notion\.(so|site|com)$/i.test(u.hostname) && u.hostname !== location.hostname) return "";
+    const m = u.pathname.replace(/-/g, "").match(/([0-9a-f]{32})\/?$/i) || (u.hash.match(/open=([0-9a-f]{32})/i));
+    return m ? m[1].toLowerCase() : "";
   }
   let askTimer;
   function askNotion() {
@@ -47,7 +56,7 @@
   function drawSearch() {
     const box = $("#sres"); if (!box) return;
     const q = SQ.q.trim();
-    if (!q) { box.innerHTML = `<div class="empty">名前・次の一歩・分類タグで探せます。\n済みや古い資料も Notion から探します</div>`; return; }
+    if (!q) { box.innerHTML = `<div class="empty">名前・次の一歩・分類タグで探せます。\n済みや古い資料も Notion から探します。\nNotion のリンクを貼ると、そのページをここで開きます</div>`; return; }
     const local = localHits(q); const ids = new Set(local.map((t) => t.id));
     const all = [...local, ...SQ.remote.filter((t) => !ids.has(t.id))].filter(kindOk);
     const order = { [ST.doing]: 0, [ST.next]: 1, [ST.inbox]: 2, [ST.wait]: 3, [ST.ai]: 4, [ST.some]: 5, [ST.ref]: 6, [ST.done]: 7 };

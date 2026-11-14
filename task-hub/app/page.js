@@ -68,7 +68,38 @@
     const id = /notion\.(so|site|com)/.test(href) ? idOf(href) : "";
     if (id && known.has(id)) { openTask(id); return; }
     const x = id && S.stock.find((r) => r.id === id); if (x) { openStock(id); return; }
+    if (id && S.mode !== "demo") { openAny(id); return; }
     openExternal(href);
+  }
+  // どの Notion ページでもこの画面で開く（Claude のリンク・/p/<ID>・検索欄に貼ったリンクから）
+  // タスクならいつものタスク画面、それ以外は項目と本文を出す。読めなければ Notion で開く
+  const DS_NAME = { [DS.task]: "DB_タスク管理", [DS.proj]: "DB_プロジェクト", [DS.diag]: "DB_診断レポート", [DS.log]: "DB_運用ログ", [DS.goal]: "DB_目標", [DS.sug]: "DB_AI提案", [DS.news]: "DB_ニュース", [DS.daily]: "DB_Daily", [DS.app]: "DB_アプリ" };
+  const flatId = (s) => String(s || "").replace(/-/g, "").toLowerCase();
+  async function openAny(id) {
+    id = flatId(id);
+    if (known.get(id)) { openTask(id); return; }
+    if (S.mode === "demo") { toast("見本では読み込み済みのタスクだけ開けます"); return; }
+    toast("ページを読みこみ中…");
+    let res;
+    try { res = await call("fetch", { id }, { read: true }); } catch (err) { toast(errText(err)); return; }
+    const tx = String(res.text || "");
+    const dsId = (tx.match(/<parent-data-source url="collection:\/\/([0-9a-f-]+)"(?:\s+name="([^"]*)")?/) || []);
+    let props = {}; try { const m = tx.match(/<properties>\n?([\s\S]*?)\n?<\/properties>/); if (m) props = JSON.parse(m[1]); } catch { props = {}; }
+    const url = props.url || `https://www.notion.so/${id}`;
+    if (dsId[1] && flatId(dsId[1]) === flatId(DS.task)) { const t = toTask({ ...props, url }); openTask(t.id); return; }
+    const title = res.title || text(props["名前"]) || text(props.title) || "（無題）";
+    const titleProp = Object.keys(props).find((k) => !/^(url|createdTime)$/.test(k) && text(props[k]) === title) || "title";
+    const show = (k, v0) => { let v = v0;
+      if (v == null || v === "" || k === titleProp || /^(url|createdTime)$/.test(k) || /:(end|is_datetime)$/.test(k)) return null;
+      const key = k.replace(/^date:(.+):start$/, "$1").replace(/^userDefined:/, "");
+      if (Array.isArray(v)) v = JSON.stringify(v);
+      if (typeof v === "string" && v.startsWith("[")) { try { const a = JSON.parse(v); if (Array.isArray(a)) return a.length ? [key, a.every((x) => /^https?:/.test(x)) ? `${a.length}件` : a.join("・")] : null; } catch { /* 文字のまま */ } }
+      if (v === "__YES__") return [key, "✓"]; if (v === "__NO__") return null;
+      return [key, /^\d{4}-\d{2}-\d{2}/.test(String(v)) && k.startsWith("date:") ? md(String(v).slice(0, 10)) : text(String(v))];
+    };
+    const fields = Object.entries(props).map(([k, v]) => show(k, v)).filter(Boolean).slice(0, 12);
+    const crumb = dsId[2] || DS_NAME[Object.keys(DS_NAME).find((k) => flatId(k) === flatId(dsId[1]))] || (dsId[1] ? "Notion のデータベース" : "Notion のページ");
+    openPage({ kind: "page", id, url, title, titleProp, fields, crumb });
   }
   // 外のページは Chrome で開く（iPhone・iPad は googlechromes://、Android は intent://）。Notion のページは Notion アプリに任せる
   // Chrome が入っていなくて開けなかったときは、少し待ってからいつものブラウザで開く

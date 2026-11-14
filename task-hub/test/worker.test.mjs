@@ -83,7 +83,10 @@ test("本文は Notion-flavored Markdown（v2）で読み、変わった所だ�
   try {
     const got = await s.call("notion-fetch", { id: "11111111111111111111111111111111" });
     assert.match(got.data.text, /<content>\n## ☑️ ToDo/);
-    const g = s.fake.calls.at(-1); assert.match(g.path, /markdown_version=v2/); assert.equal(g.version, "2026-03-11");
+    // どのページでも開けるように、親のデータソースとプロパティも添える（MCP の fetch と同じ形）
+    assert.match(got.data.text, /<parent-data-source url="collection:\/\/21762844-acbe-8075-bbe6-000bcaf22801"\/>/);
+    const props = JSON.parse(got.data.text.match(/<properties>\n(.*)\n<\/properties>/)[1]); assert.equal(props["ステータス"], "🤖 AI"); assert.equal(got.data.title, "食洗機の比較");
+    const g = s.fake.calls.find((c) => c.path.includes("/markdown")); assert.match(g.path, /markdown_version=v2/); assert.equal(g.version, "2026-03-11");
     const up = await s.call("notion-update-page", { page_id: "11111111111111111111111111111111", command: "update_content", content_updates: [{ old_str: "- [ ] 比較表を見て決める", new_str: "- [x] 比較表を見て決める" }] });
     assert.equal(up.status, 200); assert.match(s.fake.md, /- \[x\] 比較表/);
     const p = s.fake.calls.at(-1); assert.equal(p.body.type, "update_content"); assert.equal(p.body.markdown_version, "v2");
@@ -194,4 +197,13 @@ test("ウィジェット：今日の一覧と署名つきの操作URL、✓で�
     // 合言葉が無くても /w/ は画面を返す（JSON ではない）
     assert.equal((await worker.fetch(new Request("https://app.test/w/act?op=x"), s.env)).status, 400);
   } finally { s.done(); }
+});
+
+test("/p/<ページID>（Notion のリンクのドメインを差し替えたもの）は画面のそのページへ飛ぶ", async () => {
+  const env = { APP_KEY: KEY, ASSETS: { fetch: () => new Response("assets") } };
+  const go = async (path) => worker.fetch(new Request(`https://app.test${path}`), env);
+  let r = await go("/p/41362844acbe81189774ef234a994115?pvs=204"); assert.equal(r.status, 302); assert.equal(r.headers.get("Location"), "/#open=41362844acbe81189774ef234a994115");
+  r = await go("/p/Some-Title-41362844ACBE81189774EF234A994115"); assert.equal(r.headers.get("Location"), "/#open=41362844acbe81189774ef234a994115");
+  r = await go("/p/41362844-acbe-8118-9774-ef234a994115"); assert.equal(r.headers.get("Location"), "/#open=41362844acbe81189774ef234a994115");
+  r = await go("/p/nothing"); assert.equal(await r.text(), "assets");
 });

@@ -12,6 +12,8 @@ import { BUILD, HTML, SW } from "./bundle.js";
 async function page(request, env, url) {
   const p = url.pathname;
   if (p === "/" || p === "/index.html") return new Response(HTML, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Build": BUILD } });
+  // Notion のリンクの app.notion.com を今どこに差し替えたもの（/p/<ページID>）→ 画面を開いてそのページを出す
+  if (p.startsWith("/p/")) { const m = p.slice(3).replace(/-/g, "").match(/([0-9a-f]{32})\/?$/i); if (m) return new Response(null, { status: 302, headers: { Location: `/#open=${m[1].toLowerCase()}`, "Cache-Control": "no-store" } }); }
   if (p === "/sw.js") return new Response(SW, { headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-store", "X-Build": BUILD } });
   if (p === "/api/version") return json({ build: BUILD });
   return env.ASSETS.fetch(request);
@@ -202,8 +204,12 @@ async function fetchTool(notion, { id }) {
     return { title, text: `The title of this Data Source is: ${title}\n<data-source-state>\n${JSON.stringify({ name: title, schema })}\n</data-source-state>` };
   }
   const pid = normalizeId(id);
-  const md = await notion("GET", `/pages/${pid}/markdown?markdown_version=v2`, null, MD_VERSION);
-  return { id: pid, truncated: !!md.truncated, unknown_block_ids: md.unknown_block_ids || [], text: `<content>\n${md.markdown || ""}\n</content>` };
+  // 本文と一緒にプロパティと親のデータソースも返す（MCP の fetch と同じ形。どのページでも画面の中で開けるように）
+  const [md, pg] = await Promise.all([notion("GET", `/pages/${pid}/markdown?markdown_version=v2`, null, MD_VERSION), notion("GET", `/pages/${pid}`).catch(() => null)]);
+  const ds = pg?.parent?.data_source_id ? `<ancestor-path>\n<parent-data-source url="collection://${pg.parent.data_source_id}"/>\n</ancestor-path>\n` : "";
+  const props = pg ? `<properties>\n${JSON.stringify(flatPage(pg)).replace(/</g, "\\u003c")}\n</properties>\n` : "";
+  const title = pg ? plain(Object.values(pg.properties || {}).find((x) => x.type === "title")?.title) : "";
+  return { id: pid, title, truncated: !!md.truncated, unknown_block_ids: md.unknown_block_ids || [], text: `<page url="${pageUrl(pid)}">\n${ds}${props}<content>\n${md.markdown || ""}\n</content>\n</page>` };
 }
 
 // query：行を MCP の rows モードと同じ平らな形にする
