@@ -16,6 +16,7 @@
   }
   function openSearch() {
     modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す／Notionのリンクを貼って開く" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
+      <button type="button" class="qc sday" data-dayview="1">📅 日付で見る（その日に更新・実行日のもの）</button>
       <div class="seg" id="skinds">${KINDS.map(([k, n]) => `<button type="button" data-skind="${k}" aria-pressed="${SQ.kind === k}">${n}</button>`).join("")}</div>
       <div class="sres" id="sres"></div></div>`);
     $("#modal .sheet").classList.add("tall");

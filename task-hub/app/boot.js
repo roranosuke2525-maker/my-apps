@@ -66,6 +66,11 @@
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.dayview) { closeModal(); openDayView(TODAY()); return; }
+    if (d.dvstep) { dayStep(+d.dvstep); return; }
+    if (d.dvtoday) { DV.d = TODAY(); drawDay(); askDay(); return; }
+    if (d.dvkind) { DV.kind = d.dvkind; drawDay(); return; }
+    if (d.dvsort) { DV.sort = d.dvsort; drawDay(); return; }
     if (d.pksel) { pickToggle(d.pksel); return; }
     if (d.pkf) { PK.f = d.pkf; drawPick(); return; }
     if (d.pkok) { pickCommit(); return; }

@@ -812,10 +812,33 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .ck-sec .seenbar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .jr { display: flex; flex-direction: column; gap: 6px; }
 .jr .ask p { margin: 2px 0; }
+
+/* ---- v46：日付で見る ---- */
+.top .ttl button.date { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.top .ttl button.date::after { content: " ▾"; font-size: .6em; color: var(--mute); vertical-align: middle; }
+.dv { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; padding: 0 10px; }
+.pk { padding: 0 10px; }
+.dvhead { display: flex; align-items: center; gap: 6px; }
+.dvhead .dvdate { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.dvhead .dvdate b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dvhead .dvdate input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.dvhead .dvclose { font-size: 13px; padding: 4px 2px; }
+.dvf { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; align-items: center; }
+.dvf::-webkit-scrollbar { display: none; }
+.dvf .qc { flex: none; white-space: nowrap; }
+.dvf .qc b { margin-left: 4px; font-weight: 600; opacity: .75; }
+.dvf.sort > span { font-size: 11.5px; flex: none; }
+.dvnote { font-size: 11.5px; flex: none; }
+.dvlist { flex: 1; min-height: 0; overflow-y: auto; }
+.dtag { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 8px; margin-right: 5px; background: var(--sunk); color: var(--ink); }
+.dtag.due { background: color-mix(in srgb, var(--s-today) 25%, transparent); }
+.dtag.upd { background: color-mix(in srgb, var(--s-next) 25%, transparent); }
+.dtag.done { background: color-mix(in srgb, var(--s-done) 30%, transparent); }
+.search .sday { align-self: flex-start; }
 </style>
 
 <div id="app">
-  <header class="top"><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
+  <header class="top"><div class="ttl"><button type="button" class="date" id="date" data-dayview="1" aria-label="日付で見る（その日に更新・実行日のタスク）"></button><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today" title="今日"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>今日</span></button>
@@ -3708,6 +3731,66 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     await Promise.all(list.map((t) => setProps(t, props, "", { quiet: true })));
     toast(`${list.length}件を今日に入れました${S.mode === "demo" ? "（見本）" : ""}`, () => befores.forEach(([t, b]) => setProps(t, b, "", { quiet: true, undo: false })));
   }
+  // ================= 日付で見る：選んだ日に「実行日」「更新」「済み」になったタスクを並べ替えて見る =================
+  // 上の日付をタップで開く。読み込み済みのものはすぐ、残りは Notion に聞いて足す
+  const DV = { d: "", kind: "all", sort: "edited", res: [], loading: false, err: "", seq: 0 };
+  const DV_KINDS = [["all", "すべて"], ["due", "実行日"], ["upd", "更新"], ["done", "済み"]];
+  const DV_SORTS = [["edited", "更新が新しい順"], ["due", "実行日順"], ["status", "状態順"], ["name", "名前順"]];
+  const editedDay = (t) => (t.edited ? jst(Date.parse(t.edited)) : "");
+  function openDayView(d) {
+    DV.d = d || DV.d || TODAY();
+    modal(`<div class="dv" id="dv"></div>`); $("#modal .sheet").classList.add("tall");
+    drawDay(); askDay();
+  }
+  function dayLocal(d) {
+    const seen = new Set(); const out = [];
+    for (const t of [...S.tasks, ...S.doneToday, ...S.refs, ...(S.readList || [])]) { if (seen.has(t.id)) continue; seen.add(t.id); if (t.date === d || editedDay(t) === d) out.push(t); }
+    return out;
+  }
+  async function askDay() {
+    const my = ++DV.seq; DV.res = []; DV.err = "";
+    if (S.mode === "demo") { DV.loading = false; drawDay(); return; }
+    DV.loading = true; drawDay();
+    try {
+      const v = { type: "exact", value: DV.d };
+      const res = await call("query", { data: { mode: "rows", data_source_url: `collection://${DS.task}`, filter: { type: "group", operator: "or", filters: [
+        { type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: v },
+        { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is", value: v },
+      ] }, sort: [{ property: "最終更新日時", direction: "descending" }], limit: 100 } });
+      if (my !== DV.seq) return;
+      DV.res = (res.results || []).map((r) => known.get(idOf(r.url)) || toTask(r)).filter((t) => !t.parent?.length);
+    } catch (err) { if (my === DV.seq) DV.err = errText(err); }
+    if (my !== DV.seq) return;
+    DV.loading = false; drawDay();
+  }
+  function dayItems() {
+    const m = new Map(); for (const t of [...dayLocal(DV.d), ...DV.res]) if (!m.has(t.id) && !t.parent?.length) m.set(t.id, t);
+    const all = [...m.values()];
+    const is = { due: (t) => t.date === DV.d, upd: (t) => editedDay(t) === DV.d, done: (t) => t.status === ST.done && (t.date === DV.d || editedDay(t) === DV.d) };
+    const cnt = { all: all.length, due: all.filter(is.due).length, upd: all.filter(is.upd).length, done: all.filter(is.done).length };
+    const list = DV.kind === "all" ? all : all.filter(is[DV.kind]);
+    const order = { [ST.doing]: 0, [ST.next]: 1, [ST.inbox]: 2, [ST.wait]: 3, [ST.ai]: 4, [ST.some]: 5, [ST.ref]: 6, [ST.done]: 7 };
+    const by = { edited: (a, b) => (b.edited || "").localeCompare(a.edited || ""), due: (a, b) => (a.date || "9").localeCompare(b.date || "9") || (b.edited || "").localeCompare(a.edited || ""), status: (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || (b.edited || "").localeCompare(a.edited || ""), name: (a, b) => a.name.localeCompare(b.name, "ja") };
+    return { list: list.sort(by[DV.sort]), cnt, is };
+  }
+  function drawDay() {
+    const box = $("#dv"); if (!box) return;
+    const { list, cnt, is } = dayItems(); const d = DV.d;
+    const label = `${+d.slice(5, 7)}月${+d.slice(8)}日（${WD[dow(d)]}）${d === TODAY() ? "・今日" : ""}`;
+    const row = (t) => {
+      const tags = [is.due(t) ? `<span class="dtag due">実行日</span>` : "", is.upd(t) ? `<span class="dtag upd">更新 ${t.edited ? jstTime(Date.parse(t.edited)) : ""}</span>` : "", t.status === ST.done ? `<span class="dtag done">済み</span>` : ""].join("");
+      return `<div class="row" style="--c:${STAGES[stageOf(t)]?.c || "var(--mute)"}"><span class="dot"></span><button type="button" class="main" data-mopen="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${tags}${esc(STAGES[stageOf(t)]?.name || t.status)}${t.date && !is.due(t) ? `・実行日 ${md(t.date)}` : ""}${t.tag ? `・${esc(t.tag)}` : ""}</span></button><button type="button" class="meta qbtn" data-quick="${t.id}" aria-label="日付・状態を変える">${esc(metaOf(t).tx)}<i aria-hidden="true">▾</i></button></div>`;
+    };
+    const st = box.querySelector(".dvlist")?.scrollTop || 0;
+    box.innerHTML = `<div class="dvhead"><button type="button" class="iconbtn sm" data-dvstep="-1" aria-label="前の日">‹</button><label class="dvdate"><b>${label}</b><input type="date" id="dvdate" value="${d}" aria-label="日付を選ぶ"></label><button type="button" class="iconbtn sm" data-dvstep="1" aria-label="次の日">›</button>${d !== TODAY() ? `<button type="button" class="qc" data-dvtoday="1">今日</button>` : ""}<button type="button" class="mute dvclose" data-mclose="1">閉じる</button></div>
+      <div class="dvf">${DV_KINDS.map(([k, n]) => `<button type="button" class="qc" data-dvkind="${k}" aria-pressed="${DV.kind === k}">${n}<b>${cnt[k]}</b></button>`).join("")}</div>
+      <div class="dvf sort"><span class="mute">並べ替え</span>${DV_SORTS.map(([k, n]) => `<button type="button" class="qc" data-dvsort="${k}" aria-pressed="${DV.sort === k}">${n}</button>`).join("")}</div>
+      <div class="dvnote mute">${DV.loading ? "Notion から探しています…" : DV.err ? `<span class="late">${esc(DV.err)}</span>` : S.mode === "demo" ? "見本（読み込み済みのものだけ）" : "済み・資料・古いものも含む（最大100件）"}</div>
+      <div class="list dvlist">${list.map(row).join("") || (DV.loading ? "" : `<div class="empty">この日のタスクはありません</div>`)}</div>`;
+    const l = box.querySelector(".dvlist"); if (l) l.scrollTop = st;
+    const inp = $("#dvdate"); if (inp) inp.onchange = () => { if (inp.value) { DV.d = inp.value; drawDay(); askDay(); } };
+  }
+  function dayStep(n) { DV.d = addDays(DV.d, n); drawDay(); askDay(); }
   // ================= 検索：タスク全体（読み込み済みはすぐ、残りは Notion に聞く） =================
   // 名前・次の一歩・分類タグで探す。読み込み済み（未完了・資料・今日の済み）はその場で、済みや古い資料も含めた全体は Notion の検索で足す
   const SQ = { q: "", kind: "all", seq: 0, remote: [], loading: false, err: "" };
@@ -3726,6 +3809,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   }
   function openSearch() {
     modal(`<div class="search"><div class="sbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="タスクを探す／Notionのリンクを貼って開く" value="${esc(SQ.q)}" enterkeyhint="search" autocomplete="off"><button type="button" class="mute" data-mclose="1">閉じる</button></div>
+      <button type="button" class="qc sday" data-dayview="1">📅 日付で見る（その日に更新・実行日のもの）</button>
       <div class="seg" id="skinds">${KINDS.map(([k, n]) => `<button type="button" data-skind="${k}" aria-pressed="${SQ.kind === k}">${n}</button>`).join("")}</div>
       <div class="sres" id="sres"></div></div>`);
     $("#modal .sheet").classList.add("tall");
@@ -3844,6 +3928,11 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.dayview) { closeModal(); openDayView(TODAY()); return; }
+    if (d.dvstep) { dayStep(+d.dvstep); return; }
+    if (d.dvtoday) { DV.d = TODAY(); drawDay(); askDay(); return; }
+    if (d.dvkind) { DV.kind = d.dvkind; drawDay(); return; }
+    if (d.dvsort) { DV.sort = d.dvsort; drawDay(); return; }
     if (d.pksel) { pickToggle(d.pksel); return; }
     if (d.pkf) { PK.f = d.pkf; drawPick(); return; }
     if (d.pkok) { pickCommit(); return; }

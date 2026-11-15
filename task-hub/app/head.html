@@ -812,10 +812,33 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .ck-sec .seenbar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .jr { display: flex; flex-direction: column; gap: 6px; }
 .jr .ask p { margin: 2px 0; }
+
+/* ---- v46：日付で見る ---- */
+.top .ttl button.date { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.top .ttl button.date::after { content: " ▾"; font-size: .6em; color: var(--mute); vertical-align: middle; }
+.dv { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; padding: 0 10px; }
+.pk { padding: 0 10px; }
+.dvhead { display: flex; align-items: center; gap: 6px; }
+.dvhead .dvdate { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.dvhead .dvdate b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dvhead .dvdate input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.dvhead .dvclose { font-size: 13px; padding: 4px 2px; }
+.dvf { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; align-items: center; }
+.dvf::-webkit-scrollbar { display: none; }
+.dvf .qc { flex: none; white-space: nowrap; }
+.dvf .qc b { margin-left: 4px; font-weight: 600; opacity: .75; }
+.dvf.sort > span { font-size: 11.5px; flex: none; }
+.dvnote { font-size: 11.5px; flex: none; }
+.dvlist { flex: 1; min-height: 0; overflow-y: auto; }
+.dtag { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 8px; margin-right: 5px; background: var(--sunk); color: var(--ink); }
+.dtag.due { background: color-mix(in srgb, var(--s-today) 25%, transparent); }
+.dtag.upd { background: color-mix(in srgb, var(--s-next) 25%, transparent); }
+.dtag.done { background: color-mix(in srgb, var(--s-done) 30%, transparent); }
+.search .sday { align-self: flex-start; }
 </style>
 
 <div id="app">
-  <header class="top"><div class="ttl"><span class="date" id="date"></span><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
+  <header class="top"><div class="ttl"><button type="button" class="date" id="date" data-dayview="1" aria-label="日付で見る（その日に更新・実行日のタスク）"></button><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today" title="今日"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>今日</span></button>

@@ -207,3 +207,12 @@ test("/p/<ページID>（Notion のリンクのドメインを差し替えたも
   r = await go("/p/41362844-acbe-8118-9774-ef234a994115"); assert.equal(r.headers.get("Location"), "/#open=41362844acbe81189774ef234a994115");
   r = await go("/p/nothing"); assert.equal(await r.text(), "assets");
 });
+
+test("日付で見る：実行日 or その日に更新（過去の日）を Notion API の絞り込みに直せる", () => {
+  const f = toFilter({ type: "group", operator: "or", filters: [
+    { type: "property", property: "実行日", propertyType: "date", operator: "date_is", value: { type: "exact", value: "2026-11-10" } },
+    { type: "property", property: "最終更新日時", propertyType: "last_edited_time", operator: "date_is", value: { type: "exact", value: "2026-11-10" } },
+  ] });
+  assert.deepEqual(f.or[0], { property: "実行日", date: { equals: "2026-11-10" } });
+  assert.deepEqual(f.or[1], { and: [{ timestamp: "last_edited_time", last_edited_time: { on_or_after: "2026-11-10T00:00:00+09:00" } }, { timestamp: "last_edited_time", last_edited_time: { before: "2026-11-11T00:00:00+09:00" } }] });
+});
