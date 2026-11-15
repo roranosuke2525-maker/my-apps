@@ -4,6 +4,7 @@
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const dgb = $("#diagbadge"); if (dgb) { const n = checkBadge(); dgb.hidden = !n; dgb.textContent = n; }
     const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -60,7 +61,14 @@
     if (d.sub) { const o = $("#orb"); if (!o) return; const t = known.get(o.dataset.card); if (d.sub === "open") openTask(t.id); else sendTo("skip"); return; }
     if (d.logseg) { S.logSeg = d.logseg; render(); return; }
     if (d.ev !== undefined && el.classList.contains("chip")) { S.logEvent = d.ev; render(); return; }
-    if (d.diag) { openRecord("diag", d.diag); return; }
+    if (d.diag) { markSeen("diag", d.diag); openRecord("diag", d.diag); return; }
+    if (d.dgo) { document.getElementById(`ck-${d.dgo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
+    if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
+    if (d.pickday) { openPickDay(); return; }
+    if (d.pksel) { pickToggle(d.pksel); return; }
+    if (d.pkf) { PK.f = d.pkf; drawPick(); return; }
+    if (d.pkok) { pickCommit(); return; }
     if (d.log) { openRecord("log", d.log); return; }
     if (d.goal) { openRecord("goal", d.goal); return; }
     if (d.proj) { openRecord("proj", d.proj); return; }
@@ -239,6 +247,8 @@
       { id: P3, url: "https://www.notion.so/" + P3, name: "（例）タスクアプリ", status: "⏸ 保留", step: "UI案を決める", now: "", total: 4 },
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
+    S.journal = [{ id: "8".repeat(32), url: "https://www.notion.so/", name: `（例）${md(addDays(d, -1))} のジャーナル`, date: addDays(d, -1), done: 4, ai: 3, note: "" }];
+    S.tasks.push(mk("タスク診断⑥：次にやるを10件決める＋判断に答える", ST.next, { tag: "AI", waku: "💻 PC", w: "M", next: "判断してほしいことに答える", age: 9 }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));
     S.tasks.push(mk("リビング用ゴミ箱（45L・ペダル式）", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", next: "置き場所の幅を測る", age: 5, kind: "🏠 家財", price: 6800 }),
       mk("カーテン（寝室・遮光）", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "窓の幅と高さを測る", age: 3, kind: "🏠 家財", price: 18000 }),
@@ -273,7 +283,7 @@
   S.bodies = store.get("sums") || {};
   const snap = store.get("snap");
   if (snap?.tasks?.length) {
-    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, readList: snap.readList || [], loadedAt: snap.at });
+    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], journal: snap.journal || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, readList: snap.readList || [], loadedAt: snap.at });
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }

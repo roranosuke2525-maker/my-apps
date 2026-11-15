@@ -770,6 +770,48 @@ nav.tabs button span:not(.badge) { white-space: nowrap; overflow: hidden; text-o
 nav.tabs button svg { width: 19px; height: 19px; }
 nav.tabs .badge { top: 0; right: calc(50% - 18px); min-width: 14px; height: 14px; font-size: 9px; padding: 0 3px; }
 nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
+
+/* ---- v45：今日を選ぶ・診断タブ ---- */
+.pickbar { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); flex: none; }
+.pickbar .ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--s-next); color: #fff; font-weight: 700; flex: none; }
+.pickbar .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pickbar .tx b { font-size: 14px; }
+.pickbar .tx small { font-size: 11.5px; color: var(--mute); }
+.pickbar i { font-style: normal; color: var(--mute); }
+.pk { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+.pk .pkhead { display: flex; align-items: baseline; gap: 8px; }
+.pk .pkhead h3 { margin: 0; font-size: 16px; }
+.pk .pkhead small { color: var(--mute); font-size: 12px; }
+.pk .pkf { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; padding-bottom: 2px; }
+.pk .pkf::-webkit-scrollbar { display: none; }
+.pk .pkf .qc { flex: none; white-space: nowrap; }
+.pk .pklist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.pkrow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 12px; background: var(--sunk); }
+.pkrow .bx { width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--line); flex: none; display: grid; place-items: center; font-size: 14px; color: #fff; }
+.pkrow.sel { background: color-mix(in srgb, var(--s-today) 18%, var(--card)); }
+.pkrow.sel .bx { background: var(--s-today); box-shadow: none; }
+.pkrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pkrow .tx b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkrow .tx small { font-size: 11.5px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkrow .w { font-family: var(--f-num); font-size: 11px; color: var(--mute); flex: none; }
+.pk .pkfoot { display: flex; gap: 8px; flex: none; }
+.pk .pkfoot .btn.pri { flex: 1; }
+.ck-glance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ckc { position: relative; text-align: left; padding: 10px 11px 9px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 3px; border-left: 4px solid var(--sig, var(--line)); min-height: 76px; }
+.ckc.red { --sig: #e5675b; } .ckc.yellow { --sig: #e0b33c; } .ckc.green { --sig: #5bb98c; } .ckc.info { --sig: var(--line); }
+.ckc .h { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mute); }
+.ckc .h .ic { font-size: 15px; }
+.ckc b { font-size: 14.5px; line-height: 1.3; }
+.ckc small { font-size: 11.5px; color: var(--mute); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ckc .new { position: absolute; top: 8px; right: 9px; font-size: 10.5px; font-weight: 700; color: #fff; background: #e5675b; border-radius: 9px; padding: 1px 6px; }
+.ck-todo { display: flex; flex-direction: column; gap: 6px; }
+.ck-todo .row { min-height: 48px; }
+.ck-sum { font-size: 13px; padding: 9px 12px; border-radius: 12px; background: var(--sunk); }
+.ck-sum b { font-size: 14px; }
+.ck-sec { scroll-margin-top: 8px; }
+.ck-sec .seenbar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.jr { display: flex; flex-direction: column; gap: 6px; }
+.jr .ask p { margin: 2px 0; }
 </style>
 
 <div id="app">
@@ -784,7 +826,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     <button type="button" data-tab="read" title="読む"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg><span>読む</span><span class="badge" id="readbadge" hidden></span></button>
     <button type="button" data-tab="shop" title="買う"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg><span>買う</span><span class="badge" id="shopbadge" hidden></span></button>
     <button type="button" data-tab="news" title="ニュース"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg><span>ニュース</span></button>
-    <button type="button" data-tab="log" title="運用"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>運用</span></button>
+    <button type="button" data-tab="log" title="診断"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg><span>診断</span><span class="badge" id="diagbadge" hidden></span></button>
     <button type="button" data-tab="db" title="DB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span>DB</span></button>
   </nav>
   <button type="button" class="fab" id="add" aria-label="新しく入れる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -803,6 +845,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
+    jour: "2eaf269b-813f-4f1f-a980-e57602b1f99d", // DB_ジャーナル（毎晩の振り返り。診断タブで読む）
     sug: "bceda4df-aaa1-409b-9bb3-93f7ba88fd90", // DB_AI提案（AIからの提案。採用／見送りはアプリで決める）
     news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
@@ -852,7 +895,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 
   // ================= 状態 =================
   const S = {
-    mode: "loading", tab: "today", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "guide", mapMeta: null, logEvent: "",
+    mode: "loading", tab: "today", stage: "today", stageView: "list", aiSeg: "me", pileKey: "inbox", logSeg: "diag", journal: [], mapMeta: null, logEvent: "",
     tasks: [], refs: [], projects: [], doneToday: [], diag: [], logs: [], goals: [], sugs: [], extraErr: {},
     page: {}, slide: null, error: null, loadedAt: null,
     dbs: [], dbSec: null, dbOpen: null, dbRows: [], dbSchema: null, dbQuery: "", dbErr: null, dbLoading: false, dbView: "table",
@@ -1023,7 +1066,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
-  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone, readList: S.readList });
+  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, journal: S.journal, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone, readList: S.readList });
 
   // 在庫（DB_Daily）の1行。切れる予定日は Notion の計算式が読めればそれ、読めなければ同じ考え方で計算する
   const dateOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
@@ -1071,7 +1114,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -1084,10 +1127,13 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       loadSaveCfg(),
       // AIからの提案（提案中だけ）
       rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
+      // 毎晩のジャーナル（診断タブの「ひと目で」と詳細）
+      rows(DS.jour, { sort: [{ property: "日付", direction: "descending" }], limit: 7 }),
     ]);
     if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
     if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
     if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
+    if (jour.status === "fulfilled") S.journal = jour.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]), date: r["date:日付:start"] || "", done: Number(r["終わったタスク数"]) || 0, ai: Number(r["AIとのやりとり数"]) || 0, note: text(r["ひとこと"]) })); else S.journalErr = errText(jour.reason);
 
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({
@@ -2139,9 +2185,9 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 
   // ================= 記録（診断・運用ログ・目標とプロジェクト） =================
   function renderLog(view) {
-    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["guide", "使い方"], ["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"], ["guide", "使い方"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
     if (S.logSeg === "guide") return renderGuide(view);
-    if (S.logSeg === "diag") return renderDiagAll(view);
+    if (S.logSeg === "diag") return renderCheck(view);
     if (S.logSeg === "log") return renderOpsLog(view);
     return renderGoals(view);
   }
@@ -2286,6 +2332,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       </div>
       ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 更新できていません（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示）　↻ もう一度</button>` : ""}
       ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>提案</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
+      ${inStage("next").length ? `<button type="button" class="pickbar" data-pickday="1"><span class="ic">＋</span><span class="tx"><b>次にやるから今日を選ぶ</b><small>${inStage("next").length}件から・まとめて選んで1回で入れる</small></span><i>›</i></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");
     const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}` : "");
@@ -3509,11 +3556,11 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const checks = healthChecks(); const bad = checks.filter((c) => c.st === "red" || c.st === "yellow").length;
     const d = S.diag.at(-1);
     view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="scroll diagall" id="diagall">
-      <section class="g-sec"><h3>いまの健康診断<small>読み込み済みのデータから・${jstTime(S.loadedAt || Date.now())}時点</small></h3>
+      <section class="g-sec ck-sec" id="ck-health"><h3>いまの健康診断<small>読み込み済みのデータから・${jstTime(S.loadedAt || Date.now())}時点</small></h3>
         <div class="hc-sum"><span class="${bad ? "y" : "g"}">${bad ? `直したほうがいい所が ${bad}つ` : "大きな問題はありません"}</span></div>
         <div class="hc">${checks.map((c, i) => `<details class="hc-i ${c.st}" ${c.fix && c.st !== "green" && i < 9 && (c.st === "red" || c.st === "yellow") ? "open" : ""}><summary><span class="ic">${ST_ICON[c.st]}</span><span class="nm">${c.no} ${esc(c.name)}</span><span class="v">${esc(c.val)}</span></summary>
           <p class="why">${esc(c.why)}</p>${c.fix ? fixHtml(c.fix) : ""}</details>`).join("")}</div></section>
-      <section class="g-sec"><h3>週次の診断レポート<small>毎週月曜 7:23 に自動</small></h3><div id="diagweek"></div></section>
+      <section class="g-sec ck-sec" id="ck-weekly"><h3>週次の診断レポート<small>毎週月曜 7:23 に自動</small></h3><div id="diagweek"></div></section>
       ${d ? `<section class="g-sec"><h3>第${d.no}回からの提案<small>判断してほしいこと・Claude側で直せること</small></h3><div id="diagask"><p class="mute">レポート本文を読みこみ中…</p></div></section>` : ""}
       <section class="g-sec"><h3>過去のレポート</h3><div id="diaglist"></div></section>
     </div></div>`);
@@ -3560,6 +3607,106 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       diagAsk[d.id] = { secs };
     } catch { diagAsk[d.id] = { secs: [] }; }
     draw(diagAsk[d.id]);
+  }
+  // ================= 診断タブ：ひと目で（色と新着）→ 答えていない判断 → ジャーナル → 健康診断・週次レポート =================
+  // 「見た」はこの端末に覚える（レポートのIDごと）。答えていない判断は Notion のタスクから数えるので、どの端末でも同じ
+  const seenAll = () => store.get("seen") || {};
+  function markSeen(k, id) { if (!k || !id) return; const s = seenAll(); s[k] = id; store.set("seen", s); }
+  const sigOf = (v) => (/🔴|停滞|悪化|危/.test(v || "") ? "red" : /🟡|注意|黄|横ばい/.test(v || "") ? "yellow" : /🟢|順調|良好|改善/.test(v || "") ? "green" : "info");
+  const ASK_RE = /タスク診断|診断.*判断|判断に答える|目標の月次振り返り/;
+  const openAsks = () => S.tasks.filter((t) => ASK_RE.test(t.name) && t.status !== ST.done && t.status !== ST.ref);
+  function unseenReports() {
+    const s = seenAll(); const d = S.diag.at(-1); const j = S.journal?.[0];
+    return [d && s.diag !== d.id ? "diag" : null, j && s.jour !== j.id ? "jour" : null].filter(Boolean);
+  }
+  function checkBadge() { return S.mode === "loading" && !S.tasks.length ? 0 : unseenReports().length + openAsks().length; }
+  function checkCards() {
+    const seen = seenAll(); const d = S.diag.at(-1); const prev = S.diag.at(-2); const j = S.journal?.[0];
+    const checks = healthChecks(); const bad = checks.filter((c) => c.st === "red" || c.st === "yellow"); const red = checks.some((c) => c.st === "red");
+    const asks = openAsks(); const live = S.goals.filter((g) => /挑戦中/.test(g.status)); const soon = live.filter((g) => g.due && diffDays(TODAY(), g.due) <= 30);
+    const delta = d && prev ? Math.round((d.rate - prev.rate) * 100) : null;
+    return [
+      { k: "weekly", icon: "🩺", name: "週次の運用診断", sig: d ? (sigOf(d.verdict) !== "info" ? sigOf(d.verdict) : d.rate < .4 ? "red" : d.rate < .6 ? "yellow" : "green") : "info", main: d ? d.verdict || "判定なし" : "まだありません", sub: d ? `第${d.no}回・完了率 ${Math.round(d.rate * 100)}%${delta == null ? "" : `（${delta >= 0 ? "+" : ""}${delta}）`}${d.next ? `・次の一手：${d.next}` : ""}` : S.extraErr?.diag || "", unseen: !!d && seen.diag !== d.id },
+      { k: "asks", icon: "✋", name: "答えていない判断", sig: asks.length ? (asks.some((t) => ageOf(t) >= 7) ? "red" : "yellow") : "green", main: asks.length ? `${asks.length}件` : "なし", sub: asks.length ? asks.map((t) => short(t.name, 16)).join("・") : "診断・振り返りの宿題はありません" },
+      { k: "journal", icon: "📓", name: "ゆうべのジャーナル", sig: "info", main: j ? j.name : "まだありません", sub: j ? `済み ${j.done}件・AIとのやりとり ${j.ai}回${j.note ? "" : "・ひとこと未記入"}` : S.journalErr || "", unseen: !!j && seen.jour !== j.id },
+      { k: "health", icon: "🏥", name: "いまの健康診断", sig: red ? "red" : bad.length ? "yellow" : "green", main: bad.length ? `直したい所 ${bad.length}つ` : "問題なし", sub: bad.map((c) => c.name).join("・") || "10項目すべて良好" },
+      { k: "goal", icon: "🎯", name: "目標", sig: soon.length ? "yellow" : "info", main: `挑戦中 ${live.length}件`, sub: soon.length ? `期限30日以内：${soon.map((g) => short(g.name, 12)).join("・")}` : "毎月1日 8:10 に振り返り" },
+      { k: "sug", icon: "💡", name: "AIからの提案", sig: S.sugs.length ? "yellow" : "green", main: S.sugs.length ? `${S.sugs.length}件 待ち` : "なし", sub: S.sugs.length ? "採用か見送りを決める" : "毎朝 7:36 に届く", go: "concierge" },
+    ];
+  }
+  function renderCheck(view) {
+    renderDiagAll(view);
+    const root = $("#diagall"); if (!root) return;
+    const cards = checkCards(); const asks = openAsks(); const unseen = cards.filter((c) => c.unseen); const todo = unseen.length + asks.length;
+    const j = S.journal?.[0]; const seen = seenAll();
+    root.insertAdjacentHTML("afterbegin", `<section class="g-sec"><h3>ひと目で<small>色＝状態　赤い「新着」＝まだ見ていない</small></h3>
+        <div class="ck-sum">${todo ? `<b>見ておくこと ${todo}件</b>　新着レポート ${unseen.length}・答えていない判断 ${asks.length}` : "<b>見落としはありません ✨</b>"}</div>
+        <div class="ck-glance">${cards.map((c) => `<button type="button" class="ckc ${c.sig}" ${c.go === "concierge" ? 'data-concierge="1"' : `data-dgo="${c.k}"`}>${c.unseen ? '<span class="new">新着</span>' : ""}<span class="h"><span class="ic">${c.icon}</span>${esc(c.name)}</span><b>${esc(c.main)}</b><small>${esc(c.sub || "")}</small></button>`).join("")}</div></section>
+      <section class="g-sec ck-sec" id="ck-asks"><h3>✋ 答えていない判断<small>診断・振り返りから出た宿題</small></h3><div class="ck-todo">${asks.length ? asks.map((t, i) => rowHtml(t, i, { check: false })).join("") : `<div class="empty">ありません</div>`}</div></section>
+      <section class="g-sec ck-sec" id="ck-journal"><h3>📓 ゆうべのジャーナル<small>毎晩 20:53 に自動</small></h3><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "ジャーナルはまだありません")}</div>`}</div>
+        ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 確認済み</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">確認した</button>`}</div>` : ""}</section>`);
+    // 週次レポートに「確認した」
+    const d = S.diag.at(-1); const wk = $("#ck-weekly");
+    if (d && wk) wk.insertAdjacentHTML("beforeend", `<div class="seenbar">${seen.diag === d.id ? `<span class="mute">✓ 第${d.no}回は確認済み</span>` : `<button type="button" class="btn pri" data-dseen="diag:${d.id}">第${d.no}回を確認した</button>`}</div>`);
+    if (j) loadJournal(j);
+  }
+  // ジャーナル本文から「まとめ」「気になること」「明日の提案」を抜き出す
+  const jourCache = {};
+  async function loadJournal(j) {
+    const draw = (secs) => { const b = $("#jrbox"); if (!b) return; b.innerHTML = secs.length ? secs.map((s) => `<div class="ask"><b>${esc(s.h)}</b>${s.lines.map((l) => `<p>${inline(l)}</p>`).join("")}</div>`).join("") : `<p class="mute">${esc(j.name)}（要点を読み取れませんでした。全文を開いてください）</p>`; };
+    if (jourCache[j.id]) { draw(jourCache[j.id]); return; }
+    if (S.mode === "demo") { jourCache[j.id] = [{ h: "⭐ 今日のまとめ", lines: ["（例）旅行から帰って、たまった買い物を2件決めた"] }, { h: "⚠️ 気になること", lines: ["（例）年末調整の書類が 11/16 まで"] }, { h: "☀️ 明日の提案", lines: ["（例）☼ 朝：保育園の慣らし保育を確認", "（例）💻 PC：年末調整の控除証明書をそろえる"] }]; draw(jourCache[j.id]); return; }
+    try {
+      const raw = await fetchBody(j.id); const L = raw.split("\n"); const secs = [];
+      L.forEach((l, i) => {
+        const m = l.match(/^#{1,4}\s*(.*(今日のまとめ|気になること|明日の提案).*)$/); if (!m) return;
+        const lines = []; for (let k = i + 1; k < L.length && !/^#{1,4}\s/.test(L[k]); k++) { const t = L[k].replace(/^\s*([-*+]|\d+[.)])\s*(\[[ x]\]\s*)?/, "").trim(); if (t && !/^<\/?(table|tr|td|toggle|callout|details|summary)/.test(t)) lines.push(t); }
+        if (lines.length) secs.push({ h: text(m[1]), lines: lines.slice(0, 4) });
+      });
+      jourCache[j.id] = secs;
+    } catch { jourCache[j.id] = []; }
+    draw(jourCache[j.id]);
+  }
+  // ================= 今日を選ぶ：次にやるを一覧で見て、まとめて選んで1回で今日に入れる =================
+  const PK = { sel: new Set(), f: "rec", keep: false };
+  const W_ORDER = { S: 0, M: 1, L: 2, XL: 3 };
+  const wPts = (arr) => arr.reduce((s, t) => s + ({ S: 1, M: 2, L: 3, XL: 5 }[t.weight] || 1), 0);
+  function pickItems() {
+    let a = stageItems("next").slice(); const f = PK.f;
+    if (f === "light") a = a.filter((t) => !t.weight || t.weight === "S" || t.weight === "M");
+    else if (f.startsWith("w:")) a = a.filter((t) => (t.waku || "枠なし") === f.slice(2));
+    else if (f.startsWith("t:")) a = a.filter((t) => (t.tag || "分類なし") === f.slice(2));
+    if (f === "old") a.sort((x, y) => ageOf(y) - ageOf(x));
+    else a.sort((x, y) => (W_ORDER[x.weight] ?? 1) - (W_ORDER[y.weight] ?? 1) || ageOf(y) - ageOf(x));
+    return a;
+  }
+  function openPickDay() {
+    PK.sel = new Set(); PK.f = "rec";
+    modal(`<div class="pk" id="pk"></div>`); $("#modal .sheet").classList.add("tall");
+    drawPick();
+  }
+  function drawPick() {
+    const box = $("#pk"); if (!box) return;
+    const all = stageItems("next"); const today = stageItems("today");
+    const tags = [...new Set(all.map((t) => t.tag || "分類なし"))]; const wakus = [...new Set(all.map((t) => t.waku || "枠なし"))];
+    const fs = [["rec", "おすすめ順"], ["old", "古い順"], ["light", "軽いもの"], ...wakus.map((w) => [`w:${w}`, w]), ...tags.map((g) => [`t:${g}`, g])];
+    const items = pickItems(); const selT = [...PK.sel].map((id) => known.get(id)).filter(Boolean);
+    const st = box.querySelector(".pklist")?.scrollTop || 0; const fx = box.querySelector(".pkf")?.scrollLeft || 0;
+    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぶ</h3><small>今日 ${today.length}件・重さ ${wPts(today)}${selT.length ? ` → ${today.length + selT.length}件・${wPts(today) + wPts(selT)}` : ""}</small></div>
+      <div class="pkf">${fs.map(([k, n]) => `<button type="button" class="qc" data-pkf="${esc(k)}" aria-pressed="${PK.f === k}">${esc(n)}</button>`).join("")}</div>
+      <div class="pklist">${items.map((t) => { const on = PK.sel.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-pksel="${t.id}"><span class="bx">${on ? "✓" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([t.waku, t.tag, t.next].filter(Boolean).join("・"))}</small></span><span class="w">${esc(t.weight || "")}<br>${ageOf(t)}日</span></button>`; }).join("") || `<div class="empty">ここには何もありません</div>`}</div>
+      <div class="pkfoot"><button type="button" class="btn" data-mclose="1">閉じる</button><button type="button" class="btn pri" data-pkok="1" ${selT.length ? "" : "disabled"}>${selT.length ? `今日に入れる（${selT.length}件）` : "タップして選ぶ"}</button></div>`;
+    const f2 = box.querySelector(".pkf"); if (f2) f2.scrollLeft = fx;
+    if (PK.keep) { const l2 = box.querySelector(".pklist"); if (l2) l2.scrollTop = st; }
+    PK.keep = false;
+  }
+  function pickToggle(id) { if (PK.sel.has(id)) PK.sel.delete(id); else PK.sel.add(id); buzz(); PK.keep = true; drawPick(); }
+  async function pickCommit() {
+    const list = [...PK.sel].map((id) => known.get(id)).filter(Boolean); if (!list.length) return;
+    closeModal(); const props = dateProps(TODAY());
+    const befores = list.map((t) => [t, propsBefore(t, props)]);
+    await Promise.all(list.map((t) => setProps(t, props, "", { quiet: true })));
+    toast(`${list.length}件を今日に入れました${S.mode === "demo" ? "（見本）" : ""}`, () => befores.forEach(([t, b]) => setProps(t, b, "", { quiet: true, undo: false })));
   }
   // ================= 検索：タスク全体（読み込み済みはすぐ、残りは Notion に聞く） =================
   // 名前・次の一歩・分類タグで探す。読み込み済み（未完了・資料・今日の済み）はその場で、済みや古い資料も含めた全体は Notion の検索で足す
@@ -3635,6 +3782,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    const dgb = $("#diagbadge"); if (dgb) { const n = checkBadge(); dgb.hidden = !n; dgb.textContent = n; }
     const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
@@ -3691,7 +3839,14 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (d.sub) { const o = $("#orb"); if (!o) return; const t = known.get(o.dataset.card); if (d.sub === "open") openTask(t.id); else sendTo("skip"); return; }
     if (d.logseg) { S.logSeg = d.logseg; render(); return; }
     if (d.ev !== undefined && el.classList.contains("chip")) { S.logEvent = d.ev; render(); return; }
-    if (d.diag) { openRecord("diag", d.diag); return; }
+    if (d.diag) { markSeen("diag", d.diag); openRecord("diag", d.diag); return; }
+    if (d.dgo) { document.getElementById(`ck-${d.dgo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
+    if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
+    if (d.pickday) { openPickDay(); return; }
+    if (d.pksel) { pickToggle(d.pksel); return; }
+    if (d.pkf) { PK.f = d.pkf; drawPick(); return; }
+    if (d.pkok) { pickCommit(); return; }
     if (d.log) { openRecord("log", d.log); return; }
     if (d.goal) { openRecord("goal", d.goal); return; }
     if (d.proj) { openRecord("proj", d.proj); return; }
@@ -3870,6 +4025,8 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       { id: P3, url: "https://www.notion.so/" + P3, name: "（例）タスクアプリ", status: "⏸ 保留", step: "UI案を決める", now: "", total: 4 },
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
+    S.journal = [{ id: "8".repeat(32), url: "https://www.notion.so/", name: `（例）${md(addDays(d, -1))} のジャーナル`, date: addDays(d, -1), done: 4, ai: 3, note: "" }];
+    S.tasks.push(mk("タスク診断⑥：次にやるを10件決める＋判断に答える", ST.next, { tag: "AI", waku: "💻 PC", w: "M", next: "判断してほしいことに答える", age: 9 }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));
     S.tasks.push(mk("リビング用ゴミ箱（45L・ペダル式）", ST.next, { tag: "BUY", waku: "🏠 家・外", w: "S", next: "置き場所の幅を測る", age: 5, kind: "🏠 家財", price: 6800 }),
       mk("カーテン（寝室・遮光）", ST.next, { tag: "BUY", waku: "💻 PC", w: "M", next: "窓の幅と高さを測る", age: 3, kind: "🏠 家財", price: 18000 }),
@@ -3904,7 +4061,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   S.bodies = store.get("sums") || {};
   const snap = store.get("snap");
   if (snap?.tasks?.length) {
-    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, readList: snap.readList || [], loadedAt: snap.at });
+    Object.assign(S, { tasks: snap.tasks, refs: snap.refs || [], projects: snap.projects || [], doneToday: Array.isArray(snap.doneToday) ? snap.doneToday : [], diag: snap.diag || [], journal: snap.journal || [], logs: snap.logs || [], goals: snap.goals || [], stock: snap.stock || [], refillDone: snap.refillDone || {}, readList: snap.readList || [], loadedAt: snap.at });
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }

@@ -159,7 +159,7 @@
   const aiItems = () => S.tasks.filter((t) => t.status === ST.ai && t.ai && AI_TURN[t.ai]);
   const myTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "me" && t.status !== ST.ref);
   const aiTurn = () => aiItems().filter((t) => AI_TURN[t.ai] === "ai");
-  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone, readList: S.readList });
+  const saveSnap = () => store.set("snap", { at: S.loadedAt, tasks: S.tasks, refs: S.refs, projects: S.projects, doneToday: S.doneToday, diag: S.diag, journal: S.journal, logs: S.logs, goals: S.goals, stock: S.stock, refillDone: S.refillDone, readList: S.readList });
 
   // 在庫（DB_Daily）の1行。切れる予定日は Notion の計算式が読めればそれ、読めなければ同じ考え方で計算する
   const dateOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
@@ -207,7 +207,7 @@
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -220,10 +220,13 @@
       loadSaveCfg(),
       // AIからの提案（提案中だけ）
       rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
+      // 毎晩のジャーナル（診断タブの「ひと目で」と詳細）
+      rows(DS.jour, { sort: [{ property: "日付", direction: "descending" }], limit: 7 }),
     ]);
     if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
     if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
     if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
+    if (jour.status === "fulfilled") S.journal = jour.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]), date: r["date:日付:start"] || "", done: Number(r["終わったタスク数"]) || 0, ai: Number(r["AIとのやりとり数"]) || 0, note: text(r["ひとこと"]) })); else S.journalErr = errText(jour.reason);
 
     S.extraErr = {};
     if (diag.status === "fulfilled") S.diag = diag.value.results.map((r) => ({

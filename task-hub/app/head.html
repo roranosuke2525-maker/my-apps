@@ -770,6 +770,48 @@ nav.tabs button span:not(.badge) { white-space: nowrap; overflow: hidden; text-o
 nav.tabs button svg { width: 19px; height: 19px; }
 nav.tabs .badge { top: 0; right: calc(50% - 18px); min-width: 14px; height: 14px; font-size: 9px; padding: 0 3px; }
 nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
+
+/* ---- v45：今日を選ぶ・診断タブ ---- */
+.pickbar { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); flex: none; }
+.pickbar .ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--s-next); color: #fff; font-weight: 700; flex: none; }
+.pickbar .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pickbar .tx b { font-size: 14px; }
+.pickbar .tx small { font-size: 11.5px; color: var(--mute); }
+.pickbar i { font-style: normal; color: var(--mute); }
+.pk { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+.pk .pkhead { display: flex; align-items: baseline; gap: 8px; }
+.pk .pkhead h3 { margin: 0; font-size: 16px; }
+.pk .pkhead small { color: var(--mute); font-size: 12px; }
+.pk .pkf { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; padding-bottom: 2px; }
+.pk .pkf::-webkit-scrollbar { display: none; }
+.pk .pkf .qc { flex: none; white-space: nowrap; }
+.pk .pklist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.pkrow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 12px; background: var(--sunk); }
+.pkrow .bx { width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--line); flex: none; display: grid; place-items: center; font-size: 14px; color: #fff; }
+.pkrow.sel { background: color-mix(in srgb, var(--s-today) 18%, var(--card)); }
+.pkrow.sel .bx { background: var(--s-today); box-shadow: none; }
+.pkrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pkrow .tx b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkrow .tx small { font-size: 11.5px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkrow .w { font-family: var(--f-num); font-size: 11px; color: var(--mute); flex: none; }
+.pk .pkfoot { display: flex; gap: 8px; flex: none; }
+.pk .pkfoot .btn.pri { flex: 1; }
+.ck-glance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ckc { position: relative; text-align: left; padding: 10px 11px 9px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 3px; border-left: 4px solid var(--sig, var(--line)); min-height: 76px; }
+.ckc.red { --sig: #e5675b; } .ckc.yellow { --sig: #e0b33c; } .ckc.green { --sig: #5bb98c; } .ckc.info { --sig: var(--line); }
+.ckc .h { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mute); }
+.ckc .h .ic { font-size: 15px; }
+.ckc b { font-size: 14.5px; line-height: 1.3; }
+.ckc small { font-size: 11.5px; color: var(--mute); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ckc .new { position: absolute; top: 8px; right: 9px; font-size: 10.5px; font-weight: 700; color: #fff; background: #e5675b; border-radius: 9px; padding: 1px 6px; }
+.ck-todo { display: flex; flex-direction: column; gap: 6px; }
+.ck-todo .row { min-height: 48px; }
+.ck-sum { font-size: 13px; padding: 9px 12px; border-radius: 12px; background: var(--sunk); }
+.ck-sum b { font-size: 14px; }
+.ck-sec { scroll-margin-top: 8px; }
+.ck-sec .seenbar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.jr { display: flex; flex-direction: column; gap: 6px; }
+.jr .ask p { margin: 2px 0; }
 </style>
 
 <div id="app">
@@ -784,7 +826,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     <button type="button" data-tab="read" title="読む"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4.5 8.5 4.5 12 6.5c3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z"/><path d="M12 6.5v13"/></svg><span>読む</span><span class="badge" id="readbadge" hidden></span></button>
     <button type="button" data-tab="shop" title="買う"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.2l2.1 11h10.6L20 7.5H6"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg><span>買う</span><span class="badge" id="shopbadge" hidden></span></button>
     <button type="button" data-tab="news" title="ニュース"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v15a1 1 0 0 0 1 1H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></svg><span>ニュース</span></button>
-    <button type="button" data-tab="log" title="運用"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>運用</span></button>
+    <button type="button" data-tab="log" title="診断"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg><span>診断</span><span class="badge" id="diagbadge" hidden></span></button>
     <button type="button" data-tab="db" title="DB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span>DB</span></button>
   </nav>
   <button type="button" class="fab" id="add" aria-label="新しく入れる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>

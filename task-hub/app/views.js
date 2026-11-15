@@ -407,9 +407,9 @@
 
   // ================= 記録（診断・運用ログ・目標とプロジェクト） =================
   function renderLog(view) {
-    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["guide", "使い方"], ["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"], ["guide", "使い方"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
     if (S.logSeg === "guide") return renderGuide(view);
-    if (S.logSeg === "diag") return renderDiagAll(view);
+    if (S.logSeg === "diag") return renderCheck(view);
     if (S.logSeg === "log") return renderOpsLog(view);
     return renderGoals(view);
   }

@@ -157,11 +157,11 @@
     const checks = healthChecks(); const bad = checks.filter((c) => c.st === "red" || c.st === "yellow").length;
     const d = S.diag.at(-1);
     view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="scroll diagall" id="diagall">
-      <section class="g-sec"><h3>いまの健康診断<small>読み込み済みのデータから・${jstTime(S.loadedAt || Date.now())}時点</small></h3>
+      <section class="g-sec ck-sec" id="ck-health"><h3>いまの健康診断<small>読み込み済みのデータから・${jstTime(S.loadedAt || Date.now())}時点</small></h3>
         <div class="hc-sum"><span class="${bad ? "y" : "g"}">${bad ? `直したほうがいい所が ${bad}つ` : "大きな問題はありません"}</span></div>
         <div class="hc">${checks.map((c, i) => `<details class="hc-i ${c.st}" ${c.fix && c.st !== "green" && i < 9 && (c.st === "red" || c.st === "yellow") ? "open" : ""}><summary><span class="ic">${ST_ICON[c.st]}</span><span class="nm">${c.no} ${esc(c.name)}</span><span class="v">${esc(c.val)}</span></summary>
           <p class="why">${esc(c.why)}</p>${c.fix ? fixHtml(c.fix) : ""}</details>`).join("")}</div></section>
-      <section class="g-sec"><h3>週次の診断レポート<small>毎週月曜 7:23 に自動</small></h3><div id="diagweek"></div></section>
+      <section class="g-sec ck-sec" id="ck-weekly"><h3>週次の診断レポート<small>毎週月曜 7:23 に自動</small></h3><div id="diagweek"></div></section>
       ${d ? `<section class="g-sec"><h3>第${d.no}回からの提案<small>判断してほしいこと・Claude側で直せること</small></h3><div id="diagask"><p class="mute">レポート本文を読みこみ中…</p></div></section>` : ""}
       <section class="g-sec"><h3>過去のレポート</h3><div id="diaglist"></div></section>
     </div></div>`);
