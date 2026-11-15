@@ -351,7 +351,7 @@ function searchResults() {
     e.drinks ? el("div", { class: "hit-drink" }, `🍺 ${drinksLine(e.drinks)}`) : null,
     e.kind !== "toilet" ? el("button", {
       type: "button", class: "chip strong small", "aria-label": `${e.name}を行きたい場所に足す`,
-      onclick: (ev) => { ev.stopPropagation(); addPlace(e.name, { lat: e.lat, lon: e.lon, kind: e.kind }); toast(`「${e.name}」を行きたい場所に足しました`); },
+      onclick: (ev) => { ev.stopPropagation(); if (addPlace(e.name, { lat: e.lat, lon: e.lon, kind: e.kind })) toast(`「${e.name}」を行きたい場所に足しました`); },
     }, "＋ 行きたい") : null));
   }
   const count = list.length
@@ -541,7 +541,7 @@ function poiPopup(e, pin) {
     e.drinks ? el("div", { class: "drink-note" }, [e.drinks.to ? "持ち歩き○" : "店内だけ", e.drinks.note, TripPlaces.DRINKS_SOURCE].filter(Boolean).join("・")) : null,
     el("div", { class: "poi-pop-btns" },
       el("button", { type: "button", class: "chip strong small", onclick: () => { detail.map.closePopup(); routeTo({ lat: e.lat, lon: e.lon, name: e.name }); } }, "🚶 ここへ行く"),
-      e.kind !== "toilet" && !pin ? el("button", { type: "button", class: "chip small", onclick: () => { addPlace(e.name, { lat: e.lat, lon: e.lon, kind: e.kind }); toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋ 行きたい") : null,
+      e.kind !== "toilet" && !pin ? el("button", { type: "button", class: "chip small", onclick: () => { if (addPlace(e.name, { lat: e.lat, lon: e.lon, kind: e.kind })) toast(`「${e.name}」を行きたい場所に足しました`); } }, "＋ 行きたい") : null,
       el("a", { class: "chip small", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, target: "_blank", rel: "noopener" }, "Googleマップ"),
       officialHoursUrl(e) ? el("a", { class: "chip small", href: officialHoursUrl(e), target: "_blank", rel: "noopener" }, "営業時間（公式）") : null));
 }
