@@ -134,6 +134,21 @@ nav.tabs .badge { position: absolute; top: 2px; right: calc(50% - 22px); min-wid
 .board { flex: 1; min-height: 0; display: flex; gap: 8px; overflow-x: auto; padding: 0 10px 10px; scroll-snap-type: x mandatory; }
 .col { flex: 0 0 72%; max-width: 240px; scroll-snap-align: start; background: var(--sunk); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 5px; min-height: 0; overflow: hidden; }
 .col h4 { margin: 0; font-size: 12px; padding: 2px 4px; display: flex; justify-content: space-between; }
+.bnav { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 2px 10px 8px; scrollbar-width: none; }
+.bnav::-webkit-scrollbar { display: none; }
+.bnav .qc { flex: none; white-space: nowrap; }
+.bnav .qc b { margin-left: 4px; font-weight: 600; opacity: .7; }
+.board.peek { position: relative; gap: 10px; padding: 0 0 10px; scrollbar-width: none; }
+.board.peek::before, .board.peek::after { content: ""; flex: 0 0 calc((100% - min(72%, 400px)) / 2 - 10px); }
+.board.peek::-webkit-scrollbar { display: none; }
+.board.peek .col { flex: 0 0 min(72%, 400px); max-width: none; scroll-snap-align: center; scroll-snap-stop: always; opacity: .5; transform: scale(.96); transition: opacity .2s, transform .2s; }
+.board.peek .col.on { opacity: 1; transform: none; }
+.board.peek .col h4 { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; padding: 2px 2px 4px; }
+.board.peek .bname { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.board.peek .bname .num { margin-left: 5px; font-weight: 500; }
+.board.peek .bside { font-size: 11px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; padding: 2px; min-width: 0; }
+.board.peek .bside.r { text-align: right; }
+.col .cscroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding: 1px 1px 4px; overscroll-behavior: contain; }
 .bcard { background: var(--card); border-radius: 9px; padding: 6px 8px; font-size: 12.5px; box-shadow: var(--shadow); text-align: left; width: 100%; flex: none; }
 .bcard .sub { font-size: 11px; color: var(--mute); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tablewrap { flex: 1; min-height: 0; overflow: auto; }
@@ -1868,6 +1883,25 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const m = new Map(); for (const t of items) { const g = key(t); if (!m.has(g)) m.set(g, []); m.get(g).push(t); }
     return [...m];
   }
+  // ボード：ジャンル（列）を横にスクロール。今の列を真ん中に、前後の列を左右に少し見せる。列の中は縦にスクロール
+  function boardHtml(box, items) {
+    const groups = groupBy(items, S.stage); S.boardAt = S.boardAt || {};
+    const cur = Math.max(0, Math.min(S.boardAt[S.stage] ?? 0, groups.length - 1));
+    const card = (t) => `<button type="button" class="bcard" data-open="${t.id}">${esc(t.name)}<span class="sub">${esc(t.next || metaOf(t).tx)}</span></button>`;
+    box.outerHTML = `<div class="bnav" id="bnav">${groups.map(([g, l], i) => `<button type="button" class="qc" data-bgo="${i}" aria-pressed="${i === cur}">${esc(g)}<b>${l.length}</b></button>`).join("")}</div>
+      <div class="board peek" id="board">${groups.map(([g, list], i) => `<div class="col${i === cur ? " on" : ""}" data-bi="${i}"><h4>${i ? `<button type="button" class="bside" data-bgo="${i - 1}">‹ ${esc(groups[i - 1][0])}</button>` : `<span class="bside"></span>`}<span class="bname">${esc(g)}<span class="num mute">${list.length}</span></span>${i < groups.length - 1 ? `<button type="button" class="bside r" data-bgo="${i + 1}">${esc(groups[i + 1][0])} ›</button>` : `<span class="bside"></span>`}</h4><div class="cscroll">${list.map(card).join("")}</div></div>`).join("")}</div>`;
+    const b = $("#board"); if (!b) return;
+    const cols = [...b.children];
+    const mark = (k) => {
+      if (S.boardAt[S.stage] === k && cols[k]?.classList.contains("on")) return;
+      S.boardAt[S.stage] = k; cols.forEach((c, n) => c.classList.toggle("on", n === k));
+      document.querySelectorAll("#bnav [data-bgo]").forEach((x, n) => { x.setAttribute("aria-pressed", n === k); if (n === k) x.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); });
+    };
+    const centerOf = (c) => c.offsetLeft + c.offsetWidth / 2 - b.clientWidth / 2;
+    requestAnimationFrame(() => { if (cols[cur]) b.scrollLeft = centerOf(cols[cur]); cols.forEach((c, n) => c.classList.toggle("on", n === cur)); });
+    let tm; b.addEventListener("scroll", () => { clearTimeout(tm); tm = setTimeout(() => { const mid = b.scrollLeft + b.clientWidth / 2; let best = 0, bd = 1e9; cols.forEach((c, n) => { const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = n; } }); mark(best); }, 80); }, { passive: true });
+    b.goTo = (k) => { const c = cols[k]; if (c) b.scrollTo({ left: centerOf(c), behavior: "smooth" }); };
+  }
   function tableHtml(items) {
     return `<table class="grid"><thead><tr><th>名前</th><th>ステータス</th><th>実行日</th><th>枠</th><th>重さ</th><th>分類</th><th>AI</th><th>次の一歩</th><th>最終更新</th></tr></thead><tbody>${items.map((t) => `<tr class="click" data-open="${t.id}"><td>${esc(short(t.name, 22))}</td><td>${esc(t.status)}</td><td class="${metaOf(t).late ? "late" : ""}">${t.date ? md(t.date) : ""}</td><td>${esc(t.waku || "")}</td><td>${esc(t.weight || "")}</td><td>${esc(t.tag || "")}</td><td>${esc(t.ai || "")}</td><td>${esc(short(t.next || "", 20))}</td><td class="mute">${esc(updTx(t))}</td></tr>`).join("")}</tbody></table>`;
   }
@@ -1949,7 +1983,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const box = $("#stagelist");
     if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
-    if (S.stageView === "board") { box.outerHTML = `<div class="board">${groupBy(items, S.stage).map(([g, list]) => `<div class="col"><h4><span>${esc(g)}</span><span class="num mute">${list.length}</span></h4>${list.slice(0, 12).map((t) => `<button type="button" class="bcard" data-open="${t.id}">${esc(t.name)}<span class="sub">${esc(t.next || metaOf(t).tx)}</span></button>`).join("")}${list.length > 12 ? `<span class="mute" style="font-size:11px;padding:2px 4px">ほか ${list.length - 12}件</span>` : ""}</div>`).join("")}</div>`; return; }
+    if (S.stageView === "board") { boardHtml(box, items); return; }
     if (S.stageView === "table") { box.className = "tablewrap"; box.innerHTML = tableHtml(items); return; }
     if (S.stage === "next") { box.insertAdjacentHTML("beforebegin", nextLensBar(items)); box.innerHTML = nextLensList(items); return; }
     box.innerHTML = items.map((t, i) => rowHtml(t, i, { check: !["done", "ref"].includes(S.stage) })).join("");
@@ -3642,6 +3676,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
     if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
     if (d.nbulk) { nextBulk(el, d.nbulk); return; }
+    if (d.bgo != null) { document.getElementById("board")?.goTo?.(+d.bgo); return; }
     if (d.sview) { S.stageView = d.sview; render(); return; }
     if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }

@@ -151,6 +151,25 @@
     const m = new Map(); for (const t of items) { const g = key(t); if (!m.has(g)) m.set(g, []); m.get(g).push(t); }
     return [...m];
   }
+  // ボード：ジャンル（列）を横にスクロール。今の列を真ん中に、前後の列を左右に少し見せる。列の中は縦にスクロール
+  function boardHtml(box, items) {
+    const groups = groupBy(items, S.stage); S.boardAt = S.boardAt || {};
+    const cur = Math.max(0, Math.min(S.boardAt[S.stage] ?? 0, groups.length - 1));
+    const card = (t) => `<button type="button" class="bcard" data-open="${t.id}">${esc(t.name)}<span class="sub">${esc(t.next || metaOf(t).tx)}</span></button>`;
+    box.outerHTML = `<div class="bnav" id="bnav">${groups.map(([g, l], i) => `<button type="button" class="qc" data-bgo="${i}" aria-pressed="${i === cur}">${esc(g)}<b>${l.length}</b></button>`).join("")}</div>
+      <div class="board peek" id="board">${groups.map(([g, list], i) => `<div class="col${i === cur ? " on" : ""}" data-bi="${i}"><h4>${i ? `<button type="button" class="bside" data-bgo="${i - 1}">‹ ${esc(groups[i - 1][0])}</button>` : `<span class="bside"></span>`}<span class="bname">${esc(g)}<span class="num mute">${list.length}</span></span>${i < groups.length - 1 ? `<button type="button" class="bside r" data-bgo="${i + 1}">${esc(groups[i + 1][0])} ›</button>` : `<span class="bside"></span>`}</h4><div class="cscroll">${list.map(card).join("")}</div></div>`).join("")}</div>`;
+    const b = $("#board"); if (!b) return;
+    const cols = [...b.children];
+    const mark = (k) => {
+      if (S.boardAt[S.stage] === k && cols[k]?.classList.contains("on")) return;
+      S.boardAt[S.stage] = k; cols.forEach((c, n) => c.classList.toggle("on", n === k));
+      document.querySelectorAll("#bnav [data-bgo]").forEach((x, n) => { x.setAttribute("aria-pressed", n === k); if (n === k) x.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); });
+    };
+    const centerOf = (c) => c.offsetLeft + c.offsetWidth / 2 - b.clientWidth / 2;
+    requestAnimationFrame(() => { if (cols[cur]) b.scrollLeft = centerOf(cols[cur]); cols.forEach((c, n) => c.classList.toggle("on", n === cur)); });
+    let tm; b.addEventListener("scroll", () => { clearTimeout(tm); tm = setTimeout(() => { const mid = b.scrollLeft + b.clientWidth / 2; let best = 0, bd = 1e9; cols.forEach((c, n) => { const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = n; } }); mark(best); }, 80); }, { passive: true });
+    b.goTo = (k) => { const c = cols[k]; if (c) b.scrollTo({ left: centerOf(c), behavior: "smooth" }); };
+  }
   function tableHtml(items) {
     return `<table class="grid"><thead><tr><th>名前</th><th>ステータス</th><th>実行日</th><th>枠</th><th>重さ</th><th>分類</th><th>AI</th><th>次の一歩</th><th>最終更新</th></tr></thead><tbody>${items.map((t) => `<tr class="click" data-open="${t.id}"><td>${esc(short(t.name, 22))}</td><td>${esc(t.status)}</td><td class="${metaOf(t).late ? "late" : ""}">${t.date ? md(t.date) : ""}</td><td>${esc(t.waku || "")}</td><td>${esc(t.weight || "")}</td><td>${esc(t.tag || "")}</td><td>${esc(t.ai || "")}</td><td>${esc(short(t.next || "", 20))}</td><td class="mute">${esc(updTx(t))}</td></tr>`).join("")}</tbody></table>`;
   }
@@ -232,7 +251,7 @@
     const box = $("#stagelist");
     if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
-    if (S.stageView === "board") { box.outerHTML = `<div class="board">${groupBy(items, S.stage).map(([g, list]) => `<div class="col"><h4><span>${esc(g)}</span><span class="num mute">${list.length}</span></h4>${list.slice(0, 12).map((t) => `<button type="button" class="bcard" data-open="${t.id}">${esc(t.name)}<span class="sub">${esc(t.next || metaOf(t).tx)}</span></button>`).join("")}${list.length > 12 ? `<span class="mute" style="font-size:11px;padding:2px 4px">ほか ${list.length - 12}件</span>` : ""}</div>`).join("")}</div>`; return; }
+    if (S.stageView === "board") { boardHtml(box, items); return; }
     if (S.stageView === "table") { box.className = "tablewrap"; box.innerHTML = tableHtml(items); return; }
     if (S.stage === "next") { box.insertAdjacentHTML("beforebegin", nextLensBar(items)); box.innerHTML = nextLensList(items); return; }
     box.innerHTML = items.map((t, i) => rowHtml(t, i, { check: !["done", "ref"].includes(S.stage) })).join("");
