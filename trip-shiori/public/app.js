@@ -267,6 +267,12 @@ function isPlacesGroup(g) {
 // 行きたい場所は「📍 行きたい場所」のまとまりに足す（無ければ作る）
 // 行きたい場所に足す。opts: { status, lat, lon, kind }（検索や地図から足すときは位置も一緒に残す）
 function addPlace(text, opts = {}) {
+  // 同じ名前がもう入っていたら足さない（旅行中に同じ店が2回入っていたため）
+  const same = state.trip.groups.find(isPlacesGroup)?.items.find((i) => TripPlaces.norm(parseWant(i.text).name) === TripPlaces.norm(text));
+  if (same) {
+    toast(`「${text}」はもう行きたい場所に入っています`);
+    return false;
+  }
   const g = state.trip.groups.find(isPlacesGroup) || addGroup(PLACES_LABEL);
   const status = opts.status || (opts.kind === "food" ? "🍴" : opts.kind === "shop" ? "🛍" : "🚶");
   addItem(g, composeWant({ status, name: text, lat: opts.lat ?? null, lon: opts.lon ?? null }), false);
@@ -276,6 +282,7 @@ function addPlace(text, opts = {}) {
     save(PARK_STORAGE, state.park);
     render();
   }
+  return true;
 }
 
 // 時刻順に並べる。時刻の無い行（ルートのメモなど）は直前の時刻つきの行にくっついて動く
