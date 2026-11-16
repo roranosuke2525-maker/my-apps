@@ -1,0 +1,41 @@
+# 検証用：CI用の長期トークンで、既存のClaude Codeクラウドセッションに追いメッセージを送れるか確かめる
+# 必要なシークレット（Settings → Secrets and variables → Actions）:
+#   CLAUDE_CODE_OAUTH_TOKEN … 私用PCで `claude setup-token` を実行して出たトークン
+#   TEST_SESSION_ID         … テスト用に作ったクラウドセッションのID（session_… または claude.ai/code/… のURL）
+# 実行方法：シークレット登録後、Actions タブでこのワークフローの最新実行を開き「Re-run jobs」
+name: cloud-send-test
+
+on:
+  push:
+    branches: [claude/cloud-send-test]
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code && claude --version
+
+      - name: Check secrets
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TEST_SESSION_ID: ${{ secrets.TEST_SESSION_ID }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] || [ -z "$TEST_SESSION_ID" ]; then
+            echo "::error::シークレット CLAUDE_CODE_OAUTH_TOKEN / TEST_SESSION_ID が未登録です"
+            exit 1
+          fi
+
+      - name: Send follow-up to existing cloud session
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TEST_SESSION_ID: ${{ secrets.TEST_SESSION_ID }}
+        run: |
+          claude -p "【GitHub Actionsからのテスト】このメッセージが届いたら「受信OK」とだけ返してください。" \
+            --cloud "$TEST_SESSION_ID" --output-format json
