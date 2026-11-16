@@ -1,0 +1,13 @@
+name = "gemini-art"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# 描いた絵の置き場（30日で消える）
+[[kv_namespaces]]
+binding = "IMAGES"
+id = "419a84ee7d4a421aab1f36ebea5b960b"
+
+# secret（wrangler secret put か Cloudflare のダッシュボードで入れる。ここには書かない）
+#   GEMINI_API_KEY … Google AI Studio の API キー
+#   MCP_PATH_TOKEN … コネクタ URL の合言葉（/mcp/<これ>）
+# モデルを変えたいときは [vars] に GEMINI_MODEL を足す（既定 gemini-2.5-flash-image）

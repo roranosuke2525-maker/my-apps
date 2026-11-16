@@ -306,13 +306,15 @@
       queryRows(DS.report, { sort: [{ property: "達成日", direction: "descending" }], limit: REPORT_LIMIT }),
     ]);
     return {
-      quests: quests.map((r) => {
+      quests: quests.filter((r) => !yes(r["受付終了"])).map((r) => {
+        const stages = splitStages(text(r["段階"]));
+        const repeat = yes(r["くりかえし"]);
+        const count = ids(r["記録"]).length; // 達成回数＝達成記録の数
         const q = {
           id: idOf(r.url), url: r.url, title: text(r["依頼"]) || "", category: text(r["カテゴリ"]), rank: text(r["ランク"]),
-          lv: num(r["受注Lv"]), exp: num(r["基本EXP"]), stages: splitStages(text(r["段階"])),
-          board: null, detour: null,
-          count: ids(r["記録"]).length, // 達成回数＝達成記録の数
-          totalExp: null, playerLv: null,
+          stages, repeat, requester: text(r["依頼人"]) || "", count,
+          board: null, detour: null, totalExp: null, playerLv: null,
+          ...questStage({ rank: text(r["ランク"]), repeat, stages, count, lines: text(r["依頼文"]) }),
         };
         knownQuests.set(q.id, q);
         return q;
@@ -327,6 +329,23 @@
 
   function splitStages(s) {
     return (s || "").split(/[｜|]/).map((x) => x.trim()).filter(Boolean);
+  }
+
+  // src/guild-config.js の questBoard と同じ決まり（Lv は分からないので open は出さない）
+  const RANKS = ["D", "C", "B", "A", "S"];
+  const RANK_NEED = { D: 1, C: 6, B: 12, A: 20, S: 30 };
+  const RANK_REWARD = { D: 40, C: 70, B: 110, A: 160, S: 220 };
+  function questStage({ rank, repeat, stages, count, lines }) {
+    const L = Math.max(1, stages.length);
+    const stage = repeat ? 0 : Math.min(count, L - 1);
+    const start = Math.max(0, RANKS.indexOf(rank));
+    const stageRank = RANKS[repeat ? start : Math.min(4, start + stage)];
+    const ls = String(lines || "").split("\n").map((x) => x.trim());
+    return {
+      stage, stageRank, need: RANK_NEED[stageRank], reward: RANK_REWARD[stageRank],
+      master: !repeat && stages.length > 0 && count >= L,
+      line: ls[Math.min(stage, Math.max(0, ls.length - 1))] || "",
+    };
   }
 
   async function createReport(body) {
@@ -357,14 +376,24 @@
     return c;
   }
 
+  // エピソード2 は「前の話のボスを倒したか（撃破日）」で開く
   async function getStories() {
     const rows = await queryRows(DS.story, { sort: [{ property: "じゅんばん", direction: "ascending" }] });
-    return { chapters: rows.map(summarizeChapter) };
+    let prevDefeated = null;
+    return { chapters: rows.map((r) => {
+      const c = summarizeChapter(r);
+      if (c.kind === "エピソード2") {
+        c.locked = prevDefeated === false;
+        prevDefeated = !!text(r["date:撃破日:start"]);
+      }
+      return c;
+    }) };
   }
 
   function chapterOf(id) {
     const c = knownChapters.get(id);
     if (!c) throw apiError(403, "読み込んだ章ではありません。「更新」してからやり直してください");
+    if (c.locked) throw apiError(403, "前の話のボスを倒すと読めます");
     return c;
   }
 
@@ -434,6 +463,9 @@
     if (p === "/api/party" && method === "GET") return getParty();
     if (p === "/api/guild" && method === "GET") return getGuild();
     if (p === "/api/guild/reports" && method === "POST") return createReport(body);
+    if (p.startsWith("/api/items")) throw apiError(501, "そうびは Cloudflare版だけで使えます");
+    if (p === "/api/battle") throw apiError(501, "ぼうけんは Cloudflare版だけで使えます（Notion の MCP では計算式の値が読めないため）");
+    if (p === "/api/aibou") throw apiError(501, "あいぼうは Cloudflare版だけで使えます（Notion の MCP では計算式の値が読めないため）");
     if (p === "/api/story" && method === "GET") return getStories();
     if (idMatch?.[1] === "story" && method === "GET") return getStory(idMatch[2].toLowerCase());
     if (idMatch?.[1] === "story" && method === "PATCH") return markStory(idMatch[2].toLowerCase(), body);
