@@ -835,6 +835,23 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .dtag.upd { background: color-mix(in srgb, var(--s-next) 25%, transparent); }
 .dtag.done { background: color-mix(in srgb, var(--s-done) 30%, transparent); }
 .search .sday { align-self: flex-start; }
+
+/* ---- v47：ニュース（興味度・★評価・📚送る） ---- */
+.nbar { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 12px 8px; flex: none; }
+.nbar::-webkit-scrollbar { display: none; }
+.nbar .qc { flex: none; white-space: nowrap; }
+.ni { font-size: 9px; letter-spacing: 1px; color: #e0a43c; }
+.ni i { font-style: normal; color: var(--line); }
+.nsent { font-size: 10.5px; padding: 1px 7px; border-radius: 8px; background: color-mix(in srgb, var(--s-done) 25%, transparent); }
+.nsrc .me { color: var(--ink); }
+.nsrc .ot { color: var(--mute); }
+.nsrc .nmore { font-size: 11.5px; padding: 2px 6px; color: var(--accent); background: none; }
+.nact { align-items: center; }
+.stars { display: inline-flex; gap: 1px; margin-right: 4px; }
+.stars .st { width: 28px; height: 28px; font-size: 18px; line-height: 1; color: var(--line); background: none; border-radius: 6px; }
+.stars .st.on { color: #e0a43c; }
+.nact .nsend.on { background: color-mix(in srgb, #e0b33c 22%, var(--card)); }
+.news.read .stars .st.on { color: #e0a43c; }
 </style>
 
 <div id="app">

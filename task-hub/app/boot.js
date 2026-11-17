@@ -122,6 +122,9 @@
     if (d.newshide) { S.newsHide = !S.newsHide; render(); return; }
     if (d.newsstate) { const k = d.newsstate.indexOf(":"); setNews(d.newsstate.slice(0, k).split(","), d.newsstate.slice(k + 1)); return; }
     if (d.newsopen) { openNews(d.newsopen); return; }
+    if (d.newssort) { S.newsSort = d.newssort; render(); return; }
+    if (d.newsrate) { const [id, k] = d.newsrate.split(":"); rateNews(id, +k); return; }
+    if (d.newssend) { sendNews(d.newssend); return; }
     if (onShopClick(d, el)) return;
     if (d.open) { openTask(d.open); }
   });
