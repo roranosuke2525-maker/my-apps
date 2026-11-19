@@ -852,6 +852,32 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .stars .st.on { color: #e0a43c; }
 .nact .nsend.on { background: color-mix(in srgb, #e0b33c 22%, var(--card)); }
 .news.read .stars .st.on { color: #e0a43c; }
+
+/* ---- v48：🛠 アプリ改善 ---- */
+.fxreq { display: flex; flex-direction: column; gap: 8px; }
+.fxreq textarea { width: 100%; box-sizing: border-box; border-radius: 12px; padding: 10px 12px; font: inherit; background: var(--sunk); color: var(--ink); border: 1px solid var(--line); resize: vertical; min-height: 72px; }
+.fxreq .btn { align-self: flex-end; min-width: 96px; }
+.fxc { padding: 12px; border-radius: 14px; background: var(--sunk); margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.fxh { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.fxh .qc { margin-left: auto; height: 26px; font-size: 11px; }
+.fxst { font-size: 11px; padding: 1px 8px; border-radius: 9px; background: var(--card); }
+.fxst[data-st="💡 提案中"], .fxst[data-st="👀 試し版"] { background: color-mix(in srgb, #e0a43c 25%, var(--card)); }
+.fxst[data-st="🚀 反映済み"] { background: color-mix(in srgb, var(--s-done) 30%, var(--card)); }
+.fxst[data-st="⚠️ できなかった"] { background: color-mix(in srgb, #e5675b 30%, var(--card)); }
+.fxn { font-size: 15px; line-height: 1.4; }
+.fxr { margin: 0; font-size: 13px; line-height: 1.6; }
+.fxb, .fxres { margin: 0; font-size: 12px; color: var(--mute); line-height: 1.6; }
+.fxseg { margin-top: 4px; }
+.fxmocks { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.fxmocks.both { grid-template-columns: 1fr 1fr; }
+.fxm { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fxm figcaption { font-size: 11px; color: var(--mute); }
+.fxm iframe { width: 100%; height: 300px; border: 1px solid var(--line); border-radius: 10px; background: #15171c; }
+.fxmocks.both .fxm iframe { width: 360px; height: 640px; zoom: .44; }
+.fxtodo { margin: 2px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; }
+.fxact { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.fxact .btn { flex: 1; min-width: 120px; text-align: center; text-decoration: none; }
+.fxhint { margin: 0; font-size: 11.5px; }
 </style>
 
 <div id="app">

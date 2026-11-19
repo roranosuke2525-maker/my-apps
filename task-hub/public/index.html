@@ -852,6 +852,32 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .stars .st.on { color: #e0a43c; }
 .nact .nsend.on { background: color-mix(in srgb, #e0b33c 22%, var(--card)); }
 .news.read .stars .st.on { color: #e0a43c; }
+
+/* ---- v48：🛠 アプリ改善 ---- */
+.fxreq { display: flex; flex-direction: column; gap: 8px; }
+.fxreq textarea { width: 100%; box-sizing: border-box; border-radius: 12px; padding: 10px 12px; font: inherit; background: var(--sunk); color: var(--ink); border: 1px solid var(--line); resize: vertical; min-height: 72px; }
+.fxreq .btn { align-self: flex-end; min-width: 96px; }
+.fxc { padding: 12px; border-radius: 14px; background: var(--sunk); margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.fxh { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.fxh .qc { margin-left: auto; height: 26px; font-size: 11px; }
+.fxst { font-size: 11px; padding: 1px 8px; border-radius: 9px; background: var(--card); }
+.fxst[data-st="💡 提案中"], .fxst[data-st="👀 試し版"] { background: color-mix(in srgb, #e0a43c 25%, var(--card)); }
+.fxst[data-st="🚀 反映済み"] { background: color-mix(in srgb, var(--s-done) 30%, var(--card)); }
+.fxst[data-st="⚠️ できなかった"] { background: color-mix(in srgb, #e5675b 30%, var(--card)); }
+.fxn { font-size: 15px; line-height: 1.4; }
+.fxr { margin: 0; font-size: 13px; line-height: 1.6; }
+.fxb, .fxres { margin: 0; font-size: 12px; color: var(--mute); line-height: 1.6; }
+.fxseg { margin-top: 4px; }
+.fxmocks { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.fxmocks.both { grid-template-columns: 1fr 1fr; }
+.fxm { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fxm figcaption { font-size: 11px; color: var(--mute); }
+.fxm iframe { width: 100%; height: 300px; border: 1px solid var(--line); border-radius: 10px; background: #15171c; }
+.fxmocks.both .fxm iframe { width: 360px; height: 640px; zoom: .44; }
+.fxtodo { margin: 2px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; }
+.fxact { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.fxact .btn { flex: 1; min-width: 120px; text-align: center; text-decoration: none; }
+.fxhint { margin: 0; font-size: 11.5px; }
 </style>
 
 <div id="app">
@@ -885,7 +911,8 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     diag: "a36bdfc4-617e-4eac-ad23-f01f9e256278", // DB_診断レポート
     log: "15f261e9-1452-4eed-917f-06dd8a13fea3", // DB_運用ログ
     goal: "15898cc5-118c-438e-b2b0-5f26f2f41978", // DB_目標
-    jour: "2eaf269b-813f-4f1f-a980-e57602b1f99d", // DB_ジャーナル（毎晩の振り返り。診断タブで読む）
+    jour: "2eaf269b-813f-4f1f-a980-e57602b1f99d",
+    fix: "41d62844-acbe-819b-95c4-000b096056bf", // DB_アプリ改善（改善案・文章の依頼。🛠 改善で判断する） // DB_ジャーナル（毎晩の振り返り。診断タブで読む）
     sug: "bceda4df-aaa1-409b-9bb3-93f7ba88fd90", // DB_AI提案（AIからの提案。採用／見送りはアプリで決める）
     news: "62ba6b9f-d216-49d8-96b2-cf2ce0e09cdd", // DB_ニュース
     daily: "53881991-7268-41b5-8954-2bc4b2bf1971", // DB_Daily（在庫・補充リスト）
@@ -1154,7 +1181,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour, fixes] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -1169,10 +1196,13 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
       // 毎晩のジャーナル（診断タブの「ひと目で」と詳細）
       rows(DS.jour, { sort: [{ property: "日付", direction: "descending" }], limit: 7 }),
+      // アプリの改善案と依頼（診断 › 改善）
+      rows(DS.fix, { sort: [{ property: "最終更新日時", direction: "descending" }], limit: 50 }),
     ]);
     if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
     if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
     if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
+    if (S.mode === "demo") { /* 見本はそのまま */ } else if (fixes.status === "fulfilled") { S.fixes = fixes.value.results.map(toFix); S.fixAt = Date.now(); S.fixErr = ""; } else S.fixErr = errText(fixes.reason);
     if (jour.status === "fulfilled") S.journal = jour.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]), date: r["date:日付:start"] || "", done: Number(r["終わったタスク数"]) || 0, ai: Number(r["AIとのやりとり数"]) || 0, note: text(r["ひとこと"]) })); else S.journalErr = errText(jour.reason);
 
     S.extraErr = {};
@@ -2225,9 +2255,10 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 
   // ================= 記録（診断・運用ログ・目標とプロジェクト） =================
   function renderLog(view) {
-    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["diag", "診断"], ["log", "運用ログ"], ["goal", "目標・PJ"], ["guide", "使い方"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
+    view.insertAdjacentHTML("beforeend", `<div class="seg">${[["diag", "診断"], ["fix", "🛠 改善"], ["log", "運用ログ"], ["goal", "目標・PJ"], ["guide", "使い方"]].map(([k, n]) => `<button type="button" data-logseg="${k}" aria-pressed="${S.logSeg === k}">${n}</button>`).join("")}</div>`);
     if (S.logSeg === "guide") return renderGuide(view);
     if (S.logSeg === "diag") return renderCheck(view);
+    if (S.logSeg === "fix") return renderFix(view);
     if (S.logSeg === "log") return renderOpsLog(view);
     return renderGoals(view);
   }
@@ -3701,7 +3732,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const s = seenAll(); const d = S.diag.at(-1); const j = S.journal?.[0];
     return [d && s.diag !== d.id ? "diag" : null, j && s.jour !== j.id ? "jour" : null].filter(Boolean);
   }
-  function checkBadge() { return S.mode === "loading" && !S.tasks.length ? 0 : unseenReports().length + openAsks().length; }
+  function checkBadge() { return S.mode === "loading" && !S.tasks.length ? 0 : unseenReports().length + openAsks().length + fixWaiting().length; }
   function checkCards() {
     const seen = seenAll(); const d = S.diag.at(-1); const prev = S.diag.at(-2); const j = S.journal?.[0];
     const checks = healthChecks(); const bad = checks.filter((c) => c.st === "red" || c.st === "yellow"); const red = checks.some((c) => c.st === "red");
@@ -3713,6 +3744,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       { k: "journal", icon: "📓", name: "ゆうべのジャーナル", sig: "info", main: j ? j.name : "まだありません", sub: j ? `済み ${j.done}件・AIとのやりとり ${j.ai}回${j.note ? "" : "・ひとこと未記入"}` : S.journalErr || "", unseen: !!j && seen.jour !== j.id },
       { k: "health", icon: "🏥", name: "いまの健康診断", sig: red ? "red" : bad.length ? "yellow" : "green", main: bad.length ? `直したい所 ${bad.length}つ` : "問題なし", sub: bad.map((c) => c.name).join("・") || "10項目すべて良好" },
       { k: "goal", icon: "🎯", name: "目標", sig: soon.length ? "yellow" : "info", main: `挑戦中 ${live.length}件`, sub: soon.length ? `期限30日以内：${soon.map((g) => short(g.name, 12)).join("・")}` : "毎月1日 8:10 に振り返り" },
+      { k: "fix", icon: "🛠", name: "アプリの改善", sig: fixWaiting().length ? "yellow" : "green", main: fixWaiting().length ? `${fixWaiting().length}件 判断待ち` : fixMoving().length ? `${fixMoving().length}件 進行中` : "なし", sub: fixWaiting().length ? fixWaiting().map((f) => short(f.name, 14)).join("・") : "文章で直しを頼めます", go: "fix", unseen: fixWaiting().some((f) => f.state === "💡 提案中") },
       { k: "sug", icon: "💡", name: "AIからの提案", sig: S.sugs.length ? "yellow" : "green", main: S.sugs.length ? `${S.sugs.length}件 待ち` : "なし", sub: S.sugs.length ? "採用か見送りを決める" : "毎朝 7:36 に届く", go: "concierge" },
     ];
   }
@@ -3723,7 +3755,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const j = S.journal?.[0]; const seen = seenAll();
     root.insertAdjacentHTML("afterbegin", `<section class="g-sec"><h3>ひと目で<small>色＝状態　赤い「新着」＝まだ見ていない</small></h3>
         <div class="ck-sum">${todo ? `<b>見ておくこと ${todo}件</b>　新着レポート ${unseen.length}・答えていない判断 ${asks.length}` : "<b>見落としはありません ✨</b>"}</div>
-        <div class="ck-glance">${cards.map((c) => `<button type="button" class="ckc ${c.sig}" ${c.go === "concierge" ? 'data-concierge="1"' : `data-dgo="${c.k}"`}>${c.unseen ? '<span class="new">新着</span>' : ""}<span class="h"><span class="ic">${c.icon}</span>${esc(c.name)}</span><b>${esc(c.main)}</b><small>${esc(c.sub || "")}</small></button>`).join("")}</div></section>
+        <div class="ck-glance">${cards.map((c) => `<button type="button" class="ckc ${c.sig}" ${c.go === "concierge" ? 'data-concierge="1"' : c.go === "fix" ? 'data-logseg="fix"' : `data-dgo="${c.k}"`}>${c.unseen ? '<span class="new">新着</span>' : ""}<span class="h"><span class="ic">${c.icon}</span>${esc(c.name)}</span><b>${esc(c.main)}</b><small>${esc(c.sub || "")}</small></button>`).join("")}</div></section>
       <section class="g-sec ck-sec" id="ck-asks"><h3>✋ 答えていない判断<small>診断・振り返りから出た宿題</small></h3><div class="ck-todo">${asks.length ? asks.map((t, i) => rowHtml(t, i, { check: false })).join("") : `<div class="empty">ありません</div>`}</div></section>
       <section class="g-sec ck-sec" id="ck-journal"><h3>📓 ゆうべのジャーナル<small>毎晩 20:53 に自動</small></h3><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "ジャーナルはまだありません")}</div>`}</div>
         ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 確認済み</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">確認した</button>`}</div>` : ""}</section>`);
@@ -3748,6 +3780,116 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       jourCache[j.id] = secs;
     } catch { jourCache[j.id] = []; }
     draw(jourCache[j.id]);
+  }
+  // ================= 🛠 アプリ改善：改善案（前後の見本つき）を判断し、文章で直しを頼む =================
+  // 記録は DB_アプリ改善。採用・依頼・本番に出す・元に戻す は状態を変えてから、定期実行「🛠 アプリ改善（実装）」を起こす
+  // （トークンが無ければ毎日 12:17・19:17 の見回りで動く）。実装・試し版・本番は Claude Code がする
+  const FIX_APP = "https://www.notion.so/40662844acbe81b98894fc88719d6ea8"; // DB_アプリ「今どこ」
+  const FX = { ST: { prop: "💡 提案中", ok: "✅ 採用", work: "🛠 実装中", try: "👀 試し版", ship: "🚀 本番待ち", done: "🚀 反映済み", skip: "⏭ 見送り", fail: "⚠️ できなかった", back: "↩ 戻す待ち", backed: "↩ 戻した" }, bodies: {}, view: {}, armed: "" };
+  const toFix = (r) => ({
+    id: idOf(r.url), url: r.url, name: text(r["名前"]) || "（無題）", kind: r["種類"] || "", state: r["状態"] || "", reason: text(r["理由"]), basis: text(r["根拠"]), result: text(r["結果"]),
+    preview: text(r["試し版URL"]), ver: text(r["版"]), pri: Number(r["優先"]) || 0, date: r["date:日付:start"] ? String(r["date:日付:start"]).slice(0, 10) : "", decided: r["date:決めた日:start"] ? String(r["date:決めた日:start"]).slice(0, 10) : "", edited: r["最終更新日時"] || r.createdTime || "",
+  });
+  const fixWaiting = () => (S.fixes || []).filter((f) => f.state === FX.ST.prop || f.state === FX.ST.try);
+  const fixMoving = () => (S.fixes || []).filter((f) => [FX.ST.ok, FX.ST.work, FX.ST.ship, FX.ST.back].includes(f.state));
+  // 本文の「## 今」「## 直した後」の html 見本と「## やること」を読む
+  function parseFixBody(raw) {
+    const sec = (h) => { const m = raw.match(new RegExp(`^#{1,3}\\s*${h}\\s*$([\\s\\S]*?)(?=^#{1,3}\\s|$(?![\\s\\S]))`, "m")); return m ? m[1] : ""; };
+    const code = (s) => { const m = s.match(/```(?:html)?\s*\n([\s\S]*?)```/); return m ? m[1] : ""; };
+    const todo = sec("やること").split("\n").map((l) => l.replace(/^\s*([-*+]|\d+[.)])\s*(\[[ x]\]\s*)?/, "").trim()).filter(Boolean).slice(0, 8);
+    return { before: code(sec("今")), after: code(sec("直した後")), todo };
+  }
+  async function loadFixBody(f) {
+    if (FX.bodies[f.id]) return;
+    FX.bodies[f.id] = { loading: true };
+    try { FX.bodies[f.id] = parseFixBody(S.mode === "demo" ? DEMO_FIX_BODY : await fetchBody(f.id)); } catch (err) { FX.bodies[f.id] = { err: errText(err) }; }
+    if (S.tab === "log" && S.logSeg === "fix" && $("#page").hidden) render();
+  }
+  // 見本は script を動かさない枠（sandbox）で、そのまま描く
+  const mock = (html, label) => `<figure class="fxm"><figcaption>${label}</figcaption><iframe sandbox="" loading="lazy" title="${label}の見本" srcdoc="${esc(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=360"><style>html,body{margin:0;background:#15171c;color:#e8e6e1;font:14px/1.5 -apple-system,"Hiragino Sans",sans-serif}</style>${html || "<p style='padding:16px;color:#8a8f98'>見本がありません</p>"}`)}"></iframe></figure>`;
+  function fixCard(f) {
+    const b = FX.bodies[f.id]; const v = FX.view[f.id] || "both";
+    const chip = `<span class="fxst" data-st="${esc(f.state)}">${esc(f.state)}</span>`;
+    const head = `<div class="fxh">${chip}<span class="mute">${f.kind === "✍️ 依頼" ? "✍️ 依頼" : "💡 改善案"}${f.date ? `・${md(f.date)}` : ""}</span><button type="button" class="qc" data-dany=":${f.id}">Notion</button></div><b class="fxn">${esc(f.name)}</b>`;
+    const why = `${f.reason ? `<p class="fxr">${esc(f.reason)}</p>` : ""}${f.basis ? `<p class="fxb">📊 ${esc(f.basis)}</p>` : ""}`;
+    let body = "";
+    if (f.state === FX.ST.prop) {
+      if (!b) loadFixBody(f);
+      const mocks = !b || b.loading ? `<div class="mute fxload">見本を読みこみ中…</div>` : b.err ? `<div class="mute">${esc(b.err)}</div>`
+        : `<div class="seg fxseg">${[["before", "今"], ["after", "直した後"], ["both", "並べる"]].map(([k, n]) => `<button type="button" data-fxview="${f.id}:${k}" aria-pressed="${v === k}">${n}</button>`).join("")}</div><div class="fxmocks ${v}">${v !== "after" ? mock(b.before, "今") : ""}${v !== "before" ? mock(b.after, "直した後") : ""}</div>${b.todo?.length ? `<ul class="fxtodo">${b.todo.map((t) => `<li>${inline(t)}</li>`).join("")}</ul>` : ""}`;
+      body = `${mocks}<div class="fxact"><button type="button" class="btn pri" data-fxset="${f.id}:ok">採用して作ってもらう</button><button type="button" class="btn" data-fxset="${f.id}:skip">見送り</button></div>`;
+    } else if (f.state === FX.ST.try) {
+      body = `${f.result ? `<p class="fxres">🛠 ${esc(f.result)}</p>` : ""}<div class="fxact">${f.preview ? `<a class="btn" href="${esc(f.preview)}" target="_blank" rel="noopener">👀 試し版を開く</a>` : ""}<button type="button" class="btn pri" data-fxset="${f.id}:ship">本番に出す</button><button type="button" class="btn" data-fxset="${f.id}:skip">やめる</button></div><p class="mute fxhint">試し版は別のアドレスなので、開くと合言葉をもう一度聞かれます</p>`;
+    } else if (f.state === FX.ST.done) {
+      body = `${f.result ? `<p class="fxres">🛠 ${esc(f.result)}</p>` : ""}<div class="fxact"><button type="button" class="btn${FX.armed === f.id ? " danger" : ""}" data-fxset="${f.id}:back">${FX.armed === f.id ? "もう一度押すと元に戻す" : "↩ 元に戻す"}</button></div>`;
+    } else if ([FX.ST.ok, FX.ST.work, FX.ST.ship, FX.ST.back].includes(f.state)) {
+      body = `<p class="mute fxhint">${f.state === FX.ST.work ? "Claude Code が作っています" : "順番待ち"}（ボタンで起こせないときは、毎日 12:17・19:17 の見回りで動きます）</p>`;
+    } else if (f.result) body = `<p class="fxres">${esc(f.result)}</p>`;
+    return `<article class="fxc" data-fx="${f.id}">${head}${why}${body}</article>`;
+  }
+  function renderFix(view) {
+    if (!S.fixAt && !S.fixLoading && S.mode !== "loading") loadFixes();
+    const all = S.fixes || []; const wait = fixWaiting(); const moving = fixMoving();
+    const past = all.filter((f) => !wait.includes(f) && !moving.includes(f));
+    view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="scroll" id="fixbox">
+      <section class="g-sec"><h3>✍️ 文章で直してもらう<small>送るとすぐ Claude Code が作り、試し版ができます</small></h3>
+        <div class="fxreq"><textarea id="fxtext" rows="3" placeholder="例：ニュースの★をもう少し大きくして／今日タブの一番上に天気を出して">${esc(S.fixDraft || "")}</textarea><button type="button" class="btn pri" data-fxreq="1">送る</button></div></section>
+      <section class="g-sec"><h3>🧑‍⚖️ 判断を待っている<small>${wait.length}件</small></h3>${wait.map(fixCard).join("") || `<div class="empty">${S.fixLoading ? "読みこみ中…" : S.fixErr ? esc(S.fixErr) : "今はありません。改善案は毎週月曜 8:07 に届きます"}</div>`}</section>
+      ${moving.length ? `<section class="g-sec"><h3>🛠 進んでいる<small>${moving.length}件</small></h3>${moving.map(fixCard).join("")}</section>` : ""}
+      ${past.length ? `<section class="g-sec"><h3>これまで<small>${past.length}件</small></h3>${past.slice(0, 20).map(fixCard).join("")}</section>` : ""}
+    </div></div>`);
+    const ta = $("#fxtext"); if (ta) ta.oninput = () => { S.fixDraft = ta.value; };
+  }
+  async function loadFixes() {
+    if (S.mode === "demo") { if (!S.fixes) demoFixes(); return; }
+    S.fixLoading = true;
+    try { const r = await rows(DS.fix, { sort: [{ property: "最終更新日時", direction: "descending" }], limit: 50 }); S.fixes = r.results.map(toFix); S.fixErr = ""; S.fixAt = Date.now(); }
+    catch (err) { S.fixErr = errText(err); }
+    S.fixLoading = false;
+    if (S.tab === "log" && $("#page").hidden) render();
+  }
+  // 定期実行を起こす（設定が無ければ見回りに任せる）
+  async function kickFix() {
+    if (S.mode === "demo" || VIA !== "api") return "見回り（12:17・19:17）で動きます";
+    try {
+      const r = await fetch("/api/run", { method: "POST", headers: { Authorization: `Bearer ${store.get("key") || ""}`, "Content-Type": "application/json" }, body: JSON.stringify({ which: "fix" }) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || r.status);
+      return "Claude Code を呼びました（数分〜十数分）";
+    } catch { return "すぐには呼べませんでした。12:17・19:17 の見回りで動きます"; }
+  }
+  const FX_ACT = { ok: ["✅ 採用", "採用しました"], skip: ["⏭ 見送り", "見送りました"], ship: ["🚀 本番待ち", "本番に出すよう頼みました"], back: ["↩ 戻す待ち", "元に戻すよう頼みました"] };
+  async function setFix(id, act) {
+    const f = (S.fixes || []).find((x) => x.id === id); if (!f || !FX_ACT[act]) return;
+    if (act === "back" && FX.armed !== id) { FX.armed = id; render(); setTimeout(() => { if (FX.armed === id) { FX.armed = ""; render(); } }, 4000); return; }
+    FX.armed = "";
+    const [state, msg] = FX_ACT[act]; const before = f.state; f.state = state; f.decided = TODAY(); render();
+    try {
+      if (S.mode !== "demo") await call("update", { page_id: f.id, command: "update_properties", properties: { "状態": state, "date:決めた日:start": TODAY(), "date:決めた日:is_datetime": 0 }, allow_async: false }, { read: false });
+      toast(act === "skip" ? msg : `${msg}。${await kickFix()}`);
+    } catch (err) { f.state = before; render(); toast(`変えられませんでした：${errText(err)}`); }
+  }
+  async function sendFixRequest() {
+    const t = ($("#fxtext")?.value || "").trim(); if (!t) { toast("直してほしいことを書いてください"); return; }
+    if (t.length > 2000) { toast("2000字までにしてください"); return; }
+    const name = t.replace(/\s+/g, " ").slice(0, 30);
+    const props = { "名前": name, "種類": "✍️ 依頼", "状態": FX.ST.ok, "理由": t, "date:日付:start": TODAY(), "date:日付:is_datetime": 0, "アプリ": [FIX_APP] };
+    const row = { id: "", url: "", name, kind: "✍️ 依頼", state: FX.ST.ok, reason: t, basis: "", result: "", preview: "", ver: "", pri: 0, date: TODAY(), decided: "" };
+    try {
+      if (S.mode !== "demo") { const res = await call("create", { parent: { type: "data_source_id", data_source_id: DS.fix }, pages: [{ properties: props }], allow_async: false }, { read: false }); const pg = (res.pages || [])[0] || {}; row.url = pg.url || ""; row.id = String(pg.id || "").replace(/-/g, ""); }
+      else row.id = `f${String(Date.now()).padStart(31, "0")}`;
+      S.fixes = [row, ...(S.fixes || [])]; S.fixDraft = ""; render();
+      toast(`依頼しました。${await kickFix()}`);
+    } catch (err) { toast(`送れませんでした：${errText(err)}`); }
+  }
+  const DEMO_FIX_BODY = "## 今\n\n```html\n<div style=\"padding:12px\"><div style=\"font-weight:700;margin-bottom:8px\">今日</div><div style=\"padding:10px;border-radius:10px;background:#1e2128;margin-bottom:6px\">（例）資源ごみを出す</div><div style=\"padding:10px;border-radius:10px;background:#1e2128;margin-bottom:6px\">（例）家計の振込</div><div style=\"color:#8a8f98;font-size:12px;margin-top:40px\">▼ 次にやる から足す（一番下・たたまれている）</div></div>\n```\n\n## 直した後\n\n```html\n<div style=\"padding:12px\"><div style=\"padding:10px 12px;border-radius:12px;background:#2a2417;color:#e0a43c;font-weight:700;margin-bottom:10px\">＋ 次にやるから今日を選ぶ（12件）</div><div style=\"font-weight:700;margin-bottom:8px\">今日</div><div style=\"padding:10px;border-radius:10px;background:#1e2128;margin-bottom:6px\">（例）資源ごみを出す</div><div style=\"padding:10px;border-radius:10px;background:#1e2128\">（例）家計の振込</div></div>\n```\n\n## やること\n\n- 今日タブの一番上に「次にやるから今日を選ぶ」ボタンを置く\n- 押すと次にやるが一覧で出て、まとめて選べる\n- 一番下の「次にやる から足す」は残す";
+  function demoFixes() {
+    const d = TODAY();
+    S.fixes = [
+      { id: "f1".padEnd(32, "0"), url: "https://www.notion.so/", name: "（例）今日タブの一番上に「今日を選ぶ」を置く", kind: "💡 改善案", state: FX.ST.prop, reason: "次にやるを開かないまま1日が終わる日が続いています。今日タブから直接選べるようにします。", basis: "（例）この7日で今日タブから次にやるを開いたのは1回・今日やるの完了率 35%", result: "", preview: "", ver: "", pri: 80, date: d, decided: "" },
+      { id: "f2".padEnd(32, "0"), url: "https://www.notion.so/", name: "（例）ニュースの★を大きく", kind: "✍️ 依頼", state: FX.ST.try, reason: "ニュースの★をもう少し大きくして", basis: "", result: "（例）★を 28px→36px にし、押せる範囲を広げた", preview: "https://example.com", ver: "", pri: 0, date: addDays(d, -1), decided: addDays(d, -1) },
+      { id: "f3".padEnd(32, "0"), url: "https://www.notion.so/", name: "（例）診断タブにひと目でカード", kind: "💡 改善案", state: FX.ST.done, reason: "", basis: "", result: "（例）6枚のカードと新着の印を足した", preview: "", ver: "", pri: 0, date: addDays(d, -7), decided: addDays(d, -6) },
+    ];
+    S.fixAt = Date.now();
   }
   // ================= 今日を選ぶ：次にやるを一覧で見て、まとめて選んで1回で今日に入れる =================
   const PK = { sel: new Set(), f: "rec", keep: false };
@@ -3987,6 +4129,9 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.fxset) { const [id, a] = d.fxset.split(":"); setFix(id, a); return; }
+    if (d.fxview) { const [id, v] = d.fxview.split(":"); FX.view[id] = v; render(); return; }
+    if (d.fxreq) { sendFixRequest(); return; }
     if (d.dayview) { closeModal(); openDayView(TODAY()); return; }
     if (d.dvstep) { dayStep(+d.dvstep); return; }
     if (d.dvtoday) { DV.d = TODAY(); drawDay(); askDay(); return; }
@@ -4176,6 +4321,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       { id: P3, url: "https://www.notion.so/" + P3, name: "（例）タスクアプリ", status: "⏸ 保留", step: "UI案を決める", now: "", total: 4 },
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
+    demoFixes();
     S.journal = [{ id: "8".repeat(32), url: "https://www.notion.so/", name: `（例）${md(addDays(d, -1))} のジャーナル`, date: addDays(d, -1), done: 4, ai: 3, note: "" }];
     S.tasks.push(mk("タスク診断⑥：次にやるを10件決める＋判断に答える", ST.next, { tag: "AI", waku: "💻 PC", w: "M", next: "判断してほしいことに答える", age: 9 }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));

@@ -33,7 +33,7 @@ export default {
         const body = await readJson(request);
         return json(await runTool(notionClient(env), body.tool, body.input || {}));
       }
-      if (url.pathname === "/api/run" && request.method === "POST") { const body = await request.json().catch(() => ({})); return json(await fireRoutine(env, body?.which === "suggest" ? "suggest" : "research")); }
+      if (url.pathname === "/api/run" && request.method === "POST") { const body = await request.json().catch(() => ({})); return json(await fireRoutine(env, ["suggest", "fix"].includes(body?.which) ? body.which : "research")); }
       return json({ error: "not found" }, 404);
     } catch (err) {
       return json({ error: err.publicMessage || "サーバーでエラーが起きました", code: err.code || "server_error" }, err.status || 500);
@@ -46,20 +46,26 @@ export default {
 // ROUTINE_ID（vars）：定期実行の ID（trig_…）。トークンはその定期実行だけを起動できる
 const ROUTINE_BASE = "https://api.anthropic.com/v1/claude_code/routines";
 // which："research"＝AIリサーチ定時処理（ROUTINE_ID / ROUTINE_TOKEN）、"suggest"＝💡 タスクの提案（SUGGEST_ROUTINE_ID / SUGGEST_ROUTINE_TOKEN）
+// "fix"＝🛠 アプリ改善（実装）（FIX_ROUTINE_ID / FIX_ROUTINE_TOKEN）。送る文は決まった1文だけ（画面からの文章は Notion を通して渡す）
+const ROUTINES = {
+  research: { id: "ROUTINE_ID", token: "ROUTINE_TOKEN", text: "今どこアプリの「今すぐ実行」から起動", none: "今すぐ実行の設定（ROUTINE_TOKEN / ROUTINE_ID）がありません。README の「今すぐ実行」を見てください" },
+  suggest: { id: "SUGGEST_ROUTINE_ID", token: "SUGGEST_ROUTINE_TOKEN", text: "今どこアプリの「今すぐ提案してもらう」から起動", none: "「今すぐ提案」の設定（SUGGEST_ROUTINE_TOKEN / SUGGEST_ROUTINE_ID）がありません。README の「今すぐ実行」を見てください" },
+  fix: { id: "FIX_ROUTINE_ID", token: "FIX_ROUTINE_TOKEN", text: "今どこアプリの「🛠 改善」から起動（DB_アプリ改善の ✅ 採用・🚀 本番待ち・↩ 戻す待ち を処理）", none: "「🛠 改善」の設定（FIX_ROUTINE_TOKEN / FIX_ROUTINE_ID）がありません。12:17・19:17 の見回りで動きます" },
+};
 export async function fireRoutine(env, which = "research") {
-  const sug = which === "suggest";
-  const id = String((sug ? env.SUGGEST_ROUTINE_ID : env.ROUTINE_ID) || ""); const token = sug ? env.SUGGEST_ROUTINE_TOKEN : env.ROUTINE_TOKEN;
-  if (!token || !/^trig_[A-Za-z0-9]+$/.test(id)) throw httpError(500, sug ? "「今すぐ提案」の設定（SUGGEST_ROUTINE_TOKEN / SUGGEST_ROUTINE_ID）がありません。README の「今すぐ実行」を見てください" : "今すぐ実行の設定（ROUTINE_TOKEN / ROUTINE_ID）がありません。README の「今すぐ実行」を見てください", "no_routine");
+  const R = ROUTINES[which] || ROUTINES.research; const sug = which === "suggest";
+  const id = String(env[R.id] || ""); const token = env[R.token];
+  if (!token || !/^trig_[A-Za-z0-9]+$/.test(id)) throw httpError(500, R.none, "no_routine");
   const res = await fetch(`${env.ROUTINE_API_BASE || ROUTINE_BASE}/${id}/fire`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "anthropic-beta": "experimental-cc-routine-2026-04-01", "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({ text: sug ? "今どこアプリの「今すぐ提案してもらう」から起動" : "今どこアプリの「今すぐ実行」から起動" }),
+    body: JSON.stringify({ text: R.text }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = res.status === 401 || res.status === 403 ? "定期実行のトークンが正しくありません（作り直して ROUTINE_TOKEN を入れ直す）"
       : res.status === 429 ? "今すぐ実行は1時間に30回までです。少し待ってください"
-      : res.status === 404 ? `定期実行が見つかりません（${sug ? "SUGGEST_ROUTINE_ID" : "ROUTINE_ID"} を確かめる）`
+      : res.status === 404 ? `定期実行が見つかりません（${R.id} を確かめる）`
       : `定期実行を起動できませんでした（${res.status}）`;
     throw httpError(res.status === 429 ? 429 : 502, msg, res.status === 429 ? "rate_limited" : "run_error");
   }

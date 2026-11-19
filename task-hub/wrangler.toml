@@ -2,13 +2,15 @@ name = "imadoko"
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
-preview_urls = false
+preview_urls = true
 
 [vars]
 # 「今すぐ実行」で起動する定期実行（Notion AIリサーチ定時処理）。ID は秘密ではない。トークンは secret の ROUTINE_TOKEN
 ROUTINE_ID = "trig_011VhxqJwREyytrHWR4Kev1z"
 # 「💡 今すぐ提案してもらう」で起動する定期実行（💡 タスクの提案）。トークンは secret の SUGGEST_ROUTINE_TOKEN
 SUGGEST_ROUTINE_ID = "trig_014THA8ShQcytYeEempVGMq9"
+# 「🛠 改善」の採用・依頼・本番に出す・元に戻すで起動する定期実行（🛠 アプリ改善（実装））。トークンは secret の FIX_ROUTINE_TOKEN
+FIX_ROUTINE_ID = "trig_01JvzzBxdPxYg8krfTCkGDp9"
 
 [assets]
 directory = "./public"

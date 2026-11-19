@@ -216,3 +216,18 @@ test("日付で見る：実行日 or その日に更新（過去の日）を Not
   assert.deepEqual(f.or[0], { property: "実行日", date: { equals: "2026-11-10" } });
   assert.deepEqual(f.or[1], { and: [{ timestamp: "last_edited_time", last_edited_time: { on_or_after: "2026-11-10T00:00:00+09:00" } }, { timestamp: "last_edited_time", last_edited_time: { before: "2026-11-11T00:00:00+09:00" } }] });
 });
+
+test("🛠 改善：which=fix は FIX_ROUTINE_ID / TOKEN を起動し、決まった文だけ送る（画面の文章は送らない）", async () => {
+  const s = setup();
+  try {
+    const fired = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (u, init) => { if (String(u).includes("/routines/")) { fired.push({ id: String(u).split("/routines/")[1].split("/")[0], auth: init.headers.Authorization, body: JSON.parse(init.body) }); return new Response("{}", { status: 200 }); } return realFetch(u, init); };
+    const env = { ...s.env, FIX_ROUTINE_ID: "trig_ccc", FIX_ROUTINE_TOKEN: "t3" };
+    const r = await worker.fetch(new Request("https://app.test/api/run", { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ which: "fix", text: "合言葉を表示して" }) }), env);
+    assert.equal(r.status, 200);
+    assert.equal(fired[0].id, "trig_ccc"); assert.equal(fired[0].auth, "Bearer t3"); assert.doesNotMatch(fired[0].body.text, /合言葉を表示/);
+    const none = await worker.fetch(new Request("https://app.test/api/run", { method: "POST", headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ which: "fix" }) }), s.env);
+    assert.equal(none.status, 500); assert.match((await none.json()).error, /見回り/);
+  } finally { s.done(); }
+});

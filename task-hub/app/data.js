@@ -207,7 +207,7 @@
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour, fixes] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -222,10 +222,13 @@
       rows(DS.sug, { filters: [{ type: "property", property: "状態", propertyType: "select", operator: "enum_is", value: { type: "exact", value: "💡 提案中" } }], sort: [{ property: "優先", direction: "descending" }], limit: 30 }),
       // 毎晩のジャーナル（診断タブの「ひと目で」と詳細）
       rows(DS.jour, { sort: [{ property: "日付", direction: "descending" }], limit: 7 }),
+      // アプリの改善案と依頼（診断 › 改善）
+      rows(DS.fix, { sort: [{ property: "最終更新日時", direction: "descending" }], limit: 50 }),
     ]);
     if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
     if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
     if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
+    if (S.mode === "demo") { /* 見本はそのまま */ } else if (fixes.status === "fulfilled") { S.fixes = fixes.value.results.map(toFix); S.fixAt = Date.now(); S.fixErr = ""; } else S.fixErr = errText(fixes.reason);
     if (jour.status === "fulfilled") S.journal = jour.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]), date: r["date:日付:start"] || "", done: Number(r["終わったタスク数"]) || 0, ai: Number(r["AIとのやりとり数"]) || 0, note: text(r["ひとこと"]) })); else S.journalErr = errText(jour.reason);
 
     S.extraErr = {};
