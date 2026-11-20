@@ -8,7 +8,7 @@
 | フォルダ | 名前 | 形 |
 | --- | --- | --- |
 | `habit-check/` | 習慣チェック | Worker＋Notion API（アーティファクト版も） |
-| `ikuji-hub/` | 育児ハブ | アーティファクト版（MCP）のみ |
+| `ikuji-hub/` | 育児ハブ | Worker＋Notion API（アーティファクト版も） |
 | `shiori/` | しおり | Worker＋Notion API |
 | `task-hub/` | 今どこ | Worker＋Notion API（アーティファクト版も）。画面は `app/` を `scripts/build.mjs` でまとめる |
 | `trip-shiori/` | 旅のしおり | Worker＋Notion API（PWA・圏外対応） |
