@@ -66,6 +66,12 @@
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.hlpick) { setHighlight(d.hlpick); return; }
+    if (d.hlclear) { clearHighlight(d.hlclear); return; }
+    if (d.review) { openReview(); return; }
+    if (d.rvpick) { reviewPick(d.rvpick); return; }
+    if (d.rvok) { reviewCommit(); return; }
+    if (d.rvsome) { const t = known.get(d.rvsome); if (t) applyQuick(t, "s:some").then(drawReview); return; }
     if (d.fxset) { const [id, a] = d.fxset.split(":"); setFix(id, a); return; }
     if (d.fxview) { const [id, v] = d.fxview.split(":"); FX.view[id] = v; render(); return; }
     if (d.fxreq) { sendFixRequest(); return; }
@@ -259,6 +265,8 @@
     ];
     S.diag = [[1, .2, 25, 47, "3件選ぶのが億劫"], [2, .49, 49, 92, "特に壊れない"], [3, .31, 56, 109, "3件選ぶのが億劫"], [4, .35, 28, 88, "3件選ぶのが億劫"]].map(([no, rate, done, inflow, verdict]) => ({ id: `${"9".repeat(31)}${no}`, url: "https://www.notion.so/", name: `（例）診断レポート 第${no}回`, no, rate, done, inflow, verdict, next: "（例）朝は今日やるを生活の1件だけにする", from: addDays(d, -7 * (5 - no)), to: addDays(d, -7 * (4 - no)) }));
     demoFixes();
+    S.tasks.filter((t) => /ペグボード|保険の住所/.test(t.name)).forEach((t) => { t.focus = "__YES__"; });
+    S.focusSugs = [{ id: "a9".repeat(16), url: "https://www.notion.so/", name: "（例）重点候補", kind: "⭐ 重点候補", reason: "（例）2週間止まっていて、目標「家計を整える」につながります", op: null, pri: 80, date: d, taskIds: [S.tasks.find((t) => /家計の振込/.test(t.name))?.id].filter(Boolean), goalIds: [] }];
     S.journal = [{ id: "8".repeat(32), url: "https://www.notion.so/", name: `（例）${md(addDays(d, -1))} のジャーナル`, date: addDays(d, -1), done: 4, ai: 3, note: "" }];
     S.tasks.push(mk("タスク診断⑥：次にやるを10件決める＋判断に答える", ST.next, { tag: "AI", waku: "💻 PC", w: "M", next: "判断してほしいことに答える", age: 9 }));
     S.logs = [["定期実行", "（例）AIリサーチ定時処理", "🔍 2件・💬 1件"], ["定期実行", "（例）ジャーナル作成", "終わった12件"], ["仕組み変更", "（例）SOMEDAYの見直し日をなしに", "AI一括処理・運用マップを更新"], ["定期実行", "（例）朝のニュース収集", "25件"], ["定期実行", "（例）AIリサーチ定時処理", "対象なし"], ["仕組み変更", "（例）DB_アプリを新設", ""], ["定期実行", "（例）タスク運用診断", "第4回"]].map(([event, name, body], i) => ({ id: `${"8".repeat(31)}${i}`, url: "https://www.notion.so/", event, name, body, at: new Date(Date.now() - i * 3600e3 * 5).toISOString() }));

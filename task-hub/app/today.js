@@ -15,6 +15,7 @@
         ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま やっている" : "まず これ"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
       </div>
       ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 更新できていません（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示）　↻ もう一度</button>` : ""}
+      ${focusCardHtml()}
       ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>提案</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
       ${inStage("next").length ? `<button type="button" class="pickbar" data-pickday="1"><span class="ic">＋</span><span class="tx"><b>次にやるから今日を選ぶ</b><small>${inStage("next").length}件から・まとめて選んで1回で入れる</small></span><i>›</i></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);

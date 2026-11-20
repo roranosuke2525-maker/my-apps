@@ -137,6 +137,7 @@
       parent: (list(r["親タスク"]) || []).map(idOf).filter(Boolean),
       read: r["📖 すぐ読む"] === "__YES__" || r["📖 すぐ読む"] === true ? "__YES__" : "__NO__",
       goals: (list(r["関連目標"]) || []).map(idOf).filter(Boolean),
+      focus: r["⭐ 重点"] === "__YES__" || r["⭐ 重点"] === true ? "__YES__" : "__NO__", hl: r["date:🎯 ハイライト:start"] ? String(r["date:🎯 ハイライト:start"]).slice(0, 10) : null,
       kind: r["買い物の区分"] || null, price: r["価格"] == null || r["価格"] === "" ? null : Number(r["価格"]),
     };
     known.set(t.id, t);
@@ -207,7 +208,7 @@
       total: (list(r["タスク"]) || []).length, edited: r["最終更新"] || null,
     }));
     // 診断・運用ログ・目標・在庫は、読めなくてもタスクの画面は出す
-    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour, fixes] = await Promise.allSettled([
+    const [diag, logs, goals, stock, apps, refills, bought, cfg, sugs, jour, fixes, focusAll] = await Promise.allSettled([
       rows(DS.diag, { sort: [{ property: "回", direction: "descending" }], limit: 20 }),
       rows(DS.log, { sort: [{ property: "日時", direction: "descending" }], limit: 60 }),
       rows(DS.goal, { limit: 100 }),
@@ -224,10 +225,13 @@
       rows(DS.jour, { sort: [{ property: "日付", direction: "descending" }], limit: 7 }),
       // アプリの改善案と依頼（診断 › 改善）
       rows(DS.fix, { sort: [{ property: "最終更新日時", direction: "descending" }], limit: 50 }),
+      // ⭐ 今週の重点（済んだものも。週の見直しで結果を見る）
+      rows(DS.task, { filters: [{ type: "property", property: "⭐ 重点", propertyType: "checkbox", operator: "checkbox_is", value: { type: "exact", value: true } }], limit: 20 }),
     ]);
     if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
     if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
-    if (sugs.status === "fulfilled") S.sugs = sugs.value.results.map(toSug).filter(Boolean); else S.extraErr.sug = errText(sugs.reason);
+    if (sugs.status === "fulfilled") { const all = sugs.value.results.map(toSug).filter(Boolean); S.focusSugs = all.filter((s) => s.kind === "⭐ 重点候補"); S.sugs = all.filter((s) => s.kind !== "⭐ 重点候補"); } else S.extraErr.sug = errText(sugs.reason);
+    if (focusAll.status === "fulfilled" && S.mode !== "demo") S.focusAll = focusAll.value.results.map(toTask).filter((t) => t.focus === "__YES__");
     if (S.mode === "demo") { /* 見本はそのまま */ } else if (fixes.status === "fulfilled") { S.fixes = fixes.value.results.map(toFix); S.fixAt = Date.now(); S.fixErr = ""; } else S.fixErr = errText(fixes.reason);
     if (jour.status === "fulfilled") S.journal = jour.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]), date: r["date:日付:start"] || "", done: Number(r["終わったタスク数"]) || 0, ai: Number(r["AIとのやりとり数"]) || 0, note: text(r["ひとこと"]) })); else S.journalErr = errText(jour.reason);
 
