@@ -909,10 +909,21 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .rvn { font-family: var(--f-num); font-size: 12px; padding: 1px 8px; border-radius: 9px; background: var(--sunk); }
 .rvn.full { background: color-mix(in srgb, #e0a43c 30%, var(--card)); }
 .rvq { width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--sunk); color: var(--ink); font: inherit; }
+
+/* ---- v50：🔔 お知らせ ---- */
+#alertbadge.red { background: #e5675b; }
+.al { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; padding: 0 10px; }
+.allist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.alc { padding: 10px 12px; border-radius: 12px; background: var(--sunk); border-left: 4px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.alc.red { border-left-color: #e5675b; } .alc.yellow { border-left-color: #e0b33c; } .alc.info { border-left-color: var(--s-next); }
+.alc.seen { opacity: .7; }
+.alh { display: flex; align-items: center; gap: 8px; } .alh .ic { font-size: 16px; } .alh b { font-size: 14px; line-height: 1.4; }
+.alc p { margin: 0; font-size: 12.5px; color: var(--mute); line-height: 1.5; }
+.alc .qc { align-self: flex-start; }
 </style>
 
 <div id="app">
-  <header class="top"><div class="ttl"><button type="button" class="date" id="date" data-dayview="1" aria-label="日付で見る（その日に更新・実行日のタスク）"></button><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
+  <header class="top"><div class="ttl"><button type="button" class="date" id="date" data-dayview="1" aria-label="日付で見る（その日に更新・実行日のタスク）"></button><h1>今どこ</h1></div><span class="sync" id="sync"><i></i><span id="synct">読みこみ中</span></span><button type="button" class="iconbtn" id="find" data-search="1" aria-label="タスクを探す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button><button type="button" class="iconbtn" id="bell" data-alerts="1" aria-label="お知らせ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><span class="badge" id="alertbadge" hidden></span></button><button type="button" class="iconbtn" id="tips" data-concierge="1" aria-label="提案"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span class="badge" id="tipsbadge" hidden></span></button><button type="button" class="iconbtn" id="reload" aria-label="最新にする">↻</button></header>
   <main id="main"></main>
   <nav class="tabs" aria-label="画面">
     <button type="button" data-tab="today" title="今日"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>今日</span></button>

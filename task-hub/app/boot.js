@@ -4,6 +4,7 @@
     for (const b of document.querySelectorAll("nav [data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === S.tab || (b.dataset.tab === "more" && inMore(S.tab))));
     const mb = $("#morebadge"); if (mb) { const n = MORE.reduce((a, [, , , f]) => a + (f() ? 1 : 0), 0); mb.hidden = !n; }
     const mine = myTurn().length; const bd = $("#aibadge"); bd.hidden = !mine; bd.textContent = mine;
+    alertBadge();
     const dgb = $("#diagbadge"); if (dgb) { const n = checkBadge(); dgb.hidden = !n; dgb.textContent = n; }
     const sv = $("#savebadge"); if (sv) { const n = saveAlerts(); sv.hidden = !n; sv.textContent = n; }
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
@@ -66,6 +67,9 @@
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.alerts) { openAlerts(); return; }
+    if (d.alertgo) { alertGo(d.alertgo); return; }
+    if (d.alertok) { alertsSeenAll(); closeModal(); toast("確認しました（今日は同じお知らせを自動では出しません）"); return; }
     if (d.hlpick) { setHighlight(d.hlpick); return; }
     if (d.hlclear) { clearHighlight(d.hlclear); return; }
     if (d.review) { openReview(); return; }
@@ -311,7 +315,7 @@
   // ウィジェット・Claude のリンク（/p/<id> → #open=<id>）から：そのページを開く（render が # をタブ名に書き換える前に読む）
   const openAt = (location.hash.match(/^#open=([0-9a-f]{32})$/) || [])[1];
   render();
-  Promise.resolve(load()).then(() => { if (openAt) openAny(openAt); });
+  Promise.resolve(load()).then(() => { if (openAt) openAny(openAt); else setTimeout(maybeAlert, 600); });
   window.__imadoko = { S, ST, stageOf, render, parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
 })();
 </script>
