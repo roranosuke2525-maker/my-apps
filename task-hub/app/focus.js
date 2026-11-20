@@ -10,18 +10,14 @@
   const hlTask = () => [...S.tasks, ...S.doneToday].find((t) => t.hl === TODAY()) || null;
   const weekStart = (d = TODAY()) => addDays(d, -((dow(d) + 6) % 7)); // 月曜はじまり
   const reviewDue = () => { const last = store.get("review") || ""; const d = TODAY(); return (dow(d) === 0 || dow(d) === 1) && last < addDays(weekStart(d), -1) || !focusList().some(isOpenT); };
+  // 今日タブの上に出す細い帯（今日のタスクを隠さないよう1〜2行に収める）
   function focusCardHtml() {
     if (S.mode === "loading" && !S.tasks.length) return "";
-    const hl = hlTask(); const focus = focusList(); const open = focus.filter(isOpenT);
-    const rv = `<button type="button" class="qc" data-review="1">🔁 週の見直し</button>`;
-    const chips = `<div class="fcchips">${focus.map((t) => `<button type="button" class="fcchip${isOpenT(t) ? "" : " done"}${hl?.id === t.id ? " on" : ""}" ${isOpenT(t) ? `data-hlpick="${t.id}"` : `data-open="${t.id}"`}>${isOpenT(t) ? "⭐" : "✅"} ${esc(short(t.name, 22))}</button>`).join("")}</div>`;
-    let body;
-    if (hl && isOpenT(hl)) body = `<div class="fch"><span class="lbl">🎯 今日のハイライト</span>${rv}</div><button type="button" class="fcmain" data-open="${hl.id}"><b>${esc(hl.name)}</b>${hl.next ? `<small>${esc(hl.next)}</small>` : ""}</button><div class="fcact"><button type="button" class="btn pri" data-done="${hl.id}">✓ 済み</button><button type="button" class="btn" data-hlclear="${hl.id}">変える</button></div>`;
-    else if (hl) body = `<div class="fch"><span class="lbl">🎉 今日のハイライトは済み</span>${rv}</div><p class="fcsub">「${esc(short(hl.name, 24))}」が終わりました。あとは下の今日やるを、ゆっくりで大丈夫です</p>${open.length ? chips : ""}`;
-    else if (open.length) body = `<div class="fch"><span class="lbl">🎯 今日のハイライトを1つ選ぶ</span>${rv}</div><p class="fcsub">今週の重点から、今日いちばん進めたいものをタップ（今日やるにも入ります）</p>${chips}`;
-    else body = `<div class="fch"><span class="lbl">⭐ 今週の重点がまだありません</span></div><p class="fcsub">重要なことを3つだけ選ぶと、毎朝ここからハイライトを選べます（15分）</p><button type="button" class="btn pri fcgo" data-review="1">🔁 週の見直しをする</button>`;
-    const due = reviewDue() && open.length ? `<button type="button" class="fcdue" data-review="1">🗓 今夜は週の見直しの日です（来週の重点を選ぶ）›</button>` : "";
-    return `<section class="card fcard${hl && isOpenT(hl) ? " hl" : ""}">${body}${due}</section>`;
+    const hl = hlTask(); const open = focusList().filter(isOpenT); const due = reviewDue() && open.length;
+    const rv = `<button type="button" class="fcrv${due ? " due" : ""}" data-review="1" aria-label="週の見直し">🔁${due ? "<i></i>" : ""}</button>`;
+    if (hl && isOpenT(hl)) return `<section class="fcbar hl"><span class="fci">🎯</span><button type="button" class="fcname" data-open="${hl.id}">${esc(hl.name)}</button><button type="button" class="fcok" data-done="${hl.id}" aria-label="済み">✓</button><button type="button" class="fcx" data-hlclear="${hl.id}" aria-label="ハイライトを変える">↺</button>${rv}</section>`;
+    if (open.length) return `<section class="fcbar"><span class="fci">${hl ? "🎉" : "🎯"}</span><div class="fcchips">${open.map((t) => `<button type="button" class="fcchip" data-hlpick="${t.id}">⭐ ${esc(short(t.name, 16))}</button>`).join("")}</div>${rv}</section>`;
+    return `<section class="fcbar"><button type="button" class="fcname mute" data-review="1">⭐ 今週の重点を決める（週の見直し）›</button></section>`;
   }
   async function setHighlight(id) {
     const t = known.get(id); if (!t) return;

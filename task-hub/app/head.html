@@ -920,6 +920,23 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .alh { display: flex; align-items: center; gap: 8px; } .alh .ic { font-size: 16px; } .alh b { font-size: 14px; line-height: 1.4; }
 .alc p { margin: 0; font-size: 12.5px; color: var(--mute); line-height: 1.5; }
 .alc .qc { align-self: flex-start; }
+
+/* ---- v51：重点・ハイライトを細い帯に、今日を選ぶも1行に ---- */
+.fcbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 10px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); border-left: 3px solid #e0a43c; flex: none; min-height: 44px; }
+.fcbar.hl { background: color-mix(in srgb, #e0a43c 12%, var(--card)); }
+.fcbar .fci { flex: none; font-size: 16px; }
+.fcbar .fcname { flex: 1; min-width: 0; text-align: left; font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 2px; }
+.fcbar .fcname.mute { font-weight: 500; font-size: 13px; color: var(--mute); }
+.fcbar .fcok, .fcbar .fcx, .fcbar .fcrv { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--sunk); font-size: 15px; position: relative; }
+.fcbar .fcok { background: var(--s-done); color: #fff; font-weight: 700; }
+.fcbar .fcrv.due i { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: #e0a43c; }
+.fcbar .fcchips { flex: 1; min-width: 0; display: flex; flex-direction: row; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.fcbar .fcchips::-webkit-scrollbar { display: none; }
+.fcbar .fcchip { flex: none; white-space: nowrap; padding: 6px 10px; min-height: 34px; font-size: 12.5px; font-weight: 600; border-radius: 10px; background: var(--sunk); }
+.pickbar { padding: 6px 10px; border-radius: 12px; gap: 8px; min-height: 44px; }
+.pickbar .ic { width: 24px; height: 24px; font-size: 14px; }
+.pickbar .tx b { font-size: 13px; }
+.pickbar .tx small { display: none; }
 </style>
 
 <div id="app">
