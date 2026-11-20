@@ -15,6 +15,11 @@ const SLEEP_BODY_MAX = 5000;
 const CAL_WORDS = /奏輔|そうすけ|検診|健診|接種|ワクチン|保育園|慣らし|離乳食|小児科/;
 const CAL_DAYS = 180;
 const MAX_QUERY_PAGES = 5;
+// お泊まりの持ち物：DB_タスク管理 に「🧳 お泊まり準備（…）」のタスクを作り、本文のチェックリストを使う
+const PACK_PREFIX = "🧳 お泊まり準備";
+const PACK_NIGHTS_MAX = 14;
+const PACK_ITEMS_MAX = 150;
+const PACK_TEXT_MAX = 200;
 // 本文をアプリで書き換えてよいブロック（文字だけのもの）。これ以外があれば Notion で直してもらう
 const TEXT_BLOCKS = {
   paragraph: "",
@@ -47,6 +52,10 @@ export default {
       if (p === "/api/sleep" && m === "PUT") return json(await saveSleep(notion, env, await readJson(request)));
       const body = p.match(/^\/api\/sleep\/([0-9a-f]{32})\/body$/i);
       if (body && m === "GET") return json(await getSleepBody(notion, env, body[1]));
+      if (p === "/api/packs" && m === "GET") return json(await getPacks(notion, env));
+      if (p === "/api/packs" && m === "POST") return json(await createPack(notion, env, await readJson(request)));
+      const packItem = p.match(/^\/api\/packs\/([0-9a-f]{32})\/items\/([0-9a-f]{32})$/i);
+      if (packItem && m === "PATCH") return json(await checkPackItem(notion, env, packItem[1], packItem[2], await readJson(request)));
       return json({ error: "not found" }, 404);
     } catch (err) {
       return json({ error: err.publicMessage || "サーバーでエラーが起きました" }, err.status || 500);
@@ -379,6 +388,98 @@ async function saveSleep(notion, env, body) {
     await notion("POST", "/pages", page);
   }
   return getSleep(notion, env);
+}
+
+// ---------- お泊まりの持ち物（DB_タスク管理 の「🧳 お泊まり準備」タスク） ----------
+const isPack = (page, env) =>
+  parentDs(page) === normalizeId(env.TASK_DS_ID) && str(page, "名前").startsWith(PACK_PREFIX) && str(page, "分類タグ") === TASK_TAG;
+
+// 本文の見出しをまとまり、チェックボックスを持ち物として読む
+async function packItems(notion, id) {
+  const blocks = [];
+  let cursor;
+  for (let i = 0; i < MAX_QUERY_PAGES; i++) {
+    const res = await notion("GET", `/blocks/${id}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ""}`);
+    blocks.push(...(res.results || []));
+    if (!res.has_more) break;
+    cursor = res.next_cursor;
+  }
+  const groups = [];
+  for (const b of blocks) {
+    if (/^heading_[123]$/.test(b.type)) groups.push({ name: plain(b[b.type]?.rich_text), items: [] });
+    else if (b.type === "to_do") {
+      if (!groups.length) groups.push({ name: "", items: [] });
+      groups.at(-1).items.push({ id: normalizeId(b.id), text: plain(b.to_do?.rich_text), checked: Boolean(b.to_do?.checked) });
+    }
+  }
+  return groups.filter((g) => g.items.length);
+}
+
+async function getPacks(notion, env) {
+  const pages = await queryAll(notion, env.TASK_DS_ID, {
+    filter: {
+      and: [
+        { property: "名前", title: { starts_with: PACK_PREFIX } },
+        { property: "分類タグ", select: { equals: TASK_TAG } },
+        { property: "ステータス", status: { does_not_equal: DONE } },
+      ],
+    },
+  });
+  const packs = await Promise.all(pages.map(async (page) => ({
+    id: normalizeId(page.id),
+    url: page.url,
+    title: str(page, "名前"),
+    date: prop(page, "実行日"),
+    groups: await packItems(notion, page.id),
+  })));
+  return { packs: packs.sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999"))) };
+}
+
+// 画面で作った持ち物（泊数で分量を計算済み）をタスクにする
+async function createPack(notion, env, body) {
+  const nights = Number(body?.nights);
+  if (!Number.isInteger(nights) || nights < 1 || nights > PACK_NIGHTS_MAX) throw httpError(400, `泊数は1〜${PACK_NIGHTS_MAX}で選んでください`);
+  const date = String(body?.date || "");
+  if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)))) throw httpError(400, "出発日が正しくありません");
+  const groups = Array.isArray(body?.groups) ? body.groups : [];
+  const clean = (t) => String(t || "").replace(/\s+/g, " ").trim();
+  const children = [];
+  let count = 0;
+  for (const g of groups) {
+    const items = (Array.isArray(g?.items) ? g.items : []).map(clean).filter(Boolean);
+    if (!items.length) continue;
+    count += items.length;
+    if (items.some((t) => t.length > PACK_TEXT_MAX) || clean(g.name).length > PACK_TEXT_MAX) throw httpError(400, `1行は${PACK_TEXT_MAX}文字までです`);
+    children.push({ object: "block", type: "heading_2", heading_2: { rich_text: [{ type: "text", text: { content: clean(g.name) || "持ち物" } }] } });
+    for (const t of items) children.push({ object: "block", type: "to_do", to_do: { checked: false, rich_text: [{ type: "text", text: { content: t } }] } });
+  }
+  if (!count) throw httpError(400, "持ち物がありません");
+  if (count > PACK_ITEMS_MAX) throw httpError(400, `持ち物は${PACK_ITEMS_MAX}個までです`);
+  const md = date ? `・${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}〜` : "";
+  const properties = {
+    名前: { title: [{ text: { content: `${PACK_PREFIX}（${nights}泊${md}）` } }] },
+    ステータス: { status: { name: "⏭ NEXT" } },
+    分類タグ: { select: { name: TASK_TAG } },
+    枠: { select: { name: "🏠 家・外" } },
+    重さ: { select: { name: "M" } },
+  };
+  if (date) properties.実行日 = { date: { start: addDays(date, -1) } }; // 前日に詰める
+  // 1回に送れるブロックは100まで。残りはあとから足す
+  const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.TASK_DS_ID }, properties, children: children.slice(0, 100) });
+  for (let i = 100; i < children.length; i += 100) {
+    await notion("PATCH", `/blocks/${page.id}/children`, { children: children.slice(i, i + 100) });
+  }
+  return getPacks(notion, env);
+}
+
+async function checkPackItem(notion, env, pageId, blockId, body) {
+  if (typeof body?.checked !== "boolean") throw httpError(400, "変更できない項目です");
+  const page = await notion("GET", `/pages/${pageId}`);
+  if (!isPack(page, env)) throw httpError(403, "お泊まり準備のタスクだけ変更できます");
+  const block = await notion("GET", `/blocks/${blockId}`);
+  if (block.type !== "to_do" || normalizeId(block.parent?.page_id) !== normalizeId(pageId)) throw httpError(403, "このタスクの持ち物だけ変更できます");
+  await notion("PATCH", `/blocks/${blockId}`, { to_do: { checked: body.checked } });
+  return { id: normalizeId(blockId), checked: body.checked };
 }
 
 // ---------- 予定（カレンダーの非公開アドレス＝iCal を読むだけ） ----------

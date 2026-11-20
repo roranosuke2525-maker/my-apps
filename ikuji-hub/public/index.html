@@ -131,6 +131,29 @@
       </section>
     </section>
 
+    <!-- おとまり -->
+    <section id="view-trip" class="view" hidden>
+      <section id="packs" class="block"></section>
+      <form id="pack-form" class="card pack">
+        <h2 class="title">お泊まりの持ち物をつくる</h2>
+        <p class="note-s">泊数に合わせて分量を計算します。いらないものは押すと外せます。作ると Notion のタスク（出発の前日）になり、ここでチェックしながら詰められます。</p>
+        <div class="pair">
+          <label>出発日<input id="pk-date" type="date"></label>
+          <div class="nights">
+            <span class="lbl">泊数</span>
+            <div class="stepper">
+              <button type="button" class="round" id="pk-minus" aria-label="1泊へらす">−</button>
+              <b id="pk-nights">2</b><span>泊</span>
+              <button type="button" class="round" id="pk-plus" aria-label="1泊ふやす">＋</button>
+            </div>
+          </div>
+        </div>
+        <fieldset><legend>あてはまるもの</legend><div class="chips" id="pk-opts"></div></fieldset>
+        <div id="pk-preview" class="preview"></div>
+        <button type="submit" class="primary" id="pk-save">この内容でタスクを作る</button>
+      </form>
+    </section>
+
     <!-- よぼうせっしゅ -->
     <section id="view-vax" class="view" hidden>
       <p class="note-s">一般的な目安です（育児メモ「予防接種」と調べた結果より）。予定と接種の記録は母子手帳と妻のカレンダーが正です。</p>
@@ -163,8 +186,9 @@
     <button type="button" role="tab" data-view="park" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l4-4 4 4 4-4 4 4v10zM10 20v-5h4v5"/></svg>たな</button>
     <button type="button" role="tab" data-view="food" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v3l-2 3v11h8V9l-2-3V3M8 13h8"/></svg>ごはん</button>
     <button type="button" role="tab" data-view="sleep" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>ねんね</button>
+    <button type="button" role="tab" data-view="trip" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14v11H5zM9 8V5h6v3M9 12v3M15 12v3"/></svg>おとまり</button>
     <button type="button" role="tab" data-view="vax" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>せっしゅ</button>
-    <button type="button" role="tab" data-view="nursery" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg>ほいくえん</button>
+    <button type="button" role="tab" data-view="nursery" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg>ほいく</button>
   </nav>
 </div>
 

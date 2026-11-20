@@ -8,7 +8,7 @@
 | フォルダ | 名前 | 形 |
 | --- | --- | --- |
 | `habit-check/` | 習慣チェック | Worker＋Notion API（アーティファクト版も） |
-| `ikuji-hub/` | 育児ハブ | アーティファクト版（MCP）のみ |
+| `ikuji-hub/` | 育児ハブ | Worker＋Notion API（アーティファクト版も） |
 | `shiori/` | しおり | Worker＋Notion API |
 | `task-hub/` | 今どこ | Worker＋Notion API（アーティファクト版も）。画面は `app/` を `scripts/build.mjs` でまとめる |
 | `trip-shiori/` | 旅のしおり | Worker＋Notion API（PWA・圏外対応） |
@@ -36,6 +36,7 @@
 4. 修正の依頼が複数あれば、まとめて1回で直し、`npm test` を1回通す。
 5. スクリーンショットや実機確認は、頼まれたときか画面を大きく変えたときだけ。
 6. 終わったら：そのアプリの `README.md` を必要な所だけ更新し、日本語でコミット（例「しおり: ○○を足す」）。
+7. コミットしたら、確認を取らずに main へマージして push してよい（ブランチは merge コミットで取り込む。2026/11/20 に了承）。
 
 ## 書き方
 

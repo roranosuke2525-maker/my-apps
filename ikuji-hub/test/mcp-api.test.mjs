@@ -175,3 +175,25 @@ test("新しい月の行は本文ごと作る", async () => {
   assert.equal(c.input.pages[0].content, "はじめての寝返り");
   assert.equal((await api("PUT", "/api/sleep", { month: 10, body: "あ".repeat(5001) })).status, 400);
 });
+
+test("お泊まり準備：一覧・チェック・作成（アーティファクト版）", async () => {
+  const { api, mcp } = setup();
+  const list = await api("GET", "/api/packs");
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.data.packs[0].groups, [
+    { name: "🎒 いつも持つもの", items: [{ id: "i0", text: "おむつ（17枚）", checked: true }, { id: "i1", text: "抱っこ紐", checked: false }] },
+    { name: "🍼 ミルク", items: [{ id: "i2", text: "哺乳瓶（2本）", checked: false }] },
+  ]);
+  const ok = await api("PATCH", `/api/packs/${hex(6)}/items/i1`, { checked: true });
+  assert.equal(ok.status, 200);
+  assert.match(mcp.bodies[hex(6)], /- \[x\] 抱っこ紐/);
+  assert.equal((await api("PATCH", `/api/packs/${hex(1)}/items/i0`, { checked: true })).status, 403);
+
+  const made = await api("POST", "/api/packs", { nights: 2, date: "2026-12-24", groups: [{ name: "🎒 いつも", items: ["おむつ（24枚）", "[注意]<熱>"] }] });
+  assert.equal(made.status, 200);
+  const c = mcp.calls.find((x) => x.name === "notion-create-pages");
+  assert.equal(c.input.pages[0].properties.名前, "🧳 お泊まり準備（2泊・12/24〜）");
+  assert.equal(c.input.pages[0].properties["date:実行日:start"], "2026-12-23");
+  assert.equal(c.input.pages[0].content, "## 🎒 いつも\n- [ ] おむつ（24枚）\n- [ ] ［注意］＜熱＞");
+  assert.equal((await api("POST", "/api/packs", { nights: 0, groups: [] })).status, 400);
+});

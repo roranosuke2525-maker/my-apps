@@ -45,10 +45,18 @@ beforeEach(() => {
     page(21, DS.aid, { 名前: title("子ども医療費"), 申請状況: status("取得済み"), ステータス: status("完了"), 申請先: sel("高崎市"), 助成内容: text("通院・入院"), 期限: date(null) }),
     page(31, DS.sleep, { 名前: title("生後8か月"), 月齢: num(8), 記録日: date("2026-09-20"), 寝る場所: sel("ベビーベッド"), 寝かしつけ: { type: "multi_select", multi_select: [{ name: "抱っこ" }] }, 寝る時刻: text("20:00"), 夜中に起きる回数: num(3) }),
     page(32, DS.sleep, { 名前: title("生後9か月"), 月齢: num(9), 記録日: date("2026-10-26") }),
+    page(41, DS.task, { 名前: title("🧳 お泊まり準備（1泊・12/1〜）"), ステータス: status("⏭ NEXT"), 分類タグ: sel("CHILD"), 実行日: date("2026-11-30") }),
+    page(42, DS.task, { 名前: title("🧳 お泊まり準備（仕事）"), ステータス: status("⏭ NEXT"), 分類タグ: sel("WORK") }),
   ];
   blocks = {
     [hex(31)]: [{ id: "b1", type: "paragraph", has_children: false, paragraph: { rich_text: rt("絵本1冊") } }, { id: "b2", type: "bulleted_list_item", has_children: false, bulleted_list_item: { rich_text: rt("電気は真っ暗") } }],
     [hex(32)]: [{ id: "b3", type: "table", has_children: true, table: {} }],
+    [hex(41)]: [
+      { id: hex(401), type: "heading_2", has_children: false, heading_2: { rich_text: rt("🎒 いつも持つもの") } },
+      { id: hex(402), type: "to_do", has_children: false, to_do: { checked: true, rich_text: rt("おむつ（17枚）") } },
+      { id: hex(403), type: "to_do", has_children: false, to_do: { checked: false, rich_text: rt("抱っこ紐") } },
+    ],
+    [hex(42)]: [{ id: hex(421), type: "to_do", has_children: false, to_do: { checked: false, rich_text: rt("資料") } }],
   };
   ics = {
     "https://cal.test/me.ics": [
@@ -76,6 +84,7 @@ beforeEach(() => {
         if (f.and) return f.and.every((g) => match(row, g));
         const v = row.properties[f.property];
         if (f.select) return v?.select?.name === f.select.equals;
+        if (f.title) return (v?.title || []).map((t) => t.plain_text ?? t.text?.content).join("").startsWith(f.title.starts_with);
         if (f.status) return v?.status?.name !== f.status.does_not_equal;
         if (f.number) return v?.number === f.number.equals;
         return true;
@@ -101,12 +110,24 @@ beforeEach(() => {
     if (p === "/pages" && init.method === "POST") {
       const pg = page(100 + calls.length, body.parent.data_source_id, Object.fromEntries(Object.entries(body.properties).map(([k, v]) => [k, { type: Object.keys(v)[0], ...v }])));
       pages.push(pg);
-      if (body.children) blocks[pg.id] = body.children;
+      if (body.children) blocks[pg.id] = body.children.map((b, i) => ({ id: b.id || hex(5000 + calls.length * 200 + i), has_children: false, ...b }));
       return Response.json(pg);
     }
     if ((m = p.match(/^\/blocks\/([^/]+)\/children$/))) {
-      if (init.method === "PATCH") { blocks[m[1]] = [...(blocks[m[1]] || []), ...body.children]; return Response.json({}); }
+      if (init.method === "PATCH") { blocks[m[1]] = [...(blocks[m[1]] || []), ...body.children.map((b, i) => ({ id: hex(9000 + calls.length * 200 + i), has_children: false, ...b }))]; return Response.json({}); }
       return Response.json({ results: blocks[m[1]] || [], has_more: false });
+    }
+    if ((m = p.match(/^\/blocks\/([^/]+)$/)) && (init.method || "GET") === "GET") {
+      for (const [pid, list] of Object.entries(blocks)) {
+        const b = list.find((x) => x.id === m[1]);
+        if (b) return Response.json({ ...b, parent: { type: "page_id", page_id: pid } });
+      }
+      return Response.json({ code: "object_not_found" }, { status: 404 });
+    }
+    if ((m = p.match(/^\/blocks\/([^/]+)$/)) && init.method === "PATCH") {
+      const b = Object.values(blocks).flat().find((x) => x.id === m[1]);
+      Object.assign(b.to_do, body.to_do);
+      return Response.json(b);
     }
     if ((m = p.match(/^\/blocks\/([^/]+)$/)) && init.method === "DELETE") {
       for (const k of Object.keys(blocks)) blocks[k] = blocks[k].filter((b) => b.id !== m[1]);
@@ -217,3 +238,50 @@ test("iCal の読み取り：折り返し行・終日・UTC", () => {
   const ev = parseIcs("BEGIN:VEVENT\r\nSUMMARY:長い名前の\r\n 予定\r\nDTSTART:20261231T150000Z\r\nEND:VEVENT");
   assert.deepEqual(ev.map((e) => [e.title, e.date, e.time]), [["長い名前の予定", "2027-01-01", "00:00"]]);
 });
+
+test("お泊まり準備：CHILD の「🧳 お泊まり準備」タスクを、見出しごとの持ち物として返す", async () => {
+  const { status, data } = await api("GET", "/api/packs");
+  assert.equal(status, 200);
+  assert.deepEqual(data.packs.map((p) => p.title), ["🧳 お泊まり準備（1泊・12/1〜）"]);
+  assert.deepEqual(data.packs[0].groups, [{ name: "🎒 いつも持つもの", items: [
+    { id: hex(402), text: "おむつ（17枚）", checked: true },
+    { id: hex(403), text: "抱っこ紐", checked: false },
+  ] }]);
+  assert.equal(data.packs[0].date, "2026-11-30");
+});
+
+test("お泊まり準備：作ると出発の前日のタスクに、持ち物はチェックボックスで入る", async () => {
+  const groups = [{ name: "🎒 いつも持つもの", items: ["おむつ（24枚）", " 抱っこ紐 "] }, { name: "空", items: [] }];
+  const res = await api("POST", "/api/packs", { nights: 2, date: "2026-12-24", groups });
+  assert.equal(res.status, 200);
+  const created = pages.at(-1);
+  assert.equal(created.properties.名前.title[0].text.content, "🧳 お泊まり準備（2泊・12/24〜）");
+  assert.deepEqual(created.properties.実行日, { type: "date", date: { start: "2026-12-23" } });
+  assert.deepEqual(created.properties.分類タグ, { type: "select", select: { name: "CHILD" } });
+  assert.deepEqual(blocks[created.id].map((b) => [b.type, plain(b)]), [["heading_2", "🎒 いつも持つもの"], ["to_do", "おむつ（24枚）"], ["to_do", "抱っこ紐"]]);
+  assert.ok(res.data.packs.some((p) => p.title.includes("2泊")));
+
+  // 100個をこえる持ち物は分けて足す
+  const many = [{ name: "多い", items: Array.from({ length: 120 }, (_, i) => `もの${i}`) }];
+  assert.equal((await api("POST", "/api/packs", { nights: 3, groups: many })).status, 200);
+  assert.equal(blocks[pages.at(-1).id].length, 121);
+
+  for (const b of [{ nights: 0, groups }, { nights: 15, groups }, { nights: 1.5, groups }, { nights: 1, date: "12/24", groups }, { nights: 1, groups: [] }, { nights: 1, groups: [{ name: "x", items: Array(151).fill("a") }] }]) {
+    assert.equal((await api("POST", "/api/packs", b)).status, 400, JSON.stringify(b).slice(0, 60));
+  }
+});
+
+test("お泊まり準備：チェックできるのはそのタスクの持ち物だけ", async () => {
+  const ok = await api("PATCH", `/api/packs/${hex(41)}/items/${hex(403)}`, { checked: true });
+  assert.deepEqual([ok.status, ok.data.checked], [200, true]);
+  assert.equal(blocks[hex(41)][2].to_do.checked, true);
+  assert.equal((await api("PATCH", `/api/packs/${hex(42)}/items/${hex(421)}`, { checked: true })).status, 403, "WORK のタスク");
+  assert.equal((await api("PATCH", `/api/packs/${hex(41)}/items/${hex(421)}`, { checked: true })).status, 403, "ほかのページのブロック");
+  assert.equal((await api("PATCH", `/api/packs/${hex(41)}/items/${hex(401)}`, { checked: true })).status, 403, "見出し");
+  assert.equal((await api("PATCH", `/api/packs/${hex(1)}/items/${hex(403)}`, { checked: true })).status, 403, "ふつうのタスク");
+  assert.equal((await api("PATCH", `/api/packs/${hex(41)}/items/${hex(403)}`, { checked: "yes" })).status, 400);
+});
+
+function plain(b) {
+  return (b[b.type].rich_text || []).map((t) => t.plain_text ?? t.text?.content).join("");
+}
