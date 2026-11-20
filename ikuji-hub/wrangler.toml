@@ -1,0 +1,24 @@
+name = "ikuji-hub"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+# データソースID（IDだけでは読み書きできない。権限はインテグレーションの接続で決まる）
+TASK_DS_ID = "21762844-acbe-8075-bbe6-000bcaf22801"   # DB_タスク管理（分類タグ CHILD だけ読む）
+MEMO_DS_ID = "2f362844-acbe-804a-9314-000be9fe07fa"   # DB_childcare memo
+AID_DS_ID = "21c62844-acbe-800b-8b6b-000b7d8e1e7c"    # 支援の申請・給付
+SLEEP_DS_ID = "5d665394-581e-4294-9bc1-adb8bad27784"  # DB_ねんね記録
+# 子ども（「大事な日」の 奏輔誕生日）と、妻の復職日（10/26 の棚卸しで 1/19 に統一）
+CHILD_NAME = "奏輔"
+CHILD_BIRTH = "2026-01-19"
+BACK_TO_WORK = "2027-01-19"
+
+# 秘密の値は Cloudflare の「変数とシークレット」か wrangler secret put で入れる（このファイルには書かない）
+#   NOTION_TOKEN      : Notion 内部インテグレーションのシークレット（ntn_...）
+#   APP_KEY           : アプリを開くときの合言葉（16文字以上）
+#   CALENDAR_ICS_URLS : Google カレンダーの「iCal 形式の非公開アドレス」（改行かカンマ区切りで複数可・なくてもよい）

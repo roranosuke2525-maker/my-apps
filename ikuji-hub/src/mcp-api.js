@@ -413,6 +413,7 @@
     throw apiError(404, "not found");
   }
 
+  window.__ikujiHubMcp = true; // 画面に「合言葉はいらない」と伝える
   const realFetch = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url, location.href);

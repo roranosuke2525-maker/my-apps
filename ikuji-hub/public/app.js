@@ -43,6 +43,12 @@ const VAX = [
 ];
 
 const $ = (s) => document.querySelector(s);
+// Cloudflare版は合言葉（APP_KEY）を付けて /api を呼ぶ。アーティファクト版（mcp-api.js）は合言葉なし
+const KEY_STORAGE = "ikuji-hub:key";
+const NEEDS_KEY = !window.__ikujiHubMcp;
+let memoryKey = "";
+try { memoryKey = localStorage.getItem(KEY_STORAGE) || ""; } catch { /* 保存できない端末では毎回入力 */ }
+const setKey = (v) => { memoryKey = v; try { v ? localStorage.setItem(KEY_STORAGE, v) : localStorage.removeItem(KEY_STORAGE); } catch { /* 同上 */ } };
 const state = { child: null, items: [], events: [], calError: "", sleep: null, sleepError: "", draft: null, shelf: null, src: null, q: "", showDone: false, view: "park", busy: false };
 
 function shelfOf(item) {
@@ -80,13 +86,18 @@ const ymd = (date) => `${date.slice(0, 4)}/${md(date)}`;
 
 // ---------- 通信 ----------
 async function api(path, { method = "GET", body } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  if (NEEDS_KEY && !memoryKey) throw new Error("合言葉を入れてください");
+  const headers = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (NEEDS_KEY) headers.Authorization = `Bearer ${memoryKey}`;
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   let data = {};
   try { data = await res.json(); } catch { /* 空のまま */ }
+  if (res.status === 401 && NEEDS_KEY) {
+    setKey("");
+    showLogin(true, data.error || "合言葉が違います");
+    throw new Error(data.error || "合言葉が違います");
+  }
   if (!res.ok) throw new Error(data.error || `読み込めませんでした（${res.status}）`);
   return data;
 }
@@ -97,7 +108,17 @@ function setStatus(msg, isErr = false) {
   el.classList.toggle("err", isErr);
 }
 
+function showLogin(on, message = "") {
+  $("#login").hidden = !on;
+  document.querySelectorAll(".view").forEach((v) => { v.hidden = on || v.id !== `view-${state.view}`; });
+  $(".tabbar").hidden = on;
+  $("#logout").hidden = on || !NEEDS_KEY;
+  if (on) setStatus(message, Boolean(message));
+  if (on && !state.child) $("#child-age").textContent = "育児ハブ";
+}
+
 async function load() {
+  if (NEEDS_KEY && !memoryKey) { showLogin(true); return; }
   if (state.busy) return;
   state.busy = true;
   $("#reload").classList.add("spin");
@@ -475,6 +496,19 @@ $("#milk-minus").addEventListener("click", () => setMilk(Number($("#milk-ml").va
 $("#milk-plus").addEventListener("click", () => setMilk(Number($("#milk-ml").value) + 10));
 $("#milk-presets").replaceChildren(...MILK_PRESETS.map((ml) => el("button", { type: "button", class: "chip", "data-ml": ml, onclick: () => setMilk(ml) }, `${ml}ml`)));
 $("#sleep-form").addEventListener("submit", saveSleepForm);
+$("#login-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  setKey($("#key").value.trim());
+  $("#key").value = "";
+  showLogin(false);
+  load();
+});
+$("#logout").addEventListener("click", () => {
+  setKey("");
+  Object.assign(state, { items: [], events: [], sleep: null, draft: null });
+  render();
+  showLogin(true);
+});
 $("#add").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("#add-title");
@@ -504,6 +538,7 @@ setMilk(savedMilk);
 showView(["park", "food", "sleep", "vax", "nursery"].includes(savedView) ? savedView : "park");
 drawStars();
 render();
+showLogin(NEEDS_KEY && !memoryKey);
 load();
 
 if ("serviceWorker" in navigator) {
