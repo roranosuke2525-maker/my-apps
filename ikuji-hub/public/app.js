@@ -42,6 +42,82 @@ const VAX = [
   { m: 60, label: "5〜6歳（入学前の1年）", items: [["MR 2期", ""], ["おたふくかぜ 2回目", "任意接種", true]] },
 ];
 
+// お泊まりの持ち物（「奏ちゃん出かける前の準備」のテンプレートをもとに、泊まり用を足したもの）
+// q(d, n) は d＝日数（泊数＋1）・n＝泊数での数。why は画面にだけ出す計算の目安
+const PACK_OPTS = [
+  { key: "milk", label: "🍼 ミルク" },
+  { key: "food", label: "🥣 離乳食" },
+  { key: "bath", label: "🛁 お風呂グッズを持っていく" },
+  { key: "car", label: "🚗 車で行く" },
+  { key: "winter", label: "❄️ 寒い時期" },
+];
+const PACK_MASTER = [
+  { name: "🎒 いつも持つもの", items: [
+    { t: "おむつ", u: "枚", q: (d) => 7 * d + 3, why: "1日7枚＋予備3" },
+    { t: "おしりふき", u: "パック", q: (d) => Math.ceil(d / 2), why: "2日で1パック" },
+    { t: "おむつ用の防臭袋（パン袋）", u: "枚", q: (d) => 8 * d, why: "おむつ替えの回数ぶん" },
+    { t: "おむつ替えシート" },
+    { t: "ガーゼハンカチ", u: "枚", q: (d) => 2 * d, why: "1日2枚" },
+    { t: "母子手帳・保険証・医療証ポーチ" },
+    { t: "抱っこ紐" },
+    { t: "お気に入りのおもちゃ" },
+  ] },
+  { name: "👕 着がえ・ねんね", items: [
+    { t: "着がえ（上下）", u: "組", q: (d) => d + 1, why: "1日1組＋予備1" },
+    { t: "肌着", u: "枚", q: (d) => d + 1, why: "1日1枚＋予備1" },
+    { t: "パジャマ・スリーパー", u: "枚", q: (d, n) => n, why: "1泊1枚" },
+    { t: "スタイ", u: "枚", q: (d) => 2 * d, why: "1日2枚" },
+    { t: "靴下", u: "足", q: (d) => d, why: "1日1足" },
+    { t: "バスタオル", u: "枚", q: (d, n) => Math.min(n, 2), why: "2枚まで（洗って使い回す）" },
+    { t: "寝かしつけの絵本・ぬいぐるみ" },
+  ] },
+  { name: "🍼 ミルク", opt: "milk", items: [
+    { t: "ミルク（スティック）", u: "本", q: (d) => 3 * d + 1, why: "1日3回＋予備1" },
+    { t: "哺乳瓶", u: "本", q: () => 2 },
+    { t: "哺乳瓶ブラシ・洗剤" },
+    { t: "消毒グッズ（錠剤・袋）", u: "回分", q: (d) => d, why: "1日1回" },
+    { t: "お湯（保温水筒）・湯冷まし用の水" },
+  ] },
+  { name: "🥣 離乳食", opt: "food", items: [
+    { t: "ベビーフード（パウチ・瓶）", u: "食", q: (d) => 3 * d, why: "1日3回食" },
+    { t: "使い捨てエプロン", u: "枚", q: (d) => 3 * d, why: "1食1枚" },
+    { t: "離乳食用スプーン", u: "本", q: () => 2 },
+    { t: "マグ（麦茶）" },
+    { t: "手口ふき・除菌シート", u: "パック", q: (d) => Math.ceil(d / 3), why: "3日で1パック" },
+  ] },
+  { name: "🛁 お風呂・ケア", opt: "bath", items: [
+    { t: "ベビーソープ（泡）・泡立てネット" },
+    { t: "保湿クリーム・乳液" },
+    { t: "綿棒" },
+    { t: "爪切り", min: 3 },
+    { t: "体温計・いつもの薬" },
+  ] },
+  { name: "🚗 移動", items: [
+    { t: "チャイルドシートの向き・ベルトを確かめる", opt: "car" },
+    { t: "ベビーカー", not: "car" },
+    { t: "ぐずり対策の新しいおもちゃ・絵本" },
+    { t: "モバイルバッテリー" },
+  ] },
+  { name: "❄️ 寒い時期", opt: "winter", items: [
+    { t: "防寒着（アウター）" },
+    { t: "帽子・ブランケット" },
+  ] },
+];
+
+// 泊数とあてはまるものから持ち物を作る（数は「名前（○枚）」の形で Notion に書く）
+function packList(nights, opts) {
+  const d = nights + 1;
+  return PACK_MASTER.filter((g) => !g.opt || opts[g.opt]).map((g) => ({
+    name: g.name,
+    items: g.items
+      .filter((it) => (!it.opt || opts[it.opt]) && (!it.not || !opts[it.not]) && (!it.min || nights >= it.min))
+      .map((it) => {
+        const n = it.q ? it.q(d, nights) : null;
+        return { key: `${g.name}|${it.t}`, label: it.t, qty: n != null ? `${n}${it.u || ""}` : "", why: it.why || "", text: n != null ? `${it.t}（${n}${it.u || ""}）` : it.t };
+      }),
+  })).filter((g) => g.items.length);
+}
+
 const $ = (s) => document.querySelector(s);
 // Cloudflare版は合言葉（APP_KEY）を付けて /api を呼ぶ。アーティファクト版（mcp-api.js）は合言葉なし
 const KEY_STORAGE = "ikuji-hub:key";
@@ -49,7 +125,7 @@ const NEEDS_KEY = !window.__ikujiHubMcp;
 let memoryKey = "";
 try { memoryKey = localStorage.getItem(KEY_STORAGE) || ""; } catch { /* 保存できない端末では毎回入力 */ }
 const setKey = (v) => { memoryKey = v; try { v ? localStorage.setItem(KEY_STORAGE, v) : localStorage.removeItem(KEY_STORAGE); } catch { /* 同上 */ } };
-const state = { child: null, items: [], events: [], calError: "", sleep: null, sleepError: "", draft: null, shelf: null, src: null, q: "", showDone: false, view: "park", busy: false };
+const state = { child: null, items: [], events: [], calError: "", sleep: null, sleepError: "", draft: null, packs: null, packError: "", pack: null, shelf: null, src: null, q: "", showDone: false, view: "park", busy: false };
 
 function shelfOf(item) {
   if (item.src === "aid") return "money";
@@ -129,9 +205,10 @@ async function load() {
     setStatus("");
   }, (err) => setStatus(err.message, true));
   // カレンダーは読めなくても画面は使えるので、失敗は予定の欄にだけ出す
+  const packs = api("/api/packs").then((data) => { state.packs = data.packs || []; state.packError = ""; }, (err) => { state.packError = err.message; });
   const sleep = api("/api/sleep").then((data) => { state.sleep = data; state.sleepError = ""; }, (err) => { state.sleepError = err.message; });
   const cal = api("/api/calendar").then((data) => { state.events = data.events || []; state.calError = ""; }, (err) => { state.calError = err.message; });
-  await Promise.all([hub, cal, sleep]);
+  await Promise.all([hub, cal, sleep, packs]);
   state.busy = false;
   $("#reload").classList.remove("spin");
   render();
@@ -193,6 +270,7 @@ function render() {
   renderPark(today);
   renderFood();
   renderSleep(today);
+  renderTrip(today);
   renderVax(today);
   renderNursery(today);
 }
@@ -362,6 +440,106 @@ async function saveSleepForm(e) {
   }
 }
 
+// ---------- おとまり ----------
+function packDraft(today) {
+  const m = Number(today.slice(5, 7));
+  return { date: "", nights: 2, opts: { milk: true, food: true, bath: true, car: true, winter: m >= 11 || m <= 3 }, off: new Set() };
+}
+
+function renderPackForm() {
+  const d = state.pack;
+  $("#pk-nights").textContent = d.nights;
+  $("#pk-opts").replaceChildren(...PACK_OPTS.map((o) => el("button", {
+    type: "button", class: "chip", "aria-pressed": String(Boolean(d.opts[o.key])),
+    onclick: () => { d.opts[o.key] = !d.opts[o.key]; renderPackForm(); },
+  }, o.label)));
+  const groups = packList(d.nights, d.opts);
+  const total = groups.reduce((a, g) => a + g.items.filter((it) => !d.off.has(it.key)).length, 0);
+  $("#pk-save").textContent = `この内容でタスクを作る（${total}こ）`;
+  $("#pk-preview").replaceChildren(...groups.map((g) => el("div", { class: "pgroup" },
+    el("h3", {}, g.name),
+    g.items.map((it) => el("button", {
+      type: "button", class: `pitem${d.off.has(it.key) ? " off" : ""}`, "aria-pressed": String(!d.off.has(it.key)),
+      onclick: () => { d.off.has(it.key) ? d.off.delete(it.key) : d.off.add(it.key); renderPackForm(); },
+    }, el("span", {}, it.label, it.why ? el("span", { class: "why" }, it.why) : null), it.qty ? el("span", { class: "q" }, it.qty) : null)))));
+}
+
+function packCard(pack) {
+  const all = pack.groups.flatMap((g) => g.items);
+  const done = all.filter((it) => it.checked).length;
+  const finished = all.length > 0 && done === all.length;
+  return el("section", { class: "card packcard" },
+    el("div", { class: "packhead" },
+      el("h2", { class: "title", style: "font-size:17px" }, pack.title),
+      el("span", { class: "note-s" }, `${done} / ${all.length}`)),
+    el("div", { class: "bar", "aria-hidden": "true" }, el("i", { style: `width:${all.length ? Math.round((done / all.length) * 100) : 0}%` })),
+    pack.groups.map((g) => el("div", { class: "pgroup" },
+      g.name ? el("h3", {}, g.name) : null,
+      g.items.map((it) => {
+        const box = el("input", { type: "checkbox", ...(it.checked ? { checked: true } : {}) });
+        box.addEventListener("change", () => checkPack(pack, it, box.checked));
+        return el("label", { class: `check${it.checked ? " done" : ""}` }, box, el("span", {}, it.text));
+      }))),
+    finished ? el("button", { type: "button", class: "primary", onclick: () => finishPack(pack) }, "ぜんぶ詰めた！タスクを完了にする") : null,
+    el("a", { class: "open", href: pack.url, target: "_blank", rel: "noopener" }, "Notion で開く"));
+}
+
+function renderTrip(today) {
+  if (!state.pack) {
+    state.pack = packDraft(today);
+    $("#pk-date").value = "";
+  }
+  renderPackForm();
+  const box = $("#packs");
+  if (state.packError) { box.replaceChildren(el("p", { class: "note-s" }, `お泊まり準備を読めませんでした：${state.packError}`)); return; }
+  if (!state.packs) { box.replaceChildren(el("p", { class: "empty" }, "読み込み中…")); return; }
+  box.replaceChildren(...(state.packs.length ? [el("h2", { class: "sec" }, "準備中のお泊まり", el("em", {}, `${state.packs.length}件`)), ...state.packs.map(packCard)] : []));
+}
+
+async function checkPack(pack, item, checked) {
+  item.checked = checked;
+  renderTrip(todayJst());
+  try {
+    await api(`/api/packs/${pack.id}/items/${item.id}`, { method: "PATCH", body: { checked } });
+  } catch (err) {
+    item.checked = !checked;
+    setStatus(err.message, true);
+    renderTrip(todayJst());
+  }
+}
+
+async function finishPack(pack) {
+  try {
+    await api(`/api/tasks/${pack.id}`, { method: "PATCH", body: { status: "✅ DONE" } });
+    state.packs = state.packs.filter((p) => p !== pack);
+    setStatus(`「${pack.title}」を完了にしました`);
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+  render();
+}
+
+async function savePack(e) {
+  e.preventDefault();
+  const d = state.pack;
+  d.date = $("#pk-date").value;
+  const groups = packList(d.nights, d.opts).map((g) => ({ name: g.name, items: g.items.filter((it) => !d.off.has(it.key)).map((it) => it.text) }));
+  const btn = $("#pk-save");
+  btn.disabled = true;
+  try {
+    const data = await api("/api/packs", { method: "POST", body: { nights: d.nights, date: d.date, groups } });
+    state.packs = data.packs || [];
+    state.pack = null;
+    setStatus(`${d.nights}泊のお泊まり準備をタスクにしました`);
+    window.scrollTo({ top: 0 });
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    btn.disabled = false;
+    render();
+  }
+}
+
 function renderVax(today) {
   const birth = state.child?.birth;
   const calVax = state.events.filter((ev) => /検診|健診|接種|ワクチン|小児科/.test(ev.title));
@@ -496,6 +674,9 @@ $("#milk-minus").addEventListener("click", () => setMilk(Number($("#milk-ml").va
 $("#milk-plus").addEventListener("click", () => setMilk(Number($("#milk-ml").value) + 10));
 $("#milk-presets").replaceChildren(...MILK_PRESETS.map((ml) => el("button", { type: "button", class: "chip", "data-ml": ml, onclick: () => setMilk(ml) }, `${ml}ml`)));
 $("#sleep-form").addEventListener("submit", saveSleepForm);
+$("#pack-form").addEventListener("submit", savePack);
+$("#pk-minus").addEventListener("click", () => { state.pack.nights = Math.max(1, state.pack.nights - 1); renderPackForm(); });
+$("#pk-plus").addEventListener("click", () => { state.pack.nights = Math.min(14, state.pack.nights + 1); renderPackForm(); });
 $("#login-form").addEventListener("submit", (e) => {
   e.preventDefault();
   setKey($("#key").value.trim());
@@ -535,7 +716,7 @@ try {
   savedView = localStorage.getItem("ikuji-hub:view") || "park";
 } catch { /* 初期値のまま */ }
 setMilk(savedMilk);
-showView(["park", "food", "sleep", "vax", "nursery"].includes(savedView) ? savedView : "park");
+showView(["park", "food", "sleep", "trip", "vax", "nursery"].includes(savedView) ? savedView : "park");
 drawStars();
 render();
 showLogin(NEEDS_KEY && !memoryKey);
