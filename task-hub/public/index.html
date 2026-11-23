@@ -937,6 +937,17 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .pickbar .ic { width: 24px; height: 24px; font-size: 14px; }
 .pickbar .tx b { font-size: 13px; }
 .pickbar .tx small { display: none; }
+
+/* ---- v52：🌙 今日できたこと ---- */
+.ev { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; padding: 0 10px; }
+.evbody { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.evbody h4 { margin: 0 0 6px; font-size: 14px; } .evbody h4 small { color: var(--mute); font-weight: normal; }
+.evbody p { margin: 0 0 8px; font-size: 12.5px; }
+.evhi { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--sunk); text-align: center; }
+.evhi b { font-size: 17px; } .evhi span { font-size: 13px; color: var(--mute); line-height: 1.5; } .evhi .evhl { color: var(--accent); font-weight: bold; }
+.evrow { display: flex; align-items: center; gap: 8px; min-height: 40px; border-bottom: 1px solid var(--line); }
+.evrow .tx { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 8px 0; }
+.evbar .ic { font-size: 18px; }
 </style>
 
 <div id="app">
@@ -1947,11 +1958,11 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   async function setProps(t, props, msg, { undo = true, quiet = false } = {}) {
     const before = propsBefore(t, props);
     applyLocal(t, props); refresh();
-    if (!quiet) toast(msg + (S.mode === "demo" ? "（見本）" : ""), undo ? () => setProps(t, before, "元に戻しました", { undo: false }) : null);
+    if (!quiet) toast(msg + (S.mode === "demo" ? "（見本）" : ""), undo ? () => setProps(t, before, "元に戻したよ", { undo: false }) : null);
     if (S.mode === "demo") return true;
     setSync("busy");
     try { await call("update", { page_id: t.id, command: "update_properties", properties: props, allow_async: false }, { read: false }); saveSnap(); setSync("ok"); return true; }
-    catch (err) { applyLocal(t, before); refresh(); setSync("err"); toast(`変更できませんでした：${errText(err)}`); return false; }
+    catch (err) { applyLocal(t, before); refresh(); setSync("err"); toast(`ごめん、変えられなかった：${errText(err)}`); return false; }
   }
   // タスクを消す（Notion のゴミ箱へ。「取り消す」で戻せる）。画面からは先に消し、失敗したら戻す
   function dropLocal(t) { for (const L of [S.tasks, S.doneToday, S.refs, S.readList]) { const i = L.indexOf(t); if (i >= 0) L.splice(i, 1); } known.delete(t.id); }
@@ -1966,7 +1977,25 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     try { await call("del", { page_ids: [t.id] }, { read: false }); saveSnap(); setSync("ok"); return true; }
     catch (err) { putBack(t); refresh(); setSync("err"); toast(`削除できませんでした：${errText(err)}`); return false; }
   }
-  const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), `「${short(t.name)}」→ ${MOVES[key].label}${extra}`);
+  // 動かしたときのひとこと（友だちの口調で）
+  const CHEERS = ["やったね！", "ナイス！", "いいね、その調子！", "おつかれさま！", "ひとつ前進！", "さすが！"];
+  function moveSay(t, key) {
+    const n = short(t.name);
+    if (key === "done") {
+      if (t.hl === TODAY()) return `🎯 今日のハイライト「${n}」できた！今日はもう花丸だよ 🎉`;
+      const c = S.doneToday.filter((x) => x !== t).length + 1;
+      return `「${n}」できた！${CHEERS[(c - 1) % CHEERS.length]}${c >= 2 ? `今日${c}つ目` : ""}`;
+    }
+    if (key === "tomorrow") return `「${n}」は明日にしよう。無理しなくて大丈夫`;
+    if (key === "today") return `「${n}」を今日やるに入れたよ`;
+    if (key === "some") return `「${n}」はいつかへ。今はそれでOK`;
+    if (key === "next") return `「${n}」を次にやるに戻したよ`;
+    if (key === "wait") return `「${n}」は待ちにしたよ。返事が来たら動こう`;
+    if (key === "ref") return `「${n}」は資料にしまったよ`;
+    if (["ai", "deep", "thorough"].includes(key)) return `「${n}」はAIにおまかせ（${MOVES[key].label}）。答えが来たら知らせるね`;
+    return `「${n}」→ ${MOVES[key].label}`;
+  }
+  const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), moveSay(t, key) + extra);
   const short = (s, n = 14) => (s.length > n ? `${s.slice(0, n)}…` : s);
   function setSync(st) { const el = $("#sync"); el.className = `sync ${st === "ok" ? "" : st}`; $("#synct").textContent = st === "busy" ? "書き込み中" : st === "err" ? "エラー" : S.mode === "demo" ? "見本" : S.loadedAt ? `${jstTime(S.loadedAt)} 更新` : ""; }
   // 平日 7:52〜17:52 毎時（土日・祝日は動かない。祝日は振替休日・国民の休日を含む 2026〜2027年）
@@ -2454,35 +2483,36 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const d = TODAY(); const today = stageItems("today"); const late = today.filter((t) => t.date < d); const rest = today.filter((t) => t.date >= d);
     const done = S.doneToday.length; const total = today.length + done; const pct = total ? Math.round((done / total) * 100) : 0;
     const loading = S.mode === "loading" && !S.tasks.length;
-    if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>読み込めませんでした</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一度</button></div></div>`); return; }
+    if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>うまく読みこめなかった…</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一回ためす</button></div></div>`); return; }
     const doing = today.find((t) => t.status === ST.doing); const first = doing || late[0] || rest[0];
     const tip = adviceTop();
     // 進み具合の輪
     const R = 24, C = 2 * Math.PI * R;
     view.insertAdjacentHTML("beforeend", `<div class="hero card">
         <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${R}" class="bg"/><circle cx="30" cy="30" r="${R}" class="fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct / 100)}"/><text x="30" y="34" text-anchor="middle">${loading ? "…" : `${pct}%`}</text></svg>
-        <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>のこり ${today.length}件</b><span>${done ? `${done}件 終わった` : "まだ手つかず"}${late.length ? `・<em>遅れ ${late.length}</em>` : ""}</span>` : `<b>今日は全部終わり ✨</b><span>${done ? `${done}件 片づけた` : "何もありません"}</span>`}</div>
-        ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま やっている" : "まず これ"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
+        <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>あと ${today.length}件</b><span>${done ? `もう${done}件できてる！` : "まずは1つからいこう"}${late.length ? `・<em>持ち越し ${late.length}</em>` : ""}</span>` : `<b>${done ? "今日のぶん、ぜんぶ終わり！🎉" : "今日はまっさら"}</b><span>${done ? `${done}件も片づけたね、おつかれさま` : "1つ入れてみる？"}</span>`}</div>
+        ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま進めてるやつ" : "まずはこれから"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
       </div>
-      ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 更新できていません（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示）　↻ もう一度</button>` : ""}
+      ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
+      ${eveBarHtml()}
       ${focusCardHtml()}
-      ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>提案</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
-      ${inStage("next").length ? `<button type="button" class="pickbar" data-pickday="1"><span class="ic">＋</span><span class="tx"><b>次にやるから今日を選ぶ</b><small>${inStage("next").length}件から・まとめて選んで1回で入れる</small></span><i>›</i></button>` : ""}
+      ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>ひとこと</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
+      ${inStage("next").length ? `<button type="button" class="pickbar" data-pickday="1"><span class="ic">＋</span><span class="tx"><b>次にやるから今日を選ぶ</b><small>${inStage("next").length}件から、気が向くものを選ぼう</small></span><i>›</i></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");
     const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}` : "");
     let html = "";
-    if (late.length) html += `<div class="sech late"><span>遅れ</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">全部 今日に</button></div>${late.map((t, i) => rowHtml(t, i, { meta: "late" })).join("")}`;
+    if (late.length) html += `<div class="sech late"><span>持ち越し（あせらずに）</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">ぜんぶ今日に</button></div>${late.map((t, i) => rowHtml(t, i, { meta: "late" })).join("")}`;
     const groups = new Map(); for (const t of rest) { const k = t.waku || "枠なし"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
     for (const k of [...WAKU, "枠なし"]) if (groups.has(k)) html += sec(k, groups.get(k));
-    if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "おつかれさまでした" : "今日の予定はありません"}</b><span>次にやるから1つ選んで、今日に入れてみましょう</span></div>`;
+    if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "おつかれさま！今日はここまででも十分だよ" : "今日の予定はまだないよ"}</b><span>${done ? "よゆうがあれば、次にやるから1つ足してもいいし、休んでもいい" : "次にやるから1つだけ選んで、今日に入れてみよう"}</span></div>`;
     // 済み（たたむ）
     if (done) html += `<details class="donebox"${!today.length ? " open" : ""}><summary><span>済み</span><small>${done}</small></summary>${S.doneToday.map((t, i) => rowHtml(t, i, { check: false })).join("")}</details>`;
     // 次にやる から足す
     const next = stageItems("next").slice(0, 8);
-    if (next.length) html += `<details class="nextbox"${!today.length ? " open" : ""}><summary><span>次にやる から足す</span><small>${inStage("next").length}</small></summary>${next.map((t) => `<div class="row pick" data-id="${t.id}" style="--c:var(--s-next)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || t.tag || `${ageOf(t)}日`)}</span></button><button type="button" class="qc" data-pulltoday="${t.id}">今日</button></div>`).join("")}${inStage("next").length > 8 ? `<button type="button" class="morelink" data-gostage="next">すべて見る ›</button>` : ""}</details>`;
+    if (next.length) html += `<details class="nextbox"${!today.length ? " open" : ""}><summary><span>次にやるから足す</span><small>${inStage("next").length}</small></summary>${next.map((t) => `<div class="row pick" data-id="${t.id}" style="--c:var(--s-next)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc(t.next || t.tag || `${ageOf(t)}日`)}</span></button><button type="button" class="qc" data-pulltoday="${t.id}">今日</button></div>`).join("")}${inStage("next").length > 8 ? `<button type="button" class="morelink" data-gostage="next">すべて見る ›</button>` : ""}</details>`;
     box.innerHTML = html || `<div class="empty">読みこみ中…</div>`;
-    box.insertAdjacentHTML("beforeend", `<div class="ghint mute">→ 右にスワイプで済み　← 左で明日　長押しで日付・状態</div>`);
+    box.insertAdjacentHTML("beforeend", `<div class="ghint mute">→ 右にスワイプでできた！　← 左で明日に　長押しで日付・状態</div>`);
   }
 
   // ================= 行の操作：スワイプ（右＝済み・左＝明日）と長押し（日付・状態の変更） =================
@@ -3326,55 +3356,55 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const d = TODAY(); const out = [];
     const today = inStage("today"); const late = lateOf(); const next = inStage("next"); const inbox = inStage("inbox");
     const wait = inStage("wait"); const some = inStage("some");
-    if (S.sugs.length) out.push({ pri: 95, icon: "💡", title: `AIからの提案が ${S.sugs.length}件`, body: S.sugs.slice(0, 3).map((s) => s.name).join("・"), sug: true });
-    if (late.length) out.push({ pri: 100, icon: "⏰", title: `遅れが ${late.length}件あります`, body: "日付を過ぎたものは、今日やるか、日を決め直すと流れが戻ります。", acts: [["late:today", "全部 今日にする"], ["late:tomorrow", "全部 明日にずらす"]], items: late.slice(0, 4), itemActs: [["d:today", "今日"], ["d:sat", "土曜"], ["s:some", "いつか"]] });
+    if (S.sugs.length) out.push({ pri: 95, icon: "💡", title: `AIから ${S.sugs.length}件の提案が届いてるよ`, body: S.sugs.slice(0, 3).map((s) => s.name).join("・"), sug: true });
+    if (late.length) out.push({ pri: 100, icon: "⏰", title: `持ち越しが ${late.length}件あるよ`, body: "責めなくて大丈夫。今日やるか、いったん日付を外すかだけ決めると、気持ちが軽くなるよ。", acts: [["late:today", "ぜんぶ今日にする"], ["late:tomorrow", "ぜんぶ明日にする"]], items: late.slice(0, 4), itemActs: [["d:today", "今日"], ["d:sat", "土曜"], ["s:some", "いつか"]] });
     const w = load8(today);
     if (today.length >= 8 || w > 12) {
       const heavy = today.filter((t) => ["L", "XL"].includes(t.weight) || !t.weight).slice(0, 4);
-      out.push({ pri: 90, icon: "🧺", title: `今日が詰まっています（${today.length}件・重さ ${w}）`, body: "1日に終わるのは重さ12くらいまで。重いものを明日以降へ回して、終わる量に絞りましょう。", items: heavy.length ? heavy : today.slice(0, 4), itemActs: [["d:tomorrow", "明日へ"], ["d:mon", "来週月"], ["s:some", "いつか"]] });
+      out.push({ pri: 90, icon: "🧺", title: `今日ちょっと詰めこみすぎかも（${today.length}件・重さ ${w}）`, body: "1日でこなせるのは重さ12くらいまで。重いのを明日以降に回して、終わる量にしぼろう。", items: heavy.length ? heavy : today.slice(0, 4), itemActs: [["d:tomorrow", "明日へ"], ["d:mon", "来週月"], ["s:some", "いつか"]] });
     }
     if (!today.length && next.length) {
       const pick = next.slice().sort((a, b) => (W8[a.weight] || 2) - (W8[b.weight] || 2) || ageOf(b) - ageOf(a)).slice(0, 3);
-      out.push({ pri: 85, icon: "🎯", title: "今日やることが決まっていません", body: "次にやるから軽いもの・古いものを3つ選びました。今日に入れてみませんか。", items: pick, itemActs: [["d:today", "今日やる"], ["d:tomorrow", "明日"]] });
+      out.push({ pri: 85, icon: "🎯", title: "今日やること、まだ決まってないね", body: "軽いもの・前からあるものを3つ選んでみたよ。どれか1つ、今日に入れてみない？", items: pick, itemActs: [["d:today", "今日やる"], ["d:tomorrow", "明日"]] });
     }
     // 節約：区分なしの買い物・予算超え・封印の解除日
     if (typeof unsorted === "function") {
-      const un = unsorted(); if (un.length) out.push({ pri: 58, icon: "🏷", title: `区分がまだの買い物が ${un.length}件`, body: "🏠 家財／🧴 消耗品／🎮 娯楽（3月まで封印）に振り分けると、買ってよいものだけが残ります。", acts: [["tab:save", "節約で振り分ける"]] });
-      const spent = sumP(boughtMonth()); if (S.saveCfg.budget && spent > S.saveCfg.budget) out.push({ pri: 75, icon: "💸", title: `今月の家財が予算を ${yen(spent - S.saveCfg.budget)} 超えています`, body: `予算 ${yen(S.saveCfg.budget)} に対して ${yen(spent)}。残りの家財は来月に回すか、予算を見直しましょう。`, acts: [["tab:save", "節約を見る"]] });
-      if (daysLeft() <= 0 && sealed().length) out.push({ pri: 65, icon: "🔓", title: `封印の解除日です（${sealed().length}件）`, body: "欲しいものを1つずつ、買う・まだ待つ・手放すに決めましょう。", acts: [["tab:save", "封印を見る"]] });
-      else if (daysLeft() > 0 && daysLeft() <= 7 && sealed().length) out.push({ pri: 40, icon: "🔓", title: `封印の解除まで あと ${daysLeft()}日`, body: `封印中 ${sealed().length}件・${yen(sumP(sealed()))}。家財が揃っているか先に確かめましょう。`, acts: [["tab:save", "節約を見る"]] });
+      const un = unsorted(); if (un.length) out.push({ pri: 58, icon: "🏷", title: `区分がまだの買い物が ${un.length}件あるよ`, body: "🏠 家財／🧴 消耗品／🎮 娯楽（3月まで封印）に分けると、買っていいものだけが残るよ。", acts: [["tab:save", "節約で振り分ける"]] });
+      const spent = sumP(boughtMonth()); if (S.saveCfg.budget && spent > S.saveCfg.budget) out.push({ pri: 75, icon: "💸", title: `今月の家財、予算を ${yen(spent - S.saveCfg.budget)} こえちゃった`, body: `予算 ${yen(S.saveCfg.budget)} に対して ${yen(spent)}。残りは来月に回すか、予算を見直そう。`, acts: [["tab:save", "節約を見る"]] });
+      if (daysLeft() <= 0 && sealed().length) out.push({ pri: 65, icon: "🔓", title: `封印の解除日だよ（${sealed().length}件）`, body: "ここまでよくがまんしたね！欲しいものを1つずつ、買う・まだ待つ・手放すに決めよう。", acts: [["tab:save", "封印を見る"]] });
+      else if (daysLeft() > 0 && daysLeft() <= 7 && sealed().length) out.push({ pri: 40, icon: "🔓", title: `封印の解除まで あと ${daysLeft()}日`, body: `封印中 ${sealed().length}件・${yen(sumP(sealed()))}。家財がそろってるか先に確かめとこう。`, acts: [["tab:save", "節約を見る"]] });
     }
     const mine = myTurn();
-    if (mine.length) out.push({ pri: 80, icon: "💬", title: `AIからの返事が ${mine.length}件 待っています`, body: "回答（💭）や判定（🔍✅）を返すと、次の定時処理でAIが続きを進めます。", acts: [["tab:ai", "AIの番を見る"]] });
+    if (mine.length) out.push({ pri: 80, icon: "💬", title: `AIが ${mine.length}件、返事を待ってるよ`, body: "回答（💭）や判定（🔍✅）を返してくれたら、次の定時処理でAIが続きを進めるね。", acts: [["tab:ai", "AIの番を見る"]] });
     const oldIn = inbox.filter((t) => ageOf(t) >= 3);
-    if (inbox.length >= 10 || oldIn.length) out.push({ pri: 70, icon: "📥", title: `収集箱に ${inbox.length}件${oldIn.length ? `（3日以上 ${oldIn.length}件）` : ""}`, body: "1件ずつ「やる・いつか・AI・資料」に振り分けると頭が軽くなります。5分だけ仕分けしましょう。", acts: [["triage:inbox", "仕分けを始める"]] });
+    if (inbox.length >= 10 || oldIn.length) out.push({ pri: 70, icon: "📥", title: `収集箱に ${inbox.length}件${oldIn.length ? `（3日以上 ${oldIn.length}件）` : ""}`, body: "1件ずつ「やる・いつか・AI・資料」に分けると頭がすっきりするよ。5分だけやってみよう。", acts: [["triage:inbox", "仕分けを始める"]] });
     const noStep = next.filter((t) => !t.next);
-    if (noStep.length >= 3) out.push({ pri: 60, icon: "👣", title: `次の一歩が空のタスクが ${noStep.length}件`, body: "「最初に何をするか」が書いてあると手が動きます。開いて一歩を書くか、AIに分解を頼みましょう。", items: noStep.slice(0, 3), itemActs: [["open", "開く"], ["a:💬", "AIと分解"]] });
+    if (noStep.length >= 3) out.push({ pri: 60, icon: "👣", title: `最初の一歩が空のタスクが ${noStep.length}件`, body: "「最初に何をするか」が書いてあると、すっと手が動くよ。一歩を書くか、AIに分けてもらおう。", items: noStep.slice(0, 3), itemActs: [["open", "開く"], ["a:💬", "AIと分解"]] });
     const stale = next.filter((t) => ageOf(t) >= 14);
-    if (stale.length) out.push({ pri: 55, icon: "🕸", title: `2週間動いていない「次にやる」が ${stale.length}件`, body: "やらないなら いつか へ、迷っているなら AI に調べてもらうと進みます。", items: stale.slice(0, 3), itemActs: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]] });
+    if (stale.length) out.push({ pri: 55, icon: "🕸", title: `2週間止まってる「次にやる」が ${stale.length}件`, body: "やらないなら いつか へ置いてOK。迷ってるならAIに調べてもらうと動きだすよ。", items: stale.slice(0, 3), itemActs: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]] });
     const longWait = wait.filter((t) => ageOf(t) >= 7);
-    if (longWait.length) out.push({ pri: 50, icon: "📮", title: `1週間以上の待ちが ${longWait.length}件`, body: "相手に確かめる日を決めておくと抜けません。", items: longWait.slice(0, 3), itemActs: [["d:tomorrow", "明日確認"], ["s:next", "自分で進める"]] });
+    if (longWait.length) out.push({ pri: 50, icon: "📮", title: `1週間以上待ってるものが ${longWait.length}件`, body: "相手に確かめる日を決めておくと、忘れずにすむよ。", items: longWait.slice(0, 3), itemActs: [["d:tomorrow", "明日確認"], ["s:next", "自分で進める"]] });
     const soon = typeof stockSoon === "function" ? stockSoon() : [];
-    if (soon.length) out.push({ pri: 45, icon: "🛒", title: `もうすぐ切れる日用品が ${soon.length}点`, body: soon.slice(0, 3).map((x) => `${x.name}（${leftTx(x)}）`).join("・"), acts: [["shop:stock", "在庫を見る"]] });
+    if (soon.length) out.push({ pri: 45, icon: "🛒", title: `もうすぐ切れそうな日用品が ${soon.length}点`, body: soon.slice(0, 3).map((x) => `${x.name}（${leftTx(x)}）`).join("・"), acts: [["shop:stock", "在庫を見る"]] });
     const buyToday = shopLists().filter((t) => t.date && t.date <= d);
-    if (buyToday.length) out.push({ pri: 44, icon: "🧾", title: `今日の買い物リストが ${buyToday.length}件`, body: buyToday.map((t) => t.name).join("・"), acts: [["shop:list", "買い物リストを開く"]] });
-    if (some.length >= 20 && [5, 6, 0].includes(dow(d))) out.push({ pri: 30, icon: "🕰", title: `週末の見直し：いつか ${some.length}件`, body: "今週やりたくなったものを次にやるへ戻しましょう。", acts: [["triage:some", "いつかを見直す"]] });
+    if (buyToday.length) out.push({ pri: 44, icon: "🧾", title: `今日の買い物リストが ${buyToday.length}件あるよ`, body: buyToday.map((t) => t.name).join("・"), acts: [["shop:list", "買い物リストを開く"]] });
+    if (some.length >= 20 && [5, 6, 0].includes(dow(d))) out.push({ pri: 30, icon: "🕰", title: `週末の見直し：いつか ${some.length}件`, body: "今やりたくなったものがあれば、次にやるへ戻してみよう。", acts: [["triage:some", "いつかを見直す"]] });
     const dg = S.diag.at(-1);
-    if (dg?.next) out.push({ pri: 20, icon: "🩺", title: "前回の診断の「次の一手」", body: dg.next, acts: [["tab:log", "診断を見る"]] });
-    if (!out.some((x) => x.pri >= 50)) out.push({ pri: 10, icon: "✨", title: S.doneToday.length ? `今日は ${S.doneToday.length}件 終わりました。いい流れです` : "流れは整っています", body: today.length ? `今日の残り ${today.length}件。上から1つずつどうぞ。` : "余裕があれば、次にやるから1つ今日に入れてみましょう。", acts: today.length ? [["stage:today", "今日の一覧"]] : [["stage:next", "次にやるを見る"]] });
+    if (dg?.next) out.push({ pri: 20, icon: "🩺", title: "診断からの次の一手", body: dg.next, acts: [["tab:log", "診断を見る"]] });
+    if (!out.some((x) => x.pri >= 50)) out.push({ pri: 10, icon: "✨", title: S.doneToday.length ? `今日はもう ${S.doneToday.length}件できてる。いい感じ！` : "いい流れだよ", body: today.length ? `あと ${today.length}件。上から1つずつでいこう。` : "よゆうがあれば、次にやるから1つ今日に入れてみよう。", acts: today.length ? [["stage:today", "今日の一覧"]] : [["stage:next", "次にやるを見る"]] });
     return out.sort((a, b) => b.pri - a.pri);
   }
   const adviceTop = () => (S.mode === "loading" && !S.tasks.length ? null : advise()[0]);
   function openConcierge(at = 0) {
     const list = advise();
     const itemRow = (t, acts) => `<div class="crow" data-qt="${t.id}"><button type="button" class="cname" data-mopen="${t.id}">${esc(short(t.name, 28))}<small>${esc(metaOf(t).tx)}${t.weight ? `・${t.weight}` : ""}</small></button><span class="cacts">${acts.map(([k, n]) => k === "open" ? `<button type="button" class="qc" data-mopen="${t.id}">${n}</button>` : `<button type="button" class="qc" data-qk="${k}">${n}</button>`).join("")}</span></div>`;
-    modal(`<div class="tips"><h3>提案<small>${list.length}件・大事な順</small></h3><div class="clist">${sugsHtml()}${list.filter((x) => !x.sug).map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
+    modal(`<div class="tips"><h3>ひとこと<small>${list.length}件・大事な順</small></h3><div class="clist">${sugsHtml()}${list.filter((x) => !x.sug).map((x, i) => `<section class="csug" ${i === at ? 'id="logat"' : ""}><h4><span>${x.icon}</span>${esc(x.title)}</h4><p>${esc(x.body)}</p>${(x.items || []).map((t) => itemRow(t, x.itemActs)).join("")}${x.acts ? `<div class="sfoot">${x.acts.map(([k, n], j) => `<button type="button" class="btn${j ? "" : " pri"}" data-cact="${k}">${n}</button>`).join("")}</div>` : ""}</section>`).join("")}</div>
       <div class="form" style="padding-top:0"><button type="button" class="btn" data-sugrun="1">💡 今すぐ提案してもらう</button><button type="button" class="btn" data-mclose="1">閉じる</button></div></div>`);
   }
   async function conciergeAct(k) {
     const [kind, v] = k.split(":");
     closeModal();
-    if (kind === "late") { const late = lateOf(); const d = v === "today" ? TODAY() : addDays(TODAY(), 1); for (const t of late) await setProps(t, dateProps(d), `遅れ ${late.length}件を${v === "today" ? "今日" : "明日"}にしました`, { undo: false, quiet: t !== late[0] }); return; }
+    if (kind === "late") { const late = lateOf(); const d = v === "today" ? TODAY() : addDays(TODAY(), 1); for (const t of late) await setProps(t, dateProps(d), `持ち越し ${late.length}件を${v === "today" ? "今日" : "明日"}にしたよ`, { undo: false, quiet: t !== late[0] }); return; }
     if (kind === "tab") S.tab = v;
     else if (kind === "stage") { S.tab = "flow"; S.stage = v; }
     else if (kind === "triage") { S.tab = "triage"; S.pileKey = v === "some" ? "some" : "inbox"; }
@@ -3431,11 +3461,11 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
         if (t) { const ok = await setProps(t, props, `「${short(t.name)}」${sugSummary(s).replace(short(t.name, 18), "").trim()}`, { undo: false }); if (!ok) return; }
         else if (s.taskIds[0] && S.mode !== "demo") await call("update", { page_id: s.taskIds[0], command: "update_properties", properties: props, allow_async: false }, { read: false });
       }
-    } catch (err) { toast(`採用できませんでした：${errText(err)}`); return; }
+    } catch (err) { toast(`ごめん、採用できなかった：${errText(err)}`); return; }
     await settleSug(s, "✅ 採用", made ? [made.url] : null);
-    toast(op.create ? `提案を採用して「${short(made?.name || s.name)}」を作りました` : "提案を採用しました");
+    toast(op.create ? `採用！「${short(made?.name || s.name)}」を作ったよ` : "採用したよ。ありがとう！");
   }
-  async function dismissSug(id) { const s = S.sugs.find((x) => x.id === id); if (!s) return; await settleSug(s, "⏭ 見送り"); toast("見送りました（同じ提案は繰り返しません）"); }
+  async function dismissSug(id) { const s = S.sugs.find((x) => x.id === id); if (!s) return; await settleSug(s, "⏭ 見送り"); toast("見送ったよ（同じ提案はしばらく出さないね）"); }
   async function settleSug(s, state, madeUrls) {
     S.sugs = S.sugs.filter((x) => x !== s); refresh(); if (!$("#modal").hidden) openConcierge();
     if (S.mode === "demo") return;
@@ -3445,14 +3475,14 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   }
   // 今すぐ提案してもらう（定期実行「💡 タスクの提案」を API トリガーで起動）
   async function askSuggest(el) {
-    if (S.mode === "demo") { toast("見本では動きません"); return; }
+    if (S.mode === "demo") { toast("見本では動かないよ"); return; }
     if (VIA !== "api") { window.open("https://claude.ai/code/routines", "_blank", "noopener"); return; }
     el.disabled = true; el.textContent = "起動中…";
     try {
       const r = await fetch("/api/run", { method: "POST", headers: { Authorization: `Bearer ${store.get("key") || ""}`, "Content-Type": "application/json" }, body: JSON.stringify({ which: "suggest" }) });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      el.textContent = "起動しました（数分で届きます）"; toast("AIが提案を考えています。数分したら「↻」で読み直してください");
+      el.textContent = "起動しました（数分で届きます）"; toast("AIが提案を考え中。数分したら「↻」で読み直してね");
     } catch (err) { el.disabled = false; el.textContent = "💡 今すぐ提案してもらう"; toast(String(err.message || "起動できませんでした").slice(0, 120)); }
   }
   // ================= 節約：3月まで、家の必要なものだけ買う =================
@@ -3819,9 +3849,9 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const cards = checkCards(); const asks = openAsks(); const unseen = cards.filter((c) => c.unseen); const todo = unseen.length + asks.length;
     const j = S.journal?.[0]; const seen = seenAll();
     root.insertAdjacentHTML("afterbegin", `<section class="g-sec"><h3>ひと目で<small>色＝状態　赤い「新着」＝まだ見ていない</small></h3>
-        <div class="ck-sum">${todo ? `<b>見ておくこと ${todo}件</b>　新着レポート ${unseen.length}・答えていない判断 ${asks.length}` : "<b>見落としはありません ✨</b>"}</div>
+        <div class="ck-sum">${todo ? `<b>見ておきたいことが ${todo}件</b>　新着レポート ${unseen.length}・答えを待ってる判断 ${asks.length}` : "<b>見落としはないよ ✨</b>"}</div>
         <div class="ck-glance">${cards.map((c) => `<button type="button" class="ckc ${c.sig}" ${c.go === "concierge" ? 'data-concierge="1"' : c.go === "fix" ? 'data-logseg="fix"' : c.go === "review" ? 'data-review="1"' : `data-dgo="${c.k}"`}>${c.unseen ? '<span class="new">新着</span>' : ""}<span class="h"><span class="ic">${c.icon}</span>${esc(c.name)}</span><b>${esc(c.main)}</b><small>${esc(c.sub || "")}</small></button>`).join("")}</div></section>
-      <section class="g-sec ck-sec" id="ck-asks"><h3>✋ 答えていない判断<small>診断・振り返りから出た宿題</small></h3><div class="ck-todo">${asks.length ? asks.map((t, i) => rowHtml(t, i, { check: false })).join("") : `<div class="empty">ありません</div>`}</div></section>
+      <section class="g-sec ck-sec" id="ck-asks"><h3>✋ 答えていない判断<small>診断・振り返りから出た宿題</small></h3><div class="ck-todo">${asks.length ? asks.map((t, i) => rowHtml(t, i, { check: false })).join("") : `<div class="empty">今はないよ</div>`}</div></section>
       <section class="g-sec ck-sec" id="ck-journal"><h3>📓 ゆうべのジャーナル<small>毎晩 20:53 に自動</small></h3><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "ジャーナルはまだありません")}</div>`}</div>
         ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 確認済み</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">確認した</button>`}</div>` : ""}</section>`);
     // 週次レポートに「確認した」
@@ -3975,15 +4005,15 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const rv = `<button type="button" class="fcrv${due ? " due" : ""}" data-review="1" aria-label="週の見直し">🔁${due ? "<i></i>" : ""}</button>`;
     if (hl && isOpenT(hl)) return `<section class="fcbar hl"><span class="fci">🎯</span><button type="button" class="fcname" data-open="${hl.id}">${esc(hl.name)}</button><button type="button" class="fcok" data-done="${hl.id}" aria-label="済み">✓</button><button type="button" class="fcx" data-hlclear="${hl.id}" aria-label="ハイライトを変える">↺</button>${rv}</section>`;
     if (open.length) return `<section class="fcbar"><span class="fci">${hl ? "🎉" : "🎯"}</span><div class="fcchips">${open.map((t) => `<button type="button" class="fcchip" data-hlpick="${t.id}">⭐ ${esc(short(t.name, 16))}</button>`).join("")}</div>${rv}</section>`;
-    return `<section class="fcbar"><button type="button" class="fcname mute" data-review="1">⭐ 今週の重点を決める（週の見直し）›</button></section>`;
+    return `<section class="fcbar"><button type="button" class="fcname mute" data-review="1">⭐ 今週の大事な3つを決めよう（週の見直し）›</button></section>`;
   }
   async function setHighlight(id) {
     const t = known.get(id); if (!t) return;
     const old = hlTask(); const props = { "date:🎯 ハイライト:start": TODAY(), "date:🎯 ハイライト:is_datetime": 0, ...(t.date === TODAY() ? {} : dateProps(TODAY())) };
     if (old && old !== t) await setProps(old, { "date:🎯 ハイライト:start": null }, "", { quiet: true, undo: false });
-    buzz(); await setProps(t, props, `🎯 今日のハイライト：「${short(t.name)}」`);
+    buzz(); await setProps(t, props, `🎯 今日のハイライトは「${short(t.name)}」。これができたら今日は花丸！`);
   }
-  function clearHighlight(id) { const t = known.get(id); if (t) setProps(t, { "date:🎯 ハイライト:start": null }, "ハイライトを外しました（重点から選び直せます）"); }
+  function clearHighlight(id) { const t = known.get(id); if (t) setProps(t, { "date:🎯 ハイライト:start": null }, "ハイライトを外したよ。気が向いたら選び直そう"); }
 
   // ---------- 🔁 週の見直し（15分）：①今週の重点の結果 → ②止まっているもの → ③来週の重点を3つまで ----------
   const RV = { pick: new Set(), shown: false, q: "" };
@@ -4004,10 +4034,10 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       .filter((t) => !q || `${t.name} ${t.next || ""} ${t.tag || ""}`.toLowerCase().includes(q)).sort((a, b) => (RV.pick.has(b.id) - RV.pick.has(a.id)) || score(b) - score(a)).slice(0, 40);
     const n = RV.pick.size;
     const pickRow = (t, why) => { const on = RV.pick.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-rvpick="${t.id}"><span class="bx">${on ? "⭐" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc(why || [STAGES[stageOf(t)]?.name, t.tag, t.goals?.some((g) => goalIds.has(g)) ? "🎯 目標につながる" : "", ageOf(t) >= 14 ? `${ageOf(t)}日止まっている` : ""].filter(Boolean).join("・"))}</small></span></button>`; };
-    box.innerHTML = `<div class="pkhead"><h3>🔁 週の見直し</h3><small>15分でOK・正解はありません</small></div>
+    box.innerHTML = `<div class="pkhead"><h3>🔁 週の見直し</h3><small>15分でOK・正解なんてないよ</small></div>
       <div class="rvbody">
-        <section><h4>① 今週の重点はどうだった？</h4>${focus.length ? focus.map((t) => `<div class="rvrow"><span>${isOpenT(t) ? "⭐" : "✅"}</span><button type="button" class="tx" data-mopen="${t.id}">${esc(t.name)}</button><small class="mute">${isOpenT(t) ? (RV.pick.has(t.id) ? "来週も続ける" : "外す") : "済み 🎉"}</small></div>`).join("") : `<p class="mute">今週は重点がありませんでした</p>`}${done.length ? `<p class="rvok">済んだ重点 ${done.length}件。いい1週間でした</p>` : ""}</section>
-        ${stuck.length ? `<section><h4>② 止まっているもの（2週間以上）</h4><p class="mute">やらないなら「いつか」へ。大事なら③で重点に</p>${stuck.map((t) => `<div class="rvrow"><span>🕸</span><button type="button" class="tx" data-mopen="${t.id}">${esc(short(t.name, 28))}<small class="mute"> ${ageOf(t)}日</small></button><button type="button" class="qc" data-rvsome="${t.id}">いつかへ</button></div>`).join("")}</section>` : ""}
+        <section><h4>① 今週の重点はどうだった？</h4>${focus.length ? focus.map((t) => `<div class="rvrow"><span>${isOpenT(t) ? "⭐" : "✅"}</span><button type="button" class="tx" data-mopen="${t.id}">${esc(t.name)}</button><small class="mute">${isOpenT(t) ? (RV.pick.has(t.id) ? "来週も続ける" : "外す") : "済み 🎉"}</small></div>`).join("") : `<p class="mute">今週は重点なしだったね。来週はゆるく1つからでも</p>`}${done.length ? `<p class="rvok">重点を ${done.length}件やりきった！いい1週間だったね</p>` : ""}</section>
+        ${stuck.length ? `<section><h4>② 止まっているもの（2週間以上）</h4><p class="mute">やらないなら「いつか」へ置いてOK。大事なら③で重点に</p>${stuck.map((t) => `<div class="rvrow"><span>🕸</span><button type="button" class="tx" data-mopen="${t.id}">${esc(short(t.name, 28))}<small class="mute"> ${ageOf(t)}日</small></button><button type="button" class="qc" data-rvsome="${t.id}">いつかへ</button></div>`).join("")}</section>` : ""}
         <section><h4>③ 来週の重点を選ぶ <span class="rvn${n >= FOCUS_MAX ? " full" : ""}">${n} / ${FOCUS_MAX}</span></h4>
           ${sugs.length ? `<p class="mute">💡 AIのおすすめ（目標・止まっている・期限が近いものから）</p>${sugs.map((x) => pickRow(x.t, x.s.reason)).join("")}` : ""}
           <input type="search" id="rvq" class="rvq" placeholder="ほかのタスクから探す" value="${esc(RV.q)}">
@@ -4020,7 +4050,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   }
   function reviewPick(id) {
     if (RV.pick.has(id)) RV.pick.delete(id);
-    else { if (RV.pick.size >= FOCUS_MAX) { toast(`重点は${FOCUS_MAX}つまで。どれかを外してから選んでください`); return; } RV.pick.add(id); }
+    else { if (RV.pick.size >= FOCUS_MAX) { toast(`重点は${FOCUS_MAX}つまでにしとこう。どれか外してから選んでね`); return; } RV.pick.add(id); }
     buzz(); drawReview();
   }
   async function reviewCommit() {
@@ -4037,7 +4067,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
       if (S.mode !== "demo") call("update", { page_id: s.id, command: "update_properties", properties: { "状態": state, "date:決めた日:start": TODAY(), "date:決めた日:is_datetime": 0 }, allow_async: false }, { read: false }).catch(() => {});
     }
     S.focusSugs = []; store.set("review", TODAY()); render();
-    toast(`来週の重点を${RV.pick.size}件にしました。毎朝、今日タブの一番上から1つ選びます${S.mode === "demo" ? "（見本）" : ""}`);
+    toast(`来週の重点は${RV.pick.size}つ。毎朝、今日タブのいちばん上から1つ選ぼうね${S.mode === "demo" ? "（見本）" : ""}`);
   }
   // ================= 🔔 お知らせ（アラート）：診断レポート・タスクの問題点を、アプリを開いたときに知らせる =================
   // 1日のはじめて開いたとき、まだ見ていないお知らせがあれば自動で出す。上の🔔からいつでも見られる。
@@ -4048,26 +4078,26 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const out = []; const d = TODAY();
     const today = stageItems("today"); const late = today.filter((t) => t.date && t.date < d);
     const old = late.filter((t) => diffDays(t.date, d) >= 3);
-    if (late.length) out.push({ id: `late:${late.length}:${old.length}`, lv: old.length ? "red" : "yellow", icon: "⏰", title: `遅れているタスクが ${late.length}件`, body: old.length ? `3日以上遅れ：${old.slice(0, 2).map((t) => short(t.name, 14)).join("・")}${old.length > 2 ? " ほか" : ""}` : "今日やるか、日を決め直すと流れが戻ります", act: ["今日タブで見る", "today"] });
+    if (late.length) out.push({ id: `late:${late.length}:${old.length}`, lv: old.length ? "red" : "yellow", icon: "⏰", title: `持ち越しが ${late.length}件あるよ`, body: old.length ? `3日以上たってるもの：${old.slice(0, 2).map((t) => short(t.name, 14)).join("・")}${old.length > 2 ? " ほか" : ""}` : "今日やるか、日付を外すかだけ決めよう", act: ["今日タブで見る", "today"] });
     // 診断レポート（新着）・答えていない判断
     const dg = S.diag.at(-1); const seen = seenAll();
-    if (dg && seen.diag !== dg.id) out.push({ id: `diag:${dg.id}`, lv: dg.rate < .4 ? "red" : "yellow", icon: "🩺", title: `新しい診断レポート（第${dg.no}回）`, body: `${dg.verdict || ""}${dg.next ? `・次の一手：${dg.next}` : ""}`, act: ["レポートを見る", "log:diag"] });
+    if (dg && seen.diag !== dg.id) out.push({ id: `diag:${dg.id}`, lv: dg.rate < .4 ? "red" : "yellow", icon: "🩺", title: `診断レポートが届いたよ（第${dg.no}回）`, body: `${dg.verdict || ""}${dg.next ? `・次の一手：${dg.next}` : ""}`, act: ["レポートを見る", "log:diag"] });
     const asks = openAsks();
-    if (asks.length) { const a = Math.max(...asks.map(ageOf)); out.push({ id: `asks:${asks.map((t) => t.id.slice(0, 6)).join("")}`, lv: a >= 7 ? "red" : "yellow", icon: "✋", title: `答えていない判断が ${asks.length}件`, body: `${asks.map((t) => short(t.name, 16)).join("・")}${a >= 7 ? `（いちばん古いもので${a}日）` : ""}`, act: ["判断を見る", "log:diag"] }); }
+    if (asks.length) { const a = Math.max(...asks.map(ageOf)); out.push({ id: `asks:${asks.map((t) => t.id.slice(0, 6)).join("")}`, lv: a >= 7 ? "red" : "yellow", icon: "✋", title: `答えを待ってる判断が ${asks.length}件`, body: `${asks.map((t) => short(t.name, 16)).join("・")}${a >= 7 ? `（いちばん古いのは${a}日前）` : ""}`, act: ["判断を見る", "log:diag"] }); }
     // いまの健康診断で赤の項目
     for (const c of healthChecks().filter((c) => c.st === "red").slice(0, 2)) out.push({ id: `hc:${c.no}:${c.val}`, lv: "red", icon: "🏥", title: `${c.name}：${c.val}`, body: c.fix?.msg || c.why, act: ["直し方を見る", "log:diag"] });
     // 重点・ハイライト
     const focus = focusList(); const openF = focus.filter(isOpenT);
-    if (!openF.length) out.push({ id: `focus:none:${weekStart()}`, lv: "yellow", icon: "⭐", title: "今週の重点が決まっていません", body: "重要なことを3つだけ選ぶと、毎朝ここからハイライトを選べます", act: ["週の見直しをする", "review"] });
-    else if (reviewDue()) out.push({ id: `review:${weekStart()}`, lv: "yellow", icon: "🔁", title: "週の見直しの日です", body: "今週の重点の結果を見て、来週の3つを選び直します（15分）", act: ["週の見直しをする", "review"] });
-    else if (!hlTask() && workday(d)) out.push({ id: `hl:${d}`, lv: "info", icon: "🎯", title: "今日のハイライトがまだです", body: `重点から1つ：${openF.map((t) => short(t.name, 12)).join("・")}`, act: ["今日タブで選ぶ", "today"] });
+    if (!openF.length) out.push({ id: `focus:none:${weekStart()}`, lv: "yellow", icon: "⭐", title: "今週の重点、まだ決まってないよ", body: "大事なことを3つだけ選んでおくと、毎朝そこから1つ選ぶだけでいいよ", act: ["週の見直しをする", "review"] });
+    else if (reviewDue()) out.push({ id: `review:${weekStart()}`, lv: "yellow", icon: "🔁", title: "週の見直しの日だよ", body: "今週をふり返って、来週の3つを選び直そう（15分くらい）", act: ["週の見直しをする", "review"] });
+    else if (!hlTask() && workday(d)) out.push({ id: `hl:${d}`, lv: "info", icon: "🎯", title: "今日のハイライト、どれにする？", body: `重点から1つ：${openF.map((t) => short(t.name, 12)).join("・")}`, act: ["今日タブで選ぶ", "today"] });
     // AIの番・改善案・ジャーナル
     const mine = myTurn();
-    if (mine.length) out.push({ id: `ai:${mine.length}`, lv: mine.some((t) => t.ai === "💭" && ageOf(t) >= 3) ? "yellow" : "info", icon: "💭", title: `AIからの質問・判定待ちが ${mine.length}件`, body: mine.slice(0, 2).map((t) => short(t.name, 16)).join("・"), act: ["AIタブで答える", "ai"] });
+    if (mine.length) out.push({ id: `ai:${mine.length}`, lv: mine.some((t) => t.ai === "💭" && ageOf(t) >= 3) ? "yellow" : "info", icon: "💭", title: `AIが ${mine.length}件、返事を待ってるよ`, body: mine.slice(0, 2).map((t) => short(t.name, 16)).join("・"), act: ["AIタブで答える", "ai"] });
     const fw = fixWaiting();
-    if (fw.length) out.push({ id: `fix:${fw.map((f) => f.id.slice(0, 6)).join("")}`, lv: "info", icon: "🛠", title: `アプリの改善 ${fw.length}件が判断待ち`, body: fw.map((f) => short(f.name, 16)).join("・"), act: ["改善を見る", "log:fix"] });
+    if (fw.length) out.push({ id: `fix:${fw.map((f) => f.id.slice(0, 6)).join("")}`, lv: "info", icon: "🛠", title: `アプリの改善案が ${fw.length}件あるよ`, body: fw.map((f) => short(f.name, 16)).join("・"), act: ["改善を見る", "log:fix"] });
     const j = S.journal?.[0];
-    if (j && seen.jour !== j.id) out.push({ id: `jour:${j.id}`, lv: "info", icon: "📓", title: /ジャーナル/.test(j.name) ? j.name : `${j.name} のジャーナル`, body: "まとめ・気になること・明日の提案を見る", act: ["ジャーナルを見る", "log:diag"] });
+    if (j && seen.jour !== j.id) out.push({ id: `jour:${j.id}`, lv: "info", icon: "📓", title: /ジャーナル/.test(j.name) ? j.name : `${j.name} のジャーナル`, body: "まとめ・気になること・明日の提案が書いてあるよ", act: ["ジャーナルを見る", "log:diag"] });
     return out.sort((a, b) => LV_ORDER[a.lv] - LV_ORDER[b.lv]);
   }
   const alertSeen = () => { const s = store.get("alertSeen"); return s && s.d === TODAY() ? s : { d: TODAY(), ids: [] }; };
@@ -4076,7 +4106,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   function openAlerts() {
     const list = alertList(); const s = alertSeen();
     modal(`<div class="al"><div class="pkhead"><h3>🔔 お知らせ</h3><small>${list.length ? `${list.length}件・大事な順` : ""}</small></div>
-      <div class="allist">${list.map((a) => `<div class="alc ${a.lv}${s.ids.includes(a.id) ? " seen" : ""}"><div class="alh"><span class="ic">${a.icon}</span><b>${esc(a.title)}</b></div>${a.body ? `<p>${esc(a.body)}</p>` : ""}<button type="button" class="qc" data-alertgo="${a.act[1]}">${esc(a.act[0])} ›</button></div>`).join("") || `<div class="empty">気になることはありません ✨</div>`}</div>
+      <div class="allist">${list.map((a) => `<div class="alc ${a.lv}${s.ids.includes(a.id) ? " seen" : ""}"><div class="alh"><span class="ic">${a.icon}</span><b>${esc(a.title)}</b></div>${a.body ? `<p>${esc(a.body)}</p>` : ""}<button type="button" class="qc" data-alertgo="${a.act[1]}">${esc(a.act[0])} ›</button></div>`).join("") || `<div class="empty">気になることはないよ ✨ いい感じ！</div>`}</div>
       <div class="pkfoot"><button type="button" class="btn pri" data-alertok="1">確認した</button></div></div>`);
     $("#modal .sheet").classList.add("tall");
   }
@@ -4092,6 +4122,63 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const last = store.get("alertAuto"); if (last === TODAY()) return;
     if (!alertNew().length) return;
     store.set("alertAuto", TODAY()); openAlerts();
+  }
+  // ================= 🌙 夜の「今日できたこと」：夕方からはじめて開いたとき、今日済んだことを先に見せてから明日の1件を選ぶ =================
+  // 見たかどうかはこの端末に覚える（1日1回だけ自動で出す）。今日タブの帯からいつでも開ける
+  const EVE_HOUR = 17;
+  const jstHour = () => new Date(Date.now() + 9 * 3600e3).getUTCHours();
+  const isEvening = () => jstHour() >= EVE_HOUR;
+  const eveningDue = () => isEvening() && store.get("evening") !== TODAY() && !(S.mode === "loading" && !S.tasks.length);
+  const EV = { pick: null };
+  function eveWord(n) {
+    if (!n) return ["今日はおやすみの日でもいいよ", "何もしなかった日も大事な1日。ゆっくり休んで、明日また1つだけやろう"];
+    if (n === 1) return ["1つ進んだね、おつかれさま！", "ゼロと1は大ちがい。ちゃんと前に進んでるよ"];
+    if (n <= 3) return [`${n}つもできたね、えらい！`, "いいペース。この調子で明日もいこう"];
+    return [`${n}つも片づけた！すごい日だったね 🎉`, "がんばりすぎたかも。今夜はしっかり休もうね"];
+  }
+  // 明日の候補：重点 → 今日の残り → 次にやるの軽いもの（6件まで）
+  function eveCands() {
+    const seen = new Set(); const out = [];
+    const add = (t, why) => { if (t && !seen.has(t.id) && isOpenT(t)) { seen.add(t.id); out.push({ t, why }); } };
+    for (const t of focusList()) add(t, "⭐ 重点");
+    for (const t of stageItems("today")) add(t, "今日の残り");
+    for (const t of stageItems("next").filter((t) => !t.weight || t.weight === "S" || t.weight === "M").slice(0, 6)) add(t, "すぐできそう");
+    return out.slice(0, 6);
+  }
+  function openEvening(auto = false) {
+    if (auto) store.set("evening", TODAY());
+    const tm = addDays(TODAY(), 1); EV.pick = [...S.tasks].find((t) => t.hl === tm)?.id || null;
+    modal(`<div class="ev" id="ev"></div>`); $("#modal .sheet").classList.add("tall"); drawEvening();
+  }
+  function drawEvening() {
+    const box = $("#ev"); if (!box) return;
+    const done = S.doneToday; const hl = done.find((t) => t.hl === TODAY()); const [h, sub] = eveWord(done.length);
+    const tm = addDays(TODAY(), 1); const cands = eveCands();
+    box.innerHTML = `<div class="pkhead"><h3>🌙 今日できたこと</h3><small>${md(TODAY())}（${WD[dow(TODAY())]}）</small></div>
+      <div class="evbody">
+        <section class="evhi"><b>${esc(h)}</b><span>${esc(sub)}</span>${hl ? `<span class="evhl">🎯 ハイライト「${esc(short(hl.name, 20))}」も達成！</span>` : ""}</section>
+        ${done.length ? `<section><h4>✓ 済んだこと <small>${done.length}</small></h4>${done.map((t) => `<div class="evrow"><span>${t.hl === TODAY() ? "🎯" : "✓"}</span><button type="button" class="tx" data-mopen="${t.id}">${esc(t.name)}</button></div>`).join("")}</section>` : ""}
+        <section><h4>明日の1つだけ、決めとく？</h4><p class="mute">選ぶと明日（${md(tm)}・${WD[dow(tm)]}）の 🎯 ハイライトになるよ。決めなくても大丈夫</p>
+          ${cands.map(({ t, why }) => { const on = EV.pick === t.id; return `<button type="button" class="pkrow${on ? " sel" : ""}" data-evpick="${t.id}"><span class="bx">${on ? "🎯" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([why, t.waku, t.weight].filter(Boolean).join("・"))}</small></span></button>`; }).join("") || `<p class="mute">候補はないみたい。明日の朝に決めよう</p>`}
+        </section>
+      </div>
+      <div class="pkfoot"><button type="button" class="btn pri" data-evok="1">${EV.pick ? "これで明日へ・おやすみ" : "おやすみ 🌙"}</button></div>`;
+  }
+  function evePick(id) { EV.pick = EV.pick === id ? null : id; buzz(); drawEvening(); }
+  async function eveCommit() {
+    store.set("evening", TODAY()); closeModal();
+    const tm = addDays(TODAY(), 1); const t = EV.pick && known.get(EV.pick);
+    if (!t) { toast("おつかれさま。また明日！"); return; }
+    const old = [...S.tasks].filter((x) => x.hl === tm && x !== t);
+    for (const o of old) await setProps(o, { "date:🎯 ハイライト:start": null }, "", { quiet: true, undo: false });
+    if (t.hl !== tm || t.date !== tm) await setProps(t, { "date:🎯 ハイライト:start": tm, "date:🎯 ハイライト:is_datetime": 0, ...dateProps(tm) }, "", { quiet: true, undo: false });
+    toast(`明日は「${short(t.name)}」からいこう。おやすみ！${S.mode === "demo" ? "（見本）" : ""}`);
+  }
+  // 今日タブの帯（夕方から）
+  function eveBarHtml() {
+    if (!isEvening() || (S.mode === "loading" && !S.tasks.length)) return "";
+    const n = S.doneToday.length;
+    return `<button type="button" class="pickbar evbar" data-evening="1"><span class="ic">🌙</span><span class="tx"><b>今日できたこと${n ? ` ${n}件` : ""}</b><small>ふり返って、明日の1つを決めとこう</small></span><i>›</i></button>`;
   }
   // ================= 今日を選ぶ：次にやるを一覧で見て、まとめて選んで1回で今日に入れる =================
   const PK = { sel: new Set(), f: "rec", keep: false };
@@ -4118,10 +4205,10 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const fs = [["rec", "おすすめ順"], ["old", "古い順"], ["light", "軽いもの"], ...wakus.map((w) => [`w:${w}`, w]), ...tags.map((g) => [`t:${g}`, g])];
     const items = pickItems(); const selT = [...PK.sel].map((id) => known.get(id)).filter(Boolean);
     const st = box.querySelector(".pklist")?.scrollTop || 0; const fx = box.querySelector(".pkf")?.scrollLeft || 0;
-    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぶ</h3><small>今日 ${today.length}件・重さ ${wPts(today)}${selT.length ? ` → ${today.length + selT.length}件・${wPts(today) + wPts(selT)}` : ""}</small></div>
+    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぼう</h3><small>今日 ${today.length}件・重さ ${wPts(today)}${selT.length ? ` → ${today.length + selT.length}件・${wPts(today) + wPts(selT)}` : ""}</small></div>
       <div class="pkf">${fs.map(([k, n]) => `<button type="button" class="qc" data-pkf="${esc(k)}" aria-pressed="${PK.f === k}">${esc(n)}</button>`).join("")}</div>
-      <div class="pklist">${items.map((t) => { const on = PK.sel.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-pksel="${t.id}"><span class="bx">${on ? "✓" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([t.waku, t.tag, t.next].filter(Boolean).join("・"))}</small></span><span class="w">${esc(t.weight || "")}<br>${ageOf(t)}日</span></button>`; }).join("") || `<div class="empty">ここには何もありません</div>`}</div>
-      <div class="pkfoot"><button type="button" class="btn" data-mclose="1">閉じる</button><button type="button" class="btn pri" data-pkok="1" ${selT.length ? "" : "disabled"}>${selT.length ? `今日に入れる（${selT.length}件）` : "タップして選ぶ"}</button></div>`;
+      <div class="pklist">${items.map((t) => { const on = PK.sel.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-pksel="${t.id}"><span class="bx">${on ? "✓" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([t.waku, t.tag, t.next].filter(Boolean).join("・"))}</small></span><span class="w">${esc(t.weight || "")}<br>${ageOf(t)}日</span></button>`; }).join("") || `<div class="empty">ここには何もないよ</div>`}</div>
+      <div class="pkfoot"><button type="button" class="btn" data-mclose="1">閉じる</button><button type="button" class="btn pri" data-pkok="1" ${selT.length ? "" : "disabled"}>${selT.length ? `今日に入れる（${selT.length}件）` : "タップして選んでね"}</button></div>`;
     const f2 = box.querySelector(".pkf"); if (f2) f2.scrollLeft = fx;
     if (PK.keep) { const l2 = box.querySelector(".pklist"); if (l2) l2.scrollTop = st; }
     PK.keep = false;
@@ -4132,7 +4219,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     closeModal(); const props = dateProps(TODAY());
     const befores = list.map((t) => [t, propsBefore(t, props)]);
     await Promise.all(list.map((t) => setProps(t, props, "", { quiet: true })));
-    toast(`${list.length}件を今日に入れました${S.mode === "demo" ? "（見本）" : ""}`, () => befores.forEach(([t, b]) => setProps(t, b, "", { quiet: true, undo: false })));
+    toast(`${list.length}件を今日に入れたよ。1つずついこう！${S.mode === "demo" ? "（見本）" : ""}`, () => befores.forEach(([t, b]) => setProps(t, b, "", { quiet: true, undo: false })));
   }
   // ================= 日付で見る：選んだ日に「実行日」「更新」「済み」になったタスクを並べ替えて見る =================
   // 上の日付をタップで開く。読み込み済みのものはすぐ、残りは Notion に聞いて足す
@@ -4329,12 +4416,15 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (d.ev !== undefined && el.classList.contains("chip")) { S.logEvent = d.ev; render(); return; }
     if (d.diag) { markSeen("diag", d.diag); openRecord("diag", d.diag); return; }
     if (d.dgo) { document.getElementById(`ck-${d.dgo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
-    if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認済みにしました"); return; }
+    if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認したよ"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
     if (d.alerts) { openAlerts(); return; }
+    if (d.evening) { openEvening(); return; }
+    if (d.evpick) { evePick(d.evpick); return; }
+    if (d.evok) { eveCommit(); return; }
     if (d.alertgo) { alertGo(d.alertgo); return; }
-    if (d.alertok) { alertsSeenAll(); closeModal(); toast("確認しました（今日は同じお知らせを自動では出しません）"); return; }
+    if (d.alertok) { alertsSeenAll(); closeModal(); toast("見てくれてありがとう（今日は同じお知らせはもう出さないね）"); return; }
     if (d.hlpick) { setHighlight(d.hlpick); return; }
     if (d.hlclear) { clearHighlight(d.hlclear); return; }
     if (d.review) { openReview(); return; }
@@ -4580,7 +4670,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
   // ウィジェット・Claude のリンク（/p/<id> → #open=<id>）から：そのページを開く（render が # をタブ名に書き換える前に読む）
   const openAt = (location.hash.match(/^#open=([0-9a-f]{32})$/) || [])[1];
   render();
-  Promise.resolve(load()).then(() => { if (openAt) openAny(openAt); else setTimeout(maybeAlert, 600); });
+  Promise.resolve(load()).then(() => { if (openAt) openAny(openAt); else setTimeout(() => { if (!$("#modal").hidden || !$("#page").hidden) return; if (eveningDue()) openEvening(true); else maybeAlert(); }, 600); });
   window.__imadoko = { S, ST, stageOf, render, parseMd, ser, mdToHtml, htmlToMd, qaParse, qaWrite, conclusionOf, buildUpdate: () => buildUpdate(), get ED() { return ED; } }; // 確認用
 })();
 </script>

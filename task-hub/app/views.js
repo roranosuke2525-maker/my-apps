@@ -36,11 +36,11 @@
   async function setProps(t, props, msg, { undo = true, quiet = false } = {}) {
     const before = propsBefore(t, props);
     applyLocal(t, props); refresh();
-    if (!quiet) toast(msg + (S.mode === "demo" ? "（見本）" : ""), undo ? () => setProps(t, before, "元に戻しました", { undo: false }) : null);
+    if (!quiet) toast(msg + (S.mode === "demo" ? "（見本）" : ""), undo ? () => setProps(t, before, "元に戻したよ", { undo: false }) : null);
     if (S.mode === "demo") return true;
     setSync("busy");
     try { await call("update", { page_id: t.id, command: "update_properties", properties: props, allow_async: false }, { read: false }); saveSnap(); setSync("ok"); return true; }
-    catch (err) { applyLocal(t, before); refresh(); setSync("err"); toast(`変更できませんでした：${errText(err)}`); return false; }
+    catch (err) { applyLocal(t, before); refresh(); setSync("err"); toast(`ごめん、変えられなかった：${errText(err)}`); return false; }
   }
   // タスクを消す（Notion のゴミ箱へ。「取り消す」で戻せる）。画面からは先に消し、失敗したら戻す
   function dropLocal(t) { for (const L of [S.tasks, S.doneToday, S.refs, S.readList]) { const i = L.indexOf(t); if (i >= 0) L.splice(i, 1); } known.delete(t.id); }
@@ -55,7 +55,25 @@
     try { await call("del", { page_ids: [t.id] }, { read: false }); saveSnap(); setSync("ok"); return true; }
     catch (err) { putBack(t); refresh(); setSync("err"); toast(`削除できませんでした：${errText(err)}`); return false; }
   }
-  const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), `「${short(t.name)}」→ ${MOVES[key].label}${extra}`);
+  // 動かしたときのひとこと（友だちの口調で）
+  const CHEERS = ["やったね！", "ナイス！", "いいね、その調子！", "おつかれさま！", "ひとつ前進！", "さすが！"];
+  function moveSay(t, key) {
+    const n = short(t.name);
+    if (key === "done") {
+      if (t.hl === TODAY()) return `🎯 今日のハイライト「${n}」できた！今日はもう花丸だよ 🎉`;
+      const c = S.doneToday.filter((x) => x !== t).length + 1;
+      return `「${n}」できた！${CHEERS[(c - 1) % CHEERS.length]}${c >= 2 ? `今日${c}つ目` : ""}`;
+    }
+    if (key === "tomorrow") return `「${n}」は明日にしよう。無理しなくて大丈夫`;
+    if (key === "today") return `「${n}」を今日やるに入れたよ`;
+    if (key === "some") return `「${n}」はいつかへ。今はそれでOK`;
+    if (key === "next") return `「${n}」を次にやるに戻したよ`;
+    if (key === "wait") return `「${n}」は待ちにしたよ。返事が来たら動こう`;
+    if (key === "ref") return `「${n}」は資料にしまったよ`;
+    if (["ai", "deep", "thorough"].includes(key)) return `「${n}」はAIにおまかせ（${MOVES[key].label}）。答えが来たら知らせるね`;
+    return `「${n}」→ ${MOVES[key].label}`;
+  }
+  const move = (t, key, extra = "") => setProps(t, MOVES[key].props(t), moveSay(t, key) + extra);
   const short = (s, n = 14) => (s.length > n ? `${s.slice(0, n)}…` : s);
   function setSync(st) { const el = $("#sync"); el.className = `sync ${st === "ok" ? "" : st}`; $("#synct").textContent = st === "busy" ? "書き込み中" : st === "err" ? "エラー" : S.mode === "demo" ? "見本" : S.loadedAt ? `${jstTime(S.loadedAt)} 更新` : ""; }
   // 平日 7:52〜17:52 毎時（土日・祝日は動かない。祝日は振替休日・国民の休日を含む 2026〜2027年）

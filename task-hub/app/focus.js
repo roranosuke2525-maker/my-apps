@@ -17,15 +17,15 @@
     const rv = `<button type="button" class="fcrv${due ? " due" : ""}" data-review="1" aria-label="週の見直し">🔁${due ? "<i></i>" : ""}</button>`;
     if (hl && isOpenT(hl)) return `<section class="fcbar hl"><span class="fci">🎯</span><button type="button" class="fcname" data-open="${hl.id}">${esc(hl.name)}</button><button type="button" class="fcok" data-done="${hl.id}" aria-label="済み">✓</button><button type="button" class="fcx" data-hlclear="${hl.id}" aria-label="ハイライトを変える">↺</button>${rv}</section>`;
     if (open.length) return `<section class="fcbar"><span class="fci">${hl ? "🎉" : "🎯"}</span><div class="fcchips">${open.map((t) => `<button type="button" class="fcchip" data-hlpick="${t.id}">⭐ ${esc(short(t.name, 16))}</button>`).join("")}</div>${rv}</section>`;
-    return `<section class="fcbar"><button type="button" class="fcname mute" data-review="1">⭐ 今週の重点を決める（週の見直し）›</button></section>`;
+    return `<section class="fcbar"><button type="button" class="fcname mute" data-review="1">⭐ 今週の大事な3つを決めよう（週の見直し）›</button></section>`;
   }
   async function setHighlight(id) {
     const t = known.get(id); if (!t) return;
     const old = hlTask(); const props = { "date:🎯 ハイライト:start": TODAY(), "date:🎯 ハイライト:is_datetime": 0, ...(t.date === TODAY() ? {} : dateProps(TODAY())) };
     if (old && old !== t) await setProps(old, { "date:🎯 ハイライト:start": null }, "", { quiet: true, undo: false });
-    buzz(); await setProps(t, props, `🎯 今日のハイライト：「${short(t.name)}」`);
+    buzz(); await setProps(t, props, `🎯 今日のハイライトは「${short(t.name)}」。これができたら今日は花丸！`);
   }
-  function clearHighlight(id) { const t = known.get(id); if (t) setProps(t, { "date:🎯 ハイライト:start": null }, "ハイライトを外しました（重点から選び直せます）"); }
+  function clearHighlight(id) { const t = known.get(id); if (t) setProps(t, { "date:🎯 ハイライト:start": null }, "ハイライトを外したよ。気が向いたら選び直そう"); }
 
   // ---------- 🔁 週の見直し（15分）：①今週の重点の結果 → ②止まっているもの → ③来週の重点を3つまで ----------
   const RV = { pick: new Set(), shown: false, q: "" };
@@ -46,10 +46,10 @@
       .filter((t) => !q || `${t.name} ${t.next || ""} ${t.tag || ""}`.toLowerCase().includes(q)).sort((a, b) => (RV.pick.has(b.id) - RV.pick.has(a.id)) || score(b) - score(a)).slice(0, 40);
     const n = RV.pick.size;
     const pickRow = (t, why) => { const on = RV.pick.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-rvpick="${t.id}"><span class="bx">${on ? "⭐" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc(why || [STAGES[stageOf(t)]?.name, t.tag, t.goals?.some((g) => goalIds.has(g)) ? "🎯 目標につながる" : "", ageOf(t) >= 14 ? `${ageOf(t)}日止まっている` : ""].filter(Boolean).join("・"))}</small></span></button>`; };
-    box.innerHTML = `<div class="pkhead"><h3>🔁 週の見直し</h3><small>15分でOK・正解はありません</small></div>
+    box.innerHTML = `<div class="pkhead"><h3>🔁 週の見直し</h3><small>15分でOK・正解なんてないよ</small></div>
       <div class="rvbody">
-        <section><h4>① 今週の重点はどうだった？</h4>${focus.length ? focus.map((t) => `<div class="rvrow"><span>${isOpenT(t) ? "⭐" : "✅"}</span><button type="button" class="tx" data-mopen="${t.id}">${esc(t.name)}</button><small class="mute">${isOpenT(t) ? (RV.pick.has(t.id) ? "来週も続ける" : "外す") : "済み 🎉"}</small></div>`).join("") : `<p class="mute">今週は重点がありませんでした</p>`}${done.length ? `<p class="rvok">済んだ重点 ${done.length}件。いい1週間でした</p>` : ""}</section>
-        ${stuck.length ? `<section><h4>② 止まっているもの（2週間以上）</h4><p class="mute">やらないなら「いつか」へ。大事なら③で重点に</p>${stuck.map((t) => `<div class="rvrow"><span>🕸</span><button type="button" class="tx" data-mopen="${t.id}">${esc(short(t.name, 28))}<small class="mute"> ${ageOf(t)}日</small></button><button type="button" class="qc" data-rvsome="${t.id}">いつかへ</button></div>`).join("")}</section>` : ""}
+        <section><h4>① 今週の重点はどうだった？</h4>${focus.length ? focus.map((t) => `<div class="rvrow"><span>${isOpenT(t) ? "⭐" : "✅"}</span><button type="button" class="tx" data-mopen="${t.id}">${esc(t.name)}</button><small class="mute">${isOpenT(t) ? (RV.pick.has(t.id) ? "来週も続ける" : "外す") : "済み 🎉"}</small></div>`).join("") : `<p class="mute">今週は重点なしだったね。来週はゆるく1つからでも</p>`}${done.length ? `<p class="rvok">重点を ${done.length}件やりきった！いい1週間だったね</p>` : ""}</section>
+        ${stuck.length ? `<section><h4>② 止まっているもの（2週間以上）</h4><p class="mute">やらないなら「いつか」へ置いてOK。大事なら③で重点に</p>${stuck.map((t) => `<div class="rvrow"><span>🕸</span><button type="button" class="tx" data-mopen="${t.id}">${esc(short(t.name, 28))}<small class="mute"> ${ageOf(t)}日</small></button><button type="button" class="qc" data-rvsome="${t.id}">いつかへ</button></div>`).join("")}</section>` : ""}
         <section><h4>③ 来週の重点を選ぶ <span class="rvn${n >= FOCUS_MAX ? " full" : ""}">${n} / ${FOCUS_MAX}</span></h4>
           ${sugs.length ? `<p class="mute">💡 AIのおすすめ（目標・止まっている・期限が近いものから）</p>${sugs.map((x) => pickRow(x.t, x.s.reason)).join("")}` : ""}
           <input type="search" id="rvq" class="rvq" placeholder="ほかのタスクから探す" value="${esc(RV.q)}">
@@ -62,7 +62,7 @@
   }
   function reviewPick(id) {
     if (RV.pick.has(id)) RV.pick.delete(id);
-    else { if (RV.pick.size >= FOCUS_MAX) { toast(`重点は${FOCUS_MAX}つまで。どれかを外してから選んでください`); return; } RV.pick.add(id); }
+    else { if (RV.pick.size >= FOCUS_MAX) { toast(`重点は${FOCUS_MAX}つまでにしとこう。どれか外してから選んでね`); return; } RV.pick.add(id); }
     buzz(); drawReview();
   }
   async function reviewCommit() {
@@ -79,5 +79,5 @@
       if (S.mode !== "demo") call("update", { page_id: s.id, command: "update_properties", properties: { "状態": state, "date:決めた日:start": TODAY(), "date:決めた日:is_datetime": 0 }, allow_async: false }, { read: false }).catch(() => {});
     }
     S.focusSugs = []; store.set("review", TODAY()); render();
-    toast(`来週の重点を${RV.pick.size}件にしました。毎朝、今日タブの一番上から1つ選びます${S.mode === "demo" ? "（見本）" : ""}`);
+    toast(`来週の重点は${RV.pick.size}つ。毎朝、今日タブのいちばん上から1つ選ぼうね${S.mode === "demo" ? "（見本）" : ""}`);
   }

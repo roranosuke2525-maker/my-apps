@@ -23,10 +23,10 @@
     const fs = [["rec", "おすすめ順"], ["old", "古い順"], ["light", "軽いもの"], ...wakus.map((w) => [`w:${w}`, w]), ...tags.map((g) => [`t:${g}`, g])];
     const items = pickItems(); const selT = [...PK.sel].map((id) => known.get(id)).filter(Boolean);
     const st = box.querySelector(".pklist")?.scrollTop || 0; const fx = box.querySelector(".pkf")?.scrollLeft || 0;
-    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぶ</h3><small>今日 ${today.length}件・重さ ${wPts(today)}${selT.length ? ` → ${today.length + selT.length}件・${wPts(today) + wPts(selT)}` : ""}</small></div>
+    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぼう</h3><small>今日 ${today.length}件・重さ ${wPts(today)}${selT.length ? ` → ${today.length + selT.length}件・${wPts(today) + wPts(selT)}` : ""}</small></div>
       <div class="pkf">${fs.map(([k, n]) => `<button type="button" class="qc" data-pkf="${esc(k)}" aria-pressed="${PK.f === k}">${esc(n)}</button>`).join("")}</div>
-      <div class="pklist">${items.map((t) => { const on = PK.sel.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-pksel="${t.id}"><span class="bx">${on ? "✓" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([t.waku, t.tag, t.next].filter(Boolean).join("・"))}</small></span><span class="w">${esc(t.weight || "")}<br>${ageOf(t)}日</span></button>`; }).join("") || `<div class="empty">ここには何もありません</div>`}</div>
-      <div class="pkfoot"><button type="button" class="btn" data-mclose="1">閉じる</button><button type="button" class="btn pri" data-pkok="1" ${selT.length ? "" : "disabled"}>${selT.length ? `今日に入れる（${selT.length}件）` : "タップして選ぶ"}</button></div>`;
+      <div class="pklist">${items.map((t) => { const on = PK.sel.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-pksel="${t.id}"><span class="bx">${on ? "✓" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([t.waku, t.tag, t.next].filter(Boolean).join("・"))}</small></span><span class="w">${esc(t.weight || "")}<br>${ageOf(t)}日</span></button>`; }).join("") || `<div class="empty">ここには何もないよ</div>`}</div>
+      <div class="pkfoot"><button type="button" class="btn" data-mclose="1">閉じる</button><button type="button" class="btn pri" data-pkok="1" ${selT.length ? "" : "disabled"}>${selT.length ? `今日に入れる（${selT.length}件）` : "タップして選んでね"}</button></div>`;
     const f2 = box.querySelector(".pkf"); if (f2) f2.scrollLeft = fx;
     if (PK.keep) { const l2 = box.querySelector(".pklist"); if (l2) l2.scrollTop = st; }
     PK.keep = false;
@@ -37,5 +37,5 @@
     closeModal(); const props = dateProps(TODAY());
     const befores = list.map((t) => [t, propsBefore(t, props)]);
     await Promise.all(list.map((t) => setProps(t, props, "", { quiet: true })));
-    toast(`${list.length}件を今日に入れました${S.mode === "demo" ? "（見本）" : ""}`, () => befores.forEach(([t, b]) => setProps(t, b, "", { quiet: true, undo: false })));
+    toast(`${list.length}件を今日に入れたよ。1つずついこう！${S.mode === "demo" ? "（見本）" : ""}`, () => befores.forEach(([t, b]) => setProps(t, b, "", { quiet: true, undo: false })));
   }

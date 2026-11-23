@@ -937,6 +937,17 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .pickbar .ic { width: 24px; height: 24px; font-size: 14px; }
 .pickbar .tx b { font-size: 13px; }
 .pickbar .tx small { display: none; }
+
+/* ---- v52：🌙 今日できたこと ---- */
+.ev { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; padding: 0 10px; }
+.evbody { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.evbody h4 { margin: 0 0 6px; font-size: 14px; } .evbody h4 small { color: var(--mute); font-weight: normal; }
+.evbody p { margin: 0 0 8px; font-size: 12.5px; }
+.evhi { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--sunk); text-align: center; }
+.evhi b { font-size: 17px; } .evhi span { font-size: 13px; color: var(--mute); line-height: 1.5; } .evhi .evhl { color: var(--accent); font-weight: bold; }
+.evrow { display: flex; align-items: center; gap: 8px; min-height: 40px; border-bottom: 1px solid var(--line); }
+.evrow .tx { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 8px 0; }
+.evbar .ic { font-size: 18px; }
 </style>
 
 <div id="app">
