@@ -22,6 +22,7 @@ export function fakeNotionMcp() {
       { url: url(3), 名前: "抱っこひもの比較", ステータス: "📚 REFERENCE", 分類タグ: "CHILD" },
       { url: url(4), 名前: "仕事の資料", ステータス: "⏭ NEXT", 分類タグ: "WORK" },
       { url: url(5), 名前: "済んだ育児タスク", ステータス: "✅ DONE", 分類タグ: "CHILD" },
+      { url: url(6), 名前: "🧳 お泊まり準備（1泊・12/1〜）", ステータス: "⏭ NEXT", 分類タグ: "CHILD", "date:実行日:start": "2026-11-30" },
     ],
     [DS.memo]: [
       { url: url(11), 名前: "ミルクの量", "": "継続", 分類タグ: "授乳/ミルク", Star: "☆" },
@@ -42,6 +43,7 @@ export function fakeNotionMcp() {
     [hex(31)]: "寝る前に絵本1冊。\n<br>電気は真っ暗に",
     [hex(32)]: null, // 空のページ
     [hex(33)]: '<table header-row="true">\n<tr><td>a</td></tr>\n</table>',
+    [hex(6)]: "## 🎒 いつも持つもの\n- [x] おむつ（17枚）\n- [ ] 抱っこ紐\n## 🍼 ミルク\n- [ ] 哺乳瓶（2本）",
   };
   const calendars = [
     { id: "ja.japanese#holiday@group.v.calendar.google.com", summary: "日本の祝日" },
@@ -63,6 +65,7 @@ export function fakeNotionMcp() {
     const v = row[f.property];
     if (f.operator === "enum_is" || f.operator === "status_is") return v === f.value.value;
     if (f.operator === "status_is_not") return v !== f.value.value;
+    if (f.operator === "string_starts_with") return String(v || "").startsWith(f.value.value);
     throw Object.assign(new Error(`unsupported ${f.operator}`), { code: "bad_request" });
   };
   const self = {
@@ -92,7 +95,17 @@ export function fakeNotionMcp() {
       if (name === "notion-create-pages") {
         const row = { url: url(100 + calls.length), ...input.pages[0].properties };
         tables[input.parent.data_source_id].push(row);
+        if (input.pages[0].content != null) bodies[hex(100 + calls.length)] = input.pages[0].content;
         return { payload: { pages: [{ id: row.url.slice(-32), url: row.url }] } };
+      }
+      if (name === "notion-update-page" && input.command === "update_content") {
+        let b = bodies[input.page_id] || "";
+        for (const u of input.content_updates) {
+          if (b.split(u.old_str).length !== 2) throw Object.assign(new Error("no unique match"), { code: "tool_error" });
+          b = b.replace(u.old_str, u.new_str);
+        }
+        bodies[input.page_id] = b;
+        return { payload: { page_id: input.page_id } };
       }
       if (name === "notion-update-page" && input.command === "replace_content") {
         bodies[input.page_id] = input.new_str;

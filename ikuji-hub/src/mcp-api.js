@@ -28,6 +28,10 @@
   const SLEEP_TEXT_MAX = 500;
   const SLEEP_MONTH_MAX = 72;
   const SLEEP_BODY_MAX = 5000;
+  const PACK_PREFIX = "🧳 お泊まり準備";
+  const PACK_NIGHTS_MAX = 14;
+  const PACK_ITEMS_MAX = 150;
+  const PACK_TEXT_MAX = 200;
 
   // ---------- MCP 呼び出し ----------
   let mcpPromise = null;
@@ -328,6 +332,88 @@
     return getSleep();
   }
 
+  // ---------- お泊まりの持ち物（DB_タスク管理 の「🧳 お泊まり準備」タスク） ----------
+  const knownPacks = new Map(); // ページID → 項目の並び（チェックは読み込んだタスクの行だけ）
+
+  // 本文の「## 見出し」をまとまり、「- [ ] 文」を持ち物として読む
+  function parsePack(content) {
+    const groups = [];
+    for (const line of String(content || "").split("\n")) {
+      const h = line.match(/^#{1,3}\s+(.+)$/);
+      const t = line.match(/^\s*- \[( |x)\]\s*(.*)$/);
+      if (h) groups.push({ name: text(h[1]), items: [] });
+      else if (t) {
+        if (!groups.length) groups.push({ name: "", items: [] });
+        groups.at(-1).items.push({ text: text(t[2]), checked: t[1] === "x", raw: t[2] });
+      }
+    }
+    return groups.filter((g) => g.items.length);
+  }
+
+  async function loadPack(row) {
+    const id = idOf(row.url);
+    const res = await call("fetch", { id }, { read: true });
+    const groups = parsePack(between(res.text, "content") || "");
+    let n = 0;
+    const flat = [];
+    for (const g of groups) for (const it of g.items) { it.id = `i${n++}`; flat.push(it); }
+    knownPacks.set(id, flat);
+    return {
+      id, url: row.url, title: text(row["名前"]), date: dateOf(row, "実行日"),
+      groups: groups.map((g) => ({ name: g.name, items: g.items.map(({ id: iid, text: t, checked }) => ({ id: iid, text: t, checked })) })),
+    };
+  }
+
+  async function getPacks() {
+    const rows = await queryRows(DS.task, {
+      filters: [
+        { type: "property", property: "名前", propertyType: "title", operator: "string_starts_with", value: { type: "exact", value: PACK_PREFIX } },
+        { type: "property", property: "分類タグ", propertyType: "select", operator: "enum_is", value: { type: "exact", value: TASK_TAG } },
+        { type: "property", property: "ステータス", propertyType: "status", operator: "status_is_not", value: { type: "is_option", value: DONE } },
+      ],
+    });
+    const packs = await Promise.all(rows.map(loadPack));
+    return { packs: packs.sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999"))) };
+  }
+
+  async function createPack(body) {
+    const nights = Number(body?.nights);
+    if (!Number.isInteger(nights) || nights < 1 || nights > PACK_NIGHTS_MAX) throw apiError(400, `泊数は1〜${PACK_NIGHTS_MAX}で選んでください`);
+    const date = String(body?.date || "");
+    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)))) throw apiError(400, "出発日が正しくありません");
+    // < > [ ] は Notion の書き方と読まれないよう全角にする
+    const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().replace(/</g, "＜").replace(/>/g, "＞").replace(/\[/g, "［").replace(/\]/g, "］");
+    const lines = [];
+    let count = 0;
+    for (const g of Array.isArray(body?.groups) ? body.groups : []) {
+      const items = (Array.isArray(g?.items) ? g.items : []).map(clean).filter(Boolean);
+      if (!items.length) continue;
+      if (items.some((t) => t.length > PACK_TEXT_MAX) || clean(g.name).length > PACK_TEXT_MAX) throw apiError(400, `1行は${PACK_TEXT_MAX}文字までです`);
+      count += items.length;
+      lines.push(`## ${clean(g.name) || "持ち物"}`, ...items.map((t) => `- [ ] ${t}`), "");
+    }
+    if (!count) throw apiError(400, "持ち物がありません");
+    if (count > PACK_ITEMS_MAX) throw apiError(400, `持ち物は${PACK_ITEMS_MAX}個までです`);
+    const md = date ? `・${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}〜` : "";
+    const properties = { 名前: `${PACK_PREFIX}（${nights}泊${md}）`, ステータス: "⏭ NEXT", 分類タグ: TASK_TAG, 枠: "🏠 家・外", 重さ: "M" };
+    if (date) Object.assign(properties, { "date:実行日:start": addDays(date, -1), "date:実行日:is_datetime": 0 }); // 前日に詰める
+    await call("create", { parent: { type: "data_source_id", data_source_id: DS.task }, pages: [{ properties, content: lines.join("\n").trim() }], allow_async: false });
+    return getPacks();
+  }
+
+  async function checkPackItem(pageId, itemId, body) {
+    if (typeof body?.checked !== "boolean") throw apiError(400, "変更できない項目です");
+    const item = knownPacks.get(pageId)?.find((it) => it.id === itemId);
+    if (!item) throw apiError(403, "この画面で読み込んだお泊まり準備の持ち物だけ変更できます");
+    if (item.checked !== body.checked) {
+      const from = `- [${item.checked ? "x" : " "}] ${item.raw}`;
+      const to = `- [${body.checked ? "x" : " "}] ${item.raw}`;
+      await call("update", { page_id: pageId, command: "update_content", content_updates: [{ old_str: from, new_str: to }], allow_async: false });
+      item.checked = body.checked;
+    }
+    return { id: itemId, checked: body.checked };
+  }
+
   // ---------- 予定（Google カレンダー・読むだけ） ----------
   // 祝日以外の見えているカレンダーから、育児の言葉を含む予定だけを返す（ほかの予定の名前は画面に渡さない）
   async function getCalendar() {
@@ -408,11 +494,16 @@
     if (p === "/api/sleep" && method === "PUT") return saveSleep(body);
     const sleepBody = p.match(/^\/api\/sleep\/([0-9a-f]{32})\/body$/i);
     if (sleepBody && method === "GET") return getSleepBody(sleepBody[1].toLowerCase());
+    if (p === "/api/packs" && method === "GET") return getPacks();
+    if (p === "/api/packs" && method === "POST") return createPack(body);
+    const packItem = p.match(/^\/api\/packs\/([0-9a-f]{32})\/items\/(i\d+)$/i);
+    if (packItem && method === "PATCH") return checkPackItem(packItem[1].toLowerCase(), packItem[2], body);
     if (p === "/api/tasks" && method === "POST") return addTask(body);
     if (task && method === "PATCH") return setTaskStatus(task[1].toLowerCase(), body);
     throw apiError(404, "not found");
   }
 
+  window.__ikujiHubMcp = true; // 画面に「合言葉はいらない」と伝える
   const realFetch = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url, location.href);
