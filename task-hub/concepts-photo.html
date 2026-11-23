@@ -1,0 +1,142 @@
+<title>今どこ 写真の背景</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 並べて比べる：上に時刻のつまみ、下にスマホ枠を4つ。写真4枚（夜あけ・昼・夕方・夜）を時刻で重ねて変える */
+:root {
+  --ground: #0e1117;
+  --panel: #171b23;
+  --ink: #e9e6df;
+  --mute: #9aa0ab;
+  --line: #2a2f3a;
+  --accent: #f2a65a;
+  --f-head: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+  --f-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --f-num: "DM Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+body { background: var(--ground); color: var(--ink); font-family: var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 22px; }
+h1 { font-family: var(--f-head); font-weight: 800; font-size: clamp(22px, 4vw, 30px); margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--mute); line-height: 1.7; max-width: 62ch; font-size: 14px; }
+.clock { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--ground) 88%, transparent); backdrop-filter: blur(8px); padding: 12px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ground); }
+.time { font-family: var(--f-num); font-size: 26px; font-variant-numeric: tabular-nums; min-width: 4.2ch; }
+.phase { font-size: 13px; color: var(--accent); min-width: 3em; }
+#t { flex: 1 1 240px; min-width: 0; accent-color: var(--accent); height: 40px; }
+.marks { display: flex; gap: 6px; flex-wrap: wrap; }
+button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 40px; padding: 0 12px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 22px; }
+.opt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.phone { position: relative; width: 100%; max-width: 260px; aspect-ratio: 9 / 17; border-radius: 26px; overflow: hidden; border: 6px solid #05070b; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); align-self: center; background: #000; }
+.phone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 100%; opacity: 0; }
+.phone .shade { position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(0, 0, 0, .28) 0%, rgba(0, 0, 0, 0) 22%, rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, .25) 100%); }
+.ui { position: absolute; inset: 0; z-index: 3; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; font-size: 11px; }
+.ui .top { display: flex; justify-content: space-between; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); font-weight: 700; }
+.card { background: rgba(18, 21, 28, .74); backdrop-filter: blur(8px); border-radius: 12px; padding: 9px 10px; color: var(--ink); display: flex; flex-direction: column; gap: 3px; }
+.card b { font-size: 13px; } .card small { color: var(--mute); font-size: 10px; }
+.row { display: flex; gap: 6px; align-items: center; padding: 5px 0; border-top: 1px solid rgba(255, 255, 255, .06); }
+.row i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--accent); flex: none; }
+.name { display: flex; align-items: baseline; gap: 8px; }
+.name b { font-family: var(--f-head); font-size: 17px; }
+.name span { font-family: var(--f-num); color: var(--accent); font-size: 13px; }
+.opt p { margin: 0; font-size: 13px; line-height: 1.65; color: var(--mute); }
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.strip button { padding: 0; min-height: 0; border-radius: 6px; overflow: hidden; aspect-ratio: 9 / 14; position: relative; border: 1px solid var(--line); }
+.strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.strip span { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; background: rgba(0, 0, 0, .55); color: #fff; padding: 1px 0; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; font-size: 13px; line-height: 1.7; }
+.note h2 { font-family: var(--f-head); font-size: 15px; margin: 0 0 6px; }
+.note ul { margin: 0; padding-left: 1.2em; }
+@media (prefers-reduced-motion: reduce) { .card { backdrop-filter: none; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&family=Noto+Sans+JP:wght@400;700&family=DM+Mono&display=swap">
+
+<div class="wrap">
+  <h1>今どこの背景を、写真の風景に</h1>
+  <p class="lead">同じ景色を「夜あけ・昼・夕方・夜」の4枚の写真で用意し、時刻に合わせて少しずつ重ねて切りかえます。つまみを動かすか「1日を流す」で、4案を同じ時刻で見くらべられます。写真は Gemini で作ったもので、実在の場所ではありません。</p>
+
+  <div class="clock" role="group" aria-label="時刻">
+    <span class="time" id="tt">--:--</span><span class="phase" id="ph"></span>
+    <input type="range" id="t" min="0" max="1439" step="1" aria-label="時刻を選ぶ">
+    <div class="marks">
+      <button type="button" data-h="5.9">夜あけ</button><button type="button" data-h="12">昼</button><button type="button" data-h="17.4">夕方</button><button type="button" data-h="21">夜</button>
+      <button type="button" id="play" aria-pressed="false">▶ 1日を流す</button><button type="button" id="now">いま</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="note">
+    <h2>今どこに入れるときの作り</h2>
+    <ul>
+      <li>写真は1案4枚・1枚40KBくらいに小さくして、今どこと同じ場所に置きます（外のサイトから読みこまない）。一度読めば端末に残るので、2回目からは通信しません。</li>
+      <li>1分に1回だけ重ね方を変えるので、電池はほとんど使いません。</li>
+      <li>上と下だけ少し暗くして、日付やタブの文字が明るい空の上でも読めるようにします。カードは今の暗い半透明のままです。</li>
+      <li>今の試し版のオレンジ背景は、ここで選んだ案に置きかえます。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PH = ["dawn", "day", "dusk", "night"];
+  const PH_JA = { dawn: "夜あけ", day: "昼", dusk: "夕方", night: "夜" };
+  // 時刻 → どの写真をどれだけ重ねるか（間はなめらかに）
+  const KEYS = [[0, "night"], [4.4, "night"], [5.9, "dawn"], [7.6, "day"], [15.7, "day"], [17.3, "dusk"], [18.5, "dusk"], [19.6, "night"], [24, "night"]];
+  function mixAt(h) {
+    let i = 0; while (i < KEYS.length - 2 && KEYS[i + 1][0] <= h) i++;
+    const [h0, a] = KEYS[i], [h1, b] = KEYS[i + 1]; const k = Math.min(1, Math.max(0, (h - h0) / (h1 - h0 || 1)));
+    const s = k * k * (3 - 2 * k); // ゆっくり始まりゆっくり終わる
+    return { a, b, k: s };
+  }
+  const CONCEPTS = [
+    { key: "mt", tag: "A", name: "上州の山なみ", desc: "田んぼの向こうに山が重なる景色。夜あけは谷に霧、夕方は山の端に日がしずみ、夜は星と三日月。地元の朝夕に近い案。" },
+    { key: "sea", tag: "B", name: "水平線の海", desc: "やわらかい色の海と空。夕方は光の道、夜は月あかりが水面にのびる。昼は明るく、すっきりした印象。" },
+    { key: "city", tag: "C", name: "川べりの街", desc: "川の向こうの住宅街。昼はおだやか、日がしずむと窓に明かりがともる。夜の「今日できたこと」によく合う。" },
+    { key: "cloud", tag: "D", name: "空と雲", desc: "空と雲が主役で、下に丘が少しだけ。どの時間も文字のうしろがすっきりしていて、いちばん読みやすい。" },
+  ];
+  const src = (k, p) => `sky-photos/${k}-${p}.jpg`;
+  const grid = document.getElementById("grid");
+  grid.innerHTML = CONCEPTS.map((c) => `<section class="opt" aria-labelledby="n-${c.key}">
+      <div class="phone" id="ph-${c.key}">${PH.map((p) => `<img src="${src(c.key, p)}" data-p="${p}" alt="" decoding="async">`).join("")}<div class="shade"></div>
+        <div class="ui" aria-hidden="true"><div class="top"><span>11月24日（火）</span><span>🔔 💡</span></div>
+          <div class="card"><b>あと 3件</b><small>もう2件できてる！</small></div>
+          <div class="card"><small>🎯 今日のハイライト</small><b>（例）塀の補助を電話で確認</b></div>
+          <div class="card" style="gap:0"><div class="row" style="border:0"><i></i>（例）資源ごみを出す</div><div class="row"><i></i>（例）お名前スタンプを注文</div><div class="row"><i></i>（例）家計の振込</div></div>
+        </div></div>
+      <div class="name"><span>${c.tag}</span><b id="n-${c.key}">${c.name}</b></div>
+      <p>${c.desc}</p>
+      <div class="strip" aria-label="${c.name}の4枚">${PH.map((p) => `<button type="button" data-jump="${p}" aria-label="${PH_JA[p]}にする"><img src="${src(c.key, p)}" alt="${c.name}・${PH_JA[p]}" loading="lazy"><span>${PH_JA[p]}</span></button>`).join("")}</div>
+    </section>`).join("");
+
+  const t = document.getElementById("t"), tt = document.getElementById("tt"), phl = document.getElementById("ph");
+  const phaseOf = (h) => (h < 4.5 ? "夜ふけ" : h < 6.8 ? "夜あけ" : h < 10 ? "朝" : h < 15.5 ? "昼" : h < 17 ? "夕方" : h < 19 ? "日の入り" : "夜");
+  function render() {
+    const min = Number(t.value); const h = min / 60;
+    tt.textContent = `${String(Math.floor(h)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`; phl.textContent = phaseOf(h);
+    const { a, b, k } = mixAt(h);
+    for (const c of CONCEPTS) for (const img of document.querySelectorAll(`#ph-${c.key} img`)) {
+      const p = img.dataset.p;
+      img.style.opacity = p === a ? 1 : p === b ? k : 0;
+      img.style.zIndex = p === b ? 1 : 0;
+    }
+  }
+  const nowMin = () => { const d = new Date(Date.now() + 9 * 3600e3); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+  t.value = nowMin(); render();
+  t.addEventListener("input", render);
+  const JUMP = { dawn: 5.9, day: 12, dusk: 17.4, night: 21 };
+  document.querySelectorAll("[data-h]").forEach((el) => el.addEventListener("click", () => { stop(); t.value = Math.round(Number(el.dataset.h) * 60); render(); }));
+  document.querySelectorAll("[data-jump]").forEach((el) => el.addEventListener("click", () => { stop(); t.value = Math.round(JUMP[el.dataset.jump] * 60); render(); }));
+  document.getElementById("now").addEventListener("click", () => { stop(); t.value = nowMin(); render(); });
+  const play = document.getElementById("play"); let timer = 0;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function stop() { clearInterval(timer); timer = 0; play.setAttribute("aria-pressed", "false"); play.textContent = "▶ 1日を流す"; }
+  play.addEventListener("click", () => {
+    if (timer) { stop(); return; }
+    play.setAttribute("aria-pressed", "true"); play.textContent = "■ とめる";
+    timer = setInterval(() => { t.value = (Number(t.value) + (reduce ? 30 : 5)) % 1440; render(); }, reduce ? 400 : 40);
+  });
+})();
+</script>
