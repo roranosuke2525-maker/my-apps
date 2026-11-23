@@ -71,6 +71,9 @@
     if (d.evening) { openEvening(); return; }
     if (d.evpick) { evePick(d.evpick); return; }
     if (d.evok) { eveCommit(); return; }
+    if (d.judge) { openJudge(); return; }
+    if (d.jg) { judgeAct(d.jg); return; }
+    if (d.jgopen) { closeModal(); openTask(d.jgopen); return; }
     if (d.alertgo) { alertGo(d.alertgo); return; }
     if (d.alertok) { alertsSeenAll(); closeModal(); toast("見てくれてありがとう（今日は同じお知らせはもう出さないね）"); return; }
     if (d.hlpick) { setHighlight(d.hlpick); return; }

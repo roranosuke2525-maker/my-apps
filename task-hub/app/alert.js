@@ -23,6 +23,8 @@
     // AIの番・改善案・ジャーナル
     const mine = myTurn();
     if (mine.length) out.push({ id: `ai:${mine.length}`, lv: mine.some((t) => t.ai === "💭" && ageOf(t) >= 3) ? "yellow" : "info", icon: "💭", title: `AIが ${mine.length}件、返事を待ってるよ`, body: mine.slice(0, 2).map((t) => short(t.name, 16)).join("・"), act: ["AIタブで答える", "ai"] });
+    const jo = judgeOld();
+    if (jo.length) out.push({ id: `judge:${jo.length}`, lv: "yellow", icon: "🔍✅", title: `30日以上たつ判定待ちが ${jo.length}件あるよ`, body: "古い順に10件だけ、次にやる・いつか・資料に分けよう", act: ["10件だけ決める", "judge"] });
     const fw = fixWaiting();
     if (fw.length) out.push({ id: `fix:${fw.map((f) => f.id.slice(0, 6)).join("")}`, lv: "info", icon: "🛠", title: `アプリの改善案が ${fw.length}件あるよ`, body: fw.map((f) => short(f.name, 16)).join("・"), act: ["改善を見る", "log:fix"] });
     const j = S.journal?.[0];
@@ -43,6 +45,7 @@
   function alertGo(where) {
     alertsSeenAll(); closeModal();
     if (where === "review") { openReview(); return; }
+    if (where === "judge") { openJudge(); return; }
     const [tab, seg] = where.split(":"); S.tab = tab; if (seg) S.logSeg = seg; render();
   }
   // 1日のはじめて開いたときに、まだ見ていない 赤・黄 のお知らせがあれば自動で出す

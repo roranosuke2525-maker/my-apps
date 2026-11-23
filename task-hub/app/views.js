@@ -351,6 +351,8 @@
       <div class="card panel"><div class="list" id="ailist"></div></div>`);
     const box = $("#ailist");
     if (S.aiSeg === "req") { box.outerHTML = requestForm(); return; }
+    const jn = judgeItems().length; const jo = judgeOld().length;
+    if (S.aiSeg === "me" && jn) box.insertAdjacentHTML("beforebegin", `<button type="button" class="pickbar jgbar" data-judge="1"><span class="ic">🔍✅</span><span class="tx"><b>古い順に10件だけ決める（${jn}件${jo ? `・30日以上 ${jo}` : ""}）</b></span><i>›</i></button>`);
     const items = S.aiSeg === "me" ? me : ai;
     if (!items.length) { box.innerHTML = `<div class="empty">${S.aiSeg === "me" ? "あなたの番はありません。\nAIの返事を待っています" : "AIに預けているものはありません。\n「依頼する」から頼めます"}</div>`; return; }
     paged(box, `ai:${S.aiSeg}`, items, 88, (t) => {

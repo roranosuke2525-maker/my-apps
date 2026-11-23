@@ -948,6 +948,15 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .evrow { display: flex; align-items: center; gap: 8px; min-height: 40px; border-bottom: 1px solid var(--line); }
 .evrow .tx { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 8px 0; }
 .evbar .ic { font-size: 18px; }
+
+/* ---- 🔍✅ 古い順に10件だけ ---- */
+.jg { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; padding: 0 10px; }
+.jgn { color: var(--accent); font-weight: bold; }
+.jgcard { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px; background: var(--sunk); }
+.jgcard b { font-size: 16px; line-height: 1.4; } .jgcard small.old { color: #e5675b; }
+.jgcard p { margin: 0; font-size: 13px; line-height: 1.6; } .jgcard .qc { align-self: flex-start; }
+.jgacts { display: flex; gap: 6px; } .jgacts .btn { flex: 1; min-height: 44px; }
+.jgbar { margin: 0 0 8px; }
 </style>
 
 <div id="app">
