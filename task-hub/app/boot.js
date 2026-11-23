@@ -67,6 +67,7 @@
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認したよ"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.pkcap) { cycleCap(); return; }
     if (d.alerts) { openAlerts(); return; }
     if (d.evening) { openEvening(); return; }
     if (d.evpick) { evePick(d.evpick); return; }

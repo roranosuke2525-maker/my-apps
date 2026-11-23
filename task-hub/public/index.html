@@ -948,6 +948,15 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .evrow { display: flex; align-items: center; gap: 8px; min-height: 40px; border-bottom: 1px solid var(--line); }
 .evrow .tx { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 8px 0; }
 .evbar .ic { font-size: 18px; }
+
+/* ---- 今日やるの目安（2件） ---- */
+.capbar { display: flex; gap: 6px; align-items: stretch; }
+.capbar .slot { flex: 1; min-width: 0; padding: 8px; border-radius: 10px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capbar .slot.on { border: 1px solid var(--accent); color: var(--ink); }
+.capbar .capn { flex: none; min-height: 40px; padding: 0 10px; border-radius: 10px; background: var(--sunk); color: var(--accent); font-weight: bold; }
+.capbar.over .capn, .capn2.over { color: #e0b33c; }
+.capmsg { margin: 0; font-size: 12px; color: var(--mute); } .capbar.over + .capmsg { color: #e0b33c; }
+.capn2 { font-size: 12px; color: var(--mute); font-weight: normal; margin-left: 4px; }
 </style>
 
 <div id="app">
@@ -2490,7 +2499,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const R = 24, C = 2 * Math.PI * R;
     view.insertAdjacentHTML("beforeend", `<div class="hero card">
         <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${R}" class="bg"/><circle cx="30" cy="30" r="${R}" class="fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct / 100)}"/><text x="30" y="34" text-anchor="middle">${loading ? "…" : `${pct}%`}</text></svg>
-        <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>あと ${today.length}件</b><span>${done ? `もう${done}件できてる！` : "まずは1つからいこう"}${late.length ? `・<em>持ち越し ${late.length}</em>` : ""}</span>` : `<b>${done ? "今日のぶん、ぜんぶ終わり！🎉" : "今日はまっさら"}</b><span>${done ? `${done}件も片づけたね、おつかれさま` : "1つ入れてみる？"}</span>`}</div>
+        <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>あと ${today.length}件 <span class="capn2${today.length + done > dayCap() ? " over" : ""}">${today.length + done} / ${dayCap()}</span></b><span>${done ? `もう${done}件できてる！` : "まずは1つからいこう"}${late.length ? `・<em>持ち越し ${late.length}</em>` : ""}</span>` : `<b>${done ? "今日のぶん、ぜんぶ終わり！🎉" : "今日はまっさら"}</b><span>${done ? `${done}件も片づけたね、おつかれさま` : "1つ入れてみる？"}</span>`}</div>
         ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま進めてるやつ" : "まずはこれから"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
       </div>
       ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
@@ -4181,7 +4190,9 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     return `<button type="button" class="pickbar evbar" data-evening="1"><span class="ic">🌙</span><span class="tx"><b>今日できたこと${n ? ` ${n}件` : ""}</b><small>ふり返って、明日の1つを決めとこう</small></span><i>›</i></button>`;
   }
   // ================= 今日を選ぶ：次にやるを一覧で見て、まとめて選んで1回で今日に入れる =================
-  const PK = { sel: new Set(), f: "rec", keep: false };
+  const PK = { sel: new Set(), f: "rec", keep: false, armed: null };
+  // 今日やるの目安（1日に入れる件数）。🎯 ハイライト＋締切の1件＝2件がふつう。この端末に覚える
+  const dayCap = () => Math.min(5, Math.max(1, Number(store.get("dayCap")) || 2));
   const W_ORDER = { S: 0, M: 1, L: 2, XL: 3 };
   const wPts = (arr) => arr.reduce((s, t) => s + ({ S: 1, M: 2, L: 3, XL: 5 }[t.weight] || 1), 0);
   function pickItems() {
@@ -4194,7 +4205,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     return a;
   }
   function openPickDay() {
-    PK.sel = new Set(); PK.f = "rec";
+    PK.sel = new Set(); PK.f = "rec"; PK.armed = null;
     modal(`<div class="pk" id="pk"></div>`); $("#modal .sheet").classList.add("tall");
     drawPick();
   }
@@ -4205,7 +4216,10 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     const fs = [["rec", "おすすめ順"], ["old", "古い順"], ["light", "軽いもの"], ...wakus.map((w) => [`w:${w}`, w]), ...tags.map((g) => [`t:${g}`, g])];
     const items = pickItems(); const selT = [...PK.sel].map((id) => known.get(id)).filter(Boolean);
     const st = box.querySelector(".pklist")?.scrollTop || 0; const fx = box.querySelector(".pkf")?.scrollLeft || 0;
-    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぼう</h3><small>今日 ${today.length}件・重さ ${wPts(today)}${selT.length ? ` → ${today.length + selT.length}件・${wPts(today) + wPts(selT)}` : ""}</small></div>
+    const cap = dayCap(); const n = today.length + selT.length; const hl = today.find((t) => t.hl === TODAY());
+    box.innerHTML = `<div class="pkhead"><h3>今日やるを選ぼう</h3><small>重さ ${wPts(today) + wPts(selT)}</small></div>
+      <div class="capbar${n > cap ? " over" : ""}"><span class="slot${hl ? " on" : ""}">🎯 ${hl ? esc(short(hl.name, 10)) : "ハイライト"}</span><span class="slot${n >= 2 ? " on" : ""}">⏰ 締切のある1件</span><button type="button" class="capn" data-pkcap="1" aria-label="目安の件数を変える">今日 ${n} / ${cap}</button></div>
+      <p class="capmsg">${n > cap ? `目安の${cap}件をこえてるよ。多い日は残りが明日に流れがち。それでもOKなら入れてね` : n === cap ? "これで十分！あとは終わったら足そう" : `あと${cap - n}件まで入れられるよ`}</p>
       <div class="pkf">${fs.map(([k, n]) => `<button type="button" class="qc" data-pkf="${esc(k)}" aria-pressed="${PK.f === k}">${esc(n)}</button>`).join("")}</div>
       <div class="pklist">${items.map((t) => { const on = PK.sel.has(t.id); return `<button type="button" class="pkrow${on ? " sel" : ""}" data-pksel="${t.id}"><span class="bx">${on ? "✓" : ""}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc([t.waku, t.tag, t.next].filter(Boolean).join("・"))}</small></span><span class="w">${esc(t.weight || "")}<br>${ageOf(t)}日</span></button>`; }).join("") || `<div class="empty">ここには何もないよ</div>`}</div>
       <div class="pkfoot"><button type="button" class="btn" data-mclose="1">閉じる</button><button type="button" class="btn pri" data-pkok="1" ${selT.length ? "" : "disabled"}>${selT.length ? `今日に入れる（${selT.length}件）` : "タップして選んでね"}</button></div>`;
@@ -4213,7 +4227,17 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (PK.keep) { const l2 = box.querySelector(".pklist"); if (l2) l2.scrollTop = st; }
     PK.keep = false;
   }
-  function pickToggle(id) { if (PK.sel.has(id)) PK.sel.delete(id); else PK.sel.add(id); buzz(); PK.keep = true; drawPick(); }
+  function pickToggle(id) {
+    if (PK.sel.has(id)) PK.sel.delete(id);
+    else {
+      const n = stageItems("today").length + PK.sel.size + 1;
+      // 目安をこえる1件目は、もう一度押したら入る（禁止はしない）
+      if (n > dayCap() && PK.armed !== id) { PK.armed = id; buzz(20); toast(`目安は${dayCap()}件だよ。5件入れた日は1〜2件しか終わってなかった。それでも入れるならもう一回押してね`); return; }
+      PK.armed = null; PK.sel.add(id);
+    }
+    buzz(); PK.keep = true; drawPick();
+  }
+  function cycleCap() { const c = dayCap() % 5 + 1; store.set("dayCap", c); toast(`今日やるの目安を${c}件にしたよ`); PK.keep = true; drawPick(); }
   async function pickCommit() {
     const list = [...PK.sel].map((id) => known.get(id)).filter(Boolean); if (!list.length) return;
     closeModal(); const props = dateProps(TODAY());
@@ -4419,6 +4443,7 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認したよ"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }
+    if (d.pkcap) { cycleCap(); return; }
     if (d.alerts) { openAlerts(); return; }
     if (d.evening) { openEvening(); return; }
     if (d.evpick) { evePick(d.evpick); return; }
