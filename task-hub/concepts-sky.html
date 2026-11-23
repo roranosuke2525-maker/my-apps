@@ -1,0 +1,231 @@
+<title>今どこ 空の背景</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 並べて比べる：上に時刻のつまみ、下にスマホ枠を4つ。見本のカードは今どこと同じ暗い半透明 */
+:root {
+  --ground: #0e1117;
+  --panel: #171b23;
+  --ink: #e9e6df;
+  --mute: #9aa0ab;
+  --line: #2a2f3a;
+  --accent: #f2a65a;
+  --f-head: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+  --f-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --f-num: "DM Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+body { background: var(--ground); color: var(--ink); font-family: var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 22px; }
+h1 { font-family: var(--f-head); font-weight: 800; font-size: clamp(22px, 4vw, 30px); margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--mute); line-height: 1.7; max-width: 62ch; font-size: 14px; }
+.clock { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--ground) 88%, transparent); backdrop-filter: blur(8px); padding: 12px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ground); }
+.time { font-family: var(--f-num); font-size: 26px; font-variant-numeric: tabular-nums; min-width: 4.2ch; }
+.phase { font-size: 13px; color: var(--accent); min-width: 3em; }
+#t { flex: 1 1 240px; min-width: 0; accent-color: var(--accent); height: 40px; }
+.marks { display: flex; gap: 6px; flex-wrap: wrap; }
+button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 40px; padding: 0 12px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 22px; }
+.opt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.phone { position: relative; width: 100%; max-width: 260px; aspect-ratio: 9 / 17; border-radius: 26px; overflow: hidden; border: 6px solid #05070b; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); align-self: center; }
+.phone canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ui { position: absolute; inset: 0; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; font-size: 11px; }
+.ui .top { display: flex; justify-content: space-between; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); font-weight: 700; }
+.card { background: rgba(18, 21, 28, .78); backdrop-filter: blur(6px); border-radius: 12px; padding: 9px 10px; color: var(--ink); display: flex; flex-direction: column; gap: 3px; }
+.card b { font-size: 13px; } .card small { color: var(--mute); font-size: 10px; }
+.row { display: flex; gap: 6px; align-items: center; padding: 5px 0; border-top: 1px solid rgba(255, 255, 255, .06); }
+.row i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--accent); flex: none; }
+.name { display: flex; align-items: baseline; gap: 8px; }
+.name b { font-family: var(--f-head); font-size: 17px; }
+.name span { font-family: var(--f-num); color: var(--accent); font-size: 13px; }
+.opt p { margin: 0; font-size: 13px; line-height: 1.65; color: var(--mute); }
+.meter { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+.meter dt { color: var(--mute); } .meter dd { margin: 0; letter-spacing: 2px; color: var(--accent); }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; font-size: 13px; line-height: 1.7; }
+.note h2 { font-family: var(--f-head); font-size: 15px; margin: 0 0 6px; }
+.note ul { margin: 0; padding-left: 1.2em; }
+@media (prefers-reduced-motion: reduce) { .card { backdrop-filter: none; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&family=Noto+Sans+JP:wght@400;700&family=DM+Mono&display=swap">
+
+<div class="wrap">
+  <h1>今どこの背景を、時間で変わる空と風景に</h1>
+  <p class="lead">朝・昼・夕方・夜で空の色がなめらかに変わる4つの案です。つまみを動かすか「1日を流す」で、同じ時刻の4案を見くらべられます。カードは今の今どこと同じ暗い半透明なので、どの時間でも文字は読めます。</p>
+
+  <div class="clock" role="group" aria-label="時刻">
+    <span class="time" id="tt">--:--</span><span class="phase" id="ph"></span>
+    <input type="range" id="t" min="0" max="1439" step="1" aria-label="時刻を選ぶ">
+    <div class="marks">
+      <button type="button" data-h="6">朝 6時</button><button type="button" data-h="12">昼</button><button type="button" data-h="17.3">夕方</button><button type="button" data-h="21">夜</button>
+      <button type="button" id="play" aria-pressed="false">▶ 1日を流す</button><button type="button" id="now">いま</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="note">
+    <h2>今どこに入れるときの作り</h2>
+    <ul>
+      <li>絵は画像ファイルを使わず、アプリの中で描きます（外から何も読みこまない・社内PCにも何も残らない）。</li>
+      <li>1分に1回だけ描き直すので、電池はほとんど使いません。動きを減らす設定の端末では雲も止めます。</li>
+      <li>今の試し版のオレンジ背景は、ここで選んだ案に置きかえます。</li>
+      <li>決まったら、上のカード（進み具合・ハイライト）は半透明のまま、風景が少し透けるようにします。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---- 空の色：時刻ごとの上と下の色（その間はなめらかにまぜる） ----
+  const SKY = [
+    [0, "#070b1d", "#151a35"], [4.3, "#0e1430", "#2a2550"], [5.3, "#2e3570", "#c9728a"], [6.2, "#5f7fc4", "#f6b07a"],
+    [7.5, "#7cb2ea", "#f4dcb8"], [10, "#4f9be6", "#b9def6"], [14, "#4a95e2", "#c7e6f7"], [16.2, "#6a8fd2", "#f1cf98"],
+    [17.2, "#4e4f97", "#f2894a"], [18, "#2b2d68", "#c4577a"], [19, "#161b45", "#3e3264"], [20.5, "#0b1027", "#1c1d3d"], [24, "#070b1d", "#151a35"],
+  ];
+  const hx = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const mixc = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+  const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  function sky(h) {
+    let i = 0; while (i < SKY.length - 2 && SKY[i + 1][0] <= h) i++;
+    const [h0, t0, b0] = SKY[i], [h1, t1, b1] = SKY[i + 1]; const k = (h - h0) / (h1 - h0 || 1);
+    return [mixc(hx(t0), hx(t1), k), mixc(hx(b0), hx(b1), k)];
+  }
+  const elev = (h) => Math.sin(Math.PI * (h - 6) / 12); // 6時に0、12時に1、18時に0、夜は負
+  const light = (h) => Math.max(0, Math.min(1, elev(h) * 1.6 + .15));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // 決まった乱数（毎回同じ形になる）
+  const rnd = (s) => () => ((s = Math.imul(s ^ (s >>> 15), 2246822507) ^ Math.imul(s ^ (s >>> 13), 3266489909)) >>> 0) / 4294967296;
+
+  function drawSky(g, W, H, h, horizon = .7) {
+    const [top, bot] = sky(h);
+    const gr = g.createLinearGradient(0, 0, 0, H * horizon); gr.addColorStop(0, rgb(top)); gr.addColorStop(1, rgb(bot));
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    // 星
+    const night = clamp(-elev(h) * 2.2, 0, 1);
+    if (night > 0) { const r = rnd(7); g.fillStyle = `rgba(255,255,255,${.8 * night})`; for (let i = 0; i < 70; i++) { const x = r() * W, y = r() * H * horizon * .8, s = r() * 1.3 + .3; g.fillRect(x, y, s, s); } }
+    // 太陽と月（6時〜18時で太陽が左から右へ、夜は月）
+    const day = h >= 5.5 && h <= 18.5;
+    const p = day ? (h - 5.5) / 13 : ((h < 6 ? h + 24 : h) - 18.5) / 11.5;
+    const x = W * (.12 + .76 * p), y = H * horizon * (1 - Math.sin(Math.PI * p) * .78) - 4;
+    if (day) {
+      const warm = 1 - clamp(elev(h) * 1.4, 0, 1);
+      const glow = g.createRadialGradient(x, y, 2, x, y, W * .35); glow.addColorStop(0, `rgba(255,${220 - warm * 60},${170 - warm * 90},.55)`); glow.addColorStop(1, "rgba(255,200,140,0)");
+      g.fillStyle = glow; g.fillRect(0, 0, W, H);
+      g.fillStyle = `rgb(255,${246 - warm * 70},${215 - warm * 110})`; g.beginPath(); g.arc(x, y, W * .045, 0, 7); g.fill();
+    } else {
+      g.fillStyle = "rgba(240,236,220,.95)"; g.beginPath(); g.arc(x, y, W * .035, 0, 7); g.fill();
+      const [t] = sky(h); g.fillStyle = rgb(t); g.beginPath(); g.arc(x + W * .014, y - W * .008, W * .03, 0, 7); g.fill();
+    }
+  }
+  // 山の稜線（いくつかの波を重ねる）
+  function ridge(g, W, H, base, amp, seed, col) {
+    const r = rnd(seed); const ph = [r() * 6, r() * 6, r() * 6];
+    g.fillStyle = col; g.beginPath(); g.moveTo(0, H);
+    for (let x = 0; x <= W; x += 3) { const u = x / W; const y = base - amp * (Math.sin(u * 3.1 + ph[0]) * .55 + Math.sin(u * 7.3 + ph[1]) * .3 + Math.sin(u * 17 + ph[2]) * .12 + .5); g.lineTo(x, y); }
+    g.lineTo(W, H); g.closePath(); g.fill();
+  }
+
+  const CONCEPTS = [
+    { key: "mt", name: "上州の山なみ", tag: "A", desc: "重なる山の影が、朝はかすみ色、昼は青緑、夕方は茜、夜は藍に。赤城や榛名を眺めるような、地元の朝夕。", read: 4, calm: 4,
+      draw(g, W, H, h) {
+        drawSky(g, W, H, h, .62);
+        const L = light(h); const [, bot] = sky(h);
+        const day = [[150, 175, 196], [104, 140, 150], [70, 108, 96], [44, 74, 58]], nite = [[46, 52, 92], [32, 37, 70], [22, 26, 52], [14, 17, 36]];
+        [[.56, .16, 3], [.66, .17, 11], [.77, .15, 23], [.9, .12, 41]].forEach(([b, a, s], i) => {
+          const c = mixc(mixc(nite[i], day[i], L), bot, .28 - i * .06); ridge(g, W, H, H * b, H * a, s, rgb(c));
+        });
+        // 朝のもや
+        const mist = clamp(1 - Math.abs(h - 6.5) / 1.6, 0, 1) * .5;
+        if (mist) { const m = g.createLinearGradient(0, H * .55, 0, H * .85); m.addColorStop(0, `rgba(255,236,220,0)`); m.addColorStop(.5, `rgba(255,236,220,${mist})`); m.addColorStop(1, "rgba(255,236,220,0)"); g.fillStyle = m; g.fillRect(0, H * .5, W, H * .4); }
+      } },
+    { key: "sea", name: "水平線の海", tag: "B", desc: "空の色が海に映りこみ、太陽と月の光が水面にのびる。いちばん広々として、気持ちが切りかわりやすい案。", read: 3, calm: 5,
+      draw(g, W, H, h) {
+        const hz = .58; drawSky(g, W, H, h, hz);
+        const [top, bot] = sky(h); const y0 = H * hz;
+        const sea = g.createLinearGradient(0, y0, 0, H); sea.addColorStop(0, rgb(mixc(bot, [20, 40, 70], .35))); sea.addColorStop(1, rgb(mixc(top, [5, 12, 28], .55)));
+        g.fillStyle = sea; g.fillRect(0, y0, W, H - y0);
+        // 光の道
+        const day = h >= 5.5 && h <= 18.5; const p = day ? (h - 5.5) / 13 : ((h < 6 ? h + 24 : h) - 18.5) / 11.5; const x = W * (.12 + .76 * p);
+        const warm = day ? 1 - clamp(elev(h) * 1.4, 0, 1) : 0;
+        for (let i = 0; i < 26; i++) { const yy = y0 + 3 + i * (H - y0) / 26; const w = (6 + i * 2.2) * (day ? 1 : .6); g.fillStyle = day ? `rgba(255,${230 - warm * 80},${170 - warm * 100},${.55 - i * .018})` : `rgba(235,232,215,${.35 - i * .012})`; g.fillRect(x - w / 2 + Math.sin(i * 1.7) * 4, yy, w, 1.6); }
+        // さざなみ
+        const r = rnd(5); g.fillStyle = "rgba(255,255,255,.08)"; for (let i = 0; i < 60; i++) g.fillRect(r() * W, y0 + r() * (H - y0), 6 + r() * 14, 1);
+        g.fillStyle = rgb(mixc(bot, [255, 255, 255], .3), .5); g.fillRect(0, y0, W, 1);
+      } },
+    { key: "city", name: "街のあかり", tag: "C", desc: "昼は空が広く、日がしずむと窓にぽつぽつ明かりがともる。夜に「今日できたこと」を見る時間がいちばん映える案。", read: 4, calm: 3,
+      draw(g, W, H, h) {
+        drawSky(g, W, H, h, .72);
+        const L = light(h); const r = rnd(19); const base = H * .9;
+        const far = rgb(mixc([30, 34, 66], [120, 140, 170], L)), near = rgb(mixc([16, 18, 36], [70, 82, 104], L));
+        const lit = clamp(1 - L * 1.8, 0, 1);
+        [[far, .55, 24], [near, .35, 14]].forEach(([col, hmax, n], layer) => {
+          let x = -10; while (x < W) {
+            const bw = W / n * (.7 + r() * .9), bh = H * (.08 + r() * hmax * .5) + (layer ? 0 : H * .06);
+            g.fillStyle = col; g.fillRect(x, base - bh, bw - 2, bh + H);
+            if (lit > 0) for (let wy = base - bh + 6; wy < base - 4; wy += 7) for (let wx = x + 3; wx < x + bw - 6; wx += 6) if (r() < .35 * lit + (layer ? .05 : 0) * lit) { g.fillStyle = `rgba(255,${200 + r() * 40},${120 + r() * 50},${.55 + r() * .4})`; g.fillRect(wx, wy, 2.5, 3); }
+            x += bw;
+          }
+        });
+        g.fillStyle = rgb(mixc([10, 12, 24], [60, 66, 78], L)); g.fillRect(0, base, W, H - base);
+      } },
+    { key: "cloud", name: "空と雲だけ", tag: "D", desc: "風景は低い丘だけにして、空と雲の色の移り変わりを主役に。いちばん静かで、文字がいちばん読みやすい案。", read: 5, calm: 5,
+      draw(g, W, H, h, tm) {
+        drawSky(g, W, H, h, .9);
+        const L = light(h); const [, bot] = sky(h); const warm = 1 - clamp(elev(h) * 1.4, 0, 1);
+        const cc = mixc(mixc([70, 74, 110], [255, 255, 255], L), [255, 170, 130], warm * .45 * (h > 4 && h < 20 ? 1 : 0));
+        const r = rnd(31);
+        for (let i = 0; i < 7; i++) {
+          const cy = H * (.12 + r() * .45), cw = W * (.35 + r() * .4), sp = 6 + r() * 10; const cx = ((r() * W + (tm || 0) * sp) % (W + cw)) - cw / 2;
+          for (let k = 0; k < 6; k++) { const rr = cw * (.12 + r() * .12); g.fillStyle = rgb(cc, .16 + L * .12); g.beginPath(); g.ellipse(cx + (k - 2.5) * cw * .14, cy + Math.sin(k * 2) * rr * .3, rr * 1.4, rr * .7, 0, 0, 7); g.fill(); }
+        }
+        g.fillStyle = rgb(mixc(mixc([18, 22, 40], [92, 128, 110], L), bot, .2)); ridge(g, W, H, H * .95, H * .06, 3, g.fillStyle);
+      } },
+  ];
+
+  // ---- 画面を作る ----
+  const grid = document.getElementById("grid");
+  const stars = (n) => "●".repeat(n) + "○".repeat(5 - n);
+  grid.innerHTML = CONCEPTS.map((c) => `<section class="opt" aria-labelledby="n-${c.key}">
+      <div class="phone"><canvas id="cv-${c.key}" aria-label="${c.name}の見本"></canvas>
+        <div class="ui" aria-hidden="true"><div class="top"><span>11月23日（月）</span><span>🔔 💡</span></div>
+          <div class="card"><b>あと 3件</b><small>もう2件できてる！</small></div>
+          <div class="card"><small>🎯 今日のハイライト</small><b>（例）塀の補助を電話で確認</b></div>
+          <div class="card" style="gap:0"><div class="row" style="border:0"><i></i>（例）資源ごみを出す</div><div class="row"><i></i>（例）お名前スタンプを注文</div><div class="row"><i></i>（例）家計の振込</div></div>
+        </div></div>
+      <div class="name"><span>${c.tag}</span><b id="n-${c.key}">${c.name}</b></div>
+      <p>${c.desc}</p>
+      <dl class="meter"><dt>文字の読みやすさ</dt><dd>${stars(c.read)}</dd><dt>落ちつき</dt><dd>${stars(c.calm)}</dd></dl>
+    </section>`).join("");
+
+  const t = document.getElementById("t"), tt = document.getElementById("tt"), ph = document.getElementById("ph");
+  const phaseOf = (h) => (h < 4.5 ? "夜ふけ" : h < 6.5 ? "夜あけ" : h < 10 ? "朝" : h < 15.5 ? "昼" : h < 17 ? "夕方" : h < 19 ? "日の入り" : "夜");
+  let tm = 0;
+  function render() {
+    const min = Number(t.value); const h = min / 60;
+    tt.textContent = `${String(Math.floor(h)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`; ph.textContent = phaseOf(h);
+    for (const c of CONCEPTS) {
+      const cv = document.getElementById(`cv-${c.key}`); const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const W = cv.clientWidth, H = cv.clientHeight; if (!W) continue;
+      if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+      const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); c.draw(g, W, H, h, tm);
+    }
+  }
+  const nowMin = () => { const d = new Date(Date.now() + 9 * 3600e3); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+  t.value = nowMin(); render();
+  t.addEventListener("input", render);
+  document.querySelectorAll("[data-h]").forEach((b) => b.addEventListener("click", () => { stop(); t.value = Math.round(Number(b.dataset.h) * 60); render(); }));
+  document.getElementById("now").addEventListener("click", () => { stop(); t.value = nowMin(); render(); });
+  const play = document.getElementById("play"); let timer = 0;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function stop() { clearInterval(timer); timer = 0; play.setAttribute("aria-pressed", "false"); play.textContent = "▶ 1日を流す"; }
+  play.addEventListener("click", () => {
+    if (timer) { stop(); return; }
+    play.setAttribute("aria-pressed", "true"); play.textContent = "■ とめる";
+    timer = setInterval(() => { t.value = (Number(t.value) + (reduce ? 30 : 6)) % 1440; tm += .4; render(); }, reduce ? 400 : 40);
+  });
+  window.addEventListener("resize", render);
+})();
+</script>
