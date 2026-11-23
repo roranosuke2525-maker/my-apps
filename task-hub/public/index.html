@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今どこ">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#f2913f">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,7 +48,7 @@ html, body { height: 100%; overflow: hidden; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { touch-action: manipulation; }
-body { margin: 0; background: radial-gradient(120% 80% at 50% 0%, #0b1530 0%, var(--bg) 60%); color: var(--ink); font-family: var(--f); font-size: 14px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: linear-gradient(180deg, #f2913f 0%, #e0762a 45%, #c95f1a 100%) fixed; color: var(--ink); font-family: var(--f); font-size: 14px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 input, textarea, select { font: inherit; color: var(--ink); }
 button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -668,7 +668,11 @@ nav.tabs button { font-size: 9.5px; }
 .sres mark { background: rgba(157, 188, 176, .28); color: var(--ink); border-radius: 3px; padding: 0 1px; }
 
 /* ===== 落ち着いた仕上げ ===== */
-body { background: var(--bg); }
+/* 背景はオレンジ（11/23 の依頼） */
+body { background: linear-gradient(180deg, #f2913f 0%, #e0762a 45%, #c95f1a 100%) fixed; }
+/* オレンジの上でも読めるように、上の帯にも暗い下地を敷く */
+.hero, .tipbar { background: var(--card) !important; border-radius: 14px; }
+.hero { padding: 10px 12px !important; }
 #app { position: relative; z-index: 1; }
 .num { font-variant-numeric: tabular-nums; }
 .top { padding-top: 10px; padding-bottom: 8px; }
