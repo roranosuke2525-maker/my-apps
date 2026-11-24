@@ -338,22 +338,91 @@ test("本を足すとき表紙も入れられる。背景を調べる印を付�
   assert.equal(off.data.book.research, false);
 });
 
-test("Kindle 同期：Amazon からのフォームは合言葉なしで受け取り、画面に渡す HTML を返す", async () => {
-  const data = { v: 1, host: "read.amazon.co.jp", books: [{ asin: "B0", title: "本 </script><b>", author: "著者: 人", items: [{ text: "文", note: "", header: "位置: 1", loc: "1" }] }] };
-  const form = new URLSearchParams({ data: JSON.stringify(data) });
-  const res = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form.toString() }), env);
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get("Content-Type"), /text\/html/);
-  const html = await res.text();
-  assert.ok(html.includes('sessionStorage.setItem("shiori:kindleSync"'));
-  assert.ok(html.includes("\\u003c/script>\\u003cb>"), "payload の < は逃がす");
-  assert.ok(!html.includes("</script><b>"));
-  assert.equal(calls.length, 0, "Notion には触らない");
-  const bad = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "data=%7Bnope" }), env);
-  assert.equal(bad.status, 400);
-  const notForm = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }), env);
-  assert.equal(notForm.status, 400);
+async function sync(body, origin = "https://read.amazon.co.jp") {
+  const res = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "text/plain", Origin: origin }, body: JSON.stringify(body) }), env);
+  return { status: res.status, data: await res.json(), headers: res.headers };
+}
+
+test("Kindle 同期：同期の鍵は合言葉から作り、合言葉でだけ取れる", async () => {
+  const { status, data } = await api("GET", "/api/sync-token");
+  assert.equal(status, 200);
+  assert.match(data.token, /^[0-9a-f]{32}$/);
+  assert.equal((await api("GET", "/api/sync-token", null, "wrong-key-0123456789")).status, 401);
+  assert.notEqual(data.token, (await worker.fetch(new Request("https://shiori.test/api/sync-token", { headers: { Authorization: "Bearer other-key-0123456789" } }), { ...env, APP_KEY: "other-key-0123456789" }).then((r) => r.json())).token, "合言葉が変わると鍵も変わる");
+});
+
+test("Kindle 同期：本棚の本に合わせ、登録済みの文を外して入れる。Amazon からだけ CORS を許す", async () => {
+  const { data: tok } = await api("GET", "/api/sync-token");
+  const items = [
+    { text: "見本の ハイライト。", note: "", header: "黄色のハイライト | ページ: 12", loc: "" },
+    { text: "新しい一文", note: "思ったこと", header: "青色のハイライト | 位置: 1,234", loc: "1234" },
+    { text: "新しい一文", note: "", header: "", loc: "" },
+    { text: "   ", note: "文の無いメモ", header: "", loc: "" },
+  ];
+  const r = await sync({ v: 2, token: tok.token, book: { asin: "B0", title: "見本の本 (見本文庫)", author: "著者: 作家 一", cover: "https://m.media-amazon.com/x.jpg" }, items });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("Access-Control-Allow-Origin"), "https://read.amazon.co.jp");
+  assert.deepEqual(r.data, { bookId: B1, title: "見本の本", created: false, added: 1, dup: 1, pending: [], received: 4 });
+  const made = writes().filter((c) => c.method === "POST");
+  assert.equal(made.length, 1, "新しい文だけ足す（同じ文の2つ目と空の文は飛ばす）");
+  assert.equal(made[0].body.parent.data_source_id, HL_DS);
+  assert.deepEqual(made[0].body.properties["本"], { relation: [{ id: B1 }] });
+  assert.deepEqual(made[0].body.properties["出どころ"], { select: { name: "📱 Kindle" } });
+  assert.deepEqual(made[0].body.properties["位置"].rich_text[0].text.content, "1234");
+  assert.deepEqual(made[0].body.properties["メモ"].rich_text[0].text.content, "思ったこと");
+  assert.ok(!("ページ" in made[0].body.properties));
+  assert.ok(!calls.some((c) => c.path === "/pages" && c.body?.parent?.data_source_id === BOOK_DS), "本は足さない");
+
+  // Amazon 以外からは CORS を付けない。鍵が違えば 401。古い形（v:1）は作り直しを案内
+  const other = await sync({ v: 2, token: tok.token, book: { title: "見本の本" }, items: [] }, "https://evil.test");
+  assert.equal(other.headers.get("Access-Control-Allow-Origin"), null);
+  assert.equal((await sync({ v: 2, token: "0".repeat(32), book: { title: "見本の本" }, items: [] })).status, 401);
+  assert.equal((await sync({ v: 1, books: [] })).status, 400);
+  const pre = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "OPTIONS", headers: { Origin: "https://read.amazon.com" } }), env);
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get("Access-Control-Allow-Origin"), "https://read.amazon.com");
+  const form = await worker.fetch(new Request("https://shiori.test/api/kindle-sync", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "data=%7B%7D" }), env);
+  assert.equal(form.status, 200);
+  assert.match(await form.text(), /古い形/);
   const get = await worker.fetch(new Request("https://shiori.test/api/kindle-sync"), env);
   assert.equal(get.status, 303);
-  assert.equal(get.headers.get("Location"), "https://shiori.test/sync.html");
+  assert.equal(get.headers.get("Location"), "https://shiori.test/#kindle");
+});
+
+test("Kindle 同期：本棚に無い本は「読中」で足し、30件ずつ入れて残りは pending で返す。bookId 付きの送り直しは本を探さない", async () => {
+  const { data: tok } = await api("GET", "/api/sync-token");
+  const items = Array.from({ length: 35 }, (_, i) => ({ text: `文 ${i}`, note: "", header: "ページ: " + (i + 1), loc: "" }));
+  const r = await sync({ v: 2, token: tok.token, book: { asin: "B1", title: "海辺の本（上） (新潮文庫)", author: "著者: 作家 二", cover: "https://m.media-amazon.com/c.jpg" }, items });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.created, true);
+  assert.equal(r.data.title, "海辺の本（上）");
+  assert.equal(r.data.added, 30);
+  assert.deepEqual(r.data.pending, [30, 31, 32, 33, 34]);
+  const bookMade = writes().find((c) => c.method === "POST" && c.body.parent.data_source_id === BOOK_DS);
+  assert.equal(bookMade.body.properties["書籍名"].title[0].text.content, "海辺の本（上）");
+  assert.deepEqual(bookMade.body.properties["著者名"], { select: { name: "作家　二" } }, "著者名は本棚の書き方に合わせる");
+  assert.deepEqual(bookMade.body.properties["出版社"], { select: { name: "新潮文庫" } });
+  assert.deepEqual(bookMade.body.properties["ステータス"], { status: { name: "読中" } });
+  assert.equal(bookMade.body.properties["ファイル&メディア"].files[0].external.url, "https://m.media-amazon.com/c.jpg");
+  assert.equal(writes().filter((c) => c.method === "POST" && c.body.parent.data_source_id === HL_DS).length, 30);
+  assert.ok(calls.filter((c) => c.path.startsWith("/")).length <= 50, "無料プランの上限（1回50件）に収める");
+
+  calls = [];
+  const rest = await sync({ v: 2, token: tok.token, bookId: r.data.bookId, book: { title: "海辺の本（上） (新潮文庫)" }, items: r.data.pending.map((i) => items[i]) });
+  assert.deepEqual([rest.data.created, rest.data.added, rest.data.pending, rest.data.dup], [false, 5, [], 0]);
+  assert.ok(!calls.some((c) => c.path === `/data_sources/${BOOK_DS}/query`), "bookId があれば本棚を読まない");
+  assert.equal(calls.filter((c) => c.method === "POST" && c.path === "/pages").length, 5);
+
+  // 何も新しくなければ本は足さない
+  const none = await sync({ v: 2, token: tok.token, book: { title: "知らない本" }, items: [{ text: "", note: "", header: "", loc: "" }] });
+  assert.deepEqual([none.data.bookId, none.data.created, none.data.added], ["", false, 0]);
+});
+
+test("最近入ったハイライト：Kindle のものを記録日の新しい順に返す", async () => {
+  const { status, data } = await api("GET", "/api/highlights/recent");
+  assert.equal(status, 200);
+  const q = calls.find((c) => c.path === `/data_sources/${HL_DS}/query`);
+  assert.deepEqual(q.body.filter, { property: "出どころ", select: { equals: "📱 Kindle" } });
+  assert.deepEqual(q.body.sorts, [{ property: "記録日", direction: "descending" }]);
+  assert.ok(data.highlights.every((h) => h.bookId === B1 && h.date));
 });

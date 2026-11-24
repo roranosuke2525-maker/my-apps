@@ -2,6 +2,9 @@
 // Notion のトークンはこの Worker の secret にだけ置き、ブラウザには渡さない。
 // 書き換えるのは 読書メモ_DB（本）と DB_読書ハイライト の行だけ。
 
+import "../public/parse.js"; // 書名の照合・Kindle の見出しの読み取り（画面と同じ関数を使う）
+const P = globalThis.ShioriParse;
+
 const NOTION_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 const BOOK_STATUSES = ["未読", "読中", "読了"];
@@ -23,15 +26,21 @@ const LEGACY_MAX = 20; // 前の形（本のページの下の子ページ）を
 const RICH_MAX = 2000;
 const MAX_QUERY_PAGES = 5;
 const LEGACY_REL = "読書メモ_DBからのリレーション";
+const SYNC_CHUNK = 30; // Kindle 同期で1回の通信に足すハイライトの数（本の照合・登録済みの読み取りと合わせて50件に収める）
+const SYNC_ITEMS_MAX = 3000;
+const SYNC_BODY_MAX = 4 * 1024 * 1024;
+const SYNC_ORIGIN = /^https:\/\/read\.amazon\.[a-z.]+$/;
+const RECENT_MAX = 100;
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
 
+    // Safari のブックマーク「しおりへ同期」が Amazon のページから直接送る。合言葉の代わりに同期専用の鍵で確かめ、その場で Notion に入れて結果を返す
+    if (url.pathname === "/api/kindle-sync") return kindleSyncRoute(request, env);
+
     try {
-      // Safari のブックマーク「しおりへ同期」が Amazon のページから送るフォーム。合言葉は持たないので、受け取った中身を画面に渡すだけ（Notion には触らない）
-      if (url.pathname === "/api/kindle-sync") return await kindleSyncPage(request, url);
       checkConfig(env);
       if (!authorized(request, env)) return json({ error: "合言葉が違います" }, 401);
       const notion = notionClient(env);
@@ -43,6 +52,8 @@ export default {
       const term = p.match(/^\/api\/terms\/([0-9a-f-]{32,36})$/i);
 
       if (p === "/api/books" && m === "GET") return json(await getBooks(notion, env));
+      if (p === "/api/sync-token" && m === "GET") return json({ token: await syncToken(env) });
+      if (p === "/api/highlights/recent" && m === "GET") return json(await recentHighlights(notion, env, url.searchParams));
       if (p === "/api/lookup" && m === "GET") return json(await lookupBooks(url.searchParams.get("q")));
       if (p === "/api/books" && m === "POST") return json(await addBook(notion, env, await readJson(request)));
       if (book && book[2] && m === "GET") return json(await getHighlights(notion, env, book[1]));
@@ -165,6 +176,7 @@ function highlightOf(page) {
     id: normalizeId(page.id),
     url: page.url,
     text: propText(p["引用"]),
+    bookId: relIds(p["本"])[0] || "",
     page: propNum(p["ページ"]),
     loc: propText(p["位置"]),
     source: propText(p["出どころ"]),
@@ -201,10 +213,15 @@ function chunks(s, n = RICH_MAX) {
 }
 
 async function addBook(notion, env, body) {
+  return { book: bookOf(await createBook(notion, env, body)) };
+}
+
+async function createBook(notion, env, body) {
   const title = clean(body?.title, TITLE_MAX, "書籍名").replace(/\s+/g, " ");
   if (!title) throw httpError(400, "書籍名を入れてください");
-  const author = clean(body?.author, 60, "著者名").replace(/\s+/g, " ");
-  const publisher = clean(body?.publisher, 60, "出版社").replace(/\s+/g, " ");
+  // 全角の空白（「村上　春樹」）は選択肢の書き方なので残し、半角の空白だけ1つにする
+  const author = clean(body?.author, 60, "著者名").replace(/[ \t]+/g, " ");
+  const publisher = clean(body?.publisher, 60, "出版社").replace(/[ \t]+/g, " ");
   const status = BOOK_STATUSES.includes(body?.status) ? body.status : "読中";
   // 著者名・出版社は選択肢。新しい名前は Notion が選択肢に足す
   const properties = { 書籍名: { title: rich(title) }, ステータス: { status: { name: status } } };
@@ -215,8 +232,7 @@ async function addBook(notion, env, body) {
     if (!/^https:\/\/[^\s"<>]+$/.test(cover)) throw httpError(400, "表紙のURLが正しくありません");
     properties["ファイル&メディア"] = { files: [{ type: "external", name: "cover.jpg", external: { url: cover } }] };
   }
-  const page = await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.BOOK_DS_ID }, properties });
-  return { book: bookOf(page) };
+  return notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.BOOK_DS_ID }, properties });
 }
 
 async function updateBook(notion, env, id, body) {
@@ -391,6 +407,28 @@ function contextBlocks(context, quote) {
   ];
 }
 
+// 1件のハイライトを Notion のページ（DB_読書ハイライトの行）にする。先に全部を確かめてから書けるよう、作るだけで送らない
+function highlightPage(it, bookId, today) {
+  const quote = clean(it?.text, QUOTE_MAX, "ハイライト").replace(/\s*\n\s*/g, " ");
+  if (!quote) throw httpError(400, "空のハイライトがあります");
+  const source = SOURCES.includes(it?.source) ? it.source : "✍️ 手入力";
+  const page = it?.page === "" || it?.page == null ? null : Number(it.page);
+  if (page != null && (!Number.isInteger(page) || page < 0 || page > 99999)) throw httpError(400, "ページは数字で入れてください");
+  const loc = clean(it?.loc, 40, "位置");
+  const memo = clean(it?.memo, MEMO_MAX, "メモ");
+  const properties = {
+    引用: { title: rich(quote) },
+    本: { relation: [{ id: bookId }] },
+    出どころ: { select: { name: source } },
+    記録日: { date: { start: today } },
+  };
+  if (page != null) properties["ページ"] = { number: page };
+  if (loc) properties["位置"] = { rich_text: rich(loc) };
+  if (memo) properties["メモ"] = { rich_text: rich(memo) };
+  const context = clean(it?.context, CONTEXT_MAX, "ページの文");
+  return { properties, ...(context ? { children: contextBlocks(context, quote) } : {}) };
+}
+
 async function addHighlights(notion, env, body) {
   const bookId = normalizeId(String(body?.bookId || ""));
   if (!/^[0-9a-f]{32}$/.test(bookId)) throw httpError(400, "本を選んでください");
@@ -399,68 +437,147 @@ async function addHighlights(notion, env, body) {
   if (items.length > SAVE_MAX) throw httpError(400, `一度に足せるのは${SAVE_MAX}件までです`);
   const today = jstDate(new Date().toISOString());
   // 先に全部を確かめてから書く（途中で止まって半端に残らないように）
-  const pages = items.map((it) => {
-    const quote = clean(it?.text, QUOTE_MAX, "ハイライト").replace(/\s*\n\s*/g, " ");
-    if (!quote) throw httpError(400, "空のハイライトがあります");
-    const source = SOURCES.includes(it?.source) ? it.source : "✍️ 手入力";
-    const page = it?.page === "" || it?.page == null ? null : Number(it.page);
-    if (page != null && (!Number.isInteger(page) || page < 0 || page > 99999)) throw httpError(400, "ページは数字で入れてください");
-    const loc = clean(it?.loc, 40, "位置");
-    const memo = clean(it?.memo, MEMO_MAX, "メモ");
-    const properties = {
-      引用: { title: rich(quote) },
-      本: { relation: [{ id: bookId }] },
-      出どころ: { select: { name: source } },
-      記録日: { date: { start: today } },
-    };
-    if (page != null) properties["ページ"] = { number: page };
-    if (loc) properties["位置"] = { rich_text: rich(loc) };
-    if (memo) properties["メモ"] = { rich_text: rich(memo) };
-    const context = clean(it?.context, CONTEXT_MAX, "ページの文");
-    return { properties, ...(context ? { children: contextBlocks(context, quote) } : {}) };
-  });
+  const pages = items.map((it) => highlightPage(it, bookId, today));
   const book = await rowOf(notion, bookId, env.BOOK_DS_ID, "読書メモ_DB ");
+  const added = await createPages(notion, env, pages);
+  const out = await markReading(notion, book, added);
+  return { added, book: out };
+}
+
+async function createPages(notion, env, pages) {
   let added = 0;
   for (const p of pages) {
     await notion("POST", "/pages", { parent: { type: "data_source_id", data_source_id: env.HIGHLIGHT_DS_ID }, ...p });
     added++;
   }
-  // 読み始めた本は「読中」にする
-  let updated = book;
-  if (propText(book.properties?.["ステータス"]) === "未読" || !propText(book.properties?.["ステータス"])) {
-    updated = await notion("PATCH", `/pages/${bookId}`, { properties: { ステータス: { status: { name: "読中" } } } });
-  }
-  const out = bookOf(updated);
-  // ページの関連は書いた直後に増えていないことがあるので、足した数を加えて返す
-  if (out.highlightCount === bookOf(book).highlightCount) out.highlightCount += added;
-  return { added, book: out };
+  return added;
 }
 
-// ---------- Kindle 同期（ブックマークから受け取る） ----------
-const SYNC_MAX = 8 * 1024 * 1024;
-async function kindleSyncPage(request, url) {
-  if (request.method !== "POST") return Response.redirect(`${url.origin}/sync.html`, 303);
+// 読み始めた本は「読中」にする。ページの関連は書いた直後に増えていないことがあるので、足した数を加えて返す
+async function markReading(notion, book, added) {
+  let updated = book;
+  if (propText(book.properties?.["ステータス"]) === "未読" || !propText(book.properties?.["ステータス"])) {
+    updated = await notion("PATCH", `/pages/${normalizeId(book.id)}`, { properties: { ステータス: { status: { name: "読中" } } } });
+  }
+  const out = bookOf(updated);
+  if (out.highlightCount === bookOf(book).highlightCount) out.highlightCount += added;
+  return out;
+}
+
+// 最近入ったハイライト（Kindle 同期の結果を画面で確かめるため）。記録日の新しい順に最大 100 件
+async function recentHighlights(notion, env, params) {
+  const source = SOURCES.includes(params.get("source")) ? params.get("source") : "📱 Kindle";
+  const res = await notion("POST", `/data_sources/${env.HIGHLIGHT_DS_ID}/query`, {
+    filter: { property: "出どころ", select: { equals: source } },
+    sorts: [{ property: "記録日", direction: "descending" }],
+    page_size: RECENT_MAX,
+  });
+  return { highlights: (res.results || []).map(highlightOf), more: !!res.has_more };
+}
+
+// ---------- Kindle 同期（ブックマークから直接受け取る） ----------
+// ブックマークは合言葉を持たない。代わりに、合言葉から作った同期専用の鍵（この入口でしか使えない）を持つ。合言葉を変えると鍵も変わる
+async function syncToken(env) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`shiori-kindle-sync:${env.APP_KEY}`));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+
+// Amazon のページ（read.amazon.co.jp など）からの通信だけに CORS を許す
+function corsHeaders(request) {
+  const origin = request.headers.get("Origin") || "";
+  if (!SYNC_ORIGIN.test(origin)) return {};
+  return { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" };
+}
+
+async function kindleSyncRoute(request, env) {
+  const cors = corsHeaders(request);
+  const reply = (data, status = 200) => { const r = json(data, status); for (const [k, v] of Object.entries(cors)) r.headers.set(k, v); return r; };
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  if (request.method !== "POST") return Response.redirect(`${new URL(request.url).origin}/#kindle`, 303);
   const type = request.headers.get("Content-Type") || "";
-  if (!/application\/x-www-form-urlencoded|multipart\/form-data/.test(type)) throw httpError(400, "フォームからだけ受け取れます");
-  const len = Number(request.headers.get("Content-Length") || 0);
-  if (len > SYNC_MAX) throw httpError(413, "一度に受け取れる量を超えました（8MB）");
-  const form = await request.formData().catch(() => null);
-  const raw = form?.get("data");
-  if (typeof raw !== "string" || !raw) throw httpError(400, "データがありません");
-  if (raw.length > SYNC_MAX) throw httpError(413, "一度に受け取れる量を超えました（8MB）");
-  let data;
-  try { data = JSON.parse(raw); } catch { throw httpError(400, "データの形が読めません"); }
-  if (!data || data.v !== 1 || !Array.isArray(data.books)) throw httpError(400, "データの形が読めません");
-  // 画面（sync.html）に渡す。</script> で閉じられないように < を逃がす
-  const safe = JSON.stringify(data).replace(/</g, "\\u003c");
-  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>しおりへ同期</title></head><body style="font-family:-apple-system,sans-serif;padding:24px;color:#1f3a3d">
-<p id="msg">Kindle のハイライトを受け取りました。しおりを開いています…</p>
-<script type="application/json" id="payload">${safe}</script>
-<script>
-try { sessionStorage.setItem("shiori:kindleSync", document.getElementById("payload").textContent); location.replace("/sync.html"); }
-catch (e) { document.getElementById("msg").textContent = "データを受け取れませんでした：" + e.message; }
-</script></body></html>`;
-  return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  // 前の形のブックマーク（フォーム送信）には、作り直しを案内する
+  if (/application\/x-www-form-urlencoded|multipart\/form-data/.test(type)) {
+    const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>しおりへ同期</title></head><body style="font-family:-apple-system,sans-serif;padding:24px;color:#1f3a3d;line-height:1.6">
+<p><b>このブックマークは古い形です。</b></p><p>しおりの「Kindle」タブで「コードをコピー」を押し、ブックマーク「しおりへ同期」のアドレスを貼り直してください。新しい形では、ブックマークを押すとその場で Notion に入り、結果が Amazon のページの上に出ます。</p><p><a href="/#kindle">しおりを開く</a></p></body></html>`;
+    return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  try {
+    checkConfig(env);
+    if (Number(request.headers.get("Content-Length") || 0) > SYNC_BODY_MAX) throw httpError(413, "一度に送れる量を超えました（4MB）");
+    const raw = await request.text();
+    if (raw.length > SYNC_BODY_MAX) throw httpError(413, "一度に送れる量を超えました（4MB）");
+    let body;
+    try { body = JSON.parse(raw); } catch { throw httpError(400, "データの形が読めません"); }
+    if (!body || body.v !== 2) throw httpError(400, "ブックマークが古い形です。しおりの Kindle タブで作り直してください");
+    if (!constantTimeEqual(String(body.token || ""), await syncToken(env))) throw httpError(401, "同期の鍵が合いません。しおりの Kindle タブでブックマークを作り直してください");
+    return reply(await kindleSync(notionClient(env), env, body));
+  } catch (err) {
+    return reply({ error: err.publicMessage || "サーバーでエラーが起きました" }, err.status || 500);
+  }
+}
+
+// 1冊ぶんを受け取り、本棚の本に合わせ（無ければ「読中」で足し）、登録済みの文を外して入れる。
+// 1回で入れるのは SYNC_CHUNK 件まで。残りは pending（受け取った items の番号）で返し、ブックマークが bookId 付きで送り直す
+async function kindleSync(notion, env, body) {
+  const b = body.book || {};
+  const { title, publisher } = P.splitAmazonTitle(b.title);
+  if (!title) throw httpError(400, "書名がありません");
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (items.length > SYNC_ITEMS_MAX) throw httpError(400, `1冊で送れるのは${SYNC_ITEMS_MAX}件までです`);
+  const today = jstDate(new Date().toISOString());
+
+  // 本：bookId があればその本、無ければ書名で本棚から探す
+  let book = null;
+  let created = false;
+  const givenId = normalizeId(String(body.bookId || ""));
+  if (/^[0-9a-f]{32}$/.test(givenId)) {
+    book = await rowOf(notion, givenId, env.BOOK_DS_ID, "読書メモ_DB ");
+  } else {
+    const rows = await queryAll(notion, env.BOOK_DS_ID, {});
+    const books = rows.map(bookOf);
+    const hit = P.matchBook(books, title) || P.matchBook(books, String(b.title || ""));
+    if (hit) book = rows.find((r) => normalizeId(r.id) === hit.id);
+  }
+
+  // 受け取った文を整え、同じ文（空白・記号の違いは無視）は1つにする
+  const seen = new Set();
+  const fresh = [];
+  items.forEach((it, i) => {
+    const text = String(it?.text || "").replace(/\s+/g, " ").trim();
+    if (!text) return;
+    const k = P.norm(text);
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    const meta = P.kindleMeta(it?.header, it?.loc);
+    fresh.push({ i, k, item: { text, page: meta.page ?? "", loc: meta.loc, memo: String(it?.note || "").replace(/\s+/g, " ").trim(), source: "📱 Kindle" } });
+  });
+
+  // 登録済みの文は外す
+  let dup = 0;
+  let todo = fresh;
+  if (book) {
+    const have = new Set((await queryAll(notion, env.HIGHLIGHT_DS_ID, { filter: { property: "本", relation: { contains: normalizeId(book.id) } } })).map((r) => P.norm(propText(r.properties?.["引用"]))));
+    todo = fresh.filter((f) => !have.has(f.k));
+    dup = fresh.length - todo.length;
+  }
+  if (!todo.length) {
+    return { bookId: book ? normalizeId(book.id) : "", title: book ? propText(book.properties?.["書籍名"]) : title, created: false, added: 0, dup, pending: [], received: items.length };
+  }
+
+  // 本棚に無い本は「読中」で足す（著者名は本棚にある書き方に合わせる）
+  if (!book) {
+    const ds = await notion("GET", `/data_sources/${env.BOOK_DS_ID}`);
+    const authors = (ds.properties?.["著者名"]?.select?.options || []).map((o) => o.name);
+    const cover = /^https:\/\/[^\s"<>]+$/.test(String(b.cover || "")) ? String(b.cover) : "";
+    book = await createBook(notion, env, { title, author: P.matchAuthor(authors, b.author), publisher, cover, status: "読中" });
+    created = true;
+  }
+  const bookId = normalizeId(book.id);
+  const now = todo.slice(0, SYNC_CHUNK);
+  const pages = now.map((f) => highlightPage(f.item, bookId, today));
+  const added = await createPages(notion, env, pages);
+  await markReading(notion, book, added);
+  return { bookId, title: propText(book.properties?.["書籍名"]) || title, created, added, dup, pending: todo.slice(SYNC_CHUNK).map((f) => f.i), received: items.length };
 }
 
 async function updateHighlight(notion, env, id, body) {

@@ -8,10 +8,11 @@ const KINDS = ["📍 舞台", "🌿 植物", "👥 人物・距離感", "🍽 �
 const RATINGS = ["★", "★★", "★★★", "★★★★", "★★★★★"];
 const REVIEW_MAX = 255;
 const SAVE_CHUNK = 40; // Worker が一度に足せるハイライトの数
+const STALE_MS = 60e3; // ほかの画面（Safari のブックマークなど）で入れたものを拾うため、これより古ければ戻ってきたときに読み直す
 const KEY_STORAGE = "key";
 
 const $ = (s, el = document) => el.querySelector(s);
-const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), terms: new Map(), nbCover: "", dict: { kind: "", q: "", upto: "", editing: null, newKind: "✦ その他", confirm: "" }, page: null, kindle: null, done: {} };
+const state = { books: [], options: { authors: [], publishers: [] }, filter: "読中", view: "shelf", bookId: "", hl: new Map(), terms: new Map(), syncToken: "", recent: null, loadedAt: 0, nbCover: "", dict: { kind: "", q: "", upto: "", editing: null, newKind: "✦ その他", confirm: "" }, page: null, kindle: null, done: {} };
 
 // ---------- 共通 ----------
 let memoryKey = "";
@@ -87,6 +88,7 @@ async function loadBooks() {
     const data = await api("GET", "/api/books");
     state.books = data.books;
     state.options = data.options;
+    state.loadedAt = Date.now();
     if (!state.bookId || !bookOf(state.bookId)) state.bookId = store.get("book") && bookOf(store.get("book")) ? store.get("book") : (state.books.find((b) => b.status === "読中")?.id || "");
     setStatus("");
     renderAll();
@@ -115,6 +117,7 @@ function show(view) {
   store.set("view", view);
   if (view === "done") renderDone();
   if (view === "dict") renderDict();
+  if (view === "kindle") renderKindleRecent();
   window.scrollTo(0, 0);
 }
 
@@ -522,35 +525,55 @@ async function savePage(btn) {
 }
 
 // ---------- Kindle ----------
-// Safari のブックマーク「しおりへ同期」。Amazon の「メモとハイライト」の中で動き、全部の本のハイライトを読んで /api/kindle-sync にフォームで送る（→ sync.html）
-function bookmarkletCode() {
-  const action = `${location.origin}/api/kindle-sync`;
-  const code = `(()=>{const S=${JSON.stringify(action)};if(!/^read\\.amazon\\./.test(location.hostname)){if(confirm("Kindle の「メモとハイライト」を開いてから押してください。いま開きますか？"))location.href="https://read.amazon.co.jp/notebook";return}
-if(document.getElementById("shiori-sync"))return;const o=location.origin,q=(d,s)=>d.querySelector(s),T=(e)=>(e?e.textContent:"").replace(/\\s+/g," ").trim();
-const box=document.createElement("div");box.id="shiori-sync";box.style.cssText="position:fixed;left:12px;right:12px;bottom:24px;z-index:2147483647;background:#1f4d52;color:#fff;padding:14px 16px;border-radius:12px;font:15px/1.5 -apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3)";document.body.appendChild(box);
-const say=(m)=>{box.textContent="しおりへ同期："+m};say("本の一覧を読んでいます…");
+// Safari のブックマーク「しおりへ同期」。Amazon の「メモとハイライト」の中で動き、本ごとにハイライトを読んで /api/kindle-sync に直接送る。
+// Worker がその場で Notion に入れ、何件入ったかを Amazon のページの上に出す（しおりの画面は経由しない）。
+// 合言葉の代わりに同期専用の鍵（/api/sync-token）を持つ。合言葉を変えたらブックマークも作り直す
+function bookmarkletCode(token) {
+  const S = `${location.origin}/api/kindle-sync`;
+  const H = `${location.origin}/#kindle`;
+  const code = `(()=>{const S=${JSON.stringify(S)},K=${JSON.stringify(token)},H=${JSON.stringify(H)};if(!/^read\\.amazon\\./.test(location.hostname)){if(confirm("Kindle の「メモとハイライト」を開いてから押してください。いま開きますか？"))location.href="https://read.amazon.co.jp/notebook";return}
+if(document.getElementById("shiori-sync"))return;const o=location.origin,q=(d,s)=>d.querySelector(s),T=(e)=>(e?e.textContent:"").replace(/\\s+/g," ").trim(),E=(s)=>String(s).replace(/[&<>]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const box=document.createElement("div");box.id="shiori-sync";box.style.cssText="position:fixed;left:12px;right:12px;bottom:24px;z-index:2147483647;background:#1f4d52;color:#fff;padding:14px 16px;border-radius:12px;font:15px/1.5 -apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3);max-height:70vh;overflow:auto";document.body.appendChild(box);
+const lines=[];const say=(m)=>{box.innerHTML="<b>しおりへ同期</b>　"+E(m)+(lines.length?"<ul style='margin:8px 0 0;padding-left:1.2em'>"+lines.map((l)=>"<li>"+E(l)+"</li>").join("")+"</ul>":"")};
+const fin=(m)=>{say(m);box.insertAdjacentHTML("beforeend","<p style='margin:10px 0 0'><a href='"+H+"' style='color:#fff;font-weight:700'>しおりを開く →</a>　<a href='#' id='shiori-sync-x' style='color:#cfe'>閉じる</a></p>");document.getElementById("shiori-sync-x").onclick=(e)=>{e.preventDefault();box.remove()}};
+say("本の一覧を読んでいます…");
 const get=async(u)=>{const r=await fetch(u,{credentials:"include"});if(!r.ok)throw new Error("HTTP "+r.status);return new DOMParser().parseFromString(await r.text(),"text/html")};
-(async()=>{try{const lib=await get(o+"/notebook");
-const books=[...lib.querySelectorAll(".kp-notebook-library-each-book")].map(b=>({asin:b.id,title:T(q(b,"h2")),author:T(q(b,"p")),cover:(q(b,"img")||{}).src||"",items:[]}));
+const post=async(b)=>{const r=await fetch(S,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify(b)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"HTTP "+r.status);return d};
+(async()=>{let added=0,dup=0,made=0;try{const lib=await get(o+"/notebook");
+const books=[...lib.querySelectorAll(".kp-notebook-library-each-book")].map(b=>({asin:b.id,title:T(q(b,"h2")),author:T(q(b,"p")),cover:(q(b,"img")||{}).src||""}));
 if(!books.length)throw new Error("本が見つかりません。Amazon にログインしていますか？");
-for(let i=0;i<books.length;i++){const b=books[i];say((i+1)+"/"+books.length+" 『"+b.title+"』");let u=o+"/notebook?asin="+encodeURIComponent(b.asin)+"&contentLimitState=&";
-for(let n=0;n<80&&u;n++){const d=await get(u);
-for(const r of d.querySelectorAll(".a-row.a-spacing-base")){const t=T(q(r,"#highlight")),m=T(q(r,"#note")),h=T(q(r,"#annotationHighlightHeader"))||T(q(r,"#annotationNoteHeader")),l=(q(r,"#kp-annotation-location")||{}).value||"";if(t||m)b.items.push({text:t,note:m,header:h,loc:l})}
-const nx=(q(d,".kp-notebook-annotations-next-page-start")||{}).value,cl=(q(d,".kp-notebook-content-limit-state")||{}).value||"";u=nx?o+"/notebook?asin="+encodeURIComponent(b.asin)+"&token="+encodeURIComponent(nx)+"&contentLimitState="+encodeURIComponent(cl):""}}
-const total=books.reduce((a,b)=>a+b.items.length,0);say(books.length+"冊・"+total+"件を読み取りました。しおりを開きます…");
-const f=document.createElement("form");f.method="POST";f.action=S;f.style.display="none";const i=document.createElement("input");i.type="hidden";i.name="data";i.value=JSON.stringify({v:1,host:location.hostname,at:new Date().toISOString(),books});f.appendChild(i);document.body.appendChild(f);f.submit()}
-catch(e){say("うまくいきませんでした："+e.message);setTimeout(()=>box.remove(),9000)}})()})()`;
+for(let i=0;i<books.length;i++){const b=books[i],n=(i+1)+"/"+books.length+" 『"+b.title+"』";say(n+" を読んでいます…");const items=[];let u=o+"/notebook?asin="+encodeURIComponent(b.asin)+"&contentLimitState=&";
+for(let k=0;k<80&&u;k++){const d=await get(u);for(const r of d.querySelectorAll(".a-row.a-spacing-base")){const t=T(q(r,"#highlight")),m=T(q(r,"#note")),h=T(q(r,"#annotationHighlightHeader"))||T(q(r,"#annotationNoteHeader")),l=(q(r,"#kp-annotation-location")||{}).value||"";if(t)items.push({text:t,note:m,header:h,loc:l})}
+const nx=(q(d,".kp-notebook-annotations-next-page-start")||{}).value,cl=(q(d,".kp-notebook-content-limit-state")||{}).value||"";u=nx?o+"/notebook?asin="+encodeURIComponent(b.asin)+"&token="+encodeURIComponent(nx)+"&contentLimitState="+encodeURIComponent(cl):""}
+if(!items.length)continue;say(n+" "+items.length+"件をしおりに入れています…");
+let cur=items,res=await post({v:2,token:K,book:b,items:cur}),a=res.added;const cr=!!res.created,dp=res.dup||0;while(res.pending&&res.pending.length){cur=res.pending.map((j)=>cur[j]);say(n+" "+(a+cur.length)+"件のうち "+a+"件まで入れました…");res=await post({v:2,token:K,bookId:res.bookId,book:b,items:cur});a+=res.added}
+added+=a;dup+=dp;if(cr)made++;lines.push("『"+(res.title||b.title)+"』 "+(a?"新しく "+a+"件":"新しいものなし")+(dp?"（登録済み "+dp+"件）":"")+(cr?"（本棚に「読中」で足しました）":""))}
+fin(added?"✓ "+added+"件を Notion に入れました"+(made?"（本を "+made+"冊足しました）":""):"新しいハイライトはありませんでした（登録済み "+dup+"件）")}
+catch(e){fin("うまくいきませんでした："+e.message+"　もう一度押せば、入った分は外して続きから入ります")}})()})()`;
   return `javascript:${encodeURIComponent(code)}`;
 }
 
+async function getSyncToken(force = false) {
+  if (!force && state.syncToken) return state.syncToken;
+  const { token } = await api("GET", "/api/sync-token");
+  state.syncToken = token;
+  return token;
+}
+
+// ブックマークの中身（同期の鍵つき）を用意して、ボタンの href に入れる
+async function prepareBookmarklet() {
+  try { $("#bm-link").href = bookmarkletCode(await getSyncToken(true)); }
+  catch { $("#bm-link").href = "#"; }
+}
+
 function setupKindle() {
-  const bm = bookmarkletCode();
-  $("#bm-link").href = bm;
   $("#bm-link").addEventListener("click", (e) => {
     e.preventDefault();
     toast("このボタンはブックマークバーへドラッグして使います。iPhone は「コードをコピー」から");
   });
   $("#bm-copy").addEventListener("click", async () => {
+    let bm;
+    try { bm = bookmarkletCode(await getSyncToken()); } catch (e) { toast(e.message); return; }
     try { await navigator.clipboard.writeText(bm); toast("コピーしました。ブックマークのアドレスに貼ってください"); $("#bm-howto").open = true; }
     catch { const ta = el("textarea", { readonly: true, rows: "3", "aria-label": "ブックマークのコード" }); ta.value = bm; $("#bm-howto").after(ta); ta.select(); toast("長押しでコピーしてください"); }
   });
@@ -564,6 +587,39 @@ function setupKindle() {
     if (match) selectBook(match.id);
     renderKindle();
   });
+}
+
+// 最近 Kindle から入ったハイライトを、日付と本ごとにまとめて出す（同期が反映されたかをここで確かめる）
+async function renderKindleRecent(force = false) {
+  const box = $("#kindle-recent");
+  if (!force && state.recent) { drawRecent(state.recent); return; }
+  box.replaceChildren(el("div", { class: "working" }, el("span", { class: "spinner" }), "最近入ったハイライトを読み込み中…"));
+  try {
+    const data = await api("GET", "/api/highlights/recent");
+    state.recent = data.highlights;
+    drawRecent(data.highlights);
+  } catch (e) { box.replaceChildren(el("p", { class: "note" }, e.message)); }
+}
+
+function drawRecent(list) {
+  const box = $("#kindle-recent");
+  const days = new Map();
+  for (const h of list) {
+    const d = h.date || "";
+    if (!days.has(d)) days.set(d, new Map());
+    const books = days.get(d);
+    if (!books.has(h.bookId)) books.set(h.bookId, { id: h.bookId, title: bookOf(h.bookId)?.title || "（本棚に無い本）", n: 0 });
+    books.get(h.bookId).n += 1;
+  }
+  const dayLabel = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", weekday: "short" }) : "日付なし");
+  box.replaceChildren(
+    el("h3", { class: "sec" }, `Kindle から入ったもの${list.length ? `（直近 ${list.length}件）` : ""}`),
+    list.length
+      ? el("div", { class: "recent" }, [...days].map(([d, books]) => el("div", { class: "recent-day" },
+        el("div", { class: "recent-date" }, dayLabel(d)),
+        el("div", { class: "recent-books" }, [...books.values()].map((b) => el("button", { type: "button", class: "btn ghost small", disabled: !bookOf(b.id), onclick: () => openBook(b.id) }, `『${b.title}』 ${b.n}件`))))))
+      : el("p", { class: "note" }, "まだありません。Safari で Kindle の「メモとハイライト」を開き、ブックマーク「しおりへ同期」を押すと、入った本がここに並びます。"),
+    el("p", { class: "note" }, "本を押すとハイライトを見られます。上の ↻ で読み直せます。"));
 }
 
 async function renderKindle() {
@@ -822,6 +878,18 @@ async function renderDone() {
 }
 
 // ---------- はじめ ----------
+// Notion から読み直す。force でなければ、前に読んでから STALE_MS 以内なら何もしない
+function refresh(force) {
+  if (!force && Date.now() - state.loadedAt < STALE_MS) return;
+  state.hl.clear();
+  state.terms.clear();
+  state.recent = null;
+  loadBooks().then(() => {
+    if (state.view === "dict") renderDict();
+    if (state.view === "kindle") renderKindleRecent(true);
+  });
+}
+
 function showLogin() {
   for (const v of VIEWS) $(`#view-${v}`).hidden = true;
   $(".tabs").hidden = true;
@@ -838,11 +906,14 @@ function start() {
   const v = store.get("view");
   show(VIEWS.includes(v) ? v : "shelf");
   loadBooks();
+  prepareBookmarklet();
 }
 
 function setup() {
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
-  $("#reload").addEventListener("click", () => { state.hl.clear(); state.terms.clear(); loadBooks(); if (state.view === "dict") renderDict(); });
+  $("#reload").addEventListener("click", () => refresh(true));
+  // ほかの画面（Safari のブックマークなど）で入れたものを拾う：戻ってきたとき、しばらく経っていれば読み直す
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && memoryKey && $("#login").hidden) refresh(false); });
   $("#sheet-close").addEventListener("click", closeSheet);
   $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
