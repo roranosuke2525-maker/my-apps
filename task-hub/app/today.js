@@ -6,7 +6,7 @@
     const loading = S.mode === "loading" && !S.tasks.length;
     if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>うまく読みこめなかった…</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一回ためす</button></div></div>`); return; }
     // 今日タブはタスクの一覧だけ（11/25：情報が多すぎるので、進み具合・提案・重点などの帯は出さない）
-    view.insertAdjacentHTML("beforeend", `${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
+    view.insertAdjacentHTML("beforeend", `${farmBandHtml("today")}${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");
     const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}` : "");
@@ -14,7 +14,7 @@
     if (late.length) html += `<div class="sech late"><span>持ち越し（あせらずに）</span><small>${late.length}</small><button type="button" class="qc" data-cact="late:today">ぜんぶ今日に</button></div>${late.map((t, i) => rowHtml(t, i, { meta: "late" })).join("")}`;
     const groups = new Map(); for (const t of rest) { const k = t.waku || "枠なし"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
     for (const k of [...WAKU, "枠なし"]) if (groups.has(k)) html += sec(k, groups.get(k));
-    if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "おつかれさま！今日はここまででも十分だよ" : "今日の予定はまだないよ"}</b><span>${done ? "よゆうがあれば、次にやるから1つ足してもいいし、休んでもいい" : "次にやるから1つだけ選んで、今日に入れてみよう"}</span></div>`;
+    if (!today.length && !loading) html += `<div class="alldone"><b>${done ? "今日のえさやりはおしまい！🐔 おつかれさま" : "今日の予定はまだないよ"}</b><span>${done ? "よゆうがあれば、次にやるから1つ足してもいいし、休んでもいい" : "次にやるから1つだけ選んで、今日に入れてみよう"}</span></div>`;
     // 済み（たたむ）
     if (done) html += `<details class="donebox"${!today.length ? " open" : ""}><summary><span>済み</span><small>${done}</small></summary>${S.doneToday.map((t, i) => rowHtml(t, i, { check: false })).join("")}</details>`;
     // 次にやる から足す

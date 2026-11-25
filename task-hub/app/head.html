@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今どこ">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#17120e">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -969,6 +969,32 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 
 /* ---- 11/25：すっきり（提案ボタン・重点の帯を出さない） ---- */
 #tips { display: none !important; }
+
+/* ===== v55：にわとり牧場（あたたかい夜の牧場の色・ドット絵の帯） ===== */
+:root {
+  --bg: #17120e; --card: #211a14; --sunk: #2a2119; --ink: #f2e9da; --mute: #a5957e; --line: rgba(255, 226, 180, .09);
+  --accent: #e9b04f; --hi: #f2e9da; --late: #e8846c; --ok: #a7c98a;
+  --s-inbox: #d9cbb0; --s-next: #f0cf63; --s-plan: #b9a27c; --s-today: #e9b04f; --s-done: #a7c98a;
+  --s-wait: #cbb57d; --s-some: #8c7f6c; --s-ref: #c79e78; --s-ai: #b8a3d4;
+  --nb-default: #2a2119;
+}
+body { background: var(--bg) !important; }
+.card { border: 1px solid rgba(255, 220, 160, .06); }
+nav.tabs button[aria-pressed="true"] { color: var(--accent); }
+.farm { position: relative; flex: none; width: 100%; aspect-ratio: 900 / 161; max-height: 120px; margin: 0 0 8px; border-radius: 12px; overflow: hidden;
+  background: url("__FARM_IMG__") center / cover no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 1px rgba(255, 220, 160, .12); }
+.farm .fz { position: absolute; top: 0; bottom: 0; width: 19%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4px; gap: 1px; background: none; border: 0; color: #fff; min-height: 40px; }
+.farm .fz b { min-width: 26px; padding: 1px 6px; border-radius: 6px; background: rgba(23, 18, 14, .78); color: #fff4dc; font: 700 13px/1.35 var(--f-num); box-shadow: 0 0 0 2px rgba(23, 18, 14, .35); }
+.farm .fz small { position: absolute; bottom: 3px; font-size: 10px; font-weight: 700; color: #fff4dc; text-shadow: 0 1px 2px rgba(0, 0, 0, .9), 0 0 3px rgba(0, 0, 0, .8); letter-spacing: .04em; }
+.farm .fz.on b { background: var(--accent); color: #2a1a06; }
+.farm .fz.late b { box-shadow: 0 0 0 2px var(--late); }
+.farm .fz:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.farm .fz.pop b { animation: fpop .5s ease; }
+@keyframes fpop { 30% { transform: scale(1.35); } }
+.farm .fegg { position: absolute; left: 71%; top: 55%; width: 10px; height: 13px; border-radius: 50% 50% 48% 48% / 60% 60% 40% 40%; background: #fff7e6; box-shadow: inset -2px -2px 0 #e7d6b5; animation: fegg .7s cubic-bezier(.3, .7, .4, 1) forwards; pointer-events: none; }
+@keyframes fegg { 0% { left: 71%; top: 60%; } 45% { top: 18%; } 100% { left: 92%; top: 62%; opacity: .9; } }
+.view > .farm, main .farm { flex: none; }
+#toast { background: #2d241b !important; box-shadow: 0 0 0 1px rgba(255, 220, 160, .14), 0 8px 24px rgba(0, 0, 0, .45) !important; }
 </style>
 
 <div id="app">
