@@ -43,7 +43,7 @@
     if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
-    if (d.farm) { buzz(); farmGo(d.farm); return; }
+    if (d.box) { S.box = d.box; store.set("box", d.box); buzz(); render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
     if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
     if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
