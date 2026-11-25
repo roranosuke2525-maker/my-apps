@@ -678,6 +678,21 @@ test("ぼうけん：前のボスを倒した日の、倒しきったあとの�
   assert.equal(data.boss.defeatedOn, null);
 });
 
+test("ぼうけん：買い物（BUY・補充:）は1日分をまとめて1回の攻撃。ダメージは最大の1品ぶん", async () => {
+  pages.push(ep2(E1, 1, { よんだ: { type: "checkbox", checkbox: true }, ボス開始日: { type: "date", date: { start: "2026-10-20" } }, ボスHP: { type: "number", number: 10000 } }));
+  for (const [i, exp] of [[1, 10], [2, 20], [3, 30]]) {
+    const t = task(`b${i}`, "BUY", exp, "2026-10-21");
+    t.created_time = "2026-10-21T00:00:00.000Z";
+    t.properties.名前 = { type: "title", title: text(`補充:品目${i}`) };
+    pages.push(t);
+  }
+  const data = await (await req("GET", "/api/battle")).json();
+  const buys = data.boss.log.filter((x) => x.kind === "task");
+  assert.equal(buys.length, 1);
+  assert.equal(buys[0].title, "買い物 3品");
+  assert.equal(buys[0].damage, 30); // 品目の合計（60）ではなく、いちばん大きい1品
+});
+
 test("ギルド：最後の段階を終えたら制覇。ランクは最後の段階のまま", async () => {
   const q = pages.find((p) => p.id === QID);
   q.properties.達成回数 = formula(5);

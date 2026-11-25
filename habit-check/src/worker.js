@@ -853,6 +853,8 @@ function monsterOf(page, until = jstDate(new Date().toISOString())) {
     url: page.url,
     title: propValue(page.properties?.["名前"]) || "",
     status: propValue(page.properties?.["ステータス"]),
+    // 買い物（BUY タグ・「補充:」のタスク）は品目ごとに1件なので、ボス戦では1日分をまとめて1回の攻撃にする
+    buy: tag === "BUY" || /^補充[:：]/.test(propValue(page.properties?.["名前"]) || ""),
     type: tagType(tag),
     weight,
     family: family.name,
@@ -1158,10 +1160,21 @@ function fight(chapter, { habitDays, tasks, muscle = [] }, start, petType, stats
     day(date).habit = TYPES.reduce((a, t) => a + byType[t], 0);
     day(date).habitTypes = byType;
   }
+  const buys = {};
   for (const t of tasks) {
     if (t.date < start) continue;
-    day(t.date).tasks.push({ ...t, damage: weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult * share(t.date) });
+    const damage = weakened(m, t.type, t.exp) * (1 + t.stars * STAR_BONUS) * mult * share(t.date);
+    if (t.buy) {
+      // 買い物：その日の品目をまとめて1回。ダメージはいちばん大きい1品ぶん（品目が多いほど強くはならない）
+      const b = (buys[t.date] ||= { ...t, id: `buy-${t.date}`, title: "", items: 0, damage: 0 });
+      b.items++;
+      if (damage > b.damage) Object.assign(b, { ...t, id: `buy-${t.date}`, items: b.items, damage });
+      b.title = `買い物 ${b.items}品`;
+      continue;
+    }
+    day(t.date).tasks.push({ ...t, damage });
   }
+  for (const b of Object.values(buys)) day(b.date).tasks.push(b);
   // 💪 からだチェック（週1回まで・素のダメージに「ちから」の倍率を掛ける）
   for (const x of muscle) {
     if (x.date < start) continue;
