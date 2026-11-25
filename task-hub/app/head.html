@@ -6,11 +6,11 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今どこ">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#f3ecdc">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 /* 落ち着いた夜の配色。面は少しだけ明るさを変えて重ね、色は段の印と大事な所だけに使う。数字は Inter */
 :root {
@@ -982,6 +982,58 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .boxes .bx.late[aria-selected="true"] b { color: var(--bg); }
 .inboxbar { display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 0 12px; margin: 0 0 8px; border-radius: 10px; background: var(--sunk); color: var(--ink); border: 1px dashed var(--line); flex: none; font-size: 13px; }
 .inboxbar small { color: var(--mute); }
+
+/* ===== v57：本・ノートの見た目（生成りの紙・罫線・インクの文字・見出しは明朝・箱は見出しのつまみ） ===== */
+:root {
+  --bg: #e9e1cf; --card: #fbf7ee; --sunk: #f1e9d8; --ink: #2b2a27; --mute: #7d7466; --line: rgba(60, 45, 20, .13);
+  --accent: #8a3b2b; --hi: #2b2a27; --late: #b0412f; --ok: #3f6e4a;
+  --s-inbox: #8a8170; --s-ai: #6b5a96; --s-next: #2f5d8a; --s-plan: #3d7a72; --s-today: #a46a1f; --s-wait: #8a7232; --s-some: #8d8577; --s-ref: #85603f; --s-done: #3f6e4a;
+  --n-gray: #787774; --n-brown: #9f6b53; --n-orange: #d9730d; --n-yellow: #cb912f; --n-green: #448361; --n-blue: #337ea9; --n-purple: #9065b0; --n-pink: #c14c8a; --n-red: #d44c47;
+  --nb-gray: #efede6; --nb-brown: #f2e7df; --nb-orange: #f8e8d8; --nb-yellow: #f7efd5; --nb-green: #e4efe3; --nb-blue: #e2ecf3; --nb-purple: #ece4f2; --nb-pink: #f5e2ec; --nb-red: #f6e0de; --nb-default: #f1e9d8;
+  --shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(60, 45, 20, .08);
+  --f-book: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", serif;
+  color-scheme: light;
+}
+body { background: var(--bg) !important; color: var(--ink); }
+/* 本の小口のような外側、中は紙 */
+header.top { background: transparent; }
+header.top h1, header.top .date, .sech span, .panel-head b, .pkhead h3, .mh, h3, h4, .boxes .bx span { font-family: var(--f-book); }
+header.top .date { font-weight: 700; letter-spacing: .04em; }
+.card { background: var(--card); border: 1px solid rgba(60, 45, 20, .14); box-shadow: 0 1px 0 rgba(60, 45, 20, .05), 0 6px 14px -10px rgba(60, 45, 20, .35); }
+/* ノートの罫線と左の赤い余白線 */
+.swipey { background-image: linear-gradient(90deg, transparent 11px, rgba(176, 65, 47, .3) 11px, rgba(176, 65, 47, .3) 12px, transparent 12px); }
+.swipey .row, .swipey .sech { padding-left: 22px; }
+.row { border-bottom: 1px solid rgba(47, 93, 138, .16); background: transparent; }
+.rw { background: var(--card); }
+.sech { border-bottom: 1px solid rgba(60, 45, 20, .2); }
+.sech span { font-weight: 700; color: var(--ink); letter-spacing: .06em; }
+.sech.late span { color: var(--late); }
+/* チェックは手描きの丸 */
+.check { border-width: 1.5px; border-color: var(--ink); border-radius: 46% 54% 50% 50% / 52% 48% 52% 48%; }
+.check.on, .check:hover { background: var(--ink); color: var(--card); }
+/* 箱：本のインデックスのつまみ */
+.boxes { gap: 3px; margin-bottom: 0; align-items: end; }
+.boxes .bx { border-radius: 10px 10px 0 0; border: 1px solid rgba(60, 45, 20, .16); border-bottom: 0; background: #efe6d2; min-height: 48px; }
+.boxes .bx b { font-family: var(--f-book); color: var(--ink); }
+.boxes .bx[aria-selected="true"] { background: var(--card); color: var(--accent); border-color: rgba(60, 45, 20, .2); min-height: 56px; }
+.boxes .bx[aria-selected="true"] b, .boxes .bx.late[aria-selected="true"] b { color: var(--accent); }
+.boxes .bx.late b { color: var(--late); }
+.boxes + .card, .boxes + .inboxbar { border-top-left-radius: 0; }
+.inboxbar { background: #f6efdd; border: 1px dashed rgba(60, 45, 20, .3); margin: 0; border-radius: 0; }
+.inboxbar + .card { border-top-left-radius: 0; border-top-right-radius: 0; }
+/* 下のタブはしおりのひも */
+nav.tabs { background: #e2d8c3; border-top: 1px solid rgba(60, 45, 20, .15); }
+nav.tabs button[aria-pressed="true"] { background: var(--card); color: var(--accent); box-shadow: 0 0 0 1px rgba(60, 45, 20, .14); }
+/* ボタン・小さな札 */
+.btn.pri, .fab { background: var(--accent) !important; color: #fbf7ee !important; }
+.qc { background: #f3ead6; color: var(--ink); border: 1px solid rgba(60, 45, 20, .18); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+.badge, .moregrid .badge { background: var(--accent) !important; color: #fbf7ee !important; }
+#toast { background: #2b2a27 !important; color: #fbf7ee !important; }
+#toast button { color: #f0c98a; }
+#modal .sheet, #page { background: var(--card); }
+.alldone b, .empty { font-family: var(--f-book); }
+.ghint { font-family: var(--f-book); font-style: italic; }
 </style>
 
 <div id="app">
