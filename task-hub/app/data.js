@@ -230,7 +230,7 @@
     ]);
     if (bought.status === "fulfilled") S.bought = bought.value.results.map(toTask).filter((t) => !t.parent?.length); else S.extraErr.bought = errText(bought.reason);
     if (cfg.status === "fulfilled" && cfg.value) S.saveCfg = cfg.value;
-    if (sugs.status === "fulfilled") { const all = sugs.value.results.map(toSug).filter(Boolean); S.focusSugs = all.filter((s) => s.kind === "⭐ 重点候補"); S.sugs = all.filter((s) => s.kind !== "⭐ 重点候補"); } else S.extraErr.sug = errText(sugs.reason);
+    S.sugs = []; S.focusSugs = []; // 11/25：毎朝のAI提案をやめたので出さない
     if (focusAll.status === "fulfilled" && S.mode !== "demo") S.focusAll = focusAll.value.results.map(toTask).filter((t) => t.focus === "__YES__");
     if (S.mode === "demo") { /* 見本はそのまま */ } else if (fixes.status === "fulfilled") { S.fixes = fixes.value.results.map(toFix); S.fixAt = Date.now(); S.fixErr = ""; } else S.fixErr = errText(fixes.reason);
     if (jour.status === "fulfilled") S.journal = jour.value.results.map((r) => ({ url: r.url, id: idOf(r.url), name: text(r["名前"]), date: r["date:日付:start"] || "", done: Number(r["終わったタスク数"]) || 0, ai: Number(r["AIとのやりとり数"]) || 0, note: text(r["ひとこと"]) })); else S.journalErr = errText(jour.reason);

@@ -15,11 +15,6 @@
     if (asks.length) { const a = Math.max(...asks.map(ageOf)); out.push({ id: `asks:${asks.map((t) => t.id.slice(0, 6)).join("")}`, lv: a >= 7 ? "red" : "yellow", icon: "✋", title: `答えを待ってる判断が ${asks.length}件`, body: `${asks.map((t) => short(t.name, 16)).join("・")}${a >= 7 ? `（いちばん古いのは${a}日前）` : ""}`, act: ["判断を見る", "log:diag"] }); }
     // いまの健康診断で赤の項目
     for (const c of healthChecks().filter((c) => c.st === "red").slice(0, 2)) out.push({ id: `hc:${c.no}:${c.val}`, lv: "red", icon: "🏥", title: `${c.name}：${c.val}`, body: c.fix?.msg || c.why, act: ["直し方を見る", "log:diag"] });
-    // 重点・ハイライト
-    const focus = focusList(); const openF = focus.filter(isOpenT);
-    if (!openF.length) out.push({ id: `focus:none:${weekStart()}`, lv: "yellow", icon: "⭐", title: "今週の重点、まだ決まってないよ", body: "大事なことを3つだけ選んでおくと、毎朝そこから1つ選ぶだけでいいよ", act: ["週の見直しをする", "review"] });
-    else if (reviewDue()) out.push({ id: `review:${weekStart()}`, lv: "yellow", icon: "🔁", title: "週の見直しの日だよ", body: "今週をふり返って、来週の3つを選び直そう（15分くらい）", act: ["週の見直しをする", "review"] });
-    else if (!hlTask() && workday(d)) out.push({ id: `hl:${d}`, lv: "info", icon: "🎯", title: "今日のハイライト、どれにする？", body: `重点から1つ：${openF.map((t) => short(t.name, 12)).join("・")}`, act: ["今日タブで選ぶ", "today"] });
     // AIの番・改善案・ジャーナル
     const mine = myTurn();
     if (mine.length) out.push({ id: `ai:${mine.length}`, lv: mine.some((t) => t.ai === "💭" && ageOf(t) >= 3) ? "yellow" : "info", icon: "💭", title: `AIが ${mine.length}件、返事を待ってるよ`, body: mine.slice(0, 2).map((t) => short(t.name, 16)).join("・"), act: ["AIタブで答える", "ai"] });

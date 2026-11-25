@@ -21,9 +21,7 @@
       { k: "journal", icon: "📓", name: "ゆうべのジャーナル", sig: "info", main: j ? j.name : "まだありません", sub: j ? `済み ${j.done}件・AIとのやりとり ${j.ai}回${j.note ? "" : "・ひとこと未記入"}` : S.journalErr || "", unseen: !!j && seen.jour !== j.id },
       { k: "health", icon: "🏥", name: "いまの健康診断", sig: red ? "red" : bad.length ? "yellow" : "green", main: bad.length ? `直したい所 ${bad.length}つ` : "問題なし", sub: bad.map((c) => c.name).join("・") || "10項目すべて良好" },
       { k: "goal", icon: "🎯", name: "目標", sig: soon.length ? "yellow" : "info", main: `挑戦中 ${live.length}件`, sub: soon.length ? `期限30日以内：${soon.map((g) => short(g.name, 12)).join("・")}` : "毎月1日 8:10 に振り返り" },
-      { k: "focus", icon: "⭐", name: "今週の重点", sig: focusList().some(isOpenT) ? (reviewDue() ? "yellow" : "green") : "red", main: focusList().length ? `${focusList().filter((t) => !isOpenT(t)).length} / ${focusList().length} 済み` : "未設定", sub: focusList().length ? focusList().map((t) => short(t.name, 12)).join("・") : "週の見直しで3つ選ぶ", go: "review", unseen: reviewDue() },
       { k: "fix", icon: "🛠", name: "アプリの改善", sig: fixWaiting().length ? "yellow" : "green", main: fixWaiting().length ? `${fixWaiting().length}件 判断待ち` : fixMoving().length ? `${fixMoving().length}件 進行中` : "なし", sub: fixWaiting().length ? fixWaiting().map((f) => short(f.name, 14)).join("・") : "文章で直しを頼めます", go: "fix", unseen: fixWaiting().some((f) => f.state === "💡 提案中") },
-      { k: "sug", icon: "💡", name: "AIからの提案", sig: S.sugs.length ? "yellow" : "green", main: S.sugs.length ? `${S.sugs.length}件 待ち` : "なし", sub: S.sugs.length ? "採用か見送りを決める" : "毎朝 7:36 に届く", go: "concierge" },
     ];
   }
   function renderCheck(view) {

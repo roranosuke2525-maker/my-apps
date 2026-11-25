@@ -5,20 +5,8 @@
     const done = S.doneToday.length; const total = today.length + done; const pct = total ? Math.round((done / total) * 100) : 0;
     const loading = S.mode === "loading" && !S.tasks.length;
     if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>うまく読みこめなかった…</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一回ためす</button></div></div>`); return; }
-    const doing = today.find((t) => t.status === ST.doing); const first = doing || late[0] || rest[0];
-    const tip = adviceTop();
-    // 進み具合の輪
-    const R = 24, C = 2 * Math.PI * R;
-    view.insertAdjacentHTML("beforeend", `<div class="hero card">
-        <svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${R}" class="bg"/><circle cx="30" cy="30" r="${R}" class="fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct / 100)}"/><text x="30" y="34" text-anchor="middle">${loading ? "…" : `${pct}%`}</text></svg>
-        <div class="ht">${loading ? `<b>読みこみ中…</b>` : today.length ? `<b>あと ${today.length}件 <span class="capn2${today.length + done > dayCap() ? " over" : ""}">${today.length + done} / ${dayCap()}</span></b><span>${done ? `もう${done}件できてる！` : "まずは1つからいこう"}${late.length ? `・<em>持ち越し ${late.length}</em>` : ""}</span>` : `<b>${done ? "今日のぶん、ぜんぶ終わり！🎉" : "今日はまっさら"}</b><span>${done ? `${done}件も片づけたね、おつかれさま` : "1つ入れてみる？"}</span>`}</div>
-        ${first ? `<div class="hnext"><button type="button" class="hopen" data-open="${first.id}"><small>${doing ? "▶ いま進めてるやつ" : "まずはこれから"}</small><span>${esc(first.name)}</span>${first.next ? `<small class="mute">${esc(first.next)}</small>` : ""}</button><button type="button" class="check big" data-done="${first.id}" aria-label="済みにする">✓</button></div>` : ""}
-      </div>
-      ${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
-      ${eveBarHtml()}
-      ${focusCardHtml()}
-      ${tip && tip.pri >= 50 ? `<button type="button" class="tipbar" data-concierge="1"><span class="ic">${tip.icon}</span><span class="tx"><b>ひとこと</b>${esc(tip.title)}</span><i>›</i></button>` : ""}
-      ${inStage("next").length ? `<button type="button" class="pickbar" data-pickday="1"><span class="ic">＋</span><span class="tx"><b>次にやるから今日を選ぶ</b><small>${inStage("next").length}件から、気が向くものを選ぼう</small></span><i>›</i></button>` : ""}
+    // 今日タブはタスクの一覧だけ（11/25：情報が多すぎるので、進み具合・提案・重点などの帯は出さない）
+    view.insertAdjacentHTML("beforeend", `${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");
     const sec = (title, list, extra = "") => (list.length ? `<div class="sech${extra}"><span>${esc(title)}</span><small>${list.length}</small></div>${list.map((t, i) => rowHtml(t, i, { meta: "weight" })).join("")}` : "");
