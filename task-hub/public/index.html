@@ -1986,7 +1986,19 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
   const shopLists = () => S.tasks.filter((t) => SHOP_OPEN.includes(t.status) && (t.tag === "BUY" || t.refill?.length))
     .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999") || (b.edited || "").localeCompare(a.edited || ""));
   const openRefills = (id) => S.tasks.filter((t) => t.refill?.includes(id) && t.status !== ST.done);
-  const stockSoon = () => S.stock.filter((x) => x.left != null && x.left <= 3 && !openRefills(x.id).length);
+  // 買い物リスト（BUY タスクの本文のチェックリスト）に、まだ買っていない品目として入っているか（名前で見る）
+  const normName = (s) => String(s || "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+  function listedItem(id) {
+    const x = S.stock.find((s) => s.id === id); if (!x) return null;
+    for (const t of shopLists()) {
+      const got = shopRaw[t.id]; if (!got) continue;
+      const item = shopParse(got.raw).items.find((it) => !it.done && normName(it.text) === normName(x.name));
+      if (item) return { t, item };
+    }
+    return null;
+  }
+  const isListed = (id) => openRefills(id).length > 0 || !!listedItem(id);
+  const stockSoon = () => S.stock.filter((x) => x.left != null && x.left <= 3 && !isListed(x.id));
   const leftTx = (x) => (x.left == null ? "" : x.left < 0 ? `切れて${-x.left}日` : x.left === 0 ? "今日切れる" : `あと${x.left}日`);
   const leftColor = (x) => (x.left == null ? "var(--s-some)" : x.left <= 0 ? "var(--late)" : x.left <= 7 ? "var(--s-today)" : "var(--ok)");
 
@@ -2074,23 +2086,35 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     const nl = line.replace(/\[( |x|X)\]/, m[2] === " " ? "[x]" : "[ ]");
     const [a, b] = uniqSpan(lines, li, li, got.raw);
     const old = lines.slice(a, b + 1).join("\n"); lines[li] = nl; const nw = lines.slice(a, b + 1).join("\n");
-    got.raw = lines.join("\n"); touched(t); render();
+    got.raw = lines.join("\n"); touched(t);
+    // 在庫（DB_Daily）にある品目を買えたら、その品の購入日を今日にする（切れる予定日が延びる）
+    const bought = m[2] === " " ? S.stock.find((x) => normName(x.name) === normName(text(m[3]))) : null;
+    if (bought) { S.refillDone[bought.id] = TODAY(); stockCalc(bought); saveSnap(); }
+    render();
     if (S.mode === "demo") { DEMO_BODIES[id] = got.raw; return; }
     setSync("busy");
     shopWrite(id, async () => {
       try { await call("update", { page_id: id, command: "update_content", content_updates: [{ old_str: old, new_str: nw }], allow_async: false }, { read: false }); setSync("ok"); }
-      catch (err) { await shopFail(t, err); }
+      catch (err) { await shopFail(t, err); return; }
+      if (bought) {
+        try { await call("update", { page_id: bought.id, command: "update_properties", properties: { "date:購入日（手入力）:start": TODAY(), "date:購入日（手入力）:is_datetime": 0 }, allow_async: false }, { read: false }); toast(`「${short(bought.name)}」の購入日を今日にしました`); }
+        catch (err) { toast(`在庫の購入日を書けませんでした：${errText(err)}`); }
+      }
     });
   }
   async function addItem() {
     const i = $("#shopin"); const name = i.value.trim(); if (!name) { i.focus(); return; }
-    const item = `- [ ] ${name.replace(/([\\*_`<>[\]~])/g, "\\$1")}`;
-    const t = known.get($("#shopto").value);
     i.value = ""; i.focus();
+    const ok = await addItemTo(known.get($("#shopto").value), name);
+    if (!ok) i.value = name;
+    $("#shopin")?.focus();
+  }
+  // 買い物リスト（t。なければ新しく作る）に、品目を1行の ToDo として足す
+  async function addItemTo(t, name) {
+    const item = `- [ ] ${name.replace(/([\\*_`<>[\]~])/g, "\\$1")}`;
     if (!t) {
-      try { const nt = await createShopTask({ "名前": "買い物リスト", "枠": "🏠 家・外" }, item); shopRaw[nt.id] = { edited: nt.edited, raw: item }; S.shopTarget = nt.id; render(); toast("新しい買い物リストを作りました"); $("#shopin")?.focus(); }
-      catch (err) { i.value = name; toast(`作れませんでした：${errText(err)}`); }
-      return;
+      try { const nt = await createShopTask({ "名前": "買い物リスト", "枠": "🏠 家・外" }, item); shopRaw[nt.id] = { edited: nt.edited, raw: item }; S.shopTarget = nt.id; render(); toast("新しい買い物リストを作りました"); return true; }
+      catch (err) { toast(`作れませんでした：${errText(err)}`); return false; }
     }
     S.shopTarget = t.id;
     const got = shopRaw[t.id] || { raw: "" }; const lines = got.raw.split("\n");
@@ -2107,10 +2131,11 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
       if (got.raw.trim()) lines.push(""); lines.push(item);
       job = () => call("update", { page_id: t.id, command: "insert_content", content: item, allow_async: false }, { read: false });
     }
-    shopRaw[t.id] = { ...got, raw: lines.join("\n").replace(/^\n+/, "") }; touched(t); render(); $("#shopin")?.focus();
-    if (S.mode === "demo") { DEMO_BODIES[t.id] = shopRaw[t.id].raw; return; }
+    shopRaw[t.id] = { ...got, raw: lines.join("\n").replace(/^\n+/, "") }; touched(t); render();
+    if (S.mode === "demo") { DEMO_BODIES[t.id] = shopRaw[t.id].raw; return true; }
     setSync("busy");
     shopWrite(t.id, async () => { try { await job(); setSync("ok"); } catch (err) { await shopFail(t, err); } });
+    return true;
   }
   // 買えた項目（と、その下の入れ子）を本文から消す
   function clearChecked(id) {
@@ -2161,31 +2186,40 @@ nav.tabs .badge { color: #0b0b12; box-shadow: 0 0 8px var(--accent); }
     if (S.extraErr.stock && !S.stock.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty">DB_Daily を読めませんでした。\n${esc(S.extraErr.stock)}\n${VIA === "api" ? "Notion のインテグレーションを DB_Daily にも接続してください" : ""}</div></div>`); return; }
     const all = S.stock.map(stockCalc);
     const cats = [...new Set(all.map((x) => x.cat).filter(Boolean))];
-    const out = all.filter((x) => x.left != null && x.left <= 0).length, week = all.filter((x) => x.left != null && x.left > 0 && x.left <= 7).length, listed = all.filter((x) => openRefills(x.id).length).length;
-    view.insertAdjacentHTML("beforeend", `<div class="aihead"><div class="card"><div class="k">切れている</div><div class="n" style="color:var(--late)">${out}</div><div class="s">予定日を過ぎた</div></div><div class="card"><div class="k">7日以内</div><div class="n" style="color:var(--s-today)">${week}</div><div class="s">そろそろ買う</div></div><div class="card"><div class="k">リスト済み</div><div class="n">${listed}</div><div class="s">補充タスクあり</div></div></div>
+    const out = all.filter((x) => x.left != null && x.left <= 0).length, week = all.filter((x) => x.left != null && x.left > 0 && x.left <= 7).length, listed = all.filter((x) => isListed(x.id)).length;
+    view.insertAdjacentHTML("beforeend", `<div class="aihead"><div class="card"><div class="k">切れている</div><div class="n" style="color:var(--late)">${out}</div><div class="s">予定日を過ぎた</div></div><div class="card"><div class="k">7日以内</div><div class="n" style="color:var(--s-today)">${week}</div><div class="s">そろそろ買う</div></div><div class="card"><div class="k">リスト済み</div><div class="n">${listed}</div><div class="s">買い物リストにある</div></div></div>
       <div class="chips"><button type="button" class="chip" data-stockcat="" aria-pressed="${!S.stockCat}">すべて<span class="n">${all.length}</span></button>${cats.map((c) => `<button type="button" class="chip" data-stockcat="${esc(c)}" aria-pressed="${S.stockCat === c}">${esc(c)}<span class="n">${all.filter((x) => x.cat === c).length}</span></button>`).join("")}</div>
       <div class="card panel"><div class="shop" id="stockbox"></div></div>`);
     const items = all.filter((x) => !S.stockCat || x.cat === S.stockCat).sort((a, b) => (a.left ?? 1e9) - (b.left ?? 1e9) || a.name.localeCompare(b.name, "ja"));
     const box = $("#stockbox");
     if (!items.length) { box.innerHTML = `<div class="empty">${S.mode === "loading" ? "読みこみ中…" : "在庫の登録がありません"}</div>`; return; }
     box.innerHTML = items.map((x) => {
-      const open = openRefills(x.id);
+      const open = isListed(x.id) ? [1] : [];
       const sub = [x.cat, x.left == null ? (x.use ? "購入日が未入力" : "使う数が未入力") : `${md(x.end)}まで`].filter(Boolean).join("・");
       return `<div class="row stockrow" style="--c:${leftColor(x)}"><span class="dot"></span><button type="button" class="main" data-stock="${x.id}"><span class="nm">${esc(x.name)}</span><span class="sub">${esc(sub)}</span></button><span class="meta${x.left != null && x.left <= 0 ? " late" : ""}">${esc(leftTx(x))}</span>
         ${open.length ? `<button type="button" class="btn ok sm" data-stockdone="${x.id}">補充した</button>` : `<button type="button" class="btn sm" data-stockadd="${x.id}">🛒 リストへ</button>`}</div>`;
     }).join(""); keepScroll(box);
   }
-  // DB_Daily の「補充」ボタンと同じ形の補充タスクを作る（補充対象でつなぐと、済みにした日が最終補充日になる）
+  // 「🛒 リストへ」：品目ごとのタスクは作らず、買い物リスト（BUY タスク1件）の ToDo に足す。
+  // 買えたらチェック → その品の購入日が今日になる。全部買えたらリストを済みにする（EXP・ボスへの攻撃は1回）
   async function stockAdd(id, btn) {
-    const x = S.stock.find((s) => s.id === id); if (!x || openRefills(id).length) return;
+    const x = S.stock.find((s) => s.id === id); if (!x || isListed(id)) return;
     btn.disabled = true;
-    try {
-      await createShopTask({ "名前": `補充:${x.name}`, NEXT: x.link ? "リンクから注文する" : "買う", "枠": x.link ? "☼ 朝" : "🏠 家・外", "補充対象": [x.url], ...(x.link ? { "userDefined:URL": x.link } : {}) });
-      render(); toast(`「${short(x.name)}」を買い物リストに入れました`);
-    } catch (err) { btn.disabled = false; toast(`入れられませんでした：${errText(err)}`); }
+    // 足す先：選んでいる買い物リスト → チェックリストのあるリスト → 名前に「買い物」の入ったリスト（本文がまだなら先に読む）
+    const lists = shopLists().filter((t) => !t.refill?.length && (shopRaw[t.id] ? shopParse(shopRaw[t.id].raw).items.length || /買い物/.test(t.name) : /買い物/.test(t.name)));
+    const t = lists.find((l) => l.id === S.shopTarget) || lists[0];
+    if (t && !shopRaw[t.id]) {
+      try { shopRaw[t.id] = { edited: t.edited, raw: S.mode === "demo" ? DEMO_BODIES[t.id] || "" : await fetchBody(t.id) }; }
+      catch (err) { btn.disabled = false; toast(`買い物リストを読めませんでした：${errText(err)}`); return; }
+    }
+    const ok = await addItemTo(t, x.name);
+    if (ok) toast(`「${short(x.name)}」を買い物リストに入れました`);
+    else btn.disabled = false;
   }
   async function stockDone(id) {
     const x = S.stock.find((s) => s.id === id); if (!x) return;
+    const li = listedItem(id);
+    if (li) { toggleItem(li.t.id, li.item.li); return; }
     const prev = S.refillDone[id];
     S.refillDone[id] = TODAY(); stockCalc(x);
     const ok = await Promise.all(openRefills(id).map((t) => setProps(t, { "ステータス": ST.done }, `「${short(x.name)}」を補充しました（${leftTx(x) || "記録"}）`, { undo: false })));
