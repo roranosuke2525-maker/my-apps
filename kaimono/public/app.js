@@ -215,6 +215,11 @@ async function addTexts(texts) {
     return;
   }
   if (S.seg !== "quick") S.cur = t.id;
+  addToList(t, texts);
+}
+// 今あるリストに品を足す（画面にはすぐ出し、Notion へは順に送る）
+function addToList(t, texts) {
+  texts = texts.map((x) => x.trim()).filter(Boolean); if (!t || !texts.length) return;
   const temps = texts.map(() => `tmp${Date.now()}${tmpN++}`);
   t.items = t.items || [];
   texts.forEach((s, n) => { const it = { id: temps[n], text: s, checked: false, group: "", kind: "task" }; t.items.push(it); S.over[temps[n]] = { add: true, list: t.id, item: it, at: Date.now() }; });
@@ -966,6 +971,8 @@ function render() {
   badge("#b-list", left); badge("#b-stock", soon);
   appBadge(soon);
   const v = $("#view");
+  const oa = document.activeElement?.closest?.("[data-oadd]")?.dataset.oadd; // そのほかの ToDo 行に打っている途中なら、描き直しても続けて打てるように
+  const oav = oa ? document.activeElement.value : "";
   const keep = document.activeElement?.id === "addin" ? { v: $("#addin").value, s: $("#addin").selectionStart } : null;
   if (S.tab === "price") v.innerHTML = renderPrices();
   else if (S.tab === "news") v.innerHTML = renderNews();
@@ -973,6 +980,7 @@ function render() {
   else if (S.tab === "stock") v.innerHTML = renderStock();
   else v.innerHTML = renderAlert();
   if (keep && $("#addin")) { const i = $("#addin"); i.value = keep.v; i.focus(); i.setSelectionRange(keep.s, keep.s); renderSuggest(); }
+  if (oa) { const i = document.querySelector(`[data-oadd="${oa}"] input`); if (i) { i.value = oav; i.focus(); } }
   else if ($("#addin")) renderSuggest();
   if (S.edit) { const e = $("#editin"); if (e) { e.focus(); e.select(); } }
   const fab = $("#fab"); if (fab) fab.hidden = !!S.lpick || !!S.pick || !!S.maint;
@@ -1075,6 +1083,8 @@ async function deleteSet(id) {
 document.addEventListener("submit", (e) => { if (e.target.dataset?.setform) { e.preventDefault(); saveSetForm(e.target); } });
 
 const qtyBox = (id, v = "1") => `<span class="qbox"><button type="button" class="qb" data-qstep="${id}|-1" aria-label="減らす">−</button><input id="${id}" class="qin" type="text" inputmode="decimal" maxlength="8" value="${esc(v)}" aria-label="数量" autocomplete="off"><button type="button" class="qb" data-qstep="${id}|1" aria-label="増やす">＋</button></span>`;
+// リストの最後の「☐ 」行に打って Enter で足す（Notion の ToDo のように、続けて次の行に打てる）
+const todoRow = (ph) => `<form class="item todoadd" id="addform"><span class="box" aria-hidden="true"></span><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="next" placeholder="${esc(ph)}" aria-label="買うもの">${qtyBox("addqty")}<button type="submit" class="btn pri sm" aria-label="入れる">↵</button></form><div class="suggest insug" id="suggest"></div>`;
 const addBox = (ph) => `<form class="addbox" id="addform"><input id="addin" type="text" maxlength="400" autocomplete="off" enterkeyhint="done" placeholder="${esc(ph)}" aria-label="買うもの">${qtyBox("addqty")}<button type="submit" class="btn pri">入れる</button></form><div class="suggest" id="suggest"></div>`;
 // 数量の欄：空や1なら名前だけ（＝1個）。「6枚」のような単位つきもそのまま。名前に数量が書いてあればそちらを使う
 const withQty = (name, qty) => { const q = String(qty || "").replace(/\s+/g, "").replace(/^[x×＊*]/, ""); return !q || q === "1" || A.splitQty(name).qty ? name : `${name} ${q}`; };
@@ -1093,20 +1103,22 @@ function renderUsual() {
   const t = listOf(S.cur);
   const chips = lists.map((x) => `<button type="button" class="lchip" data-cur="${x.id}" aria-pressed="${S.cur === x.id}">${esc(x.name.replace(/^🛒\s*/, ""))}<span class="n">${leftOf(x)}</span></button>`).join("")
     + `<button type="button" class="lchip add" data-plan="1">＋ 準備する</button>`;
-  return `${stepsBar(2)}<div class="lchips">${chips}</div><p class="note pad">② 買い物中：かごに入れた品をタップ（✓ で色が変わる）。終わったら下の「③ 買い物おわり」。</p>${listView(t, "その場で足す（牛乳、卵）")}`;
+  return `${stepsBar(2)}<div class="lchips">${chips}</div><p class="note pad">② 買い物中：かごに入れた品をタップ（✓ で色が変わる）。終わったら下の「③ 買い物おわり」。</p>${listView(t, "＋ 買うものを打って Enter")}`;
 }
 function renderQuick() {
   const t = quickList();
   const note = `<p class="note pad">思いついた品をサッと足す1枚。ついでの買い物でまとめて買えます。</p>`;
-  return note + (t ? listView(t, "思いついたら入れる（電池、洗剤）") : `${addBox("思いついたら入れる（電池、洗剤）")}<div class="empty small">まだ何もありません</div>`);
+  return note + (t ? listView(t, "＋ 思いついたら打って Enter") : `<div class="card list">${todoRow("＋ 思いついたら打って Enter")}</div>`);
 }
 
 function listView(t, ph) {
   const items = t.items || [];
   const todo = items.filter((i) => !i.checked); const basket = items.filter((i) => i.checked);
   const when = whenBar(t.id, t.at);
+  const menu = S.lmenu === t.id;
   const tools = `<div class="ltools"><div class="seg"><button type="button" data-sort="aisle" aria-pressed="${S.sort === "aisle"}">売り場順</button><button type="button" data-sort="added" aria-pressed="${S.sort === "added"}">入れた順</button></div>
-    <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${basket.length && !S.lpick ? `<button type="button" class="btn ghost sm" data-clear="${t.id}">🗑 チェック済み${basket.length}品を消す</button>` : ""}${items.length ? `<button type="button" class="btn ${S.lpick ? "pri" : "ghost"} sm" data-lpickmode="1">${S.lpick ? "選ぶのをやめる" : "☑ 選んで消す"}</button>` : ""}${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="Notion で開く">↗</a></div>`;
+    <span class="mute">${todo.length ? `あと${todo.length}品` : items.length ? "ぜんぶかごに入りました" : ""}</span>${S.lpick ? `<button type="button" class="btn pri sm" data-lpickmode="1">選ぶのをやめる</button>` : `<button type="button" class="more" data-lmenu="${t.id}" aria-expanded="${menu}" aria-label="ほかの操作">⋯</button>`}</div>
+    ${menu && !S.lpick ? `<div class="lmenu">${basket.length ? `<button type="button" class="btn ghost sm" data-clear="${t.id}">🗑 チェック済み${basket.length}品を消す</button>` : ""}${items.length ? `<button type="button" class="btn ghost sm" data-lpickmode="1">☑ 選んで消す</button>` : ""}${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 注文ページ</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener">Notion で開く ↗</a></div>` : ""}`;
   const prog = items.length ? `<div class="prog"><i style="width:${Math.round((basket.length / items.length) * 100)}%"></i></div>` : "";
   if (S.lpick) {
     const all = items.every((i) => S.lpick.has(i.id));
@@ -1114,11 +1126,11 @@ function listView(t, ph) {
       <div class="card bulkbar"><b>${S.lpick.size}品を選択中</b><div class="row-end"><button type="button" class="btn ghost sm" data-lpickall="${t.id}">${all ? "全部外す" : "全部選ぶ"}</button><button type="button" class="btn danger sm" data-lpickdel="${t.id}" ${S.lpick.size ? "" : "disabled"}>🗑 選んだ${S.lpick.size}品を消す</button></div></div>`;
   }
   // チェックした品は消さずに、その場で色を反転して残す（並びは変えない）
-  const body = items.length ? groups(items) : `<div class="empty small">上の欄から入れてください。「、」で区切るとまとめて入ります</div>`;
+  const body = items.length ? groups(items) : "";
   const bk = items.length && !todo.length ? `<div class="empty small">🎉 ぜんぶかごに入りました</div>` : "";
   const isQuick = kindOf(t) === "quick";
   const foot = `<div class="lfoot">${items.length && !isQuick ? `<button type="button" class="btn ok endshop" data-endshop="${t.id}">③ 買い物おわり<small>${todo.length ? `かご ${basket.length}/${items.length}品・残りはあとで選べます` : "ぜんぶかごに入りました 🎉"}</small></button>` : ""}${isQuick && basket.length ? `<button type="button" class="btn" data-clear="${t.id}">かごに入れた${basket.length}品を消す（買えた）</button>` : ""}${t.more ? `<p class="note">本文の ToDo が100個を超えています。続きは Notion で見てください</p>` : ""}</div>`;
-  return `${when}${addBox(ph)}${setChips(t.id)}<div class="card list">${tools}${prog}${body}${bk}</div>${foot}`;
+  return `${when}${setChips(t.id)}<div class="card list">${tools}${prog}${body}${bk}${todoRow(ph)}</div>${foot}`;
 }
 
 function renderPlan(canBack) {
@@ -1162,8 +1174,8 @@ function renderOther() {
     const meta = t.at ? fmtAt(t.at) : t.date ? md(t.date) : "";
     return `<div class="card ocard"><div class="ohead"><button type="button" class="oname" data-oopen="${t.id}">${esc(t.name)}</button>${meta ? `<span class="meta">${esc(meta)}</span>` : ""}</div>
       ${t.next ? `<div class="osub">次：${esc(t.next)}</div>` : ""}
-      ${items.length ? `<button type="button" class="oprog" data-oopen="${t.id}"><span class="prog"><i style="width:${Math.round((done / items.length) * 100)}%"></i></span><small>${done}/${items.length} ${open ? "▲" : "▼"}</small></button>` : ""}
-      ${open && items.length ? `<div class="list">${items.map(itemRow).join("")}</div>` : ""}
+      ${items.length ? `<button type="button" class="oprog" data-oopen="${t.id}"><span class="prog"><i style="width:${Math.round((done / items.length) * 100)}%"></i></span><small>${done}/${items.length} ${open ? "▲" : "▼"}</small></button>` : open ? "" : `<button type="button" class="btn ghost sm otodo" data-oopen="${t.id}">☐ ToDo を足す</button>`}
+      ${open ? `<div class="list">${items.map(itemRow).join("")}<form class="item todoadd" data-oadd="${t.id}"><span class="box" aria-hidden="true"></span><input name="q" type="text" maxlength="400" autocomplete="off" enterkeyhint="next" placeholder="＋ ToDo を足す" aria-label="ToDo を足す"><button type="submit" class="btn pri sm" aria-label="足す">↵</button></form></div>` : ""}
       ${whenBar(t.id, t.at)}
       <div class="oacts">${t.link ? `<a class="btn ghost sm" href="${esc(t.link)}" target="_blank" rel="noopener">🛒 開く</a>` : ""}<a class="btn ghost sm" href="${esc(t.url)}" target="_blank" rel="noopener">Notion ↗</a><button type="button" class="btn ok sm" data-finish="${t.id}">✓ 済み</button></div></div>`;
   };
@@ -1509,6 +1521,7 @@ document.addEventListener("click", (e) => {
   if (d.whenopen) { S.whenFor = S.whenFor === d.whenopen ? "" : d.whenopen; render(); return; }
   if (d.when !== undefined && d.when.includes("|")) { const [target, at] = d.when.split("|"); setWhen(target, at); return; }
   if (d.oopen) { S.openOther = S.openOther === d.oopen ? "" : d.oopen; render(); return; }
+  if (d.lmenu) { S.lmenu = S.lmenu === d.lmenu ? "" : d.lmenu; render(); return; }
   if (d.sort) { S.sort = d.sort; store.set("sort", d.sort); render(); return; }
   if (d.toggle) { toggle(d.toggle); return; }
   if (d.lpickmode) { S.lpick = S.lpick ? null : new Set(); S.edit = ""; render(); return; }
@@ -1589,6 +1602,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("submit", (e) => {
   const f = e.target; e.preventDefault();
+  if (f.dataset.oadd) { const i = f.elements.q; const texts = A.splitInput(i.value); const t = listOf(f.dataset.oadd); i.value = ""; addToList(t, texts); setTimeout(() => document.querySelector(`[data-oadd="${f.dataset.oadd}"] input`)?.focus(), 0); return; }
   if (f.id === "addform") { const i = $("#addin"); const q = $("#addqty"); const texts = A.splitInput(i.value).map((x) => withQty(x, q?.value)); i.value = ""; if (q) q.value = "1"; addTexts(texts); i.focus(); return; }
   if (f.id === "planextra") { const v = $("#pextra").value; const qv = $("#pqty")?.value; const add = A.splitInput(v).map((x) => withQty(x, qv)); if (add.length) { S.plan.extra.push(...add); savePlan(); render(); $("#pextra")?.focus(); } return; }
   if (f.dataset.tplform) { saveTemplate(f); return; }
@@ -1636,3 +1650,13 @@ function showLogin() {
   load();
   if (pushOk()) loadPush();
 })();
+
+// 何行かまとめて貼ったら、1行1品で入れる（ToDo の行・そのほかの ToDo）
+document.addEventListener("paste", (e) => {
+  const i = e.target; if (!(i.id === "addin" || i.closest?.("[data-oadd]"))) return;
+  const text = e.clipboardData?.getData("text") || "";
+  if (!/\n/.test(text.trim())) return;
+  e.preventDefault();
+  const texts = A.splitInput(text);
+  if (i.id === "addin") addTexts(texts); else addToList(listOf(i.closest("[data-oadd]").dataset.oadd), texts);
+});

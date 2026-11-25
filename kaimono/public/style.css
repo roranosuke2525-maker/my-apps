@@ -487,3 +487,16 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .qasec .chip, .qadone .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
 .qasec .chip { max-width: 70%; }
 .qadone .chip { background: var(--card); color: var(--pri); border-color: var(--pri); }
+
+/* リストの最後の ☐ 行（Notion の ToDo のように打って Enter） */
+.todoadd { gap: 8px; padding: 4px 6px; border-top: 1px dashed var(--line) !important; }
+.todoadd .box { border-style: dashed; opacity: 0.6; margin-left: 6px; }
+.todoadd input { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 8px 0 !important; font-size: 16px; }
+.todoadd input:focus { outline: none; }
+.todoadd:focus-within { background: var(--pri-soft); border-radius: 10px; }
+.todoadd .qbox { transform: scale(0.9); }
+.todoadd .qbox, .todoadd .btn { opacity: 0.35; transition: opacity 0.15s; }
+.todoadd:focus-within .qbox, .todoadd:focus-within .btn { opacity: 1; }
+.insug { padding: 4px 6px 8px; margin: 0; }
+.lmenu { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 6px 8px; justify-content: flex-end; }
+.otodo { margin: 4px 0; }
