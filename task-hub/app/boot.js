@@ -10,9 +10,13 @@
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
-    const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
+    const warped = render.lastTab && render.lastTab !== S.tab;
+    // 手帳のページをめくる向き：下のタブの並びで右へ進むなら前へ、左なら戻る
+    const order = [...document.querySelectorAll("nav [data-tab]")].map((b) => b.dataset.tab);
+    const back = warped && order.indexOf(S.tab) < order.indexOf(render.lastTab);
+    render.lastTab = S.tab; document.body.dataset.tab = S.tab;
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
-    main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
+    main.innerHTML = `<div class="view${warped && !reduce ? ` warp turn${back ? " back" : ""}` : ""}"></div>`;
     const view = $(".view", main);
     ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }

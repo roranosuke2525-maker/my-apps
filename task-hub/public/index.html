@@ -1034,6 +1034,85 @@ nav.tabs button[aria-pressed="true"] { background: var(--card); color: var(--acc
 #modal .sheet, #page { background: var(--card); }
 .alldone b, .empty { font-family: var(--f-book); }
 .ghint { font-family: var(--f-book); font-style: italic; }
+
+/* ===== v58：手帳（机の上に開いた手帳・リング・クリップ・マスキングテープ・付箋・マーカー・ページめくり） ===== */
+:root { --desk: #cdbb98; --paper: #fdfaf2; --tape1: #f2a7a0; --tape2: #f5cf74; --tape3: #9fcbe0; --tape4: #b9d9a3; --tape5: #d3c3e8; --marker: rgba(255, 223, 77, .75); --pen: #2f4f7f; }
+/* 机：クラフト紙のような下地 */
+body { background-color: var(--desk) !important; background-image: radial-gradient(rgba(90, 60, 20, .10) 1px, transparent 1.2px), radial-gradient(rgba(255, 255, 255, .12) 1px, transparent 1.2px) !important; background-size: 7px 7px, 11px 11px !important; background-position: 0 0, 3px 5px !important; }
+header.top { color: #3b2f22; }
+/* 日付は手帳の日付スタンプ */
+header.top .date { border: 1.5px solid var(--accent); color: var(--accent); border-radius: 4px; padding: 1px 8px; background: rgba(253, 250, 242, .55); transform: rotate(-1.5deg); }
+nav.tabs { background: #6d5a43; border-top: 0; box-shadow: 0 -2px 6px rgba(60, 40, 15, .25); }
+nav.tabs button { color: #e9dcc5; }
+nav.tabs button[aria-pressed="true"] { background: var(--paper); color: var(--accent); box-shadow: 0 -3px 0 var(--accent) inset; }
+/* 紙：ふちが少しよれた、厚みのある1枚 */
+.card { background: var(--paper); border: 0; box-shadow: 0 1px 0 rgba(0, 0, 0, .04), 0 2px 0 -1px #efe8d8, 0 3px 0 -1px rgba(0, 0, 0, .06), 0 10px 18px -12px rgba(60, 40, 15, .55); }
+/* 今日・流れの紙：上にリングとじ */
+body[data-tab="today"] .view > .card.panel, body[data-tab="flow"] .view > .card.panel { position: relative; padding-top: 16px; }
+body[data-tab="today"] .view > .card.panel::before, body[data-tab="flow"] .view > .card.panel::before {
+  content: ""; position: absolute; left: 10px; right: 10px; top: 3px; height: 12px; pointer-events: none; z-index: 2;
+  background: radial-gradient(circle at 50% 70%, #5a5048 0 2.2px, transparent 2.6px) 0 0 / 22px 12px repeat-x,
+              linear-gradient(90deg, transparent 0 9px, #a8a49c 9px 13px, transparent 13px) 0 -3px / 22px 10px repeat-x; }
+/* クリップ：右上で紙をはさむ */
+body[data-tab="today"] .view > .card.panel::after {
+  content: ""; position: absolute; right: 22px; top: -6px; width: 13px; height: 38px; z-index: 3; pointer-events: none;
+  border: 2.5px solid #8e979f; border-radius: 7px 7px 8px 8px; box-shadow: inset 0 0 0 3px transparent, 3px 3px 0 -1px rgba(0, 0, 0, .08); transform: rotate(6deg);
+  background: linear-gradient(#8e979f, #8e979f) 50% 6px / 2.5px 22px no-repeat; }
+/* 見出しはマスキングテープ */
+.sech span { display: inline-block; padding: 2px 12px; color: #3b2f22 !important; background: repeating-linear-gradient(-45deg, rgba(255, 255, 255, .28) 0 4px, transparent 4px 8px), var(--tape, var(--tape2)); opacity: .95; transform: rotate(-1.2deg); clip-path: polygon(2% 0, 98% 4%, 100% 100%, 0 96%); }
+.sech:nth-of-type(2n) span { --tape: var(--tape3); transform: rotate(.8deg); }
+.sech:nth-of-type(3n) span { --tape: var(--tape4); }
+.sech.late span { --tape: var(--tape1); }
+/* 作業中は蛍光マーカー */
+.row:has(.doing) .nm { background: linear-gradient(transparent 52%, var(--marker) 52%, var(--marker) 92%, transparent 92%); }
+/* 済みはペンで線を引いて消す */
+.donebox .row .nm, .row:has(.check.on) .nm { text-decoration: line-through 2px var(--pen); color: var(--mute); }
+.donebox summary span { font-family: var(--f-book); }
+/* 未整理は黄色い付箋 */
+.inboxbar { background: #fff3a3 !important; border: 0 !important; border-radius: 2px !important; margin: 4px 4px 10px !important; transform: rotate(-1deg); box-shadow: 0 6px 10px -6px rgba(60, 40, 15, .5); position: relative; }
+.inboxbar::before { content: ""; position: absolute; left: 50%; top: -7px; width: 54px; height: 14px; transform: translateX(-50%) rotate(-3deg); background: rgba(159, 203, 224, .75); }
+.inboxbar + .card { border-radius: 14px !important; }
+/* 箱：色ちがいのインデックスシール */
+.boxes .bx { border: 0 !important; color: #3b2f22; background: color-mix(in srgb, var(--tab) 55%, var(--paper)); }
+.boxes .bx:nth-child(1) { --tab: var(--tape1); } .boxes .bx:nth-child(2) { --tab: var(--tape2); } .boxes .bx:nth-child(3) { --tab: var(--tape3); } .boxes .bx:nth-child(4) { --tab: var(--tape4); } .boxes .bx:nth-child(5) { --tab: var(--tape5); }
+.boxes .bx[aria-selected="true"] { background: var(--tab); color: #2b2a27; transform: translateY(-3px); box-shadow: 0 3px 0 var(--paper); }
+.boxes .bx[aria-selected="true"] b { color: #2b2a27 !important; }
+/* お知らせ（トースト）は小さなメモ */
+#toast { background: #fffbe0 !important; color: #3b2f22 !important; border-radius: 2px !important; transform: translateX(-50%) rotate(-1deg); box-shadow: 0 8px 14px -8px rgba(60, 40, 15, .6) !important; font-family: var(--f-book); }
+#toast button { color: var(--accent) !important; }
+/* シート（下から出る紙）：ミシン目でちぎるメモ帳 */
+#modal .sheet { background: var(--paper); border-top: 2px dashed rgba(60, 45, 20, .25); }
+/* 右下の＋：赤いスタンプ */
+.fab { border-radius: 50% !important; box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--accent), 0 8px 14px -6px rgba(60, 40, 15, .6) !important; }
+/* ページめくり：タブを変えると、紙が右から（戻るときは左から）めくれてくる */
+.view.warp.turn { transform-origin: 0 50%; animation: pageturn .5s cubic-bezier(.2, .7, .3, 1) both; }
+.view.warp.turn.back { transform-origin: 100% 50%; animation-name: pageturnb; }
+@keyframes pageturn { 0% { transform: perspective(1400px) rotateY(-62deg); opacity: .4; filter: brightness(.85); } 100% { transform: none; opacity: 1; filter: none; } }
+@keyframes pageturnb { 0% { transform: perspective(1400px) rotateY(62deg); opacity: .4; filter: brightness(.85); } 100% { transform: none; opacity: 1; filter: none; } }
+/* ---- タブごとの紙 ---- */
+/* 流れ：段は付箋を並べた形 */
+body[data-tab="flow"] .pipe .step { background: #fff6c9; border-radius: 2px; box-shadow: 0 5px 8px -6px rgba(60, 40, 15, .55); }
+body[data-tab="flow"] .pipe .step:nth-of-type(2n) { transform: rotate(1.2deg); background: #fde2dc; }
+body[data-tab="flow"] .pipe .step:nth-of-type(3n) { transform: rotate(-1deg); background: #dcecf5; }
+body[data-tab="flow"] .pipe .step[aria-pressed="true"] { outline: 2px solid var(--accent); }
+/* 節約：家計簿（罫線＋金額の縦線） */
+body[data-tab="save"] .card { background-image: repeating-linear-gradient(transparent 0 31px, rgba(47, 93, 138, .16) 31px 32px), linear-gradient(90deg, transparent calc(100% - 92px), rgba(176, 65, 47, .28) calc(100% - 92px), rgba(176, 65, 47, .28) calc(100% - 91px), transparent 0); }
+/* AI：方眼のドット（バレットジャーナル） */
+body[data-tab="ai"] .card, body[data-tab="triage"] .card { background-image: radial-gradient(rgba(60, 45, 20, .22) 1px, transparent 1.4px); background-size: 14px 14px; }
+/* 診断：方眼紙 */
+body[data-tab="log"] .card { background-image: linear-gradient(rgba(63, 110, 74, .12) 1px, transparent 1px), linear-gradient(90deg, rgba(63, 110, 74, .12) 1px, transparent 1px); background-size: 16px 16px; }
+/* 買う：糊でとじたメモパッド */
+body[data-tab="shop"] .card { background: #fffbe4; position: relative; }
+body[data-tab="shop"] .view > .card:first-of-type { border-top: 8px solid #b0412f; }
+/* 読む：しおりのひも */
+body[data-tab="read"] .view > .card { position: relative; }
+body[data-tab="read"] .view > .card::after { content: ""; position: absolute; right: 26px; top: 0; width: 12px; height: 46px; background: #b0412f; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%); pointer-events: none; }
+/* ニュース：新聞の切り抜き */
+body[data-tab="news"] .card { background: #f2efe6; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 8px 14px -10px rgba(40, 30, 10, .5); }
+body[data-tab="news"] .card :is(b, h3, h4) { font-family: var(--f-book); }
+/* DB：索引カード */
+body[data-tab="db"] .card { background-image: linear-gradient(rgba(176, 65, 47, .35), rgba(176, 65, 47, .35)) 0 36px / 100% 1px no-repeat, repeating-linear-gradient(transparent 0 23px, rgba(47, 93, 138, .14) 23px 24px); background-position: 0 36px, 0 37px; }
+@media (prefers-reduced-motion: reduce) { .view.warp.turn { animation: none; } }
 </style>
 
 <div id="app">
@@ -4518,9 +4597,13 @@ nav.tabs button[aria-pressed="true"] { background: var(--card); color: var(--acc
     const rb = $("#readbadge"); const rn = S.readList.filter(isRead).length; if (rb) { rb.hidden = !rn; rb.textContent = rn; }
     const soon = stockSoon().length; const sb = $("#shopbadge"); sb.hidden = !soon; sb.textContent = soon;
     $("#date").textContent = TODAY_TXT();
-    const warped = render.lastTab && render.lastTab !== S.tab; render.lastTab = S.tab;
+    const warped = render.lastTab && render.lastTab !== S.tab;
+    // 手帳のページをめくる向き：下のタブの並びで右へ進むなら前へ、左なら戻る
+    const order = [...document.querySelectorAll("nav [data-tab]")].map((b) => b.dataset.tab);
+    const back = warped && order.indexOf(S.tab) < order.indexOf(render.lastTab);
+    render.lastTab = S.tab; document.body.dataset.tab = S.tab;
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
-    main.innerHTML = `<div class="view${warped && !reduce ? " warp" : ""}"></div>`;
+    main.innerHTML = `<div class="view${warped && !reduce ? ` warp turn${back ? " back" : ""}` : ""}"></div>`;
     const view = $(".view", main);
     ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
