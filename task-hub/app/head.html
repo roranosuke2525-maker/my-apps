@@ -948,6 +948,24 @@ nav.tabs button[aria-pressed="true"]::after { width: 12px; bottom: 0; }
 .evrow { display: flex; align-items: center; gap: 8px; min-height: 40px; border-bottom: 1px solid var(--line); }
 .evrow .tx { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 8px 0; }
 .evbar .ic { font-size: 18px; }
+
+/* ---- 🔍✅ 古い順に10件だけ ---- */
+.jg { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; padding: 0 10px; }
+.jgn { color: var(--accent); font-weight: bold; }
+.jgcard { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px; background: var(--sunk); }
+.jgcard b { font-size: 16px; line-height: 1.4; } .jgcard small.old { color: #e5675b; }
+.jgcard p { margin: 0; font-size: 13px; line-height: 1.6; } .jgcard .qc { align-self: flex-start; }
+.jgacts { display: flex; gap: 6px; } .jgacts .btn { flex: 1; min-height: 44px; }
+.jgbar { margin: 0 0 8px; }
+
+/* ---- 今日やるの目安（2件） ---- */
+.capbar { display: flex; gap: 6px; align-items: stretch; }
+.capbar .slot { flex: 1; min-width: 0; padding: 8px; border-radius: 10px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capbar .slot.on { border: 1px solid var(--accent); color: var(--ink); }
+.capbar .capn { flex: none; min-height: 40px; padding: 0 10px; border-radius: 10px; background: var(--sunk); color: var(--accent); font-weight: bold; }
+.capbar.over .capn, .capn2.over { color: #e0b33c; }
+.capmsg { margin: 0; font-size: 12px; color: var(--mute); } .capbar.over + .capmsg { color: #e0b33c; }
+.capn2 { font-size: 12px; color: var(--mute); font-weight: normal; margin-left: 4px; }
 </style>
 
 <div id="app">
