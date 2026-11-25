@@ -1,0 +1,42 @@
+<title>今どこ 画面の4案</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 4枚のスマホ画面（Geminiの見本）を横に並べ、案ごとに何が変わるかを短く添える */
+:root {
+  --ground: #0e1117; --panel: #171b23; --ink: #e9e6df; --mute: #9aa0ab; --line: #2a2f3a; --accent: #f2a65a;
+  --f-head: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif;
+  --f-body: "Noto Sans JP", "Hiragino Sans", sans-serif;
+  color-scheme: dark;
+}
+body { background: var(--ground); color: var(--ink); font-family: var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--f-head); font-weight: 800; font-size: clamp(22px, 4vw, 30px); margin: 0; }
+.lead { margin: 0; color: var(--mute); line-height: 1.7; font-size: 14px; max-width: 64ch; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 22px; }
+.opt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.opt img { width: 100%; max-width: 280px; align-self: center; border-radius: 18px; border: 1px solid var(--line); display: block; }
+.name { display: flex; gap: 8px; align-items: baseline; } .name span { color: var(--accent); font-weight: 700; } .name b { font-family: var(--f-head); font-size: 17px; }
+.opt p { margin: 0; font-size: 13px; line-height: 1.65; color: var(--mute); }
+.opt ul { margin: 0; padding-left: 1.1em; font-size: 13px; line-height: 1.6; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; font-size: 13px; line-height: 1.7; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@800&family=Noto+Sans+JP:wght@400;700&display=swap">
+<div class="wrap">
+  <h1>今どこの画面、4つの方向</h1>
+  <p class="lead">Gemini に描かせた見本です。どれも「情報を減らして、今日のタスクを片づけやすく」がねらい。絵の中の日本語は Gemini が崩しているので、雰囲気と並び方だけ見てください。</p>
+  <div class="grid">
+    <section class="opt"><img src="ui-ideas/a.jpg" alt="A案：今やる1件だけを大きく出す暗い画面"><div class="name"><span>A</span><b>いまの1件だけ</b></div>
+      <p>今日タブには、今やるタスクを1枚だけ大きく出す。「できた」を押すと次の1枚に替わる。</p>
+      <ul><li>迷わない・考えない</li><li>全体は「あと◯件 ›」から見る</li></ul></section>
+    <section class="opt"><img src="ui-ideas/b.jpg" alt="B案：紙のノートのようなチェックリスト"><div class="name"><span>B</span><b>紙のチェックリスト</b></div>
+      <p>明るい紙の色に、手書きふうの見出しと丸いチェック。済んだものは線で消える。</p>
+      <ul><li>やさしい・落ちつく</li><li>今の暗い画面から大きく変わる</li></ul></section>
+    <section class="opt"><img src="ui-ideas/c.jpg" alt="C案：朝・PC・家外の時間の流れに並べた画面"><div class="name"><span>C</span><b>1日の流れ</b></div>
+      <p>朝 → PC → 家・外 の枠を縦の線でつなぎ、今の時刻に印。上に「2 / 5 できた」の細い帯。</p>
+      <ul><li>いつやるかが見える</li><li>今の枠の分け方をそのまま使える</li></ul></section>
+    <section class="opt"><img src="ui-ideas/d.jpg" alt="D案：山なみの写真の上に半透明のリスト"><div class="name"><span>D</span><b>風景＋すりガラス</b></div>
+      <p>前に作った時間で変わる風景を背景に、すりガラスのカードで今日のタスクを3件ほど。</p>
+      <ul><li>開くのが楽しくなる</li><li>件数が多い日は読みにくい</li></ul></section>
+  </div>
+  <p class="note">組み合わせもできます（例：A の「1件だけ」＋ D の風景、C の流れ＋ B の紙の色）。決まったら、今の今日タブ（一覧だけ）をその形に作り替えます。</p>
+</div>
