@@ -266,10 +266,13 @@
     panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll swipey" id="stagelist"></div>`;
     const box = $("#stagelist");
     if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
+    if (S.stageView === "list" && S.stage === "today") { box.innerHTML = todayListHtml(loading); return; }
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
     if (S.stageView === "board") { boardHtml(box, items); return; }
     if (S.stageView === "table") { box.className = "tablewrap"; box.innerHTML = tableHtml(items); return; }
     if (S.stage === "next") { box.insertAdjacentHTML("beforebegin", nextLensBar(items)); box.innerHTML = nextLensList(items); return; }
+    if (S.stage === "plan") { box.innerHTML = planListHtml(items); return; }
+    if (S.stage === "inbox") box.insertAdjacentHTML("beforebegin", `<button type="button" class="inboxbar" data-cact="triage:inbox"><span>📥 未整理 <b>${items.length}</b>件</span><small>仕分けで分ける ›</small></button>`);
     box.innerHTML = items.map((t, i) => rowHtml(t, i, { check: !["done", "ref"].includes(S.stage) })).join("");
   }
 

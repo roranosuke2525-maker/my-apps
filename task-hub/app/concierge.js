@@ -56,7 +56,7 @@
     closeModal();
     if (kind === "late") { const late = lateOf(); const d = v === "today" ? TODAY() : addDays(TODAY(), 1); for (const t of late) await setProps(t, dateProps(d), `持ち越し ${late.length}件を${v === "today" ? "今日" : "明日"}にしたよ`, { undo: false, quiet: t !== late[0] }); return; }
     if (kind === "tab") S.tab = v;
-    else if (kind === "stage") { S.tab = "flow"; S.stage = v; }
+    else if (kind === "stage") { S.tab = "today"; S.stage = v; }
     else if (kind === "triage") { S.tab = "triage"; S.pileKey = v === "some" ? "some" : "inbox"; }
     else if (kind === "shop") { S.tab = "shop"; S.shopSeg = v; }
     else if (kind === "logseg") { S.tab = "log"; S.logSeg = v; }

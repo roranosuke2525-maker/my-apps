@@ -18,7 +18,7 @@
     const keep = warped ? {} : Object.fromEntries([...main.querySelectorAll(".scroll[id]")].map((e) => [e.id, e.scrollTop])); // 描き直してもスクロール位置を保つ
     main.innerHTML = `<div class="view${warped && !reduce ? ` warp turn${back ? " back" : ""}` : ""}"></div>`;
     const view = $(".view", main);
-    ({ today: renderToday, flow: renderFlow, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
+    ({ today: renderToday, flow: renderToday, ai: renderAi, save: renderSave, triage: renderTriage, shop: renderShop, read: renderRead, news: renderNews, log: renderLog, db: renderDbHome })[S.tab](view);
     for (const [id, top] of Object.entries(keep)) { const e = document.getElementById(id); if (e) e.scrollTop = top; }
     S.slide = null;
     renderConciergeFab();
@@ -46,8 +46,7 @@
     if (d.tab) { S.tab = d.tab; if (d.tab !== "db") S.dbOpen = null; render(); return; }
     if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
-    if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
-    if (d.box) { S.box = d.box; store.set("box", d.box); buzz(); render(); return; }
+    if (d.gostage) { S.tab = "today"; S.stage = d.gostage; render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
     if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
     if (d.ngroup != null && el.closest(".ngroups")) { S.nextGroup = d.ngroup; render(); return; }
@@ -192,7 +191,7 @@
 
   // ================= 階層をスワイプで行き来する =================
   // ページ・DBの中：右へスワイプで1つ戻る／流れの一覧：左右で隣の段／下のタブバー：左右で隣のタブ
-  const TABS = ["today", "flow", "save", "triage", "ai", "read", "shop", "news", "log", "db"];
+  const TABS = ["today", "save", "triage", "ai", "read", "shop", "news", "log", "db"];
   (() => {
     let g = null;
     addEventListener("pointerdown", (e) => { if (e.button > 0) return; g = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target, id: e.pointerId }; }, true);
@@ -206,7 +205,7 @@
       if (!$("#page").hidden) { if (dx > 0 && (edge || !el.closest(".ed"))) { swipeGuard(); closePage(); } return; }
       if (el.closest("nav.tabs")) { const i = Math.max(0, TABS.indexOf(S.tab)) + (dx < 0 ? 1 : -1); if (TABS[i]) { swipeGuard(); S.tab = TABS[i]; if (S.tab !== "db") S.dbOpen = null; render(); } return; }
       if (S.tab === "db" && S.dbOpen && dx > 0) { swipeGuard(); S.dbOpen = null; render(); return; }
-      if (S.tab === "flow" && el.closest("[data-swipestage], .pipe, .park")) { swipeGuard(); stageStep(dx < 0 ? 1 : -1); }
+      if (S.tab === "today" && el.closest("[data-swipestage], .pipe, .park")) { swipeGuard(); stageStep(dx < 0 ? 1 : -1); }
     }, true);
     function swipeGuard() { const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener("click", stop, { capture: true, once: true }); setTimeout(() => removeEventListener("click", stop, { capture: true }), 300); }
   })();
@@ -323,7 +322,7 @@
     for (const t of [...S.tasks, ...S.refs, ...S.doneToday, ...S.readList]) known.set(t.id, t);
     if (jst(snap.at) !== TODAY()) S.doneToday = [];
   }
-  try { const h = location.hash.slice(1); if (["today", "flow", "save", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h; } catch { /* なし */ }
+  try { const h = location.hash.slice(1); if (["today", "flow", "save", "ai", "read", "triage", "shop", "news", "log", "db"].includes(h)) S.tab = h === "flow" ? "today" : h; } catch { /* なし */ }
   // ウィジェット・Claude のリンク（/p/<id> → #open=<id>）から：そのページを開く（render が # をタブ名に書き換える前に読む）
   const openAt = (location.hash.match(/^#open=([0-9a-f]{32})$/) || [])[1];
   render();

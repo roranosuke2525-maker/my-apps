@@ -1,58 +1,33 @@
-  // ================= 今日：5つの箱（今日・今週・次にやる・待ち・いつか）でタスクを見る =================
+  // ================= 今日：流れと1つにまとめたタブ =================
   const buzz = (ms = 10) => { try { navigator.vibrate?.(ms); } catch { /* 無ければ何もしない */ } };
-  // 11/26：今日タブを「箱」で分ける（朝・PC・家外の枠は使っていなかったのでやめる）。
-  // 今日＝実行日が今日まで（持ち越しを含む）／今週＝明日〜7日後に日付があるもの／次にやる＝日付なし（8日より先の予定も下に）／待ち／いつか。
-  // 収集箱にあるものは上に「未整理◯件」と出し、仕分けへ。Notion の仕組みは変えない（ステータスと実行日から分けるだけ）
-  const BOXES = [["today", "今日"], ["week", "今週"], ["next", "次にやる"], ["wait", "待ち"], ["some", "いつか"]];
-  function boxItems(k) {
-    const d = TODAY(); const w = addDays(d, 7);
-    if (k === "today") return stageItems("today");
-    const plan = stageItems("plan").slice().sort((x, y) => (x.date || "").localeCompare(y.date || ""));
-    if (k === "week") return plan.filter((t) => t.date && t.date <= w);
-    if (k === "next") return stageItems("next");
-    if (k === "later") return plan.filter((t) => t.date && t.date > w);
-    if (k === "wait") return stageItems("wait");
-    if (k === "some") return inStage("some").slice().sort((x, y) => (y.edited || "").localeCompare(x.edited || ""));
-    return [];
-  }
+  // 11/26：「今日」と「流れ」は同じ中身なので1つのタブに。上のインデックスは流れの順（収集→次にやる→予定→今日→済み＋置き場）。
+  // 開いたときは「今日」の段。今日の段は 持ち越し・今日・済み、予定の段は日ごと（近い順）に並べる。Notion の仕組みは変えない
   function renderToday(view) {
-    const d = TODAY(); const loading = S.mode === "loading" && !S.tasks.length;
     if (S.mode === "error" && !S.tasks.length) { view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="empty errbox"><b>うまく読みこめなかった…</b><span>${esc(S.error || "")}</span><button type="button" class="btn pri" id="retry">もう一回ためす</button></div></div>`); return; }
-    if (!S.box) S.box = store.get("box") || "today";
-    const cnt = Object.fromEntries(BOXES.map(([k]) => [k, boxItems(k).length])); cnt.next += boxItems("later").length;
-    const inbox = inStage("inbox").length; const late = boxItems("today").filter((t) => t.date < d).length;
-    view.insertAdjacentHTML("beforeend", `${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
-      <div class="boxes" role="tablist" aria-label="箱">${BOXES.map(([k, n]) => `<button type="button" role="tab" class="bx${k === "today" && late ? " late" : ""}" data-box="${k}" data-ix="${k}" aria-selected="${S.box === k}"><b>${loading ? "…" : cnt[k]}</b><span>${n}</span></button>`).join("")}</div>
-      ${inbox ? `<button type="button" class="inboxbar" data-cact="triage:inbox"><span>📥 未整理 <b>${inbox}</b>件</span><small>箱に分ける ›</small></button>` : ""}
-      <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
-    const box = $("#todaylist");
-    const rows = (list, meta) => list.map((t, i) => rowHtml(t, i, meta ? { meta } : {})).join("");
-    const head = (title, n, extra = "", btn = "") => `<div class="sech${extra}"><span>${esc(title)}</span><small>${n}</small>${btn}</div>`;
-    const pull = (list) => list.map((t) => `<div class="row pick" data-id="${t.id}" style="--c:var(--s-next)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc([t.date ? metaOf(t).tx : "", t.next || t.tag || ""].filter(Boolean).join("・") || `${ageOf(t)}日`)}</span></button><button type="button" class="qc" data-pulltoday="${t.id}">今日</button></div>`).join("");
+    if (S.error && S.tasks.length) view.insertAdjacentHTML("beforeend", `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>`);
+    renderFlow(view);
+  }
+  const secHead = (title, n, extra = "", btn = "") => `<div class="sech${extra}"><span>${esc(title)}</span><small>${n}</small>${btn}</div>`;
+  const pullRows = (list) => list.map((t) => `<div class="row pick" data-id="${t.id}" style="--c:var(--s-next)"><span class="dot"></span><button type="button" class="main" data-open="${t.id}"><span class="nm">${esc(t.name)}</span><span class="sub">${esc([t.date ? metaOf(t).tx : "", t.next || t.tag || ""].filter(Boolean).join("・") || `${ageOf(t)}日`)}</span></button><button type="button" class="qc" data-pulltoday="${t.id}">今日</button></div>`).join("");
+  // 今日の段：持ち越し → 今日 → 済み
+  function todayListHtml(loading) {
+    const d = TODAY(); const all = stageItems("today"); const lt = all.filter((t) => t.date < d); const now = all.filter((t) => t.date >= d); const done = S.doneToday.length;
+    const rows = (list, meta) => list.map((t, i) => rowHtml(t, i, { meta })).join("");
     let html = "";
-    if (S.box === "today") {
-      const all = boxItems("today"); const lt = all.filter((t) => t.date < d); const now = all.filter((t) => t.date >= d); const done = S.doneToday.length;
-      if (lt.length) html += head("持ち越し（あせらずに）", lt.length, " late", `<button type="button" class="qc" data-cact="late:today">ぜんぶ今日に</button>`) + rows(lt, "late");
-      if (now.length) html += head("今日", now.length) + rows(now, "weight");
-      if (!all.length && !loading) html += `<div class="alldone"><b>${done ? "今日のぶんはおしまい！おつかれさま" : "今日やることはまだないよ"}</b><span>${done ? "よゆうがあれば「今週」や「次にやる」から1つ足してもいいし、休んでもいい" : "「今週」か「次にやる」の箱から「今日」を押して入れよう"}</span></div>`;
-      if (done) html += `<details class="donebox"${!all.length ? " open" : ""}><summary><span>済み</span><small>${done}</small></summary>${S.doneToday.map((t, i) => rowHtml(t, i, { check: false })).join("")}</details>`;
-    } else if (S.box === "week") {
-      const list = boxItems("week"); const byDay = new Map();
-      for (const t of list) { if (!byDay.has(t.date)) byDay.set(t.date, []); byDay.get(t.date).push(t); }
-      for (const [day, ts] of byDay) html += head(`${day === addDays(d, 1) ? "明日" : WD[dow(day)] + "曜"}　${md(day)}`, ts.length) + pull(ts);
-      if (!list.length && !loading) html += `<div class="empty">今週に日付が入っているものはないよ。\n「次にやる」から日付を決めると、ここに並ぶ</div>`;
-    } else if (S.box === "next") {
-      const list = boxItems("next"); const later = boxItems("later");
-      if (list.length) html += head("日付なし（古い順）", list.length) + pull(list.slice().sort((x, y) => ageOf(y) - ageOf(x)));
-      if (later.length) html += head("先の予定（8日より先）", later.length) + pull(later);
-      if (!list.length && !later.length && !loading) html += `<div class="empty">次にやるは空っぽ</div>`;
-    } else {
-      const list = boxItems(S.box);
-      if (list.length) html += head(S.box === "wait" ? "相手の返事・届くのを待っている" : "今はやらない・寝かせている", list.length) + pull(list);
-      else if (!loading) html += `<div class="empty">${S.box === "wait" ? "待っているものはないよ" : "いつかの箱は空っぽ"}</div>`;
-    }
-    box.innerHTML = html || `<div class="empty">読みこみ中…</div>`;
-    box.insertAdjacentHTML("beforeend", `<div class="ghint mute">${S.box === "today" ? "→ 右にスワイプでできた！　← 左で明日に　長押しで日付・状態" : "「今日」で今日の箱へ　長押しで日付・状態"}</div>`);
+    if (lt.length) html += secHead("持ち越し（あせらずに）", lt.length, " late", `<button type="button" class="qc" data-cact="late:today">ぜんぶ今日に</button>`) + rows(lt, "late");
+    if (now.length) html += secHead("今日", now.length) + rows(now, "weight");
+    if (!all.length) html += loading ? `<div class="empty">読みこみ中…</div>` : `<div class="alldone"><b>${done ? "今日のぶんはおしまい！おつかれさま" : "今日やることはまだないよ"}</b><span>${done ? "よゆうがあれば「予定」や「次にやる」から1つ足してもいいし、休んでもいい" : "「予定」か「次にやる」から「今日」を押して入れよう"}</span></div>`;
+    if (done) html += `<details class="donebox"${!all.length ? " open" : ""}><summary><span>済み</span><small>${done}</small></summary>${S.doneToday.map((t, i) => rowHtml(t, i, { check: false })).join("")}</details>`;
+    return html + `<div class="ghint mute">→ 右にスワイプでできた！　← 左で明日に　長押しで日付・状態</div>`;
+  }
+  // 予定の段：1週間は日ごと、その先はまとめて
+  function planListHtml(items) {
+    const d = TODAY(); const w = addDays(d, 7); const byDay = new Map(); const later = [];
+    for (const t of items) { if (t.date && t.date <= w) { if (!byDay.has(t.date)) byDay.set(t.date, []); byDay.get(t.date).push(t); } else later.push(t); }
+    let html = "";
+    for (const [day, ts] of byDay) html += secHead(`${day === addDays(d, 1) ? "明日" : WD[dow(day)] + "曜"}　${md(day)}`, ts.length) + pullRows(ts);
+    if (later.length) html += secHead("先の予定（8日より先）", later.length) + pullRows(later);
+    return html + `<div class="ghint mute">「今日」で今日の段へ　長押しで日付・状態</div>`;
   }
 
   // ================= 行の操作：スワイプ（右＝済み・左＝明日）と長押し（日付・状態の変更） =================
