@@ -258,12 +258,12 @@
     const soon = stageItems("plan")[0];
     const sub = { inbox: inflow ? `今日 +${inflow}` : cnt.inbox ? `最古 ${maxAge("inbox")}日` : "空っぽ", next: cnt.next ? `最古 ${maxAge("next")}日` : "—", plan: soon ? `次 ${md(soon.date)}` : "—", today: late ? `遅れ ${late}` : cnt.today ? "のこり" : "完了", done: "今日" };
     const loading = S.mode === "loading" && !S.tasks.length;
-    view.insertAdjacentHTML("beforeend", `<div class="pipe" role="group" aria-label="GTDの流れ">${FLOW_MAIN.map((k, i) => `<button type="button" class="step" data-stage="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}" title="${STAGES[k].sub}"><span class="no">${i + 1}</span><span class="n">${loading ? "…" : cnt[k]}</span><span class="k">${STAGES[k].name}</span><span class="s${k === "today" && late ? " late" : ""}">${esc(sub[k])}</span></button>${i < FLOW_MAIN.length - 1 ? `<span class="arr" aria-hidden="true"></span>` : ""}`).join("")}</div>
-      <div class="park"><span class="lbl">置き場</span>${FLOW_SIDE.map((k) => `<button type="button" class="pk" data-stage="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}"><i></i>${STAGES[k].name}<b>${loading ? "…" : cnt[k]}${k === "ref" && S.refMore ? "+" : ""}</b></button>`).join("")}</div>
+    view.insertAdjacentHTML("beforeend", `<div class="pipe" role="tablist" aria-label="流れ">${FLOW_MAIN.map((k) => `<button type="button" role="tab" class="step" data-stage="${k}" data-ix="${k}" aria-pressed="${S.stage === k}" title="${STAGES[k].sub}"><span class="n">${loading ? "…" : cnt[k]}</span><span class="k">${STAGES[k].name}</span><span class="s${k === "today" && late ? " late" : ""}">${esc(sub[k])}</span></button>`).join("")}</div>
+      <div class="park"><span class="lbl">置き場</span>${FLOW_SIDE.map((k) => `<button type="button" class="pk" data-stage="${k}" data-ix="${k}" style="--c:${STAGES[k].c}" aria-pressed="${S.stage === k}"><i></i>${STAGES[k].name}<b>${loading ? "…" : cnt[k]}${k === "ref" && S.refMore ? "+" : ""}</b></button>`).join("")}</div>
       <div class="card panel" id="stagepanel" data-swipestage="1"></div>`);
     const st = STAGES[S.stage]; const items = stageItems(S.stage); const pos = FLOW_ORDER.indexOf(S.stage);
     const panel = $("#stagepanel");
-    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${FLOW_MAIN.includes(S.stage) ? `${pos + 1}. ` : ""}${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll swipey" id="stagelist"></div>`;
+    panel.innerHTML = `<div class="panel-head"><button type="button" class="iconbtn sm" data-stagestep="-1" ${pos ? "" : "disabled"} aria-label="前の段">‹</button><span class="dot" style="--c:${st.c}"></span><span class="ttl"><b>${st.name}</b><small>${esc(FLOW_VERB[S.stage])}・${items.length}件</small></span><button type="button" class="iconbtn sm" data-stagestep="1" ${pos < FLOW_ORDER.length - 1 ? "" : "disabled"} aria-label="次の段">›</button><div class="seg">${[["list", "リスト"], ["board", "ボード"], ["table", "表"]].map(([k, n]) => `<button type="button" data-sview="${k}" aria-pressed="${S.stageView === k}">${n}</button>`).join("")}</div></div><div class="scroll swipey" id="stagelist"></div>`;
     const box = $("#stagelist");
     if (S.slide?.key === "stage") box.classList.add(S.slide.dir > 0 ? "in-l" : "in-r");
     if (!items.length) { box.innerHTML = `<div class="empty">${loading ? "読みこみ中…" : S.stage === "today" ? "今日やることは全部終わりました ✨" : "ここには何もありません"}\n<small class="mute">左右にスワイプで隣の段へ</small></div>`; return; }
@@ -406,8 +406,10 @@
     const orb = $("#orb"); if (!orb) return; const t = known.get(orb.dataset.card); if (!t) return;
     const P = PILES[S.pileKey]; const i = P.dests.indexOf(key); const btn = $(`.dest[data-rdest="${key}"]`);
     btn?.classList.add("hit"); buzz(12);
-    if (i >= 0 && !reduce) { const a = (i * 60 - 90) * Math.PI / 180; orb.style.transition = "transform .28s ease-in, opacity .28s"; orb.style.transform = `translate(${Math.cos(a) * 180}px, ${Math.sin(a) * 180}px) scale(.3)`; orb.style.opacity = "0"; }
-    setTimeout(() => { if (key === "skip") { skipped.add(t.id); render(); toast(`「${short(t.name)}」はまだ置いておきます`); } else move(t, DEST[key].mv || key); }, reduce ? 0 : 260);
+    // 手帳のハンコ：カードに行き先の判を押してから、その方向へ送る
+    if (!reduce) { orb.style.transition = "none"; orb.style.transform = ""; orb.insertAdjacentHTML("beforeend", `<span class="ostamp" style="--c:${DEST[key].c}">${esc(DEST[key].label)}</span>`); }
+    if (i >= 0 && !reduce) setTimeout(() => { const a = (i * 60 - 90) * Math.PI / 180; orb.style.transition = "transform .3s ease-in, opacity .3s"; orb.style.transform = `translate(${Math.cos(a) * 180}px, ${Math.sin(a) * 180}px) rotate(${i % 2 ? 14 : -14}deg) scale(.35)`; orb.style.opacity = "0"; }, 260);
+    setTimeout(() => { if (key === "skip") { skipped.add(t.id); render(); toast(`「${short(t.name)}」はまだ置いておくね`); } else move(t, DEST[key].mv || key); }, reduce ? 0 : 560);
   }
   // 丸を引っぱると、その方向の行き先が光る。離すとそこへ
   function dragOrb(orb, P) {

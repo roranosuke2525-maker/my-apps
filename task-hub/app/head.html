@@ -1113,6 +1113,58 @@ body[data-tab="news"] .card :is(b, h3, h4) { font-family: var(--f-book); }
 /* DB：索引カード */
 body[data-tab="db"] .card { background-image: linear-gradient(rgba(176, 65, 47, .35), rgba(176, 65, 47, .35)) 0 36px / 100% 1px no-repeat, repeating-linear-gradient(transparent 0 23px, rgba(47, 93, 138, .14) 23px 24px); background-position: 0 36px, 0 37px; }
 @media (prefers-reduced-motion: reduce) { .view.warp.turn { animation: none; } }
+
+/* ===== v59：手帳をもっと（インデックスの統一・仕分けはカッターマットと判子・済みはペンの線と判） ===== */
+:root { --ix-inbox: #d8d0c0; --ix-next: #9fcbe0; --ix-plan: #f5cf74; --ix-week: #f5cf74; --ix-today: #f2a7a0; --ix-done: #b9d9a3; --ix-wait: #f0bf8f; --ix-some: #d3c3e8; --ix-ref: #d6c1a6; --ix-judge: #c9b8e6; }
+[data-ix="inbox"] { --ix: var(--ix-inbox); } [data-ix="next"] { --ix: var(--ix-next); } [data-ix="plan"] { --ix: var(--ix-plan); } [data-ix="week"] { --ix: var(--ix-week); }
+[data-ix="today"] { --ix: var(--ix-today); } [data-ix="done"] { --ix: var(--ix-done); } [data-ix="wait"] { --ix: var(--ix-wait); } [data-ix="some"] { --ix: var(--ix-some); } [data-ix="ref"] { --ix: var(--ix-ref); } [data-ix="judge"] { --ix: var(--ix-judge); }
+/* 今日の箱と流れの段を同じ「インデックスのつまみ」に */
+.boxes .bx[data-ix], .pipe .step[data-ix] { --tab: var(--ix); }
+.pipe { display: grid !important; grid-template-columns: repeat(5, 1fr); gap: 3px; align-items: end; margin-bottom: 0; }
+.pipe .step { transform: none !important; border-radius: 10px 10px 0 0 !important; border: 0 !important; outline: 0 !important; box-shadow: none !important; padding: 6px 2px 4px !important; min-height: 52px; background: color-mix(in srgb, var(--ix) 55%, var(--paper)) !important; color: #3b2f22; }
+.pipe .step .n { font-family: var(--f-book); font-size: 18px; color: #2b2a27; text-shadow: none; }
+.pipe .step .k { font-family: var(--f-book); font-size: 11px; font-weight: 700; color: #3b2f22; }
+.pipe .step .s { font-size: 9px; color: #6c6152; }
+.pipe .step[aria-pressed="true"] { background: var(--ix) !important; transform: translateY(-3px) !important; box-shadow: 0 3px 0 var(--paper) !important; }
+.pipe .no, .pipe .arr { display: none !important; }
+.park { margin-top: 6px; }
+.park .pk { border-radius: 8px 8px 8px 8px; background: color-mix(in srgb, var(--ix) 45%, var(--paper)) !important; box-shadow: none !important; border: 1px solid rgba(60, 45, 20, .12); }
+.park .pk i { display: none; }
+.park .pk[aria-pressed="true"] { background: var(--ix) !important; }
+/* 紙の右下の折り目（ドッグイヤー） */
+body[data-tab="flow"] .view > .card.panel::after { content: ""; position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; background: linear-gradient(315deg, var(--desk) 0 50%, #e6dac0 50% 100%); box-shadow: -2px -2px 3px rgba(60, 40, 15, .12); border-top-left-radius: 4px; pointer-events: none; }
+/* 済み：ペンで線を引いて「済」の判 */
+.row .nm { position: relative; }
+.row.strike .nm::after { content: ""; position: absolute; left: 0; top: 52%; height: 2px; width: 0; background: var(--pen); border-radius: 2px; animation: penline .35s ease-out forwards; }
+@keyframes penline { to { width: 100%; } }
+.row.strike::after { content: "済"; position: absolute; right: 46px; top: 50%; width: 34px; height: 34px; margin-top: -17px; display: grid; place-items: center; border: 2.5px solid #c0392b; border-radius: 50%; color: #c0392b; font: 700 16px/1 var(--f-book); transform: rotate(-14deg) scale(1.6); opacity: 0; animation: hanko .3s .15s ease-out forwards; pointer-events: none; }
+.row.strike { position: relative; }
+@keyframes hanko { to { transform: rotate(-14deg) scale(1); opacity: .9; } }
+/* スワイプの下地も判子の文字 */
+.rw .sw { font-family: var(--f-book); }
+/* ＋はペン先：押すと少し傾く */
+.fab:active { transform: rotate(-14deg) scale(.94) !important; }
+/* ---- 仕分け：緑のカッターマットの上で、索引カードに判子を押して振り分ける ---- */
+body[data-tab="triage"] .chips .chip[data-pile] { border-radius: 10px 10px 0 0; box-shadow: none; border: 0; background: color-mix(in srgb, var(--ix, #ddd) 55%, var(--paper)); font-family: var(--f-book); }
+body[data-tab="triage"] .chips .chip[data-pile="inbox"] { --ix: var(--ix-inbox); } body[data-tab="triage"] .chips .chip[data-pile="judge"] { --ix: var(--ix-judge); }
+body[data-tab="triage"] .chips .chip[data-pile="next"] { --ix: var(--ix-next); } body[data-tab="triage"] .chips .chip[data-pile="wait"] { --ix: var(--ix-wait); } body[data-tab="triage"] .chips .chip[data-pile="some"] { --ix: var(--ix-some); }
+body[data-tab="triage"] .chips .chip[aria-pressed="true"] { background: var(--ix); color: #2b2a27; }
+.radial { background-color: #3d7a63; background-image: linear-gradient(rgba(255, 255, 255, .13) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .13) 1px, transparent 1px), linear-gradient(rgba(255, 255, 255, .25) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .25) 1px, transparent 1px);
+  background-size: 12px 12px, 12px 12px, 60px 60px, 60px 60px; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15), 0 10px 18px -12px rgba(40, 30, 10, .6); padding: 8px; }
+.orb { border-radius: 3px !important; width: 210px !important; height: 150px !important; margin: -75px 0 0 -105px !important; transform: rotate(-2deg); color: #2b2a27 !important;
+  background: linear-gradient(rgba(176, 65, 47, .55), rgba(176, 65, 47, .55)) 0 30px / 100% 1px no-repeat, repeating-linear-gradient(transparent 0 19px, rgba(47, 93, 138, .2) 19px 20px) 0 31px / 100% calc(100% - 31px) no-repeat, var(--paper) !important;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, .05), 0 14px 22px -12px rgba(0, 0, 0, .55) !important; border: 0 !important; padding: 8px 12px !important; justify-content: flex-start !important; overflow: hidden; }
+.orb .otag { color: #6c6152 !important; font-family: var(--f-book); }
+.orb .onm { font-family: var(--f-book); font-weight: 700; color: #2b2a27; }
+.orb .onx, .orb .ometa { color: #6c6152 !important; }
+.ostamp { position: absolute; left: 50%; top: 50%; padding: 6px 12px; border: 3px solid var(--c, #c0392b); border-radius: 8px; color: var(--c, #c0392b); background: rgba(253, 250, 242, .35); font: 700 20px/1.1 var(--f-book); letter-spacing: .08em; white-space: nowrap; transform: translate(-50%, -50%) rotate(-12deg) scale(2.2); opacity: 0; animation: ostamp .24s ease-out forwards; filter: saturate(1.4) brightness(.75); mix-blend-mode: multiply; }
+@keyframes ostamp { to { transform: translate(-50%, -50%) rotate(-12deg) scale(1); opacity: .92; } }
+.dest { border-radius: 50% !important; width: 74px !important; height: 74px !important; margin: -37px 0 0 -37px !important; background: rgba(253, 250, 242, .94) !important; color: #2b2a27 !important; box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--c) 80%, #000), inset 0 0 0 4px rgba(253, 250, 242, .94), inset 0 0 0 5.5px color-mix(in srgb, var(--c) 80%, #000), 0 6px 10px -6px rgba(0, 0, 0, .5) !important; font-family: var(--f-book); }
+.dest span { font-size: 10.5px; }
+.dest.near, .dest:active { background: color-mix(in srgb, var(--c) 30%, var(--paper)) !important; }
+.dest.hit { background: color-mix(in srgb, var(--c) 55%, var(--paper)) !important; color: #2b2a27 !important; }
+body[data-tab="triage"] .rfoot { color: #3b2f22; }
+@media (prefers-reduced-motion: reduce) { .row.strike .nm::after { animation: none; width: 100%; } .row.strike::after { animation: none; opacity: .9; transform: rotate(-14deg); } .ostamp { animation: none; opacity: .9; transform: translate(-50%, -50%) rotate(-12deg); } }
 </style>
 
 <div id="app">

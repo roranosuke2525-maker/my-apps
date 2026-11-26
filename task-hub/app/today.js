@@ -22,7 +22,7 @@
     const cnt = Object.fromEntries(BOXES.map(([k]) => [k, boxItems(k).length])); cnt.next += boxItems("later").length;
     const inbox = inStage("inbox").length; const late = boxItems("today").filter((t) => t.date < d).length;
     view.insertAdjacentHTML("beforeend", `${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
-      <div class="boxes" role="tablist" aria-label="箱">${BOXES.map(([k, n]) => `<button type="button" role="tab" class="bx${k === "today" && late ? " late" : ""}" data-box="${k}" aria-selected="${S.box === k}"><b>${loading ? "…" : cnt[k]}</b><span>${n}</span></button>`).join("")}</div>
+      <div class="boxes" role="tablist" aria-label="箱">${BOXES.map(([k, n]) => `<button type="button" role="tab" class="bx${k === "today" && late ? " late" : ""}" data-box="${k}" data-ix="${k}" aria-selected="${S.box === k}"><b>${loading ? "…" : cnt[k]}</b><span>${n}</span></button>`).join("")}</div>
       ${inbox ? `<button type="button" class="inboxbar" data-cact="triage:inbox"><span>📥 未整理 <b>${inbox}</b>件</span><small>箱に分ける ›</small></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);
     const box = $("#todaylist");

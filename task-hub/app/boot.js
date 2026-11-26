@@ -54,7 +54,7 @@
     if (d.nbulk) { nextBulk(el, d.nbulk); return; }
     if (d.bgo != null) { document.getElementById("board")?.goTo?.(+d.bgo); return; }
     if (d.sview) { S.stageView = d.sview; render(); return; }
-    if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); el.closest(".row")?.classList.add("gone"); setTimeout(() => move(t, "done"), reduce ? 0 : 300); return; }
+    if (d.done) { const t = known.get(d.done); if (!t) return; buzz(); el.classList.add("on"); const rw = el.closest(".row"); rw?.classList.add("strike"); setTimeout(() => rw?.classList.add("gone"), reduce ? 0 : 420); setTimeout(() => move(t, "done"), reduce ? 0 : 680); return; }
     if (d.pg) { const [key, dir] = [d.pg.slice(0, d.pg.lastIndexOf(":")), +d.pg.slice(d.pg.lastIndexOf(":") + 1)]; S.page[key] = (S.page[key] || 0) + dir; S.slide = { key, dir }; render(); return; }
     if (d.aiseg) { S.aiSeg = d.aiseg; render(); return; }
     if (d.runnow) { runNow(el); return; }
