@@ -6,7 +6,7 @@
   const BOXES = [["today", "今日"], ["week", "今週"], ["next", "次にやる"], ["wait", "待ち"], ["some", "いつか"]];
   function boxItems(k) {
     const d = TODAY(); const w = addDays(d, 7);
-    if (k === "today") return stageItems("today");
+    if (k === "today") return stageItems("today").filter((t) => !isCoach(t));
     const plan = stageItems("plan").slice().sort((x, y) => (x.date || "").localeCompare(y.date || ""));
     if (k === "week") return plan.filter((t) => t.date && t.date <= w);
     if (k === "next") return stageItems("next");
@@ -22,6 +22,7 @@
     const cnt = Object.fromEntries(BOXES.map(([k]) => [k, boxItems(k).length])); cnt.next += boxItems("later").length;
     const inbox = inStage("inbox").length; const late = boxItems("today").filter((t) => t.date < d).length;
     view.insertAdjacentHTML("beforeend", `${S.error && S.tasks.length ? `<button type="button" class="stale" id="retry">⚠ 新しくできてないみたい（${S.loadedAt ? jstTime(S.loadedAt) : "前"}のデータを表示中）　↻ もう一回</button>` : ""}
+      ${coachCardHtml()}
       <div class="boxes" role="tablist" aria-label="箱">${BOXES.map(([k, n]) => `<button type="button" role="tab" class="bx${k === "today" && late ? " late" : ""}" data-box="${k}" aria-selected="${S.box === k}"><b>${loading ? "…" : cnt[k]}</b><span>${n}</span></button>`).join("")}</div>
       ${inbox ? `<button type="button" class="inboxbar" data-cact="triage:inbox"><span>📥 未整理 <b>${inbox}</b>件</span><small>箱に分ける ›</small></button>` : ""}
       <div class="card panel"><div class="scroll swipey" id="todaylist"></div></div>`);

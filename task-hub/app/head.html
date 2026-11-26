@@ -1113,6 +1113,20 @@ body[data-tab="news"] .card :is(b, h3, h4) { font-family: var(--f-book); }
 /* DB：索引カード */
 body[data-tab="db"] .card { background-image: linear-gradient(rgba(176, 65, 47, .35), rgba(176, 65, 47, .35)) 0 36px / 100% 1px no-repeat, repeating-linear-gradient(transparent 0 23px, rgba(47, 93, 138, .14) 23px 24px); background-position: 0 36px, 0 37px; }
 @media (prefers-reduced-motion: reduce) { .view.warp.turn { animation: none; } }
+
+/* ---- 🧭 コーチのカード（手帳に貼った一筆せん） ---- */
+.coach { flex: none; margin: 0 2px 10px; padding: 10px 12px 10px; display: flex; flex-direction: column; gap: 8px; background: #fffef6 !important; border-left: 4px solid var(--accent) !important; position: relative; }
+.coach::before { content: ""; position: absolute; left: 50%; top: -8px; width: 64px; height: 16px; transform: translateX(-50%) rotate(2deg); background: rgba(245, 207, 116, .8); }
+.coh { display: flex; align-items: center; gap: 8px; } .coh b { flex: 1; font-family: var(--f-book); font-size: 15px; }
+.cosec small { display: block; color: var(--mute); font-size: 11px; margin-bottom: 2px; }
+.cosec p { margin: 0; font-size: 13.5px; line-height: 1.55; }
+.coq { font-weight: 700; }
+.coopts { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.coopt { min-height: 42px; text-align: left; padding: 8px 12px; border-radius: 10px; background: #f6efdd; border: 1px solid rgba(60, 45, 20, .18); color: var(--ink); font-size: 13.5px; }
+.coopt.on { background: #fff3a3; border-color: var(--accent); font-weight: 700; }
+.coopt.on::before { content: "✓ "; color: var(--accent); }
+.cocm { display: flex; gap: 6px; margin-top: 6px; } .cocm input { flex: 1; min-width: 0; min-height: 40px; border-radius: 10px; border: 1px solid rgba(60, 45, 20, .2); background: #fff; padding: 0 10px; font-size: 14px; color: var(--ink); }
+.cofoot { display: flex; justify-content: flex-end; } .cofoot .btn { min-height: 40px; }
 </style>
 
 <div id="app">

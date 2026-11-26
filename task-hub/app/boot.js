@@ -47,6 +47,9 @@
     if (d.gotab) { closeModal(); S.tab = d.gotab; if (d.gotab !== "db") S.dbOpen = null; render(); return; }
     if (d.pulltoday) { const t = known.get(d.pulltoday); if (t) { buzz(); move(t, "today"); } return; }
     if (d.gostage) { S.tab = "flow"; S.stage = d.gostage; render(); return; }
+    if (d.coopt != null) { coachAnswer(Number(d.coopt)); return; }
+    if (d.cocm) { coachComment(); return; }
+    if (d.cook) { const t = known.get(d.cook); if (t) { buzz(); move(t, "done"); } return; }
     if (d.box) { S.box = d.box; store.set("box", d.box); buzz(); render(); return; }
     if (d.stage) { S.stage = d.stage; render(); return; }
     if (d.nlens) { S.nextLens = d.nlens; S.nextGroup = ""; render(); return; }
@@ -237,6 +240,7 @@
     const P1 = "a".repeat(32), P2 = "b".repeat(32), P3 = "c".repeat(32);
     S.tasks = [
       mk("資源ごみを出す", ST.next, { date: d, waku: "☼ 朝", w: "S", tag: "HOME", next: "7:30までに玄関前へ" }),
+      mk("🧭 コーチ 今日", ST.next, { date: d, tag: "ROUTINE", w: "S", next: "昼休みに電話して対象かだけ聞く" }),
       mk("保険の住所変更をWEBで申請する", ST.next, { date: addDays(d, -2), waku: "☼ 朝", w: "S", tag: "MONEY", next: "契約者サービスにログインする" }),
       mk("ペグボードの棚板を選ぶ", ST.doing, { date: d, waku: "🏠 家・外", w: "L", tag: "HOME", pj: P1, next: "天板から画面上端までの高さを測る" }),
       mk("家計の振込", ST.next, { date: d, waku: "💻 PC", w: "S", tag: "MONEY", next: "口座へ振り込む" }),
