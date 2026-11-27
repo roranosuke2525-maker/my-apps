@@ -25,6 +25,7 @@
 - **テスト**：`npm test`（`node --test test/*.test.mjs`）。Notion API は偽物（`test/fake-*.mjs` か `NOTION_API_BASE` の差し替え）で、値は作りもの。
 - **アーティファクト版（MCP）** は頼まれたときだけ。`src/mcp-api.js` が Worker と同じ返事の形で答え、`scripts/build-artifact.mjs` で `dist/artifact.html` を作る。
 - **情シス対策**：社内PCに何も入れない・保存しない。外部の読み込みは最小限。
+- **仕事（Notion の WORK）は入れない**：ここのアプリは ME（私用）のもの。WORK の中身（顧客名・件名・担当者名・注番・金額など）は、コード・テスト・README・仕様書・コミット文に書かない。アプリの連携（NOTION_TOKEN）は WORK につながない。ME と WORK は運用を分ける（WORK の決まりは Notion の WORK にある「⚙️ WORKの決まり」）。
 
 新しいアプリは、いちばん近い既存アプリ（Worker 版なら `shiori/`）を手本にフォルダごと写して始める。
 
