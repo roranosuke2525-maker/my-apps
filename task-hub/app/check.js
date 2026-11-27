@@ -24,20 +24,35 @@
       { k: "fix", icon: "🛠", name: "アプリの改善", sig: fixWaiting().length ? "yellow" : "green", main: fixWaiting().length ? `${fixWaiting().length}件 判断待ち` : fixMoving().length ? `${fixMoving().length}件 進行中` : "なし", sub: fixWaiting().length ? fixWaiting().map((f) => short(f.name, 14)).join("・") : "文章で直しを頼めます", go: "fix", unseen: fixWaiting().some((f) => f.state === "💡 提案中") },
     ];
   }
+  // いまやること：上から順にやればいい形に並べる（赤 → 判断 → 黄 → 読むもの → アプリの直し）
+  function checkTodo() {
+    const seen = seenAll(); const d = S.diag.at(-1); const j = S.journal?.[0]; const out = [];
+    const checks = healthChecks(); const no = (c) => checks.indexOf(c) + 1;
+    const h = (c) => ({ ic: c.st === "red" ? "🔴" : "🟡", t: c.fix?.msg || c.why, s: `${c.name}（${c.val}）`, b: "見る", attr: `data-dgo="h${no(c)}"` });
+    checks.filter((c) => c.st === "red").forEach((c) => out.push(h(c)));
+    openAsks().forEach((t) => out.push({ ic: "✋", t: short(t.name, 30), s: "ふりかえりから出た質問。答えるとClaudeが続きをやる", b: "答える", attr: `data-mopen="${t.id}"` }));
+    checks.filter((c) => c.st === "yellow").forEach((c) => out.push(h(c)));
+    if (d && seen.diag !== d.id) out.push({ ic: "🩺", t: `先週のふりかえり（第${d.no}回）を読む`, s: d.verdict ? `Claudeの見立て：${d.verdict}` : "", b: "読む", attr: `data-dgo="weekly"` });
+    if (j && seen.jour !== j.id) out.push({ ic: "📓", t: "ゆうべの日記を読む", s: j.name, b: "読む", attr: `data-dgo="journal"` });
+    if (fixWaiting().length) out.push({ ic: "🛠", t: `アプリの直し ${fixWaiting().length}件を決める`, s: fixWaiting().map((f) => short(f.name, 14)).join("・"), b: "見る", attr: `data-logseg="fix"` });
+    return out;
+  }
   function renderCheck(view) {
     renderDiagAll(view);
     const root = $("#diagall"); if (!root) return;
-    const cards = checkCards(); const asks = openAsks(); const unseen = cards.filter((c) => c.unseen); const todo = unseen.length + asks.length;
-    const j = S.journal?.[0]; const seen = seenAll();
-    root.insertAdjacentHTML("afterbegin", `<section class="g-sec"><h3>ひと目で<small>色＝状態　赤い「新着」＝まだ見ていない</small></h3>
-        <div class="ck-sum">${todo ? `<b>見ておきたいことが ${todo}件</b>　新着レポート ${unseen.length}・答えを待ってる判断 ${asks.length}` : "<b>見落としはないよ ✨</b>"}</div>
-        <div class="ck-glance">${cards.map((c) => `<button type="button" class="ckc ${c.sig}" ${c.go === "concierge" ? 'data-concierge="1"' : c.go === "fix" ? 'data-logseg="fix"' : c.go === "review" ? 'data-review="1"' : `data-dgo="${c.k}"`}>${c.unseen ? '<span class="new">新着</span>' : ""}<span class="h"><span class="ic">${c.icon}</span>${esc(c.name)}</span><b>${esc(c.main)}</b><small>${esc(c.sub || "")}</small></button>`).join("")}</div></section>
-      <section class="g-sec ck-sec" id="ck-asks"><h3>✋ 答えていない判断<small>診断・振り返りから出た宿題</small></h3><div class="ck-todo">${asks.length ? asks.map((t, i) => rowHtml(t, i, { check: false })).join("") : `<div class="empty">今はないよ</div>`}</div></section>
-      <section class="g-sec ck-sec" id="ck-journal"><h3>📓 ゆうべのジャーナル<small>毎晩 20:53 に自動</small></h3><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "ジャーナルはまだありません")}</div>`}</div>
-        ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 確認済み</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">確認した</button>`}</div>` : ""}</section>`);
-    // 週次レポートに「確認した」
-    const d = S.diag.at(-1); const wk = $("#ck-weekly");
-    if (d && wk) wk.insertAdjacentHTML("beforeend", `<div class="seenbar">${seen.diag === d.id ? `<span class="mute">✓ 第${d.no}回は確認済み</span>` : `<button type="button" class="btn pri" data-dseen="diag:${d.id}">第${d.no}回を確認した</button>`}</div>`);
+    const todo = checkTodo(); const d = S.diag.at(-1); const prev = S.diag.at(-2); const j = S.journal?.[0]; const seen = seenAll();
+    const checks = healthChecks(); const red = checks.some((c) => c.st === "red"); const yel = checks.some((c) => c.st === "yellow");
+    const mood = red ? ["☔", "ちょっと手当てがいるよ"] : yel || todo.length ? ["⛅", "だいたい大丈夫。気になる所が少しある"] : ["☀️", "順調だよ。見ることはないよ"];
+    const delta = d && prev ? Math.round((d.rate - prev.rate) * 100) : null;
+    const week = d ? `先週は「今日やる」に入れたものの <b>${Math.round(d.rate * 100)}%</b> ができた${delta == null ? "" : delta > 0 ? `（前の週より ${delta} 上がった）` : delta < 0 ? `（前の週より ${-delta} 下がった）` : "（前の週と同じ）"}` : "";
+    root.insertAdjacentHTML("afterbegin", `<section class="dg-top"><div class="dg-mood"><span class="w">${mood[0]}</span><div><b>${mood[1]}</b>${week ? `<p>${week}</p>` : ""}${d?.next ? `<p class="mute">今週ためすこと：${esc(d.next)}</p>` : ""}</div></div></section>
+      <section class="g-sec"><h3>いまやること<small>${todo.length ? `${todo.length}つ・上から順に` : ""}</small></h3>
+        ${todo.length ? `<ol class="dg-todo">${todo.map((x, i) => `<li><span class="no">${i + 1}</span><span class="ic">${x.ic}</span><span class="tx"><b>${esc(x.t)}</b>${x.s ? `<small>${esc(x.s)}</small>` : ""}</span><button type="button" class="qc" ${x.attr}>${x.b}</button></li>`).join("")}</ol>` : `<div class="empty">今やることはないよ ✨</div>`}</section>`);
+    // ジャーナルは「くわしく」のなかに
+    root.insertAdjacentHTML("beforeend", `<details class="dg-sec ck-sec" id="ck-journal"><summary><span>📓 ゆうべの日記</span><small>毎晩 20:53 に自動</small></summary><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "日記はまだありません")}</div>`}</div>
+        ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 読んだ</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">読んだ</button>`}</div>` : ""}</details>`);
+    const wk = $("#ck-weekly");
+    if (d && wk) wk.insertAdjacentHTML("beforeend", `<div class="seenbar">${seen.diag === d.id ? `<span class="mute">✓ 第${d.no}回は読んだ</span>` : `<button type="button" class="btn pri" data-dseen="diag:${d.id}">第${d.no}回を読んだ</button>`}</div>`);
     if (j) loadJournal(j);
   }
   // ジャーナル本文から「まとめ」「気になること」「明日の提案」を抜き出す

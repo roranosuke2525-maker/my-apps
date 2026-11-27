@@ -67,7 +67,7 @@
     if (d.logseg) { S.logSeg = d.logseg; render(); return; }
     if (d.ev !== undefined && el.classList.contains("chip")) { S.logEvent = d.ev; render(); return; }
     if (d.diag) { markSeen("diag", d.diag); openRecord("diag", d.diag); return; }
-    if (d.dgo) { document.getElementById(`ck-${d.dgo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (d.dgo) { const tg = document.getElementById(`ck-${d.dgo}`); for (let p = tg; p; p = p.parentElement?.closest("details")) if (p.tagName === "DETAILS") p.open = true; tg?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); tg?.classList.add("flash"); setTimeout(() => tg?.classList.remove("flash"), 1200); return; }
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認したよ"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }

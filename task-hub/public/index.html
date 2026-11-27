@@ -1198,6 +1198,36 @@ body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(s
 .rfoot .qc { min-height: 44px; min-width: 92px; padding: 0 14px; border-radius: 4px 14px 14px 4px; background: #f5e9c8; color: #3b2f22; border: 1px solid rgba(60, 45, 20, .25); position: relative; font-family: var(--f-book); font-weight: 700; box-shadow: 0 4px 6px -4px rgba(60, 40, 15, .5); }
 .rfoot .qc::before { content: ""; position: absolute; left: 7px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #fbf7ec; box-shadow: inset 0 0 0 1px rgba(60, 45, 20, .35); }
 .rfoot .qc { padding-left: 20px; }
+
+/* ===== v62：診断を分かりやすく（ひとことで → いまやること → くわしく） ===== */
+.dg-top { flex: none; }
+body[data-tab="log"] .fab { display: none !important; }
+.dg-mood { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 4px; background: #fff8dc; box-shadow: 0 6px 10px -7px rgba(60, 40, 15, .5); transform: rotate(-.6deg); position: relative; }
+.dg-mood::before { content: ""; position: absolute; left: 50%; top: -7px; width: 60px; height: 14px; transform: translateX(-50%) rotate(-2deg); background: rgba(159, 203, 224, .7); }
+.dg-mood .w { font-size: 34px; line-height: 1; flex: none; }
+.dg-mood b { font: 700 16px/1.4 var(--f-book); color: #2b2a27; }
+.dg-mood p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; } .dg-mood p b { font-size: 15px; color: var(--accent); }
+.dg-todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dg-todo li { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px dashed rgba(60, 45, 20, .2); }
+.dg-todo .no { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font: 700 12px/1 var(--f-book); }
+.dg-todo .ic { flex: none; font-size: 15px; }
+.dg-todo .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dg-todo .tx b { font-size: 13.5px; line-height: 1.4; } .dg-todo .tx small { font-size: 11.5px; color: var(--mute); line-height: 1.4; }
+.dg-todo .qc { flex: none; min-height: 40px; min-width: 56px; }
+.dg-more { margin: 14px 0 4px; }
+.dg-sec { border-radius: 10px; background: var(--sunk); margin-bottom: 8px; scroll-margin-top: 8px; }
+.dg-sec > summary { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 12px; cursor: pointer; list-style: none; font: 700 14px/1.3 var(--f-book); }
+.dg-sec > summary::-webkit-details-marker, .hc-ok > summary::-webkit-details-marker { display: none; }
+.dg-sec > summary span { flex: 1; } .dg-sec > summary small { font: 12px var(--f-body, inherit); color: var(--mute); }
+.dg-sec > summary::after, .hc-ok > summary::after { content: "▾"; color: var(--mute); transition: transform .2s; }
+.dg-sec[open] > summary::after, .hc-ok[open] > summary::after { transform: rotate(180deg); }
+.dg-sec > :not(summary) { margin-left: 10px; margin-right: 10px; }
+.dg-sec[open] { padding-bottom: 10px; }
+.dg-note { font-size: 11.5px; color: var(--mute); margin: 0 0 8px; }
+.hc-ok { margin-top: 4px; } .hc-ok > summary { display: flex; gap: 8px; align-items: center; min-height: 40px; padding: 0 12px; cursor: pointer; list-style: none; font-size: 13px; color: var(--mute); }
+.hc-ok > summary::before { content: "🟢"; font-size: 11px; }
+#diaglist { padding-top: 4px; }
+.flash { animation: dgflash 1.2s ease-out; } @keyframes dgflash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 </style>
 
 <div id="app">
@@ -3987,44 +4017,46 @@ body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(s
     const lvl = (red, yellow) => (red ? "red" : yellow ? "yellow" : "green");
     const last = S.diag.at(-1);
     return [
-      { no: "①", name: "今日やる", val: `${today.length}件・重さ${w8}`, st: lvl(today.length >= 12, today.length >= 8 || w8 > 12), why: "8件以上・重さ12超で完了率が下がりやすい",
-        fix: today.length >= 8 || w8 > 12 ? { msg: "重いもの（L・XL）を明日以降へ", items: today.filter((t) => ["L", "XL"].includes(t.weight)).slice(0, 4), acts: [["d:tomorrow", "明日へ"], ["d:mon", "月曜"], ["s:some", "いつか"]] } : null },
-      { no: "②", name: "持ち越し（遅れ）", val: `${late.length}件`, st: lvl(late.some((t) => diffDays(t.date, TODAY()) >= 7), late.length > 0), why: "日付を過ぎたまま。何度もずらすなら分解かいつかへ",
-        fix: late.length ? { msg: "今日やるか、日を決め直す", items: late.slice(0, 4), acts: [["d:today", "今日"], ["d:sat", "土曜"], ["a:💬", "AIと分解"], ["s:some", "いつか"]], all: ["late:today", "全部 今日にする"] } : null },
-      { no: "③", name: "処理している時間帯", val: "週次レポートで確認", st: "info", why: "ログから組み立てるので月曜の診断で見る" },
-      { no: "④", name: "滞留", val: `収集 ${inbox.length}・動かないNEXT ${oldNext.length}`, st: lvl(inbox.length > 50, inbox.length > 20 || oldNext.length > 5), why: "収集50件超・7日以上動かないNEXTが5件超で黄信号",
-        fix: oldNext.length || inbox.length > 20 ? { msg: oldNext.length ? "7日以上動いていない「次にやる」" : "収集箱を仕分ける", items: oldNext.slice(0, 4), acts: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]], all: inbox.length > 20 ? ["triage:inbox", "仕分けを始める"] : null } : null },
-      { no: "⑤", name: "AI処理の稼働", val: `今日の定時処理 ${runsToday}回・止まり気味 ${aiStuck.length}件`, st: lvl(false, (workday(TODAY()) && h >= 10 && !runsToday && S.logs.length) || aiStuck.length > 0), why: "平日の日中は毎時動く。AIの番が2日以上残るなら止まっているかも",
-        fix: aiStuck.length ? { msg: "AIの番のまま2日以上たっている（定時処理の運用ログを確認）", items: aiStuck.slice(0, 4), acts: [["open", "開く"]], all: ["logseg:log", "運用ログを見る"] } : null },
-      { no: "⑥", name: "流入と完了（今日）", val: `入った ${inflow}・済み ${S.doneToday.length}`, st: lvl(false, inflow > S.doneToday.length + 5), why: "入る数が出る数を上回り続けると溜まる" },
-      { no: "⑦", name: "仕組み変更の回数", val: `この7日 ${changes}件`, st: lvl(false, changes > 3), why: "週3件超は仕組みいじりすぎ（目標は月0件）",
+      { no: "①", name: "今日の量", val: `${today.length}件・重さ ${w8}`, st: lvl(today.length >= 12, today.length >= 8 || w8 > 12), why: "多すぎると、できる割合が下がりやすい（8件か、重さの合計12をこえたら注意）",
+        fix: today.length >= 8 || w8 > 12 ? { msg: "今日が多すぎる。重いもの（L・XL）を明日以降へ", items: today.filter((t) => ["L", "XL"].includes(t.weight)).slice(0, 4), acts: [["d:tomorrow", "明日へ"], ["d:mon", "月曜"], ["s:some", "いつか"]] } : null },
+      { no: "②", name: "日付を過ぎたもの", val: `${late.length}件`, st: lvl(late.some((t) => diffDays(t.date, TODAY()) >= 7), late.length > 0), why: "そのままだと気が重くなる。何度もずらすなら、小さく分けるか「いつか」へ",
+        fix: late.length ? { msg: "日付を過ぎたものを、今日やるか日を決め直す", items: late.slice(0, 4), acts: [["d:today", "今日"], ["d:sat", "土曜"], ["a:💬", "AIと分解"], ["s:some", "いつか"]], all: ["late:today", "全部 今日にする"] } : null },
+      { no: "③", name: "動いている時間帯", val: "月曜のふりかえりで", st: "info", why: "記録から組み立てるので、月曜のふりかえりで見る" },
+      { no: "④", name: "たまっているもの", val: `収集 ${inbox.length}・止まった次にやる ${oldNext.length}`, st: lvl(inbox.length > 50, inbox.length > 20 || oldNext.length > 5), why: "収集が20件、7日以上動かない「次にやる」が5件をこえたら注意",
+        fix: oldNext.length || inbox.length > 20 ? { msg: oldNext.length ? "7日以上動いていない「次にやる」。今日やるか、いつかへ" : "収集箱を仕分ける", items: oldNext.slice(0, 4), acts: [["d:today", "今日"], ["s:some", "いつか"], ["a:🔍", "AIに調べて"]], all: inbox.length > 20 ? ["triage:inbox", "仕分けを始める"] : null } : null },
+      { no: "⑤", name: "AIがちゃんと動いているか", val: `今日 ${runsToday}回・止まり ${aiStuck.length}件`, st: lvl(false, (workday(TODAY()) && h >= 10 && !runsToday && S.logs.length) || aiStuck.length > 0), why: "平日の昼は1時間ごとに動く。「AIの番」が2日以上残っていたら止まっているかも",
+        fix: aiStuck.length ? { msg: "「AIの番」のまま2日以上たっている（運用ログで動いているか見る）", items: aiStuck.slice(0, 4), acts: [["open", "開く"]], all: ["logseg:log", "運用ログを見る"] } : null },
+      { no: "⑥", name: "入った数とできた数（今日）", val: `入った ${inflow}・できた ${S.doneToday.length}`, st: lvl(false, inflow > S.doneToday.length + 5), why: "入る数が、できる数よりずっと多い日が続くと、たまっていく" },
+      { no: "⑦", name: "仕組みをいじった回数", val: `この7日 ${changes}回`, st: lvl(false, changes > 3), why: "1週間に3回をこえると、いじりすぎ（ほんとうは月0回が目標）",
         fix: changes > 3 ? { msg: "しばらく仕組みは触らず、運用で様子を見る", all: ["logseg:log", "運用ログを見る"] } : null },
-      { no: "⑧", name: "保留の健全性", val: `SOMEDAY ${some.length}・危ない保留 ${riskySome.length}・長い待ち ${longWait.length}`, st: lvl(riskySome.length > 0, longWait.length > 0), why: "締切・手続き・セキュリティ系をいつかに置かない。14日以上の待ちは確認",
-        fix: riskySome.length || longWait.length ? { msg: riskySome.length ? "締切・手続き系がいつかにある" : "14日以上の待ち", items: [...riskySome, ...longWait].slice(0, 4), acts: [["s:next", "次にやるへ"], ["d:tomorrow", "明日確認"]] } : null },
-      { no: "⑨", name: "データの健全性", val: `重複 ${dups.length}・仮タイトル ${temp.length}・分類なし ${noTag.length}`, st: lvl(false, dups.length || temp.length || noTag.length), why: "重複・仮タイトル・分類タグ空。分類は定時処理が空欄を埋める",
+      { no: "⑧", name: "置きっぱなし", val: `いつか ${some.length}・危ない ${riskySome.length}・長い待ち ${longWait.length}`, st: lvl(riskySome.length > 0, longWait.length > 0), why: "締切・手続き・パスワードなどは「いつか」に置かない。2週間以上の「待ち」は相手に確認",
+        fix: riskySome.length || longWait.length ? { msg: riskySome.length ? "締切・手続きのものが「いつか」にある" : "2週間以上たった「待ち」を相手に確認する", items: [...riskySome, ...longWait].slice(0, 4), acts: [["s:next", "次にやるへ"], ["d:tomorrow", "明日確認"]] } : null },
+      { no: "⑨", name: "データの乱れ", val: `同じ名前 ${dups.length}・仮の名前 ${temp.length}・分類なし ${noTag.length}`, st: lvl(false, dups.length || temp.length || noTag.length), why: "同じ名前・仮の名前・分類が空のもの。分類の空欄はAIがあとで埋める",
         fix: dups.length || temp.length || noTag.length ? { msg: dups.length ? "名前がほぼ同じタスク（片方を済み・資料に）" : temp.length ? "仮タイトル（開いて名前を付ける）" : "分類タグが空（その場で選ぶか、定時処理に任せる）", items: (dups.length ? dups.flat() : temp.length ? temp : noTag).slice(0, 5), acts: dups.length ? [["open", "開く"], ["s:done", "済み"], ["s:ref", "資料"]] : temp.length ? [["open", "開く"]] : [["tag", "分類"]] } : null },
-      { no: "⑩", name: "前回の次の一手", val: last?.next ? short(last.next, 26) : "—", st: last?.next ? "info" : "info", why: last ? `第${last.no}回で決めたこと。守れたかは次の月曜に診断` : "診断レポートがまだない" },
+      { no: "⑩", name: "先週決めたこと", val: last?.next ? short(last.next, 26) : "—", st: last?.next ? "info" : "info", why: last ? `第${last.no}回のふりかえりで決めたこと。できたかは次の月曜に見る` : "ふりかえりがまだない" },
     ];
   }
   const ST_ICON = { green: "🟢", yellow: "🟡", red: "🔴", info: "⚪" };
   function renderDiagAll(view) {
-    const checks = healthChecks(); const bad = checks.filter((c) => c.st === "red" || c.st === "yellow").length;
+    const checks = healthChecks(); const bad = checks.filter((c) => c.st === "red" || c.st === "yellow"); const ok = checks.filter((c) => !bad.includes(c));
     const d = S.diag.at(-1);
+    const item = (c) => `<details class="hc-i ${c.st}" id="ck-h${checks.indexOf(c) + 1}"><summary><span class="ic">${ST_ICON[c.st]}</span><span class="nm">${esc(c.name)}</span><span class="v">${esc(c.val)}</span></summary>
+          <p class="why">${esc(c.why)}</p>${c.fix ? fixHtml(c.fix) : ""}</details>`;
     view.insertAdjacentHTML("beforeend", `<div class="card panel"><div class="scroll diagall" id="diagall">
-      <section class="g-sec ck-sec" id="ck-health"><h3>いまの健康診断<small>読み込み済みのデータから・${jstTime(S.loadedAt || Date.now())}時点</small></h3>
-        <div class="hc-sum"><span class="${bad ? "y" : "g"}">${bad ? `直したほうがいい所が ${bad}つ` : "大きな問題はありません"}</span></div>
-        <div class="hc">${checks.map((c, i) => `<details class="hc-i ${c.st}" ${c.fix && c.st !== "green" && i < 9 && (c.st === "red" || c.st === "yellow") ? "open" : ""}><summary><span class="ic">${ST_ICON[c.st]}</span><span class="nm">${c.no} ${esc(c.name)}</span><span class="v">${esc(c.val)}</span></summary>
-          <p class="why">${esc(c.why)}</p>${c.fix ? fixHtml(c.fix) : ""}</details>`).join("")}</div></section>
-      <section class="g-sec ck-sec" id="ck-weekly"><h3>週次の診断レポート<small>毎週月曜 7:23 に自動</small></h3><div id="diagweek"></div></section>
-      ${d ? `<section class="g-sec"><h3>第${d.no}回からの提案<small>判断してほしいこと・Claude側で直せること</small></h3><div id="diagask"><p class="mute">レポート本文を読みこみ中…</p></div></section>` : ""}
-      <section class="g-sec"><h3>過去のレポート</h3><div id="diaglist"></div></section>
+      <h3 class="dg-more">くわしく<small>押すとひらく</small></h3>
+      <details class="dg-sec ck-sec" id="ck-health"><summary><span>🏥 いまの点検（10項目）</span><small>${bad.length ? `気になる所 ${bad.length}つ` : "ぜんぶ大丈夫"}</small></summary>
+        <p class="dg-note">いま読みこんであるタスクから、その場で数えています（${jstTime(S.loadedAt || Date.now())}時点）</p>
+        <div class="hc">${bad.map(item).join("")}${ok.length ? `<details class="hc-ok"><summary>問題なし ${ok.length}項目</summary><div class="hc">${ok.map(item).join("")}</div></details>` : ""}</div></details>
+      <details class="dg-sec ck-sec" id="ck-weekly"><summary><span>🩺 先週のふりかえり</span><small>${d ? `第${d.no}回・毎週月曜の朝` : "まだない"}</small></summary><div id="diagweek"></div>
+      ${d ? `<div class="g-sec"><h3>ふりかえりからの質問と提案</h3><div id="diagask"><p class="mute">読みこみ中…</p></div></div>` : ""}
+      <details class="hc-ok"><summary>前のふりかえり</summary><div id="diaglist"></div></details></details>
     </div></div>`);
     const wk = $("#diagweek");
-    if (!d) wk.innerHTML = `<div class="empty">${esc(S.extraErr.diag || "診断レポートはまだありません")}</div>`;
+    if (!d) wk.innerHTML = `<div class="empty">${esc(S.extraErr.diag || "ふりかえりはまだありません（毎週月曜の朝にできる）")}</div>`;
     else {
       const prev = S.diag.at(-2); const delta = prev ? Math.round((d.rate - prev.rate) * 100) : null;
-      wk.innerHTML = `<div class="statrow"><div class="card stat"><div class="k">今日やる完了率</div><div class="n">${Math.round(d.rate * 100)}%</div><div class="s">${delta == null ? "" : `前回から ${delta >= 0 ? "+" : ""}${delta}pt`}</div></div><div class="card stat"><div class="k">完了</div><div class="n">${d.done}</div><div class="s">件</div></div><div class="card stat"><div class="k">流入</div><div class="n">${d.inflow}</div><div class="s">件</div></div><div class="card stat"><div class="k">回</div><div class="n">${d.no}</div><div class="s">${d.from ? `${md(d.from)}〜${md(d.to || d.from)}` : ""}</div></div></div>
-        <button type="button" class="card verdict" data-diag="${d.id}"><span class="mute" style="font-size:11.5px">第${d.no}回の判定</span><b>${esc(d.verdict || "—")}</b><span class="nx">次の一手：${esc(d.next || "—")}</span></button>
+      wk.innerHTML = `<div class="statrow"><div class="card stat"><div class="k">できた割合</div><div class="n">${Math.round(d.rate * 100)}%</div><div class="s">${delta == null ? "今日やるのうち" : `前の週より ${delta >= 0 ? "+" : ""}${delta}`}</div></div><div class="card stat"><div class="k">できた</div><div class="n">${d.done}</div><div class="s">件</div></div><div class="card stat"><div class="k">入った</div><div class="n">${d.inflow}</div><div class="s">件</div></div><div class="card stat"><div class="k">期間</div><div class="n" style="font-size:13px">${d.from ? md(d.from) : "—"}</div><div class="s">${d.to ? `〜${md(d.to)}` : ""}</div></div></div>
+        <button type="button" class="card verdict" data-diag="${d.id}"><span class="mute" style="font-size:11.5px">Claudeの見立て</span><b>${esc(d.verdict || "—")}</b><span class="nx">今週ためすこと：${esc(d.next || "—")}</span></button>
         <div class="card chart" id="dchart"></div>`;
       drawDiagChart();
       loadDiagAsk(d);
@@ -4033,14 +4065,14 @@ body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(s
   }
   function fixHtml(f) {
     const row = (t) => `<div class="crow" data-qt="${t.id}"><button type="button" class="cname" data-mopen="${t.id}">${esc(short(t.name, 26))}<small>${esc(STAGES[stageOf(t)]?.name || "")}・${esc(metaOf(t).tx)}</small></button><span class="cacts">${f.acts.map(([k, n]) => k === "open" ? `<button type="button" class="qc" data-mopen="${t.id}">${n}</button>` : k === "tag" ? `<select class="qc" data-settag="${t.id}" aria-label="分類タグ"><option value="">分類…</option>${TAGS.map((g) => `<option>${g}</option>`).join("")}</select>` : `<button type="button" class="qc" data-qk="${k}">${n}</button>`).join("")}</span></div>`;
-    return `<div class="fix"><b>直し方</b>${esc(f.msg)}${(f.items || []).map(row).join("")}${f.all ? `<div class="sfoot"><button type="button" class="btn pri" data-cact="${f.all[0]}">${esc(f.all[1])}</button></div>` : ""}</div>`;
+    return `<div class="fix"><b>どうする？</b>${esc(f.msg)}${(f.items || []).map(row).join("")}${f.all ? `<div class="sfoot"><button type="button" class="btn pri" data-cact="${f.all[0]}">${esc(f.all[1])}</button></div>` : ""}</div>`;
   }
   function drawDiagChart() {
     const ds = S.diag; const el = $("#dchart"); if (!el || !ds.length) return;
     const W = 340, H = 118, pl = 26, pr = 26, pt = 10, pb = 18; const n = ds.length; const max = Math.max(10, ...ds.map((x) => Math.max(x.done, x.inflow)));
     const X = (i) => pl + ((i + .5) * (W - pl - pr)) / n; const Y = (v) => pt + (1 - v / max) * (H - pt - pb); const YR = (r) => pt + (1 - r) * (H - pt - pb); const bw = Math.min(12, (W - pl - pr) / n / 3);
     const ticks = [0, Math.round(max / 2), max];
-    el.innerHTML = `<div class="legend"><span><i style="background:var(--s-inbox);opacity:.5"></i>流入</span><span><i style="background:var(--s-done)"></i>完了</span><span><i style="background:var(--s-today)"></i>今日やる完了率（右の目盛り）</span></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="診断の推移">
+    el.innerHTML = `<div class="legend"><span><i style="background:var(--s-inbox);opacity:.5"></i>入った</span><span><i style="background:var(--s-done)"></i>できた</span><span><i style="background:var(--s-today)"></i>できた割合（右の目盛り）</span></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ふりかえりの移り変わり">
       ${ticks.map((v) => `<line x1="${pl}" x2="${W - pr}" y1="${Y(v)}" y2="${Y(v)}" style="stroke:var(--line)"/><text x="${pl - 4}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`).join("")}${[0, .5, 1].map((r) => `<text x="${W - pr + 4}" y="${YR(r) + 3}">${r * 100}%</text>`).join("")}
       ${ds.map((x, i) => `<rect x="${X(i) - bw - 1}" y="${Y(x.inflow)}" width="${bw}" height="${Y(0) - Y(x.inflow)}" rx="2" style="fill:var(--s-inbox);opacity:.5"/><rect x="${X(i) + 1}" y="${Y(x.done)}" width="${bw}" height="${Y(0) - Y(x.done)}" rx="2" style="fill:var(--s-done)"/><text x="${X(i)}" y="${H - 4}" text-anchor="middle">${x.no}</text>`).join("")}
       <polyline points="${ds.map((x, i) => `${X(i)},${YR(x.rate)}`).join(" ")}" fill="none" style="stroke:var(--s-today)" stroke-width="2"/>${ds.map((x, i) => `<circle cx="${X(i)}" cy="${YR(x.rate)}" r="${i === n - 1 ? 4 : 2.5}" style="fill:var(--s-today)"/>`).join("")}</svg>`;
@@ -4089,20 +4121,35 @@ body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(s
       { k: "fix", icon: "🛠", name: "アプリの改善", sig: fixWaiting().length ? "yellow" : "green", main: fixWaiting().length ? `${fixWaiting().length}件 判断待ち` : fixMoving().length ? `${fixMoving().length}件 進行中` : "なし", sub: fixWaiting().length ? fixWaiting().map((f) => short(f.name, 14)).join("・") : "文章で直しを頼めます", go: "fix", unseen: fixWaiting().some((f) => f.state === "💡 提案中") },
     ];
   }
+  // いまやること：上から順にやればいい形に並べる（赤 → 判断 → 黄 → 読むもの → アプリの直し）
+  function checkTodo() {
+    const seen = seenAll(); const d = S.diag.at(-1); const j = S.journal?.[0]; const out = [];
+    const checks = healthChecks(); const no = (c) => checks.indexOf(c) + 1;
+    const h = (c) => ({ ic: c.st === "red" ? "🔴" : "🟡", t: c.fix?.msg || c.why, s: `${c.name}（${c.val}）`, b: "見る", attr: `data-dgo="h${no(c)}"` });
+    checks.filter((c) => c.st === "red").forEach((c) => out.push(h(c)));
+    openAsks().forEach((t) => out.push({ ic: "✋", t: short(t.name, 30), s: "ふりかえりから出た質問。答えるとClaudeが続きをやる", b: "答える", attr: `data-mopen="${t.id}"` }));
+    checks.filter((c) => c.st === "yellow").forEach((c) => out.push(h(c)));
+    if (d && seen.diag !== d.id) out.push({ ic: "🩺", t: `先週のふりかえり（第${d.no}回）を読む`, s: d.verdict ? `Claudeの見立て：${d.verdict}` : "", b: "読む", attr: `data-dgo="weekly"` });
+    if (j && seen.jour !== j.id) out.push({ ic: "📓", t: "ゆうべの日記を読む", s: j.name, b: "読む", attr: `data-dgo="journal"` });
+    if (fixWaiting().length) out.push({ ic: "🛠", t: `アプリの直し ${fixWaiting().length}件を決める`, s: fixWaiting().map((f) => short(f.name, 14)).join("・"), b: "見る", attr: `data-logseg="fix"` });
+    return out;
+  }
   function renderCheck(view) {
     renderDiagAll(view);
     const root = $("#diagall"); if (!root) return;
-    const cards = checkCards(); const asks = openAsks(); const unseen = cards.filter((c) => c.unseen); const todo = unseen.length + asks.length;
-    const j = S.journal?.[0]; const seen = seenAll();
-    root.insertAdjacentHTML("afterbegin", `<section class="g-sec"><h3>ひと目で<small>色＝状態　赤い「新着」＝まだ見ていない</small></h3>
-        <div class="ck-sum">${todo ? `<b>見ておきたいことが ${todo}件</b>　新着レポート ${unseen.length}・答えを待ってる判断 ${asks.length}` : "<b>見落としはないよ ✨</b>"}</div>
-        <div class="ck-glance">${cards.map((c) => `<button type="button" class="ckc ${c.sig}" ${c.go === "concierge" ? 'data-concierge="1"' : c.go === "fix" ? 'data-logseg="fix"' : c.go === "review" ? 'data-review="1"' : `data-dgo="${c.k}"`}>${c.unseen ? '<span class="new">新着</span>' : ""}<span class="h"><span class="ic">${c.icon}</span>${esc(c.name)}</span><b>${esc(c.main)}</b><small>${esc(c.sub || "")}</small></button>`).join("")}</div></section>
-      <section class="g-sec ck-sec" id="ck-asks"><h3>✋ 答えていない判断<small>診断・振り返りから出た宿題</small></h3><div class="ck-todo">${asks.length ? asks.map((t, i) => rowHtml(t, i, { check: false })).join("") : `<div class="empty">今はないよ</div>`}</div></section>
-      <section class="g-sec ck-sec" id="ck-journal"><h3>📓 ゆうべのジャーナル<small>毎晩 20:53 に自動</small></h3><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "ジャーナルはまだありません")}</div>`}</div>
-        ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 確認済み</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">確認した</button>`}</div>` : ""}</section>`);
-    // 週次レポートに「確認した」
-    const d = S.diag.at(-1); const wk = $("#ck-weekly");
-    if (d && wk) wk.insertAdjacentHTML("beforeend", `<div class="seenbar">${seen.diag === d.id ? `<span class="mute">✓ 第${d.no}回は確認済み</span>` : `<button type="button" class="btn pri" data-dseen="diag:${d.id}">第${d.no}回を確認した</button>`}</div>`);
+    const todo = checkTodo(); const d = S.diag.at(-1); const prev = S.diag.at(-2); const j = S.journal?.[0]; const seen = seenAll();
+    const checks = healthChecks(); const red = checks.some((c) => c.st === "red"); const yel = checks.some((c) => c.st === "yellow");
+    const mood = red ? ["☔", "ちょっと手当てがいるよ"] : yel || todo.length ? ["⛅", "だいたい大丈夫。気になる所が少しある"] : ["☀️", "順調だよ。見ることはないよ"];
+    const delta = d && prev ? Math.round((d.rate - prev.rate) * 100) : null;
+    const week = d ? `先週は「今日やる」に入れたものの <b>${Math.round(d.rate * 100)}%</b> ができた${delta == null ? "" : delta > 0 ? `（前の週より ${delta} 上がった）` : delta < 0 ? `（前の週より ${-delta} 下がった）` : "（前の週と同じ）"}` : "";
+    root.insertAdjacentHTML("afterbegin", `<section class="dg-top"><div class="dg-mood"><span class="w">${mood[0]}</span><div><b>${mood[1]}</b>${week ? `<p>${week}</p>` : ""}${d?.next ? `<p class="mute">今週ためすこと：${esc(d.next)}</p>` : ""}</div></div></section>
+      <section class="g-sec"><h3>いまやること<small>${todo.length ? `${todo.length}つ・上から順に` : ""}</small></h3>
+        ${todo.length ? `<ol class="dg-todo">${todo.map((x, i) => `<li><span class="no">${i + 1}</span><span class="ic">${x.ic}</span><span class="tx"><b>${esc(x.t)}</b>${x.s ? `<small>${esc(x.s)}</small>` : ""}</span><button type="button" class="qc" ${x.attr}>${x.b}</button></li>`).join("")}</ol>` : `<div class="empty">今やることはないよ ✨</div>`}</section>`);
+    // ジャーナルは「くわしく」のなかに
+    root.insertAdjacentHTML("beforeend", `<details class="dg-sec ck-sec" id="ck-journal"><summary><span>📓 ゆうべの日記</span><small>毎晩 20:53 に自動</small></summary><div class="jr" id="jrbox">${j ? `<p class="mute">読みこみ中…</p>` : `<div class="empty">${esc(S.journalErr || "日記はまだありません")}</div>`}</div>
+        ${j ? `<div class="seenbar"><button type="button" class="btn" data-dany="jour:${j.id}">全文を開く</button>${seen.jour === j.id ? `<span class="mute" style="align-self:center">✓ 読んだ</span>` : `<button type="button" class="btn pri" data-dseen="jour:${j.id}">読んだ</button>`}</div>` : ""}</details>`);
+    const wk = $("#ck-weekly");
+    if (d && wk) wk.insertAdjacentHTML("beforeend", `<div class="seenbar">${seen.diag === d.id ? `<span class="mute">✓ 第${d.no}回は読んだ</span>` : `<button type="button" class="btn pri" data-dseen="diag:${d.id}">第${d.no}回を読んだ</button>`}</div>`);
     if (j) loadJournal(j);
   }
   // ジャーナル本文から「まとめ」「気になること」「明日の提案」を抜き出す
@@ -4718,7 +4765,7 @@ body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(s
     if (d.logseg) { S.logSeg = d.logseg; render(); return; }
     if (d.ev !== undefined && el.classList.contains("chip")) { S.logEvent = d.ev; render(); return; }
     if (d.diag) { markSeen("diag", d.diag); openRecord("diag", d.diag); return; }
-    if (d.dgo) { document.getElementById(`ck-${d.dgo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (d.dgo) { const tg = document.getElementById(`ck-${d.dgo}`); for (let p = tg; p; p = p.parentElement?.closest("details")) if (p.tagName === "DETAILS") p.open = true; tg?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); tg?.classList.add("flash"); setTimeout(() => tg?.classList.remove("flash"), 1200); return; }
     if (d.dseen) { const [k, id] = d.dseen.split(":"); markSeen(k, id); render(); toast("確認したよ"); return; }
     if (d.dany) { const [k, id] = d.dany.split(":"); if (k) markSeen(k, id); openAny(id); return; }
     if (d.pickday) { openPickDay(); return; }

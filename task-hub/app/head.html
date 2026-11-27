@@ -1198,6 +1198,36 @@ body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(s
 .rfoot .qc { min-height: 44px; min-width: 92px; padding: 0 14px; border-radius: 4px 14px 14px 4px; background: #f5e9c8; color: #3b2f22; border: 1px solid rgba(60, 45, 20, .25); position: relative; font-family: var(--f-book); font-weight: 700; box-shadow: 0 4px 6px -4px rgba(60, 40, 15, .5); }
 .rfoot .qc::before { content: ""; position: absolute; left: 7px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #fbf7ec; box-shadow: inset 0 0 0 1px rgba(60, 45, 20, .35); }
 .rfoot .qc { padding-left: 20px; }
+
+/* ===== v62：診断を分かりやすく（ひとことで → いまやること → くわしく） ===== */
+.dg-top { flex: none; }
+body[data-tab="log"] .fab { display: none !important; }
+.dg-mood { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 4px; background: #fff8dc; box-shadow: 0 6px 10px -7px rgba(60, 40, 15, .5); transform: rotate(-.6deg); position: relative; }
+.dg-mood::before { content: ""; position: absolute; left: 50%; top: -7px; width: 60px; height: 14px; transform: translateX(-50%) rotate(-2deg); background: rgba(159, 203, 224, .7); }
+.dg-mood .w { font-size: 34px; line-height: 1; flex: none; }
+.dg-mood b { font: 700 16px/1.4 var(--f-book); color: #2b2a27; }
+.dg-mood p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; } .dg-mood p b { font-size: 15px; color: var(--accent); }
+.dg-todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dg-todo li { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px dashed rgba(60, 45, 20, .2); }
+.dg-todo .no { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font: 700 12px/1 var(--f-book); }
+.dg-todo .ic { flex: none; font-size: 15px; }
+.dg-todo .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dg-todo .tx b { font-size: 13.5px; line-height: 1.4; } .dg-todo .tx small { font-size: 11.5px; color: var(--mute); line-height: 1.4; }
+.dg-todo .qc { flex: none; min-height: 40px; min-width: 56px; }
+.dg-more { margin: 14px 0 4px; }
+.dg-sec { border-radius: 10px; background: var(--sunk); margin-bottom: 8px; scroll-margin-top: 8px; }
+.dg-sec > summary { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 12px; cursor: pointer; list-style: none; font: 700 14px/1.3 var(--f-book); }
+.dg-sec > summary::-webkit-details-marker, .hc-ok > summary::-webkit-details-marker { display: none; }
+.dg-sec > summary span { flex: 1; } .dg-sec > summary small { font: 12px var(--f-body, inherit); color: var(--mute); }
+.dg-sec > summary::after, .hc-ok > summary::after { content: "▾"; color: var(--mute); transition: transform .2s; }
+.dg-sec[open] > summary::after, .hc-ok[open] > summary::after { transform: rotate(180deg); }
+.dg-sec > :not(summary) { margin-left: 10px; margin-right: 10px; }
+.dg-sec[open] { padding-bottom: 10px; }
+.dg-note { font-size: 11.5px; color: var(--mute); margin: 0 0 8px; }
+.hc-ok { margin-top: 4px; } .hc-ok > summary { display: flex; gap: 8px; align-items: center; min-height: 40px; padding: 0 12px; cursor: pointer; list-style: none; font-size: 13px; color: var(--mute); }
+.hc-ok > summary::before { content: "🟢"; font-size: 11px; }
+#diaglist { padding-top: 4px; }
+.flash { animation: dgflash 1.2s ease-out; } @keyframes dgflash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 </style>
 
 <div id="app">
