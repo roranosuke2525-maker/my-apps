@@ -400,7 +400,7 @@
         ${P.dests.map((k, i) => `<button type="button" class="dest" data-rdest="${k}" style="--a:${i * 60}deg;--c:${DEST[k].c}"><i>${DEST[k].ic}</i><span>${esc(DEST[k].label)}</span></button>`).join("")}
         <div class="orb" id="orb" data-card="${t.id}" style="--c:${P.c}"><span class="otag">${t.tag ? esc(t.tag) : ""}${t.ai && t.status === ST.ai ? ` ${t.ai}` : ""}</span><b class="onm">${esc(t.name)}</b><span class="onx">${t.next ? `次の一歩：${esc(short(t.next, 28))}` : S.pileKey === "judge" ? (summaryOf(t)?.conc ? `⭐ ${esc(short(summaryOf(t).conc, 40))}` : "結論を読みこみ中…") : ""}</span><span class="ometa">${t.date ? esc(metaOf(t).tx) : `${ageOf(t)}日前から`}${t.weight ? `・${t.weight}` : ""}</span></div>
       </div>
-      <div class="rfoot"><span class="mute">${items.length}件・1件目</span><button type="button" class="qc" data-sub="open">開く</button><button type="button" class="qc" data-sub="skip">あとで</button></div>` : `<div class="empty">「${P.name}」の山は空です${S.pileKey === "inbox" ? "\n収集箱がからっぽ。いい状態です" : ""}</div>`}</div>`);
+      <div class="rfoot"><span class="rleft">のこり <b>${items.length}</b> 枚</span><button type="button" class="qc" data-sub="open">開いて見る</button><button type="button" class="qc" data-sub="skip">あとで ›</button></div>` : `<div class="empty">「${P.name}」の山は空です${S.pileKey === "inbox" ? "\n収集箱がからっぽ。いい状態です" : ""}</div>`}</div>`);
     const orb = $("#orb"); if (orb) dragOrb(orb, P);
     if (S.pileKey === "judge") prefetchBodies();
   }

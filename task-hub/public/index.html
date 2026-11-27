@@ -1169,6 +1169,35 @@ body[data-tab="triage"] .rfoot { color: #3b2f22; }
 /* ===== v60：今日と流れを1つに（インデックスは流れの順） ===== */
 body[data-tab="today"] .pipe + .park { margin-bottom: 8px; }
 body[data-tab="today"] #stagepanel > .inboxbar, body[data-tab="today"] #stagepanel .inboxbar { margin: 2px 4px 8px !important; }
+
+/* ===== v61：仕分けを手帳の1ページに（方眼のページ・とじ穴・索引カード・ゴム判）。メッセージと＋は「あとで」に被らない ===== */
+body[data-tab="triage"] .fab { display: none !important; }
+body[data-tab="triage"] #toast { bottom: auto !important; top: calc(58px + env(safe-area-inset-top, 0px)); width: min(92vw, 360px); }
+.radial { position: relative; background-color: #fbf7ec !important; border-radius: 4px 14px 14px 4px !important; padding: 26px 10px 8px 30px !important;
+  background-image: radial-gradient(circle at 14px 50%, var(--desk) 0 5px, transparent 5.6px), radial-gradient(rgba(60, 45, 20, .2) 1px, transparent 1.4px), linear-gradient(90deg, transparent 0 25px, rgba(192, 57, 43, .45) 25px 26.5px, transparent 26.5px) !important;
+  background-size: 28px 44px, 14px 14px, 100% 100% !important; background-repeat: repeat-y, repeat, no-repeat !important; background-position: 0 10px, 0 0, 0 0 !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .04), 3px 3px 0 -1px #efe8d8, 4px 4px 0 -1px rgba(60, 45, 20, .1), 0 12px 20px -12px rgba(60, 40, 15, .55) !important; }
+.radial::before { content: "きょうの仕分け"; position: absolute; left: 50%; top: 4px; transform: translateX(-50%) rotate(-1.5deg); padding: 2px 14px; font: 700 12px/1.6 var(--f-book); letter-spacing: .1em; color: #3b2f22; background: rgba(159, 203, 224, .7); }
+.ringwrap { width: min(100%, 340px, calc(100dvh - 300px)) !important; }
+.ringwrap::before { content: ""; position: absolute; inset: 15%; border: 1.5px dashed rgba(60, 45, 20, .22); border-radius: 50%; pointer-events: none; }
+/* 真ん中は小さめの索引カード（判子に重ならない大きさ）＋クリップ */
+.orb { width: 160px !important; height: 128px !important; margin: -64px 0 0 -80px !important; padding: 8px 10px !important; }
+.orb .onm { font-size: 14px; -webkit-line-clamp: 3; }
+.orb .onx { display: none; }
+.orb::after { content: ""; position: absolute; left: 16px; top: -5px; width: 11px; height: 30px; border: 2.5px solid #8e979f; border-radius: 6px; transform: rotate(-8deg); pointer-events: none; }
+/* 行き先はゴム判（インクの色・二重の枠・少し傾き） */
+.dest { width: 70px !important; height: 70px !important; margin: -35px 0 0 -35px !important; background: radial-gradient(circle at 40% 35%, #fffdf6, #f3ead6) !important;
+  color: color-mix(in srgb, var(--c) 70%, #2b2a27) !important; font-weight: 700; }
+.dest span { font-size: 10.5px; letter-spacing: .02em; }
+.dest i { filter: saturate(.8); }
+.dest:nth-child(2n) span { display: inline-block; transform: rotate(-4deg); }
+.dest:nth-child(2n+1) span { display: inline-block; transform: rotate(3deg); }
+/* 下：のこり枚数は手書き、ボタンは荷札 */
+.rfoot { padding: 6px 4px calc(10px + env(safe-area-inset-bottom, 0px)) !important; width: 100%; gap: 10px !important; }
+.rfoot .rleft { flex: 1; font: 13px/1.4 var(--f-book); color: #3b2f22; } .rfoot .rleft b { font-size: 18px; color: var(--accent); }
+.rfoot .qc { min-height: 44px; min-width: 92px; padding: 0 14px; border-radius: 4px 14px 14px 4px; background: #f5e9c8; color: #3b2f22; border: 1px solid rgba(60, 45, 20, .25); position: relative; font-family: var(--f-book); font-weight: 700; box-shadow: 0 4px 6px -4px rgba(60, 40, 15, .5); }
+.rfoot .qc::before { content: ""; position: absolute; left: 7px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #fbf7ec; box-shadow: inset 0 0 0 1px rgba(60, 45, 20, .35); }
+.rfoot .qc { padding-left: 20px; }
 </style>
 
 <div id="app">
@@ -2542,7 +2571,7 @@ body[data-tab="today"] #stagepanel > .inboxbar, body[data-tab="today"] #stagepan
         ${P.dests.map((k, i) => `<button type="button" class="dest" data-rdest="${k}" style="--a:${i * 60}deg;--c:${DEST[k].c}"><i>${DEST[k].ic}</i><span>${esc(DEST[k].label)}</span></button>`).join("")}
         <div class="orb" id="orb" data-card="${t.id}" style="--c:${P.c}"><span class="otag">${t.tag ? esc(t.tag) : ""}${t.ai && t.status === ST.ai ? ` ${t.ai}` : ""}</span><b class="onm">${esc(t.name)}</b><span class="onx">${t.next ? `次の一歩：${esc(short(t.next, 28))}` : S.pileKey === "judge" ? (summaryOf(t)?.conc ? `⭐ ${esc(short(summaryOf(t).conc, 40))}` : "結論を読みこみ中…") : ""}</span><span class="ometa">${t.date ? esc(metaOf(t).tx) : `${ageOf(t)}日前から`}${t.weight ? `・${t.weight}` : ""}</span></div>
       </div>
-      <div class="rfoot"><span class="mute">${items.length}件・1件目</span><button type="button" class="qc" data-sub="open">開く</button><button type="button" class="qc" data-sub="skip">あとで</button></div>` : `<div class="empty">「${P.name}」の山は空です${S.pileKey === "inbox" ? "\n収集箱がからっぽ。いい状態です" : ""}</div>`}</div>`);
+      <div class="rfoot"><span class="rleft">のこり <b>${items.length}</b> 枚</span><button type="button" class="qc" data-sub="open">開いて見る</button><button type="button" class="qc" data-sub="skip">あとで ›</button></div>` : `<div class="empty">「${P.name}」の山は空です${S.pileKey === "inbox" ? "\n収集箱がからっぽ。いい状態です" : ""}</div>`}</div>`);
     const orb = $("#orb"); if (orb) dragOrb(orb, P);
     if (S.pileKey === "judge") prefetchBodies();
   }
