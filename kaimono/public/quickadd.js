@@ -4,13 +4,13 @@
 const QA = { open: false, dest: "", q: "", added: [] };
 
 function qaDests() {
-  return [...usualLists().map((t) => ({ id: t.id, name: t.name.replace(/^🛒\s*/, ""), icon: "🛒" })), { id: "quick", name: "ちょい買い", icon: "⚡" }];
+  return [...usualLists().map((t) => ({ id: t.id, name: t.name.replace(/^🛒\s*/, ""), icon: "🛒" })), { id: "quick", name: "ちょい買い", icon: "⚡" }, { id: "later", name: "今度買う", icon: "🕰" }];
 }
 function qaList() { return QA.dest === "quick" ? quickList() : listOf(QA.dest); }
 function openQuickAdd() {
   const ds = qaDests();
   // 行き先：いま見ているリスト → 前に選んだもの → いちばん近いいつもの買い物 → ちょい買い
-  const here = S.tab === "list" && S.seg === "usual" && !S.planning ? S.cur : S.tab === "list" && S.seg === "quick" ? "quick" : "";
+  const here = S.tab === "list" && S.seg === "usual" && !S.planning ? S.cur : S.tab === "list" && S.seg === "quick" ? "quick" : S.tab === "list" && S.seg === "later" ? "later" : "";
   QA.dest = [here, QA.dest].find((id) => id && ds.some((d) => d.id === id)) || ds[0].id;
   QA.open = true; QA.q = ""; QA.added = [];
   renderQuickAdd();
@@ -19,6 +19,7 @@ function openQuickAdd() {
 function closeQuickAdd() { QA.open = false; const el = $("#qadd"); el.hidden = true; el.innerHTML = ""; document.body.classList.remove("modal"); render(); }
 
 function qaOnList() {
+  if (QA.dest === "later") return new Set((S.wishes || []).map((w) => kana(A.splitQty(w.name).name).replace(/\s/g, "")));
   const t = qaList();
   return new Set((t?.items || []).filter((i) => !i.checked).map((i) => kana(A.splitQty(i.text).name).replace(/\s/g, "")));
 }
@@ -55,18 +56,22 @@ function qaSuggest() {
 function renderQuickAdd() {
   const el = $("#qadd"); if (!QA.open) return;
   const ds = qaDests(); const t = qaList();
-  const left = t ? (t.items || []).filter((i) => !i.checked).length : 0;
+  const left = QA.dest === "later" ? (S.wishes || []).length : t ? (t.items || []).filter((i) => !i.checked).length : 0;
   el.innerHTML = `<div class="sheet-bg" data-qa="close"></div><div class="sheet qa" role="dialog" aria-label="買うものを足す">
     <div class="sh-head"><b>＋ 買うものを足す</b><button type="button" class="more" data-qa="close" aria-label="閉じる">×</button></div>
     <div class="qadest"><span class="mute">入れる先</span>${ds.map((d) => `<button type="button" class="chip" data-qa="dest" data-id="${d.id}" aria-pressed="${QA.dest === d.id}">${d.icon} ${esc(d.name)}</button>`).join("")}</div>
     <form class="addbox" id="qaform"><input id="qain" type="text" maxlength="200" autocomplete="off" enterkeyhint="done" placeholder="品の名前（例：牛乳）" aria-label="買うもの" value="${esc(QA.q)}">${qtyBox("qaqty")}<button type="submit" class="btn pri">入れる</button></form>
     <div id="qasug">${qaSuggest()}</div>
     ${QA.added.length ? `<div class="qadone"><span class="mute">入れた：</span>${QA.added.map((a, k) => `<span class="chip on">✓ ${esc(a.text)}<button type="button" class="x" data-qa="undo" data-k="${k}" aria-label="「${esc(a.text)}」を取り消す">×</button></span>`).join("")}</div>` : ""}
-    <div class="row-end"><span class="mute">${t ? `「${esc(ds.find((d) => d.id === QA.dest)?.name || "")}」に ${left}品` : "まだ空です（入れると作ります）"}</span><button type="button" class="btn ok" data-qa="close">おわり</button></div></div>`;
+    <div class="row-end"><span class="mute">${t || QA.dest === "later" ? `「${esc(ds.find((d) => d.id === QA.dest)?.name || "")}」に ${left}品` : "まだ空です（入れると作ります）"}</span><button type="button" class="btn ok" data-qa="close">おわり</button></div></div>`;
   el.hidden = false; document.body.classList.add("modal");
 }
 async function qaAdd(text) {
   text = text.trim(); if (!text) return;
+  if (QA.dest === "later") {
+    if (await addWish(text)) QA.added.push({ text, dest: "later" });
+    QA.q = ""; renderQuickAdd(); $("#qain")?.focus(); return;
+  }
   const seg = S.seg, cur = S.cur;
   if (QA.dest === "quick") S.seg = "quick"; else { S.seg = "usual"; S.cur = QA.dest; }
   try { await addTexts([text]); }
@@ -80,6 +85,7 @@ async function qaAdd(text) {
 }
 function qaUndo(k) {
   const a = QA.added[k]; if (!a) return;
+  if (a.dest === "later") { const w = (S.wishes || []).find((x) => x.name === a.text); if (w) api("DELETE", `/api/wishes/${w.id}`).then(() => { S.wishes = S.wishes.filter((x) => x.id !== w.id); render(); }).catch((err) => toast(err.message)); QA.added.splice(k, 1); renderQuickAdd(); return; }
   const t = a.dest === "quick" ? quickList() : listOf(a.dest);
   const it = [...(t?.items || [])].reverse().find((i) => i.text === a.text && !i.checked);
   if (it) removeItem(it.id);

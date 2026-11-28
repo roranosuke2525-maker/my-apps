@@ -112,7 +112,7 @@ async function load({ quiet = false } = {}) {
   if (!quiet) setStatus("Notion から読みこみ中…");
   try {
     const st = await api("GET", "/api/state");
-    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "", reminders: st.reminders || {}, stores: st.stores || S.stores, sites: st.sites || S.sites, sets: st.sets || [] });
+    Object.assign(S, { lists: st.lists, stock: st.stock, today: st.today, loadedAt: st.loadedAt, templates: st.templates || [], templateErr: st.templateErr || "", reminders: st.reminders || {}, stores: st.stores || S.stores, sites: st.sites || S.sites, sets: st.sets || [], wishes: st.wishes || [] });
     applyOver();
     if (S.wantList) { const t = listOf(S.wantList); if (t) { S.seg = kindOf(t); S.cur = t.id; S.tab = "list"; } S.wantList = ""; }
     for (const t of S.lists.filter((x) => kindOf(x) !== "other")) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
@@ -1014,10 +1014,11 @@ function renderList() {
   const soon = soonStock();
   const banner = soon.length ? `<button type="button" class="banner" data-go="stock"><span class="bi">⚠️</span><span><b>切れそうな在庫が${soon.length}品</b><small>${esc(soon.slice(0, 3).map((x) => `${x.name}（${leftTx(x.left)}）`).join("・"))}</small></span><span class="go">補充へ ›</span></button>` : "";
   const q = quickList();
-  const segs = [["usual", "🛒 いつもの", usualLists().reduce((n, t) => n + leftOf(t), 0)], ["quick", "⚡ ちょい買い", q ? leftOf(q) : 0], ["other", "📦 そのほか", otherTasks().length]];
+  const segs = [["usual", "🛒 いつもの", usualLists().reduce((n, t) => n + leftOf(t), 0)], ["quick", "⚡ ちょい買い", q ? leftOf(q) : 0], ["other", "📦 そのほか", otherTasks().length], ["later", "🕰 今度", (S.wishes || []).length]];
   const head = `${banner}<div class="kinds" role="tablist">${segs.map(([k, n, c]) => `<button type="button" data-seg="${k}" aria-pressed="${S.seg === k}">${n}${c ? `<span class="n">${c}</span>` : ""}</button>`).join("")}</div>`;
   if (S.seg === "quick") return head + renderQuick();
   if (S.seg === "other") return head + renderOther();
+  if (S.seg === "later") return head + renderLater();
   return head + renderUsual();
 }
 // ---------- 買い物セット：ボタンで明細に足す・もう一度押すと取り消す ----------
@@ -1185,6 +1186,62 @@ function renderPlan(canBack) {
     <div class="row-end"><button type="submit" form="planextra" class="btn sm">＋ 今回だけ</button><button type="button" class="btn sm" data-tplnew="1">⭐ いつもの品に登録して入れる</button></div></div>
     <div class="card pfoot">${whenBar("plan", S.plan.at, { open: true, label: "いつ買う？ " })}
     <div class="row-end">${picked ? `<button type="button" class="btn ghost" data-planclear="1">選び直す</button>` : ""}<button type="button" class="btn pri" data-plancreate="1" ${picked ? "" : "disabled"}>${picked ? `② この${picked}品で買い物リストを作る →` : "品を選んでください"}</button></div></div>`;
+}
+
+// ---------- 🕰 今度買いたいもの（Notion の BUY・🕰 SOMEDAY）----------
+function renderLater() {
+  const ws = S.wishes || [];
+  const dests = [...usualLists().map((t) => [t.id, `🛒 ${t.name.replace(/^🛒\s*/, "")}`]), ["quick", "⚡ ちょい買い"], ["net", "🌐 ネットで買う"]];
+  const row = (w) => {
+    if (S.wishEdit === w.id) return `<form class="item wform" data-wishform="${w.id}"><input name="name" value="${esc(w.name)}" maxlength="200" aria-label="名前" required><input name="memo" value="${esc(w.memo || "")}" maxlength="200" placeholder="メモ（色・サイズ・予算など）" aria-label="メモ"><input name="link" type="url" value="${esc(w.link || "")}" placeholder="商品ページの URL（https://…）" aria-label="URL">
+      <div class="row-end"><button type="button" class="btn danger sm" data-wishdel="${w.id}">🗑 消す</button><button type="button" class="btn ghost sm" data-wishedit="">やめる</button><button type="submit" class="btn pri sm">保存</button></div></form>`;
+    const buy = S.wishBuy === w.id;
+    return `<div class="witem${buy ? " open" : ""}"><div class="wmain"><button type="button" class="wname" data-wishedit="${w.id}"><b>${esc(w.name)}</b>${w.memo ? `<small>${esc(w.memo)}</small>` : ""}<small class="mute">${esc(md(w.created || ""))} に入れた</small></button>${w.link ? `<a class="more" href="${esc(w.link)}" target="_blank" rel="noopener" aria-label="商品ページ">🔗</a>` : `<a class="more" href="${esc(googleUrl(w.name))}" target="_blank" rel="noopener" aria-label="Google で調べる">🔎</a>`}<button type="button" class="btn ${buy ? "ghost" : "pri"} sm" data-wishbuy="${buy ? "" : w.id}">${buy ? "やめる" : "🛒 今回買う"}</button></div>
+      ${buy ? `<div class="wdest"><span class="mute">どこで買う？</span>${dests.map(([id, n]) => `<button type="button" class="chip" data-wishto="${w.id}|${id}">${esc(n)}</button>`).join("")}</div>` : ""}</div>`;
+  };
+  return `<p class="note pad">今すぐではないけど、今度買いたいものを置いておく場所です。買うときは「🛒 今回買う」で買い物リストへ移します。名前をタップで直す（メモ・URL も）。</p>
+    <div class="card list">${ws.map(row).join("")}<form class="item todoadd" id="wishadd"><span class="box" aria-hidden="true"></span><input id="wishin" type="text" maxlength="200" autocomplete="off" enterkeyhint="next" placeholder="＋ 今度買いたいものを打って Enter" aria-label="今度買いたいもの"><button type="submit" class="btn pri sm" aria-label="入れる">↵</button></form></div>
+    ${ws.length ? "" : `<div class="empty small">まだありません。気になった物をメモしておくと、買い物のときに思い出せます</div>`}`;
+}
+async function addWish(name, extra = {}) {
+  name = name.trim(); if (!name) return;
+  try {
+    setSync("busy");
+    const r = await api("POST", "/api/wishes", { name, ...extra });
+    S.wishes = [r.wish, ...(S.wishes || [])]; saveSnap(); setSync("ok"); render();
+    toast(`「${name}」を今度買うに入れました`);
+    return true;
+  } catch (err) { setSync("err"); toast(`入れられませんでした：${err.message}`); return false; }
+}
+async function saveWish(f) {
+  const id = f.dataset.wishform; const el = f.elements;
+  try {
+    const r = await api("PATCH", `/api/wishes/${id}`, { name: el.name.value, memo: el.memo.value, link: el.link.value.trim() });
+    S.wishes = S.wishes.map((w) => (w.id === id ? r.wish : w)); S.wishEdit = ""; saveSnap(); render(); toast("直しました");
+  } catch (err) { toast(`直せませんでした：${err.message}`); }
+}
+async function deleteWish(id) {
+  const w = S.wishes.find((x) => x.id === id); if (!w || !confirm(`「${w.name}」を今度買うから消しますか？（Notion のゴミ箱から戻せます）`)) return;
+  try { await api("DELETE", `/api/wishes/${id}`); S.wishes = S.wishes.filter((x) => x.id !== id); S.wishEdit = ""; saveSnap(); render(); toast("消しました"); }
+  catch (err) { toast(`消せませんでした：${err.message}`); }
+}
+async function buyWish(id, to, btn) {
+  const w = S.wishes.find((x) => x.id === id); if (!w) return;
+  if (btn) btn.disabled = true;
+  try {
+    setSync("busy");
+    let listId = to;
+    if (to === "quick") {
+      let q = quickList();
+      if (!q) { q = (await api("POST", "/api/lists", { name: QUICK })).list; S.lists.unshift(q); }
+      listId = q.id;
+    }
+    const r = await api("POST", `/api/wishes/${id}/buy`, { list: listId });
+    if (to === "net") S.lists.unshift(r.task);
+    else { const t = listOf(listId); if (t) t.items = [...(t.items || []), ...r.items]; }
+    S.wishes = S.wishes.filter((x) => x.id !== id); S.wishBuy = ""; saveSnap(); setSync("ok"); render();
+    toast(to === "net" ? `「${w.name}」を📦 そのほか（ネットで買う）に移しました` : `「${w.name}」を${to === "quick" ? "ちょい買い" : "買い物リスト"}に入れました`);
+  } catch (err) { setSync("err"); if (btn) btn.disabled = false; toast(`移せませんでした：${err.message}`); }
 }
 
 function renderOther() {
@@ -1554,6 +1611,10 @@ document.addEventListener("click", (e) => {
   if (d.whenopen) { S.whenFor = S.whenFor === d.whenopen ? "" : d.whenopen; render(); return; }
   if (d.when !== undefined && d.when.includes("|")) { const [target, at] = d.when.split("|"); setWhen(target, at); return; }
   if (d.oopen) { S.openOther = S.openOther === d.oopen ? "" : d.oopen; render(); return; }
+  if (d.wishbuy !== undefined) { S.wishBuy = d.wishbuy; S.wishEdit = ""; render(); return; }
+  if (d.wishto) { const [id, to] = d.wishto.split("|"); buyWish(id, to, el); return; }
+  if (d.wishedit !== undefined) { S.wishEdit = d.wishedit; S.wishBuy = ""; render(); return; }
+  if (d.wishdel) { deleteWish(d.wishdel); return; }
   if (d.lmenu) { S.lmenu = S.lmenu === d.lmenu ? "" : d.lmenu; render(); return; }
   if (d.sort) { S.sort = d.sort; store.set("sort", d.sort); render(); return; }
   if (d.toggle) { toggle(d.toggle); return; }
@@ -1636,6 +1697,8 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("submit", (e) => {
   const f = e.target; e.preventDefault();
+  if (f.id === "wishadd") { const i = $("#wishin"); const v = i.value; i.value = ""; addWish(v).then(() => $("#wishin")?.focus()); return; }
+  if (f.dataset.wishform) { saveWish(f); return; }
   if (f.dataset.oadd) { const i = f.elements.q; const texts = A.splitInput(i.value); const t = listOf(f.dataset.oadd); i.value = ""; addToList(t, texts); setTimeout(() => document.querySelector(`[data-oadd="${f.dataset.oadd}"] input`)?.focus(), 0); return; }
   if (f.id === "addform") { const i = $("#addin"); const q = $("#addqty"); const texts = A.splitInput(i.value).map((x) => withQty(x, q?.value)); i.value = ""; if (q) q.value = "1"; addTexts(texts); i.focus(); return; }
   if (f.id === "planextra") { const v = $("#pextra").value; const qv = $("#pqty")?.value; const add = A.splitInput(v).map((x) => withQty(x, qv)); if (add.length) { S.plan.extra.push(...add); savePlan(); render(); $("#pextra")?.focus(); } return; }

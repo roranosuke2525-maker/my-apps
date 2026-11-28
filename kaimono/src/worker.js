@@ -6,7 +6,7 @@ import { sendPush, b64u } from "./webpush.js";
 
 const NOTION_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
-const ST = { next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", inbox: "📥 INBOX", done: "✅ DONE" };
+const ST = { someday: "🕰 SOMEDAY", next: "⏭ NEXT", doing: "▶️ DOING", wait: "⏳ WAITING", inbox: "📥 INBOX", done: "✅ DONE" };
 const OPEN = [ST.next, ST.doing, ST.inbox, ST.wait];
 const CATS = ["日用品", "消耗品", "食品", "育児", "サプリ", "美容"];
 const FREQS = ["毎日", "毎週", "毎月"];
@@ -75,6 +75,11 @@ export default {
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1], await readJson(request).catch(() => ({}))));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
       if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
+      const wm = p.match(/^\/api\/wishes\/([0-9a-f-]{32,36})(\/buy)?$/i);
+      if (p === "/api/wishes" && m === "POST") return json(await addWish(notion, env, await readJson(request)));
+      if (wm && wm[2] && m === "POST") return json(await buyWish(notion, env, wm[1], await readJson(request)));
+      if (wm && !wm[2] && m === "PATCH") return json(await editWish(notion, env, wm[1], await readJson(request)));
+      if (wm && !wm[2] && m === "DELETE") return json(await removeWish(notion, env, wm[1]));
       if (p === "/api/bought" && m === "GET") return json(await boughtNames(notion, env, url.searchParams.get("fresh") === "1"));
       if (p === "/api/newsread" && m === "GET") return json({ read: await newsRead(env) });
       if (p === "/api/newsread" && m === "POST") return json(await markNewsRead(env, await readJson(request)));
@@ -321,7 +326,7 @@ const recent = [{ timestamp: "last_edited_time", direction: "descending" }];
 
 async function loadState(notion, env) {
   const today = todayJst();
-  const [tasks, stockPages, templates, sets] = await Promise.all([
+  const [tasks, stockPages, templates, sets, wishPages] = await Promise.all([
     queryAll(notion, env.TASK_DS_ID, {
       filter: { and: [openFilter, { property: "親タスク", relation: { is_empty: true } }, { or: [{ property: "分類タグ", select: { equals: "BUY" } }, { property: "補充対象", relation: { is_not_empty: true } }] }] },
       sorts: recent,
@@ -332,6 +337,8 @@ async function loadState(notion, env) {
       ? queryAll(notion, env.TEMPLATE_DS_ID, { filter: { property: "使う", checkbox: { equals: true } } }).then((r) => ({ ok: r }), (err) => ({ err: err.publicMessage || "読めませんでした" }))
       : { err: "TEMPLATE_DS_ID が設定されていません" },
     env.SET_DS_ID ? queryAll(notion, env.SET_DS_ID, { filter: { property: "使う", checkbox: { equals: true } } }).catch(() => []) : [],
+    // 今度買いたいもの：BUY の 🕰 SOMEDAY（品の子タスクは除く）
+    queryAll(notion, env.TASK_DS_ID, { filter: { and: [{ property: "ステータス", status: { equals: ST.someday } }, { property: "分類タグ", select: { equals: "BUY" } }, { property: "親タスク", relation: { is_empty: true } }] }, sorts: [{ timestamp: "created_time", direction: "descending" }] }).catch(() => []),
   ]);
   const lists = tasks.map(taskOf);
   // チェックリストとして使うのは補充タスク以外。本文の ToDo を読む
@@ -352,6 +359,7 @@ async function loadState(notion, env) {
     sites: await siteList(env),
     stores: await storeList(env, [...(templates.ok || []).map((pg) => propText(pg.properties?.["店"])), ...stockPages.map((pg) => propText(pg.properties?.["店"]))]),
     templateErr: templates.err || "",
+    wishes: wishPages.map(wishOf),
     reminders: await remindMap(env, lists.map((t) => t.id)),
   };
 }
@@ -402,6 +410,62 @@ async function createTask(notion, env, properties) {
     }
   }
   return notion("POST", "/pages", body(base));
+}
+
+// ---------- 今度買いたいもの（DB_タスク管理 の BUY・🕰 SOMEDAY）----------
+const wishOf = (page) => { const t = taskOf(page); return { id: t.id, url: t.url, name: t.name, memo: t.next, link: t.link, created: jstOf(page.created_time || new Date().toISOString()) }; };
+async function wishPage(notion, env, id) {
+  const page = await notion("GET", `/pages/${normalizeId(id)}`);
+  if (normalizeId(page.parent?.data_source_id) !== normalizeId(env.TASK_DS_ID)) throw httpError(403, "DB_タスク管理 の行ではありません");
+  const t = taskOf(page);
+  if (t.status !== ST.someday || t.tag !== "BUY") throw httpError(403, "今度買いたいものではありません");
+  return page;
+}
+function wishProps(body, { edit = false } = {}) {
+  const props = {};
+  if (!edit || body?.name !== undefined) { const name = clean(body?.name, NAME_MAX, "名前"); if (!name) throw httpError(400, "名前を入れてください"); props["名前"] = { title: rich(name) }; }
+  if (!edit || body?.memo !== undefined) { const memo = clean(body?.memo, 200, "メモ"); if (memo || edit) props.NEXT = { rich_text: memo ? rich(memo) : [] }; }
+  if (!edit || body?.link !== undefined) {
+    const link = String(body?.link || "").trim();
+    if (link && !/^https:\/\/\S{1,1900}$/.test(link)) throw httpError(400, "URL は https:// で始めてください");
+    if (link || edit) props.URL = { url: link || null };
+  }
+  return props;
+}
+async function addWish(notion, env, body) {
+  const props = wishProps(body);
+  const page = await createTask(notion, env, {
+    ...props,
+    "ステータス": { status: { name: ST.someday } },
+    "分類タグ": { select: { name: "BUY" } },
+    "枠": { select: { name: props.URL ? WAKU_NET : WAKU_HOME } },
+  });
+  return { wish: wishOf(page) };
+}
+async function editWish(notion, env, id, body) {
+  await wishPage(notion, env, id);
+  const page = await notion("PATCH", `/pages/${normalizeId(id)}`, { properties: wishProps(body, { edit: true }) });
+  return { wish: wishOf(page) };
+}
+async function removeWish(notion, env, id) {
+  await wishPage(notion, env, id);
+  await notion("PATCH", `/pages/${normalizeId(id)}`, { in_trash: true });
+  return { removed: normalizeId(id) };
+}
+// 今回買う：list があればその買い物に品として入れて（子タスクを作る）、今度の行はゴミ箱へ。
+// list が "net" なら、そのまま ⏭ NEXT にして「そのほか」の買い物タスクにする（ネット注文など）
+async function buyWish(notion, env, id, body) {
+  const page = await wishPage(notion, env, id);
+  const w = wishOf(page);
+  if (body?.list === "net") {
+    const after = await notion("PATCH", `/pages/${w.id}`, { properties: { "ステータス": { status: { name: ST.next } } } });
+    return { task: { ...taskOf(after), items: [] } };
+  }
+  const t = await listPage(notion, env, body?.list);
+  if (t.tag !== "BUY" || t.refill.length || t.parent.length) throw httpError(403, "買い物リストではありません");
+  const items = await createSubtasks(notion, env, t.id, [w.name]);
+  await notion("PATCH", `/pages/${w.id}`, { in_trash: true });
+  return { items };
 }
 
 // ---------- 買い物リスト ----------

@@ -446,6 +446,32 @@ test("前に買った品：買い物の品（子タスク）で済んだもの�
   assert.equal(r.data.items[0].name, "卵");
 });
 
+test("今度買いたいもの：SOMEDAY の BUY として作る・直す・今回の買い物へ移す・ネットで買う・消す", async () => {
+  const w = (await api("POST", "/api/wishes", { name: "電気ケトル", memo: "1.0L くらい", link: "https://shop.example/k" })).data.wish;
+  const pg = pages.get(w.id);
+  assert.equal(pg.properties["ステータス"].status.name, "🕰 SOMEDAY");
+  assert.equal(pg.properties["分類タグ"].select.name, "BUY");
+  assert.deepEqual([w.name, w.memo, w.link], ["電気ケトル", "1.0L くらい", "https://shop.example/k"]);
+  const st = (await api("GET", "/api/state")).data;
+  assert.ok(st.wishes.some((x) => x.id === w.id));
+  assert.ok(!st.lists.some((x) => x.id === w.id)); // 今の買い物には出さない
+  assert.equal((await api("PATCH", `/api/wishes/${w.id}`, { name: "電気ケトル 白" })).data.wish.name, "電気ケトル 白");
+  assert.equal((await api("POST", "/api/wishes", { name: "" })).status, 400);
+  // 今回の買い物へ：品（子タスク）ができ、今度の行はゴミ箱へ
+  const b = await api("POST", `/api/wishes/${w.id}/buy`, { list: L1 });
+  assert.equal(b.data.items[0].text, "電気ケトル 白");
+  assert.deepEqual(pages.get(b.data.items[0].id).properties["親タスク"].relation, [{ id: L1 }]);
+  assert.equal(pg.in_trash, true);
+  // ネットで買う：そのまま NEXT の買い物タスクに
+  const w2 = (await api("POST", "/api/wishes", { name: "加湿器" })).data.wish;
+  const net = await api("POST", `/api/wishes/${w2.id}/buy`, { list: "net" });
+  assert.equal(net.data.task.status, "⏭ NEXT");
+  assert.equal((await api("PATCH", `/api/wishes/${w2.id}`, { name: "x" })).status, 403); // もう今度の行ではない
+  const w3 = (await api("POST", "/api/wishes", { name: "傘" })).data.wish;
+  assert.equal((await api("DELETE", `/api/wishes/${w3.id}`)).status, 200);
+  assert.equal((await api("POST", `/api/wishes/${OTHER}/buy`, { list: L1 })).status, 403);
+});
+
 test("いつもの品を直す・外す（テンプレート以外の行は触らない）", async () => {
   const id = (await api("POST", "/api/templates", { name: "豆腐", store: "ヤオコー", qty: 2, unit: "丁" })).data.template.id;
   const ed = await api("PATCH", `/api/templates/${id}`, { name: "木綿豆腐", qty: 3, unit: "丁", aisle: "卵・乳製品・豆腐", store: "ベイシア" });
