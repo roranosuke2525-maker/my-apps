@@ -436,6 +436,16 @@ test("読んだ記事：覚えて、未読に戻せる", async () => {
   assert.equal((await api("POST", "/api/newsread", { links: [] })).status, 400);
 });
 
+test("前に買った品：買い物の品（子タスク）で済んだものを名前ごとに数える", async () => {
+  const add = await api("POST", `/api/lists/${L1}/items`, { items: ["卵", "卵", "牛乳"] });
+  for (const i of add.data.items) await api("PATCH", `/api/subtasks/${i.id}`, { checked: true });
+  const r = await api("GET", "/api/bought?fresh=1");
+  assert.equal(r.status, 200);
+  const egg = r.data.items.find((x) => x.name === "卵");
+  assert.equal(egg.n, 2);
+  assert.equal(r.data.items[0].name, "卵");
+});
+
 test("いつもの品を直す・外す（テンプレート以外の行は触らない）", async () => {
   const id = (await api("POST", "/api/templates", { name: "豆腐", store: "ヤオコー", qty: 2, unit: "丁" })).data.template.id;
   const ed = await api("PATCH", `/api/templates/${id}`, { name: "木綿豆腐", qty: 3, unit: "丁", aisle: "卵・乳製品・豆腐", store: "ベイシア" });

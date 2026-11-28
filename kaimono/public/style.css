@@ -500,3 +500,9 @@ button.mres { width: 100%; border: 0; border-top: 1px solid var(--line); backgro
 .insug { padding: 4px 6px 8px; margin: 0; }
 .lmenu { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 6px 8px; justify-content: flex-end; }
 .otodo { margin: 4px 0; }
+.insug .sgl { flex: 1 1 100%; font-size: 12px; color: var(--mute); display: flex; gap: 8px; align-items: baseline; }
+.insug .sgl small { font-size: 11px; opacity: 0.8; }
+.insug .chip small { color: var(--mute); }
+.insug .chip.past { border-color: var(--pri); }
+/* ToDo の行に打っている間は、下の「買い物おわり」と ＋ を隠して候補を見やすく */
+body:has(#addin:focus) .lfoot, body:has(#addin:focus) .fab { display: none; }

@@ -75,6 +75,7 @@ export default {
       if (stock?.[2] === "restocked" && m === "POST") return json(await restocked(notion, env, stock[1], await readJson(request).catch(() => ({}))));
       if (stock && !stock[2] && m === "PATCH") return json(await editStock(notion, env, stock[1], await readJson(request)));
       if (stock && !stock[2] && m === "DELETE") return json(await trashStock(notion, env, stock[1]));
+      if (p === "/api/bought" && m === "GET") return json(await boughtNames(notion, env, url.searchParams.get("fresh") === "1"));
       if (p === "/api/newsread" && m === "GET") return json({ read: await newsRead(env) });
       if (p === "/api/newsread" && m === "POST") return json(await markNewsRead(env, await readJson(request)));
       if (p === "/api/newsfav" && m === "GET") return json({ favs: await newsFavs(env) });
@@ -847,6 +848,28 @@ async function markNewsRead(env, body) {
 export function productNames(title) {
   const m = [...title.matchAll(/[「『]([^」』]{2,40})[」』]/g)].map((x) => x[1].normalize("NFKC").trim()).filter((x) => !/まとめ|発売|新商品|新作|ランキング|コンビニアイス/.test(x));
   return [...new Set(m)].slice(0, 4);
+}
+
+// 前に買った品：買い物の品（子タスク）のうち ✅ DONE になったもの（直近180日）。名前ごとの回数と最後の日。1時間 KV に置く
+const BOUGHT_DAYS = 180;
+async function boughtNames(notion, env, fresh = false) {
+  if (!fresh) { const hit = await env.SUBS.get("bought", "json").catch(() => null); if (hit) return hit; }
+  const since = new Date(Date.now() - BOUGHT_DAYS * 864e5).toISOString().slice(0, 10);
+  const pages = await queryAll(notion, env.TASK_DS_ID, {
+    filter: { and: [{ property: "親タスク", relation: { is_not_empty: true } }, { property: "ステータス", status: { equals: ST.done } }, { timestamp: "last_edited_time", last_edited_time: { on_or_after: since } }] },
+    sorts: [{ timestamp: "last_edited_time", direction: "descending" }],
+  });
+  const by = new Map();
+  for (const pg of pages) {
+    const name = propText(pg.properties?.["名前"]).trim(); if (!name) continue;
+    const day = jstOf(pg.last_edited_time || new Date().toISOString());
+    const x = by.get(name) || { name, n: 0, last: "" };
+    x.n++; if (day > x.last) x.last = day;
+    by.set(name, x);
+  }
+  const out = { items: [...by.values()].sort((a, b) => b.n - a.n || b.last.localeCompare(a.last)).slice(0, 300) };
+  await env.SUBS.put("bought", JSON.stringify(out), { expirationTtl: 3600 }).catch(() => {});
+  return out;
 }
 
 // 過去の補充を直す：補充した日を変える／補充リストに戻す（まだ買っていなかった）／記録ごと消す（間違えて補充した）

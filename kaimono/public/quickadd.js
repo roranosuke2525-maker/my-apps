@@ -33,6 +33,7 @@ function qaSuggest() {
     const k = kana(q).replace(/\s/g, "");
     const names = new Map();
     const put = (n, score) => { if (n && kana(n).replace(/\s/g, "").includes(k)) names.set(n, Math.max(names.get(n) || 0, score + (kana(n).replace(/\s/g, "").startsWith(k) ? 100 : 0))); };
+    for (const b of bought) put(b.name, 50 + b.n);
     for (const [n, h] of Object.entries(hist)) put(n, h.n);
     for (const x of S.stock) put(x.name, 0.5);
     for (const x of S.templates) put(x.name, 0.4);
@@ -41,12 +42,13 @@ function qaSuggest() {
     return `<div class="qasec">${xs.map((n) => qaChip(n)).join("")}${xs.some((n) => qaKey(n) === qaKey(q)) ? "" : `<button type="button" class="chip new" data-qa="typed">＋「${esc(q)}」を入れる</button>`}</div>`;
   }
   const soon = soonStock(SOON_DAYS).slice(0, 6);
-  const often = Object.entries(hist).filter(([, h]) => h.n >= 1).sort((a, b) => b[1].n - a[1].n || (b[1].last || "").localeCompare(a[1].last || "")).slice(0, 14).map(([n]) => n);
+  const often = bought.length ? bought.slice(0, 16).map((b) => b.name) : Object.entries(hist).filter(([, h]) => h.n >= 1).sort((a, b) => b[1].n - a[1].n || (b[1].last || "").localeCompare(a[1].last || "")).slice(0, 14).map(([n]) => n);
+  const bmap = new Map(bought.map((b) => [b.name, b]));
   const clips = typeof N !== "undefined" && N.favs ? [...new Set(N.favs.flatMap((f) => f.names || []))].slice(0, 8) : [];
   const staples = often.length < 6 ? A.STAPLES.filter((n) => !often.includes(n)).slice(0, 10) : [];
   const sec = (title, body) => (body ? `<div class="qasec"><div class="sgl">${title}</div>${body}</div>` : "");
   return sec("📦 切れそう", soon.map((x) => qaChip(x.name, leftTx(x.left), true)).join(""))
-    + sec("🔁 よく買う", often.map((n) => qaChip(n)).join(""))
+    + sec(bought.length ? "🔁 前に買った" : "🔁 よく買う", often.map((n) => qaChip(n, bmap.get(n) ? boughtTx(bmap.get(n)) : "")).join(""))
     + sec("📎 クリップした新商品", clips.map((n) => qaChip(n)).join(""))
     + sec("🧺 定番", staples.map((n) => qaChip(n)).join(""));
 }

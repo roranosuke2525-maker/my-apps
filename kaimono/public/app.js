@@ -118,6 +118,7 @@ async function load({ quiet = false } = {}) {
     for (const t of S.lists.filter((x) => kindOf(x) !== "other")) for (const i of t.items || []) remember(A.splitQty(i.text).name, false);
     saveSnap(); saveHist();
     setStatus("");
+    loadBought();
   } catch (err) {
     if (!err.auth) setStatus(S.loadedAt ? `前回の内容を出しています（${err.message}）` : err.message, !err.network);
   } finally {
@@ -126,6 +127,24 @@ async function load({ quiet = false } = {}) {
   }
 }
 let pendingReload = false;
+// 前に買った品（Notion の買い物の品で ✅ になったもの・180日）。名前ごとに回数と最後の日
+let bought = store.json("bought", []);
+async function loadBought(fresh = false) {
+  try {
+    const r = await api("GET", `/api/bought${fresh ? "?fresh=1" : ""}`);
+    const by = new Map();
+    for (const x of r.items || []) {
+      const name = A.splitQty(x.name).name; if (!name) continue;
+      const y = by.get(name) || { name, n: 0, last: "" };
+      y.n += x.n; if (x.last > y.last) y.last = x.last;
+      by.set(name, y);
+    }
+    bought = [...by.values()].sort((a, b) => b.n - a.n || b.last.localeCompare(a.last));
+    store.set("bought", JSON.stringify(bought));
+    if ($("#suggest")) renderSuggest();
+  } catch { /* 読めなくても今までの候補で動く */ }
+}
+const boughtTx = (b) => `${b.n > 1 ? `${b.n}回・` : ""}${b.last ? md(b.last) : ""}`;
 
 function remember(name, count = true) {
   if (!name) return;
@@ -590,6 +609,7 @@ async function endShopping(id) {
   }
   // 足した品やチェックの保存が終わるのを待ってから済みにする
   for (let k = 0; k < 40 && Q.length; k++) { await flush(); if (Q.length) await new Promise((r) => setTimeout(r, 300)); }
+  setTimeout(() => loadBought(true), 2000);
   await finishList(t, how === "move" ? `残り${rest.length}品はちょい買いへ` : how === "drop" ? `残り${rest.length}品は買わない` : "おつかれさま", { rest: how === "done" ? "" : "drop" });
 }
 
@@ -1258,28 +1278,41 @@ async function refillCancel(tid, btn) {
 function renderSuggest() {
   const box = $("#suggest"); if (!box) return;
   const raw = $("#addin").value; const parts = A.splitInput(raw); const q = /[、,，;\n]\s*$/.test(raw) ? "" : parts.at(-1) || "";
+  // 打っている間か、ToDo の行にカーソルがあるときだけ出す
+  if (!q && !S.addFocus) { box.innerHTML = ""; return; }
   const t = S.seg === "quick" ? quickList() : listOf(S.cur);
-  const onList = new Set((t?.items || []).filter((i) => !i.checked).map((i) => A.splitQty(i.text).name));
-  const names = new Map();
-  const put = (n, score) => { if (n && !onList.has(n) && !parts.slice(0, -1).includes(n)) names.set(n, Math.max(names.get(n) || 0, score)); };
-  for (const [n, h] of Object.entries(hist)) put(n, h.n + (h.last === S.today ? 0 : 0.5));
-  for (const x of S.stock) put(x.name, 0.3);
-  A.STAPLES.forEach((n, k) => put(n, 0.2 - k / 1000));
-  let out;
+  const onList = new Set((t?.items || []).filter((i) => !i.checked).map((i) => kana(A.splitQty(i.text).name).replace(/\s/g, "")));
+  const skip = (n) => !n || onList.has(kana(n).replace(/\s/g, "")) || parts.slice(0, -1).includes(n);
+  const chip = (n, sub = "", cls = "") => `<button type="button" class="chip${cls}" data-sug="${esc(n)}">＋ ${esc(n)}${sub ? `<small>${esc(sub)}</small>` : ""}</button>`;
+  const bmap = new Map(bought.map((b) => [b.name, b]));
   if (q) {
-    const k = kana(q);
-    out = [...names].filter(([n]) => kana(n).includes(k) && n !== q).sort((a, b) => (kana(b[0]).startsWith(k) - kana(a[0]).startsWith(k)) || b[1] - a[1]).slice(0, 8);
-    box.innerHTML = out.length ? out.map(([n]) => `<button type="button" class="chip" data-sug="${esc(n)}">＋ ${esc(n)}</button>`).join("") : "";
+    const k = kana(q).replace(/\s/g, "");
+    const names = new Map();
+    const put = (n, score) => { if (!skip(n) && n !== q && kana(n).replace(/\s/g, "").includes(k)) names.set(n, Math.max(names.get(n) || 0, score + (kana(n).replace(/\s/g, "").startsWith(k) ? 1000 : 0))); };
+    for (const b of bought) put(b.name, 100 + b.n);
+    for (const [n, h] of Object.entries(hist)) put(n, h.n);
+    for (const x of S.stock) put(x.name, 0.3);
+    for (const x of S.templates) put(x.name, 0.3);
+    A.STAPLES.forEach((n, k2) => put(n, 0.2 - k2 / 1000));
+    const out = [...names].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    box.innerHTML = out.map(([n]) => { const b = bmap.get(n); return chip(n, b ? `前に ${boughtTx(b)}` : "", b ? " past" : ""); }).join("");
     return;
   }
-  if (S.seg !== "quick") { box.innerHTML = ""; return; } // いつものリストでは、打ちかけたときだけ候補を出す
-  const soon = soonStock(SOON_DAYS).filter((x) => !onList.has(x.name)).slice(0, 4);
-  for (const x of soon) names.delete(x.name);
-  out = [...names].filter(([n]) => hist[n]?.n >= 1).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  if (out.length < 6) out = out.concat([...names].filter(([n]) => !hist[n]?.n && !out.some(([m]) => m === n)).sort((a, b) => b[1] - a[1]).slice(0, 8 - out.length));
-  box.innerHTML = (soon.length ? `<div class="sgl">📦 切れそう</div>${soon.map((x) => `<button type="button" class="chip warn" data-sug="${esc(x.name)}">＋ ${esc(x.name)}<small>${esc(leftTx(x.left))}</small></button>`).join("")}` : "")
-    + (out.length ? `<div class="sgl">${Object.keys(hist).length ? "よく買う" : "定番"}</div>${out.map(([n]) => `<button type="button" class="chip" data-sug="${esc(n)}">＋ ${esc(n)}</button>`).join("")}` : "");
+  const soon = soonStock(SOON_DAYS).filter((x) => !skip(x.name)).slice(0, 4);
+  let past = bought.filter((b) => !skip(b.name) && !soon.some((x) => x.name === b.name)).slice(0, 16);
+  let label = "🔁 前に買った";
+  if (!past.length) { // まだ買った記録がないときは、入れたことのある品・定番
+    label = Object.keys(hist).length ? "🔁 よく入れる" : "🧺 定番";
+    const xs = Object.entries(hist).sort((a, b) => b[1].n - a[1].n).map(([n]) => n).filter((n) => !skip(n));
+    past = (xs.length ? xs : A.STAPLES.filter((n) => !skip(n))).slice(0, 12).map((name) => ({ name }));
+  }
+  box.innerHTML = (soon.length ? `<div class="sgl">📦 切れそう</div>${soon.map((x) => chip(x.name, leftTx(x.left), " warn")).join("")}` : "")
+    + (past.length ? `<div class="sgl">${label}<small>タップで入る</small></div>${past.map((b) => chip(b.name, b.n ? boughtTx(b) : "")).join("")}` : "");
 }
+// ToDo の行にカーソルが入ったら候補を出す。候補を押してもカーソルは行に残す
+document.addEventListener("focusin", (e) => { if (e.target.id === "addin") { S.addFocus = true; renderSuggest(); } });
+document.addEventListener("focusout", (e) => { if (e.target.id === "addin") setTimeout(() => { if (document.activeElement?.id !== "addin") { S.addFocus = false; renderSuggest(); } }, 200); });
+document.addEventListener("pointerdown", (e) => { if (e.target.closest("#suggest [data-sug]")) e.preventDefault(); });
 
 // ---------- 補充の履歴：間違えて補充した記録を直す ----------
 const H = { list: null, loading: false };
@@ -1546,6 +1579,7 @@ document.addEventListener("click", (e) => {
     if (!/[、,，;\n]\s*$/.test(i.value)) parts.pop();
     i.value = "";
     const q = $("#addqty"); const qv = q?.value; if (q) q.value = "1";
+    if (navigator.vibrate) navigator.vibrate(8);
     addTexts([...parts, d.sug].map((x) => withQty(x, qv)));
     return;
   }
